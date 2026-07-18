@@ -39,4 +39,3 @@ func (a *App) GetFileDiff(novelID int64, hash string, filePath string) (*git.Fil
 	}
 	return repo.ShowFile(hash, filePath)
 }
-

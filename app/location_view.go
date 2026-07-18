@@ -22,12 +22,12 @@ func (a *App) GetLocationRelations(novelID int64) ([]location.LocationRelation, 
 
 // CreateLocationInput 是 CreateLocation 的参数。
 type CreateLocationInput struct {
-	Name             string `json:"name"`                        // 地点名称，必填
-	LocationType     string `json:"location_type,omitempty"`     // 自由文本类型
-	Description      string `json:"description,omitempty"`       // 自然语言描述
-	DetailJSON       string `json:"detail_json,omitempty"`       // JSON 自由格式
+	Name             string `json:"name"`                         // 地点名称，必填
+	LocationType     string `json:"location_type,omitempty"`      // 自由文本类型
+	Description      string `json:"description,omitempty"`        // 自然语言描述
+	DetailJSON       string `json:"detail_json,omitempty"`        // JSON 自由格式
 	ParentLocationID *int64 `json:"parent_location_id,omitempty"` // 父级地点 ID
-	Tags             string `json:"tags,omitempty"`              // JSON 数组标签
+	Tags             string `json:"tags,omitempty"`               // JSON 数组标签
 }
 
 // CreateLocation 创建一个地点。

@@ -10,10 +10,10 @@ import (
 // CreateReaderPerspectiveInput 是创建读者认知条目的入参。
 type CreateReaderPerspectiveInput struct {
 	Type            string `json:"type"`                       // 必填："known" | "suspense" | "misconception"
-	Content         string `json:"content"`                     // 必填
-	PlantedChapter  int    `json:"planted_chapter"`             // 必填
-	RelatedTruth    string `json:"related_truth,omitempty"`     // 可选
-	RevealedChapter int    `json:"revealed_chapter,omitempty"`  // 可选，默认 0
+	Content         string `json:"content"`                    // 必填
+	PlantedChapter  int    `json:"planted_chapter"`            // 必填
+	RelatedTruth    string `json:"related_truth,omitempty"`    // 可选
+	RevealedChapter int    `json:"revealed_chapter,omitempty"` // 可选，默认 0
 }
 
 // UpdateReaderPerspectiveInput 是更新读者认知条目的入参。

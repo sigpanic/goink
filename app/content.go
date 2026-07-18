@@ -64,9 +64,9 @@ func (a *App) SaveContent(input SaveContentInput) error {
 	if m := chPathRe.FindStringSubmatch(input.Path); m != nil {
 		chapNum, _ := strconv.Atoi(m[1])
 		rag.SubmitRefresh(input.NovelID, chapNum, input.Content)
-			if svc := a.searchService.Load(); svc != nil {
-				svc.UpdateCachedChapter(input.NovelID, chapNum, input.Content)
-			}
+		if svc := a.searchService.Load(); svc != nil {
+			svc.UpdateCachedChapter(input.NovelID, chapNum, input.Content)
+		}
 		stats := text.ComputeStats(input.Content)
 
 		// 记录字数变化

@@ -148,15 +148,15 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	})
 
 	result, runErr := a.agent.Run(ctx, agent.RunOptions{
-		TurnID:        turnID,
-		SessionID:     sess.SessionID,
-		NovelID:       input.NovelID,
-		Messages:      messages,
-		AllowedTools:  agentcfg.Allowlist(agentcfg.MainAgent),
-		ActiveVersion: sess.ActiveVersion,
-		Model:         model,
-		ProviderName:  input.ProviderName,
-		AgentType:     "main",
+		TurnID:          turnID,
+		SessionID:       sess.SessionID,
+		NovelID:         input.NovelID,
+		Messages:        messages,
+		AllowedTools:    agentcfg.Allowlist(agentcfg.MainAgent),
+		ActiveVersion:   sess.ActiveVersion,
+		Model:           model,
+		ProviderName:    input.ProviderName,
+		AgentType:       "main",
 		MaxTurns:        50,
 		ReasoningEffort: input.ReasoningEffort,
 	})
