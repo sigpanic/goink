@@ -2,8 +2,8 @@ import { Heart, ExternalLink, FileText, GitFork } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { BrowserOpenURL } from '@/lib/wailsjs/runtime/runtime'
 
-const REPO = 'sigpanic/goink'
-const BRANCH = 'master'
+const REPO = 'sigpanic/goink-skills'
+const BRANCH = 'main'
 
 interface Props {
   open: boolean
@@ -16,9 +16,9 @@ export default function SkillContributeDialog({ open, onClose }: Props) {
   if (!open) return null
 
   const links = {
-    template: `https://github.com/${REPO}/blob/${BRANCH}/skills/.template/skill.md`,
+    template: `https://github.com/${REPO}/blob/${BRANCH}/.template/skill.md`,
     fork: `https://github.com/${REPO}/fork`,
-    guide: `https://github.com/${REPO}/blob/${BRANCH}/skills/README.md`,
+    guide: `https://github.com/${REPO}/blob/${BRANCH}/README.md`,
   }
 
   const steps = [
