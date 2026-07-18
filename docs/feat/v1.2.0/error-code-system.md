@@ -53,16 +53,37 @@ v1.2.0 新增 skill 市场功能恰好是首个对**错误分类反馈**有硬�
 ```go
 type Code string
 
+// 通用错误码（跨模块共享）
 const (
-    CodeOK          Code = ""              // 无错误（默认零值）
-    CodeNetwork     Code = "network"       // 网络层失败：超时 / 连接拒绝 / DNS / context 取消
-    CodeRateLimited Code = "rate_limited"  // GitHub rate limit（403+Remaining:0 或 429）
-    CodeNotFound    Code = "not_found"     // 资源不存在（404 或 skill 名未找到）
-    CodeForbidden   Code = "forbidden"     // 权限拒绝（403 非 rate limit）
-    CodeInvalid     Code = "invalid"       // 入参非法（target 不是 user/novel、novelID=0 等）
-    CodeInternal    Code = "internal"      // 其他未分类错误（默认 fallback）
+    CodeOK       Code = ""
+    CodeInternal Code = "internal"
+    CodeInvalid  Code = "invalid"
+)
+
+// githubapi 模块错误码
+const (
+    CodeGitHubAPINetwork     Code = "githubapi.network"
+    CodeGitHubAPIRateLimited Code = "githubapi.rate_limited"
+    CodeGitHubAPINotFound    Code = "githubapi.not_found"
+    CodeGitHubAPIForbidden   Code = "githubapi.forbidden"
+    CodeGitHubAPIOther       Code = "githubapi.other"
+)
+
+// llm 模块错误码
+const (
+    CodeLLMRateLimited Code = "llm.rate_limited"
+    CodeLLMNotFound    Code = "llm.not_found"
+    CodeLLMForbidden   Code = "llm.forbidden"
+    CodeLLMServerError Code = "llm.server_error"
+    CodeLLMClientError Code = "llm.client_error"
 )
 ```
+
+### 为什么按模块分区
+
+- **避免 const 块无限增长**：每个模块一个 const 区，新增模块只加新区不动旧代码
+- **switch 拆函数**：每个模块的映射逻辑独立，便于维护和测试
+- **同样语义不同模块不同错误码**：404 在 githubapi 是「skill 文件被移除」，在 llm 是「模型不存在」，前端反馈应不同。错误码带模块前缀让前端能精确区分
 
 **为什么用 `string` 而不是 `int`**：
 
@@ -115,52 +136,47 @@ type Empty = struct{}
 ## `CodeFromError` 映射规则
 
 ```go
+// CodeFromError 只做调度，具体映射逻辑在各模块专属函数里
 func CodeFromError(err error) Code {
     if err == nil {
         return CodeOK
     }
-
-    // GitHub API 错误：按 Kind 精确映射
     var ghErr *githubapi.Error
     if errors.As(err, &ghErr) {
-        switch ghErr.Kind {
-        case githubapi.KindNetwork:
-            return CodeNetwork
-        case githubapi.KindRateLimited:
-            return CodeRateLimited
-        case githubapi.KindNotFound:
-            return CodeNotFound
-        case githubapi.KindForbidden:
-            return CodeForbidden
-        default:
-            return CodeInternal
-        }
+        return codeFromGitHubAPIError(ghErr)
     }
-
-    // LLM API 错误：按 StatusCode 模糊映射
     var llmErr *llm.APIError
     if errors.As(err, &llmErr) {
-        switch {
-        case llmErr.StatusCode == 429:
-            return CodeRateLimited
-        case llmErr.StatusCode == 404:
-            return CodeNotFound
-        case llmErr.StatusCode == 403:
-            return CodeForbidden
-        case llmErr.StatusCode >= 500:
-            return CodeNetwork // 服务端错误归类为可重试网络问题
-        default:
-            return CodeInternal
-        }
+        return codeFromLLMAPIError(llmErr)
     }
-
     // 业务层 fmt.Errorf("remote: invalid target %q", target) 等约定
     msg := err.Error()
     if strings.Contains(msg, "invalid") || strings.Contains(msg, "requires non-zero") {
         return CodeInvalid
     }
-
     return CodeInternal
+}
+
+// codeFromGitHubAPIError 映射 *githubapi.Error.Kind → apperr.Code
+func codeFromGitHubAPIError(err *githubapi.Error) Code {
+    switch err.Kind {
+    case githubapi.KindNetwork:     return CodeGitHubAPINetwork
+    case githubapi.KindRateLimited: return CodeGitHubAPIRateLimited
+    case githubapi.KindNotFound:    return CodeGitHubAPINotFound
+    case githubapi.KindForbidden:   return CodeGitHubAPIForbidden
+    default:                        return CodeGitHubAPIOther
+    }
+}
+
+// codeFromLLMAPIError 映射 *llm.APIError.StatusCode → apperr.Code
+func codeFromLLMAPIError(err *llm.APIError) Code {
+    switch {
+    case err.StatusCode == 429:  return CodeLLMRateLimited
+    case err.StatusCode == 404:  return CodeLLMNotFound
+    case err.StatusCode == 403:  return CodeLLMForbidden
+    case err.StatusCode >= 500:  return CodeLLMServerError
+    default:                     return CodeLLMClientError
+    }
 }
 ```
 
@@ -222,7 +238,9 @@ func (a *App) InstallRemoteSkill(input InstallRemoteSkillInput) *apperr.Result[a
 Wails 自动生成的 `App.d.ts` 会暴露 `Result<T>` 的 TS 类型。前端消费模式：
 
 ```ts
-type ErrCode = '' | 'network' | 'rate_limited' | 'not_found' | 'forbidden' | 'invalid' | 'internal'
+type ErrCode = '' | 'internal' | 'invalid'
+  | 'githubapi.network' | 'githubapi.rate_limited' | 'githubapi.not_found' | 'githubapi.forbidden' | 'githubapi.other'
+  | 'llm.rate_limited' | 'llm.not_found' | 'llm.forbidden' | 'llm.server_error' | 'llm.client_error'
 
 interface Result<T> {
   data: T
@@ -234,17 +252,20 @@ async function loadMarketplace() {
   const res = await app.ListRemoteSkills({ page: 1, size: 20, query: '' })
   if (res.err_code) {
     switch (res.err_code) {
-      case 'network':
+      case 'githubapi.network':
         showNetworkError(res.err_msg)         // 显示重试 + 手动访问仓库提示
         break
-      case 'rate_limited':
+      case 'githubapi.rate_limited':
         showRateLimitError(res.err_msg)       // 显示重置时间
         break
-      case 'not_found':
-        showNotFoundError(res.err_msg)        // skill 可能已被移除
+      case 'githubapi.not_found':
+        showSkillNotFoundError(res.err_msg)   // skill 可能已被移除
+        break
+      case 'llm.not_found':
+        showModelNotFoundError(res.err_msg)   // 模型不存在（与 skill 404 反馈不同）
         break
       default:
-        showGenericError(res.err_msg)
+        showGenericError(res.err_code, res.err_msg)
     }
     return
   }
@@ -257,12 +278,18 @@ async function loadMarketplace() {
 | ErrCode | UI 反馈 | 是否可重试 |
 |---|---|---|
 | `""` (OK) | 正常渲染数据 | — |
-| `network` | 红色提示条 + 重试按钮 + 手动访问仓库链接 | 是 |
-| `rate_limited` | 黄色提示条 + 显示重置时间 | 等待后重试 |
-| `not_found` | 灰色提示 + 建议刷新列表 | 刷新后重试 |
-| `forbidden` | 红色提示 + 联系维护者 | 否 |
-| `invalid` | 表单错误提示（不应发生，前端预校验） | 否 |
 | `internal` | 通用错误 + 错误详情折叠 | 是 |
+| `invalid` | 表单错误提示（前端预校验应避免） | 否 |
+| `githubapi.network` | 红色提示条 + 重试 + 手动访问仓库链接 | 是 |
+| `githubapi.rate_limited` | 黄色提示 + 显示重置时间 | 等待后重试 |
+| `githubapi.not_found` | 灰色提示 + 建议刷新列表（skill 文件被移除） | 刷新后重试 |
+| `githubapi.forbidden` | 红色提示 + 联系维护者 | 否 |
+| `githubapi.other` | 通用错误 + 错误详情 | 是 |
+| `llm.rate_limited` | LLM 限流提示 + 稍后重试 | 等待后重试 |
+| `llm.not_found` | 模型不存在，检查配置 | 否 |
+| `llm.forbidden` | API Key 无权限 | 否 |
+| `llm.server_error` | LLM 服务端错误，稍后重试 | 是 |
+| `llm.client_error` | LLM 客户端错误，检查请求 | 否 |
 
 ## 实施计划
 
@@ -276,8 +303,8 @@ async function loadMarketplace() {
 `apperr_test.go` 至少覆盖：
 
 - `Ok[T]` 构造的 Result 字段正确（ErrCode="", ErrMsg 缺省）
-- `Err[T]` 包装 `*githubapi.Error` 各 Kind → 对应 Code
-- `Err[T]` 包装 `*llm.APIError` 各 StatusCode → 对应 Code
+- `Err[T]` 包装 `*githubapi.Error` 5 个 Kind（Network/RateLimited/NotFound/Forbidden/Other）→ 对应 githubapi.* Code
+- `Err[T]` 包装 `*llm.APIError` 5 个 StatusCode（429/404/403/5xx/其他 4xx）→ 对应 llm.* Code
 - `Err[T]` 包装多层 `fmt.Errorf("...: %w", err)` 仍能 `errors.As` 透传到底层
 - `Err[T]` 包装普通 `errors.New("invalid target")` → CodeInvalid
 - `Err[T]` 包装未知错误 → CodeInternal
@@ -299,4 +326,4 @@ async function loadMarketplace() {
 2. **ErrMsg 暴露底层错误**：`err.Error()` 可能包含内部路径/URL，对桌面应用可接受（非 SaaS 多租户），
    但仍需注意未来若加远程上报功能要脱敏
 3. **错误码字符串的稳定性**：一旦发布，错误码字符串即成为前端契约，
-   后续不可改名（只能新增），需在 README/文档里强调
+   后续不可改名（只能新增），需在 README/文档里强调。模块前缀错误码字符串即成为前端契约，后续不可改名（只能新增）

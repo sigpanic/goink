@@ -54,6 +54,7 @@ v1.1.x 期间 **skills 仓库独立**为 `sigpanic/goink-skills`（main 分支�
 | 更新检查 | 仅市场内对比 | 不做后台轮询，只在市场打开时拉一次 `index.json` 与本地 version 对比，显示「已安装 / 可更新 v{remote}」 |
 | 推进方式 | 分步提交 | 严格按 6 步顺序，每步写完发询问等 review，用户说 commit 才提交 |
 | GitHub API 客户端 | 抽取通用层 | 新建 `internal/githubapi/client.go`，`update/checker.go` 本次不动，`skill/remote` 基于新 client |
+| 错误码组织 | 模块前缀 + const 分区 | 错误码集中定义在 apperr，按模块分 const 区，switch 拆函数。同样 404 不同模块不同错误码（githubapi.not_found ≠ llm.not_found），前端反馈可精确区分 |
 
 ### 关于 403 vs 429 的说明
 
@@ -140,7 +141,8 @@ rate limit 实际返回 `403` + body 含 `"message": "API rate limit exceeded"` 
 ### 第四部分：Wails 应用层
 
 在 `app/skill_api.go` 新增三个方法（与现有 `ListSkills` / `DeleteSkill` 并列）。
-**所有方法返回 `*apperr.Result[T]`**，统一错误码透传（详见 `error-code-system.md`）：
+**所有方法返回 `*apperr.Result[T]`**，统一错误码透传（详见 `error-code-system.md`）。
+返回的 `Result.ErrCode` 字段值带模块前缀（如 `githubapi.not_found`），前端按模块做差异化反馈：
 
 | 方法 | 入参 | 返回 |
 |---|---|---|
@@ -173,7 +175,9 @@ rate limit 实际返回 `403` + body 含 `"message": "API rate limit exceeded"` 
   - 单选：`user 层（所有小说共享，推荐）` / `novel 层（仅当前小说）`
   - 如果检测到本地已存在，改为「覆盖安装」确认框，显示本地/远程 version 对比
 - **网络失败态**（核心需求，按 `err_code` 分类反馈，详见 `error-code-system.md`）：
-  - `err_code = "network"` → 红色提示条：
+
+  skill 市场的远程 API 全部走 githubapi 客户端，故错误码均带 `githubapi.` 前缀；前端按 err_code 分类反馈。
+  - `err_code = "githubapi.network"` → 红色提示条：
     > **无法连接 GitHub API**
     > `api.github.com` 国内通常可直连（区别于 `github.com`）。如长期失败，请尝试：
     > 1. 检查网络代理设置
@@ -181,9 +185,9 @@ rate limit 实际返回 `403` + body 含 `"message": "API rate limit exceeded"` 
     > 3. 在可访问 GitHub 的网络环境中使用此功能
     >
     > [重试]
-  - `err_code = "rate_limited"` → 「GitHub API 请求频率超限（匿名 60 次/小时），重置时间：{X-RateLimit-Reset 格式化}，请稍后再试」
-  - `err_code = "forbidden"` → 「访问被拒绝，可能是仓库权限问题」
-  - `err_code = "not_found"` → 「该 skill 可能已被维护者移除，请刷新列表」
+  - `err_code = "githubapi.rate_limited"` → 「GitHub API 请求频率超限（匿名 60 次/小时），重置时间：{X-RateLimit-Reset 格式化}，请稍后再试」
+  - `err_code = "githubapi.forbidden"` → 「访问被拒绝，可能是仓库权限问题」
+  - `err_code = "githubapi.not_found"` → 「该 skill 可能已被维护者移除，请刷新列表」
   - `err_code = "invalid"` → 表单错误提示（前端预校验应避免此情况）
   - 其他 → 「获取 skill 失败：{err_msg}」+ [重试]
 
@@ -390,5 +394,4 @@ type ListRemoteSkillsInput struct {
 - 不做集中管理 URL 的 refactor（本次只修 bug URL）
 - 不动 `internal/update/checker.go`（等市场稳定后单独 refactor）
 - 不做后台启动时检查更新（仅市场内对比）
-- 不做仓库内嵌 webview 浏览 PR（外链 `BrowserOpenURL` 即可）
-- 不做 skill 评分 / 评论 / 下载量统计（社区规模还小，过度设计）
+- 不做仓库内嵌 web
