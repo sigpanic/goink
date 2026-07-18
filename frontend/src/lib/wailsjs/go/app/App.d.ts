@@ -13,6 +13,7 @@ import {timeline} from '../models';
 import {llm} from '../models';
 import {pattern} from '../models';
 import {git} from '../models';
+import {apperr} from '../models';
 import {session} from '../models';
 import {storage} from '../models';
 import {config} from '../models';
@@ -127,6 +128,8 @@ export function GetPreferences(arg1:number):Promise<app.PreferenceResult>;
 
 export function GetReaderPerspectives(arg1:number):Promise<Array<reader.ReaderPerspective>>;
 
+export function GetRemoteSkillContent(arg1:string):Promise<apperr.Result_string_>;
+
 export function GetSession(arg1:string):Promise<app.SessionDetail>;
 
 export function GetSessionMessages(arg1:string):Promise<Array<session.Message>>;
@@ -153,7 +156,11 @@ export function ImportWithLLM(arg1:app.ImportWithLLMInput):Promise<imp.ImportRes
 
 export function Initialize(arg1:string):Promise<void>;
 
+export function InstallRemoteSkill(arg1:app.InstallRemoteSkillInput):Promise<apperr.Result_struct____>;
+
 export function IsInitialized():Promise<boolean>;
+
+export function ListRemoteSkills(arg1:app.ListRemoteSkillsInput):Promise<apperr.Result_novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__>;
 
 export function ListSkills(arg1:app.ListSkillsInput):Promise<Array<skill.SkillMeta>>;
 

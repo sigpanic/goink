@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
+	"novel/internal/apperr"
 	"novel/internal/config"
 	"novel/internal/git"
 	"novel/internal/skill"
+	"novel/internal/skill/remote"
+	"novel/internal/storage"
 )
 
 // ListSkillsInput 是 ListSkills 的入参。
@@ -89,4 +92,85 @@ func (a *App) DeleteSkill(input DeleteSkillInput) error {
 	}
 
 	return nil
+}
+
+// ListRemoteSkillsInput 是 ListRemoteSkills 的入参。
+// Page/Size 走 storage.PageParams 归一化（Page<1 → 1，Size 默认 20，上限 100）。
+// Query 为 name + description 的模糊匹配（大小写不敏感），空串表示不过滤。
+type ListRemoteSkillsInput struct {
+	Page  int    `json:"page"`
+	Size  int    `json:"size"`
+	Query string `json:"query"`
+}
+
+// ListRemoteSkills 列出远程 skill 市场的所有 skill，支持分页和搜索。
+// forceRefresh=false 优先使用内存缓存（1h TTL），前端"刷新"按钮可改为 true 强制刷新。
+// 错误以 *apperr.Result[*storage.PageResult[remote.RemoteSkillMeta]] 透传，前端按 err_code 分类反馈。
+func (a *App) ListRemoteSkills(input ListRemoteSkillsInput) *apperr.Result[*storage.PageResult[remote.RemoteSkillMeta]] {
+	all, err := a.remote.ListRemoteSkills(a.ctx, false)
+	if err != nil {
+		return apperr.Err[*storage.PageResult[remote.RemoteSkillMeta]](err)
+	}
+
+	// 1. 搜索过滤（name + description 模糊匹配，大小写不敏感）
+	filtered := filterRemoteSkillsByQuery(all, input.Query)
+
+	// 2. 分页（复用 storage.PageParams.Normalize + storage.NewPageResult）
+	p := (&storage.PageParams{Page: input.Page, Size: input.Size}).Normalize()
+	start := (p.Page - 1) * p.Size
+	end := start + p.Size
+	if start > len(filtered) {
+		start = len(filtered)
+	}
+	if end > len(filtered) {
+		end = len(filtered)
+	}
+	page := storage.NewPageResult(filtered[start:end], int64(len(filtered)), p.Page, p.Size)
+
+	return apperr.Ok(page)
+}
+
+// filterRemoteSkillsByQuery 按 query 模糊匹配 name + description（大小写不敏感）。
+// query 为空串时返回全部。
+func filterRemoteSkillsByQuery(skills []remote.RemoteSkillMeta, query string) []remote.RemoteSkillMeta {
+	if query == "" {
+		return skills
+	}
+	q := strings.ToLower(query)
+	out := make([]remote.RemoteSkillMeta, 0, len(skills))
+	for _, s := range skills {
+		if strings.Contains(strings.ToLower(s.Name), q) ||
+			strings.Contains(strings.ToLower(s.Description), q) {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// GetRemoteSkillContent 拉取指定远程 skill 的 markdown 原文内容。
+// 用于详情面板展示全文。
+func (a *App) GetRemoteSkillContent(name string) *apperr.Result[string] {
+	content, err := a.remote.GetRemoteSkillContent(a.ctx, name)
+	if err != nil {
+		return apperr.Err[string](err)
+	}
+	return apperr.Ok(content)
+}
+
+// InstallRemoteSkillInput 是 InstallRemoteSkill 的入参。
+// Target 取值 "user" 或 "novel"；Target=novel 时 NovelID 必填。
+type InstallRemoteSkillInput struct {
+	Name    string `json:"name"`
+	Target  string `json:"target"`   // "user" or "novel"
+	NovelID int64  `json:"novel_id"` // target=novel 时必填
+}
+
+// InstallRemoteSkill 将指定远程 skill 安装到目标层（user 或 novel）。
+// 安装成功后触发 skill.Store 热重载（失败只 Warn 不返回 error）。
+// 后端不做存在性判断，前端弹确认框处理覆盖语义。
+func (a *App) InstallRemoteSkill(input InstallRemoteSkillInput) *apperr.Result[apperr.Empty] {
+	if err := a.remote.InstallRemoteSkill(a.ctx, input.Name, input.Target, input.NovelID); err != nil {
+		return apperr.Err[apperr.Empty](err)
+	}
+	return apperr.Ok(apperr.Empty{})
 }

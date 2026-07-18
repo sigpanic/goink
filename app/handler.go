@@ -25,9 +25,10 @@ import (
 	"novel/internal/search"
 	"novel/internal/session"
 	"novel/internal/skill"
-	"novel/internal/style"
+	"novel/internal/skill/remote"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
+	"novel/internal/style"
 	"novel/internal/timeline"
 	"novel/internal/writing"
 )
@@ -51,11 +52,13 @@ type App struct {
 	vectorStore   *rag.VectorStore
 	searchService atomic.Pointer[search.Service]
 
-	novel      *novel.Store
-	chapter    *chapter.Store
-	character  *character.Store
-	session    *session.Store
-	skill      *skill.Store
+	novel     *novel.Store
+	chapter   *chapter.Store
+	character *character.Store
+	session   *session.Store
+	skill     *skill.Store
+	// remote 持有远程 skill 市场服务，用于 ListRemoteSkills / GetRemoteSkillContent / InstallRemoteSkill。
+	remote     *remote.Service
 	style      *style.Store
 	timeline   *timeline.Store
 	storyarc   *storyarc.Store
@@ -184,6 +187,8 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 		a.logger.Error("初始化 skill store 失败", "err", err)
 	} else {
 		a.skill = s
+		// 初始化远程 skill 市场服务（基于 skillStore 和 logger）
+		a.remote = remote.NewService(a.skill, a.logger)
 	}
 
 	// 7. 初始化 MCP 工具注册表

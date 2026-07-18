@@ -214,6 +214,10 @@ export function GetReaderPerspectives(arg1) {
   return window['go']['app']['App']['GetReaderPerspectives'](arg1);
 }
 
+export function GetRemoteSkillContent(arg1) {
+  return window['go']['app']['App']['GetRemoteSkillContent'](arg1);
+}
+
 export function GetSession(arg1) {
   return window['go']['app']['App']['GetSession'](arg1);
 }
@@ -266,8 +270,16 @@ export function Initialize(arg1) {
   return window['go']['app']['App']['Initialize'](arg1);
 }
 
+export function InstallRemoteSkill(arg1) {
+  return window['go']['app']['App']['InstallRemoteSkill'](arg1);
+}
+
 export function IsInitialized() {
   return window['go']['app']['App']['IsInitialized']();
+}
+
+export function ListRemoteSkills(arg1) {
+  return window['go']['app']['App']['ListRemoteSkills'](arg1);
 }
 
 export function ListSkills(arg1) {

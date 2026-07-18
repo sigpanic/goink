@@ -392,6 +392,38 @@ export namespace app {
 	        this.model_id = source["model_id"];
 	    }
 	}
+	export class InstallRemoteSkillInput {
+	    name: string;
+	    target: string;
+	    novel_id: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new InstallRemoteSkillInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.target = source["target"];
+	        this.novel_id = source["novel_id"];
+	    }
+	}
+	export class ListRemoteSkillsInput {
+	    page: number;
+	    size: number;
+	    query: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ListRemoteSkillsInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.query = source["query"];
+	    }
+	}
 	export class ListSkillsInput {
 	    novel_id: number;
 	
@@ -781,6 +813,96 @@ export namespace app {
 	        this.status = source["status"];
 	        this.resolved_chapter_id = source["resolved_chapter_id"];
 	    }
+	}
+
+}
+
+export namespace apperr {
+	
+	export class Result__novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__ {
+	    data?: storage.PageResult_novel_internal_skill_remote_RemoteSkillMeta_;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result__novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], storage.PageResult_novel_internal_skill_remote_RemoteSkillMeta_);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_string_ {
+	    data: string;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_string_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = source["data"];
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	}
+	export class Result_struct____ {
+	    // Go type: struct {}
+	    data: any;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_struct____(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], Object);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
@@ -1708,6 +1830,35 @@ export namespace reader {
 
 }
 
+export namespace remote {
+	
+	export class RemoteSkillMeta {
+	    name: string;
+	    description: string;
+	    category: string;
+	    mode: string;
+	    author: string;
+	    version: number;
+	    file: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RemoteSkillMeta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.category = source["category"];
+	        this.mode = source["mode"];
+	        this.author = source["author"];
+	        this.version = source["version"];
+	        this.file = source["file"];
+	    }
+	}
+
+}
+
 export namespace search {
 	
 	export class Result {
@@ -1858,6 +2009,44 @@ export namespace storage {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.items = this.convertValues(source["items"], app.SessionMeta);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.total_pages = source["total_pages"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PageResult_novel_internal_skill_remote_RemoteSkillMeta_ {
+	    items: remote.RemoteSkillMeta[];
+	    total: number;
+	    page: number;
+	    size: number;
+	    total_pages: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PageResult_novel_internal_skill_remote_RemoteSkillMeta_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], remote.RemoteSkillMeta);
 	        this.total = source["total"];
 	        this.page = source["page"];
 	        this.size = source["size"];
