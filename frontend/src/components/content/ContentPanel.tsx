@@ -570,7 +570,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
             readOnly={activeTab.readOnly}
             onSave={async (newContent) => {
               await doSave(activeTab.id, activeTab.path, newContent as string)
-              updateTab(activeTab.id, { viewMode: 'preview' })
+              updateTab(activeTab.id, { content: newContent, viewMode: 'preview' })
             }}
             onCancel={() => updateTab(activeTab.id, { viewMode: 'preview' })}
           />
