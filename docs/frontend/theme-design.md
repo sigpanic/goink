@@ -35,6 +35,9 @@ useTheme()  ─  读/写 [data-theme]，MutationObserver 跨组件同步
 | `--border` | 边框/分隔线 |
 | `--primary` | 品牌强调（按钮、链接、图标） |
 | `--destructive` | 删除/错误操作 |
+| `--success` / `--success-foreground` / `--success-border` | 成功/已完成 |
+| `--warning` / `--warning-foreground` / `--warning-border` | 警告/需注意 |
+| `--danger-bg` / `--danger-border` | 危险操作底色 |
 | `--sidebar-*` | 侧栏专用 |
 
 浅色：白色系，primary 紫色 `oklch(0.546 0.245 262.881)`。

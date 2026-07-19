@@ -501,7 +501,7 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                         onClick={() => handleCardClick(sk)}
                         className={`group relative flex flex-col rounded-2xl p-5 transition-all duration-300 cursor-pointer select-none backdrop-blur-2xl border
                           ${installed
-                            ? 'bg-sky-50/60 border-sky-200/50 opacity-75 hover:opacity-100'
+                            ? 'bg-success/60 border-success-border/50 opacity-75 hover:opacity-100'
                             : 'bg-card/80 border-white/15 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5'
                           }`}
                       >
@@ -528,7 +528,7 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                           )}
                         </div>
                         {installed && installedVer !== undefined && (
-                          <span className="absolute right-3 bottom-3 text-[10px] text-sky-700/80 dark:text-sky-300/80">
+                          <span className="absolute right-3 bottom-3 text-[10px] text-success-foreground">
                             {t('skill.marketplace.installed', { version: installedVer })}
                           </span>
                         )}
@@ -648,8 +648,8 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
 
         {phase === 'confirm_overwrite' && selectedSkill && (
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4 space-y-3">
-            {/* amber warning bar */}
-            <div className="px-3 py-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+            {/* overwrite warning bar */}
+            <div className="px-3 py-2 text-xs text-warning-foreground bg-warning border border-warning-border rounded-md">
               {t('skill.marketplace.overwriteWarning', {
                 target: installTarget === 'user' ? t('skill.marketplace.targetUser') : t('skill.marketplace.targetNovel'),
               })}
