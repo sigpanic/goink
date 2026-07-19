@@ -78,6 +78,12 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
   const [installedNames, setInstalledNames] = useState<Set<string>>(new Set())
   const [installedVersions, setInstalledVersions] = useState<Map<string, number>>(new Map())
 
+  const canUpdateDetail = useMemo(() => {
+    if (!selectedSkill) return false
+    const v = installedVersions.get(selectedSkill.name)
+    return v !== undefined && selectedSkill.version > v
+  }, [selectedSkill, installedVersions])
+
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Reset state when modal closes
@@ -380,7 +386,9 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                 {installing && installTarget === 'user' ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t('skill.marketplace.installing')}</>
                 ) : (
-                  installedNames.has(selectedSkill.name) ? t('skill.marketplace.reinstallToUser') : t('skill.marketplace.installToUser')
+                  installedNames.has(selectedSkill.name)
+                    ? (canUpdateDetail ? t('skill.marketplace.updateToUser') : t('skill.marketplace.reinstallToUser'))
+                    : t('skill.marketplace.installToUser')
                 )}
               </button>
               <button
@@ -391,7 +399,9 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                 {installing && installTarget === 'novel' ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" />{t('skill.marketplace.installing')}</>
                 ) : (
-                  installedNames.has(selectedSkill.name) ? t('skill.marketplace.reinstallToNovel') : t('skill.marketplace.installToNovel')
+                  installedNames.has(selectedSkill.name)
+                    ? (canUpdateDetail ? t('skill.marketplace.updateToNovel') : t('skill.marketplace.reinstallToNovel'))
+                    : t('skill.marketplace.installToNovel')
                 )}
               </button>
               <button
@@ -495,14 +505,17 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                   {items.map(sk => {
                     const installed = installedNames.has(sk.name)
                     const installedVer = installedVersions.get(sk.name)
+                    const canUpdate = installed && installedVer !== undefined && sk.version > installedVer
                     return (
                       <div
                         key={sk.name}
                         onClick={() => handleCardClick(sk)}
                         className={`group relative flex flex-col rounded-2xl p-5 transition-all duration-300 cursor-pointer select-none backdrop-blur-2xl border
-                          ${installed
-                            ? 'bg-success/60 border-success-border/50 opacity-75 hover:opacity-100'
-                            : 'bg-card/80 border-white/15 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5'
+                          ${canUpdate
+                            ? 'bg-warning/60 border-warning-border/50 opacity-75 hover:opacity-100'
+                            : installed
+                              ? 'bg-success/60 border-success-border/50 opacity-75 hover:opacity-100'
+                              : 'bg-card/80 border-white/15 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5'
                           }`}
                       >
                         <div className="flex items-start justify-between mb-2 gap-2">
@@ -528,8 +541,10 @@ export default function SkillMarketplace({ open, onOpenChange, novelId, onInstal
                           )}
                         </div>
                         {installed && installedVer !== undefined && (
-                          <span className="absolute right-3 bottom-3 text-[10px] text-success-foreground">
-                            {t('skill.marketplace.installed', { version: installedVer })}
+                          <span className={`absolute right-3 bottom-3 text-[10px] ${canUpdate ? 'text-warning-foreground' : 'text-success-foreground'}`}>
+                            {canUpdate
+                              ? t('skill.marketplace.updatable', { version: sk.version })
+                              : t('skill.marketplace.installed', { version: installedVer })}
                           </span>
                         )}
                       </div>
