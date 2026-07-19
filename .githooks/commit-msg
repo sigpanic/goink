@@ -72,4 +72,23 @@ EOF
     fi
 fi
 
+# Require body (subject line alone is not enough; need non-empty content
+# after the blank line). line_count == 1 means only subject; line_count
+# == 2 means subject + blank line but no body content. Merge/revert were
+# already skipped above so they are unaffected.
+if [ "$line_count" -le 2 ]; then
+    cat >&2 <<'EOF'
+
+  ✖ Commit message must include a body explaining what and why.
+    Subject line alone is not enough; add a blank line then the body.
+
+    Correct:
+      feat: short description
+
+      Detailed body explaining what changed and why.
+
+EOF
+    exit 1
+fi
+
 exit 0
