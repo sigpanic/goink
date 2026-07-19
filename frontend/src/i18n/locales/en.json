@@ -766,6 +766,8 @@
     "modeSmart": "Smart — AI can invoke autonomously, user can also trigger via /",
     "modeCommand": "Command — Only triggered by user via /, not shown in catalog",
     "modePermanent": "Permanent — Auto-injected at session start, always active",
+    "alwaysScopeUser": "This skill will be injected as a system prompt into every session of all novels",
+    "alwaysScopeNovel": "This skill will be injected as a system prompt into every session of the current novel",
     "builtinNotEditable": "Built-in skills cannot be edited",
     "nameRequired": "Name is required",
     "summaryRequired": "Summary is required",

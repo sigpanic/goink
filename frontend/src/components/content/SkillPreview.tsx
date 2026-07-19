@@ -1,12 +1,13 @@
 import { useTranslation } from 'react-i18next'
 import Markdown from '@/components/Markdown'
-import { splitFrontmatter } from './types'
+import { splitFrontmatter, type SkillSource } from './types'
 
 interface Props {
   content: string
+  source?: SkillSource
 }
 
-export default function SkillPreview({ content }: Props) {
+export default function SkillPreview({ content, source }: Props) {
   const { t } = useTranslation()
   if (!content) {
     return (
@@ -58,6 +59,13 @@ export default function SkillPreview({ content }: Props) {
               )}
             </tbody>
           </table>
+        </div>
+      )}
+      {meta.mode === 'always' && (source === 'user' || source === 'novel') && (
+        <div className="px-6 pb-2">
+          <p className="text-xs text-muted-foreground">
+            {source === 'user' ? t('skill.alwaysScopeUser') : t('skill.alwaysScopeNovel')}
+          </p>
         </div>
       )}
       <div className="px-6 py-4">

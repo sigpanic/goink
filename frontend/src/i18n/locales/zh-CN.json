@@ -738,6 +738,8 @@
     "modeSmart": "智能 — AI 可自主调用，用户也可 / 触发",
     "modeCommand": "指令 — 仅用户 / 手动触发，不出现在目录中",
     "modePermanent": "常驻 — 会话开头自动注入，始终生效",
+    "alwaysScopeUser": "该 skill 将作为系统提示词注入到所有小说的每个会话中",
+    "alwaysScopeNovel": "该 skill 将作为系统提示词注入到当前小说的每个会话中",
     "builtinNotEditable": "内置技能不可编辑",
     "nameRequired": "名称不能为空",
     "summaryRequired": "简介不能为空",

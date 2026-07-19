@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { splitFrontmatter } from '@/components/content/types'
+import { splitFrontmatter, type SkillSource } from '@/components/content/types'
 
 const KNOWN_FIELDS = ['name', 'description', 'category', 'mode', 'author', 'version']
 
@@ -12,12 +12,13 @@ const MODE_OPTIONS = [
 
 interface Props {
   content: string
+  source?: SkillSource
   readOnly?: boolean
   onSave: (newContent: string) => Promise<void>
   onCancel: () => void
 }
 
-export default function SkillEditForm({ content, readOnly, onSave, onCancel }: Props) {
+export default function SkillEditForm({ content, source, readOnly, onSave, onCancel }: Props) {
   const { t } = useTranslation()
 
   const { meta, body } = splitFrontmatter(content)
@@ -71,7 +72,7 @@ export default function SkillEditForm({ content, readOnly, onSave, onCancel }: P
         '---',
         `name: ${name.trim()}`,
         `description: ${description.trim()}`,
-        `category: ${category.trim() || t('skill.uncategorized')}`,
+        `category: ${category.trim()}`,
         `mode: ${mode}`,
       ]
       if (author.trim()) {
@@ -146,6 +147,11 @@ export default function SkillEditForm({ content, readOnly, onSave, onCancel }: P
               <option key={o.value} value={o.value}>{t(o.labelKey)}</option>
             ))}
           </select>
+          {mode === 'always' && (source === 'user' || source === 'novel') && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {source === 'user' ? t('skill.alwaysScopeUser') : t('skill.alwaysScopeNovel')}
+            </p>
+          )}
         </div>
 
         <div className="flex gap-4">

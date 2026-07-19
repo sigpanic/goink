@@ -13,7 +13,7 @@ import OutlineViewer from './OutlineViewer'
 import SkillPreview from './SkillPreview'
 import SkillEditForm from '@/components/skill/SkillEditForm'
 import Markdown from '@/components/Markdown'
-import { outlinePath, isContentPath, isOutlinePath, isSkillPath, skillNameFromPath } from './types'
+import { outlinePath, isContentPath, isOutlinePath, isSkillPath, skillNameFromPath, sourceFromPath } from './types'
 import type { EditorTab } from './types'
 import './ContentPanel.css'
 
@@ -563,10 +563,11 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(function ContentPanel
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         ) : viewMode === 'preview' ? (
-          <SkillPreview content={activeTab.content ?? ''} />
+          <SkillPreview content={activeTab.content ?? ''} source={sourceFromPath(activeTab.path)} />
         ) : viewMode === 'edit' ? (
           <SkillEditForm
             content={activeTab.content ?? ''}
+            source={sourceFromPath(activeTab.path)}
             readOnly={activeTab.readOnly}
             onSave={async (newContent) => {
               await doSave(activeTab.id, activeTab.path, newContent as string)

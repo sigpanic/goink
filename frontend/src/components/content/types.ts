@@ -43,6 +43,16 @@ export function isSkillPath(p: string): boolean {
   return p.startsWith('skills/') || p.startsWith('~/.goink/skills/') || p.startsWith('/builtin/skills/')
 }
 
+export type SkillSource = 'builtin' | 'user' | 'novel'
+
+// sourceFromPath infers the skill layer from its tab path.
+// Mirrors the path conventions in SkillList.skillPath.
+export function sourceFromPath(p: string): SkillSource {
+  if (p.startsWith('/builtin/skills/')) return 'builtin'
+  if (p.startsWith('~/.goink/skills/')) return 'user'
+  return 'novel'
+}
+
 export function skillNameFromPath(p: string): string {
   return p.replace(/.*\//, '').replace('.md', '')
 }
