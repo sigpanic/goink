@@ -988,6 +988,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                             error={seg.error}
                             approvalType={seg.approvalType}
                             approvalPayload={seg.approvalPayload}
+                            result={seg.result}
                             onApprove={
                               seg.toolStatus === 'awaiting_approval'
                                 ? (feedback: string) => onApprove(seg.toolId, feedback)

@@ -105,6 +105,36 @@ var chapterTools = map[string]bool{
 	"read":                true,
 }
 
+// deleteRecordTableLabels 把 delete_record 的 args.table 映射到中文展示前缀。
+// 用于 buildDisplay 中细化 "删除记录" 为 "删除角色"/"删除地点" 等。
+var deleteRecordTableLabels = map[string]string{
+	"character":                "删除角色",
+	"character_relation":       "删除角色关系",
+	"location":                 "删除地点",
+	"location_relation":        "删除地点关系",
+	"timeline_entry":           "删除时间线条目",
+	"story_arc":                "删除故事弧",
+	"arc_node":                 "删除弧节点",
+	"reader_perspective_entry": "删除读者视角条目",
+	"preference":               "删除偏好项",
+}
+
+// resultDataMergeTools 是允许把 result.Data 合并到 AgentEvent.Metadata 的工具白名单。
+// 前端通过 event.metadata 拿到这些字段用于完成态富文本渲染。
+var resultDataMergeTools = map[string]bool{
+	"web_search":    true,
+	"web_fetch":     true,
+	"delete_record": true,
+}
+
+// resultFieldTools 是允许在 toolDisplays 数组里输出 result 字段的工具白名单。
+// 用于历史回看（rebuildTurns 从 messages 重建时前端拿到 td.result）。
+var resultFieldTools = map[string]bool{
+	"web_search":    true,
+	"web_fetch":     true,
+	"delete_record": true,
+}
+
 // buildDisplay 根据 tool_name + args + phase 生成前端展示文本。
 // executing 阶段加 "正在" 前缀，completed/failed/cancelled 去掉。
 // chapter 工具通过 novelID + chapter_number 查 DB 获取章节标题。
@@ -169,6 +199,15 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 				baseText = "编辑 " + label
 			case "read":
 				baseText = "查看 " + label
+			}
+		}
+	}
+
+	// delete_record：根据 args.table 细化展示文本（如 "删除角色" / "删除地点关系"）
+	if name == "delete_record" {
+		if table, ok := args["table"].(string); ok {
+			if label, ok := deleteRecordTableLabels[table]; ok {
+				baseText = label
 			}
 		}
 	}
@@ -240,7 +279,7 @@ func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {
 			"activity_kind": to.activityKind,
 			"phase":         phase,
 		}
-		if (to.name == "web_search" || to.name == "web_fetch") && to.result != nil && to.result.Success && to.result.Data != nil {
+		if resultFieldTools[to.name] && to.result != nil && to.result.Success && to.result.Data != nil {
 			entry["result"] = to.result.Data
 		}
 		toolDisplays = append(toolDisplays, entry)

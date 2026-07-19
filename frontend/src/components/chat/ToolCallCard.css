@@ -98,6 +98,17 @@
   border-top: 1px solid color-mix(in oklab, var(--tool-red-border) 12%, transparent);
 }
 
+/* ── Result body (delete_record 完成态具体内容) ── */
+.tool-result-body {
+  padding: 0.15rem 0.6rem 0.35rem;
+  color: var(--muted-foreground);
+  font-size: 0.68rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-top: 1px solid color-mix(in oklab, var(--tool-green-border) 12%, transparent);
+}
+
 /* ── Approval body ── */
 .approval-body {
   padding: 0.4rem 0.6rem 0.5rem;

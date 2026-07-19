@@ -16,6 +16,8 @@ interface Props {
   approvalPayload?: Record<string, unknown>
   onApprove?: (feedback: string) => void
   onReject?: (feedback: string) => void
+  // 完成态富文本结果（web_search / web_fetch / delete_record）
+  result?: Record<string, unknown>
 }
 
 function activityIcon(kind?: string) {
@@ -105,6 +107,36 @@ function ApprovalBody({ type, payload }: { type?: string; payload?: Record<strin
   return <span>{t('chat.waitingApproval')}</span>
 }
 
+// DeletedEntityBody 在完成态渲染 delete_record 的具体内容。
+// 复用 ApprovalBody 的字段读取逻辑，但使用 deletedEntity* i18n key（"已删除 xxx"）。
+function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
+  const { t } = useTranslation()
+  const typeLabels = getTypeLabels(t)
+  const label = typeLabels[String(deleted.type)] ?? String(deleted.type ?? t('chat.record'))
+  const nameOrTitle = (deleted.name ?? deleted.title) as string | undefined
+  const title = nameOrTitle ?? `#${deleted.id}`
+
+  if (deleted.type === 'character_relation') {
+    return <span>{t('chat.deletedEntityCharacterRelation', { source: String(deleted.source), target: String(deleted.target), relation: String(deleted.relation) })}</span>
+  }
+  if (deleted.type === 'location_relation') {
+    return <span>{t('chat.deletedEntityLocationRelation', { locationA: String(deleted.location_a), locationB: String(deleted.location_b), relation: String(deleted.relation) })}</span>
+  }
+  if (deleted.type === 'arc_node') {
+    return <span>{t('chat.deletedEntityArcNode', { title, storyArc: String(deleted.story_arc) })}</span>
+  }
+  if (deleted.type === 'reader_perspective_entry') {
+    return <span>{t('chat.deletedEntityReaderEntry', { id: String(deleted.id), entryType: String(deleted.entry_type), plantedChapter: String(deleted.planted_chapter) })}</span>
+  }
+  if (deleted.type === 'preference') {
+    return <span>{t('chat.deletedEntityPreference', { category: String(deleted.category), id: String(deleted.id) })}</span>
+  }
+  if (deleted.type === 'timeline_entry') {
+    return <span>{t('chat.deletedEntityTimelineEntry', { title })}</span>
+  }
+  return <span>{t('chat.deletedEntityGeneric', { label, title })}</span>
+}
+
 function ApprovalView({ displayText, compact, approvalType, approvalPayload, onApprove, onReject }: { displayText: string; compact?: boolean; approvalType?: string; approvalPayload?: Record<string, unknown>; onApprove: (feedback: string) => void; onReject: (feedback: string) => void }) {
   const [feedback, setFeedback] = useState('')
   const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -149,7 +181,7 @@ function ApprovalView({ displayText, compact, approvalType, approvalPayload, onA
   )
 }
 
-export default memo(function ToolCallCard({ displayText, status, activityKind, error, compact, approvalType, approvalPayload, onApprove, onReject }: Props) {
+export default memo(function ToolCallCard({ toolName, displayText, status, activityKind, error, compact, approvalType, approvalPayload, onApprove, onReject, result }: Props) {
   const { t } = useTranslation()
 
   // 审批中状态
@@ -160,6 +192,11 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
   const isExecuting = status === 'executing'
   const isCompleted = status === 'completed'
   const isFailed = status === 'failed'
+
+  // delete_record 完成态：渲染"已删除 xxx"具体内容（result.deleted 由后端 metadata 透传）
+  const deletedEntity = isCompleted && toolName === 'delete_record' && result?.deleted
+    ? (result.deleted as Record<string, unknown>)
+    : undefined
 
   return (
     <div className={`tool-card ${isExecuting ? 'executing' : isCompleted ? 'completed' : 'failed'} ${compact ? 'compact' : ''}`}>
@@ -180,6 +217,12 @@ export default memo(function ToolCallCard({ displayText, status, activityKind, e
           {isExecuting ? activityBadge(activityKind, t) : isCompleted ? t('chat.done') : t('chat.failed')}
         </span>
       </div>
+
+      {deletedEntity && (
+        <div className="tool-result-body">
+          <DeletedEntityBody deleted={deletedEntity} />
+        </div>
+      )}
 
       {isFailed && error && (
         <div className="tool-error">{error.slice(0, 120)}</div>

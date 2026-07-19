@@ -125,6 +125,7 @@ export default memo(function SubagentCard({ agentType, segments, status }: Props
                     status={seg.toolStatus}
                     activityKind={seg.activityKind}
                     error={seg.error}
+                    result={seg.result}
                     compact
                   />
                 )

@@ -299,7 +299,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 					display = a.buildDisplay(name, args, displayPhase(phase), opts.NovelID)
 					metadata := display.Metadata
-					if (name == "web_search" || name == "web_fetch") && result.Success && result.Data != nil {
+					if resultDataMergeTools[name] && result.Success && result.Data != nil {
 						if metadata == nil {
 							metadata = make(map[string]any)
 						}
