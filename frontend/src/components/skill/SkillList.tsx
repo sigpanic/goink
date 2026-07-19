@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
-import { Search, Plus, Pencil, Trash2, Heart } from 'lucide-react'
+import { Search, Plus, Pencil, Trash2, Heart, Store } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toastError } from '@/lib/utils'
 import { useApp } from '@/hooks/useApp'
 import type { skill } from '@/hooks/useApp'
 import SkillContributeDialog from './SkillContributeDialog'
+import SkillMarketplace from './SkillMarketplace'
 
 interface Props {
   novelId: number
@@ -32,6 +33,7 @@ export default function SkillList({ novelId, activeSkillName, onSelectSkill, onE
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
   const [showContribute, setShowContribute] = useState(false)
+  const [marketplaceOpen, setMarketplaceOpen] = useState(false)
   const load = useCallback(async () => {
     if (!novelId) { setSkills([]); return }
     setLoading(true)
@@ -44,6 +46,10 @@ export default function SkillList({ novelId, activeSkillName, onSelectSkill, onE
       setLoading(false)
     }
   }, [app, novelId])
+
+  const handleMarketplaceInstalled = useCallback(() => {
+    load()
+  }, [load])
 
   useEffect(() => { load() }, [load])
 
@@ -75,6 +81,13 @@ export default function SkillList({ novelId, activeSkillName, onSelectSkill, onE
           {t('skill.skills')} ({skills.length})
         </span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setMarketplaceOpen(true)}
+            className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
+            title={t('skill.marketplace.title')}
+          >
+            <Store className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={() => setShowContribute(true)}
             className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-rose-500 transition-colors"
@@ -185,6 +198,12 @@ export default function SkillList({ novelId, activeSkillName, onSelectSkill, onE
         )}
       </div>
       <SkillContributeDialog open={showContribute} onClose={() => setShowContribute(false)} />
+      <SkillMarketplace
+        open={marketplaceOpen}
+        onOpenChange={setMarketplaceOpen}
+        novelId={novelId}
+        onInstalled={handleMarketplaceInstalled}
+      />
     </>
   )
 }

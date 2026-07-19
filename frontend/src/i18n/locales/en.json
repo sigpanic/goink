@@ -445,10 +445,28 @@
     "typePalace": "Building",
     "typeWater": "Water",
     "typeKeywords": {
-      "nature": ["Forest", "Cave", "Mountain", "Swamp"],
-      "settlement": ["City", "Town", "Village", "Market"],
-      "palace": ["Palace", "Castle", "Temple"],
-      "water": ["Ocean", "River", "Lake"]
+      "nature": [
+        "Forest",
+        "Cave",
+        "Mountain",
+        "Swamp"
+      ],
+      "settlement": [
+        "City",
+        "Town",
+        "Village",
+        "Market"
+      ],
+      "palace": [
+        "Palace",
+        "Castle",
+        "Temple"
+      ],
+      "water": [
+        "Ocean",
+        "River",
+        "Lake"
+      ]
     }
   },
   "storyarc": {
@@ -780,7 +798,56 @@
     "contributeFormatAuthor": "Your name",
     "forkAndContribute": "Fork & Contribute",
     "viewTemplate": "View Template",
-    "viewGuide": "View Contributing Guide"
+    "viewGuide": "View Contributing Guide",
+    "marketplace": {
+      "title": "Skill Marketplace",
+      "close": "Close",
+      "search": "Search skills...",
+      "refresh": "Refresh",
+      "loading": "Loading...",
+      "empty": "No skills yet",
+      "repoLink": "Open GitHub repo",
+      "pagination_one": "{{total}} item · Page {{page}}/{{totalPages}}",
+      "pagination_other": "{{total}} items · Page {{page}}/{{totalPages}}",
+      "pageSize": "Page size {{size}}",
+      "installed": "Installed v{{version}}",
+      "installToUser": "Install to User Level",
+      "installToNovel": "Install to Novel Level",
+      "reinstallToUser": "Reinstall to User Level",
+      "reinstallToNovel": "Reinstall to Novel Level",
+      "installing": "Installing...",
+      "back": "Back",
+      "cancel": "Cancel",
+      "fieldName": "Name",
+      "fieldDescription": "Description",
+      "fieldCategory": "Category",
+      "fieldMode": "Mode",
+      "fieldAuthor": "Author",
+      "fieldVersion": "Version",
+      "modeSmart": "Smart",
+      "modeCommand": "Command",
+      "modePermanent": "Permanent",
+      "contentLoading": "Loading skill content...",
+      "contentError": "Failed to load skill content",
+      "novelRequired": "Select a novel first to install to the novel level",
+      "installSuccess": "Skill installed successfully",
+      "installFailed": "Skill installation failed",
+      "overwriteTitle": "Overwrite Confirmation",
+      "overwriteWarning": "If you continue, the local {{target}} skill will be replaced with the remote content",
+      "targetUser": "user level",
+      "targetNovel": "novel level",
+      "localContent": "Local current content",
+      "remoteContent": "Remote new content",
+      "confirmOverwrite": "Confirm Overwrite",
+      "noLocalContent": "(no local content)",
+      "retry": "Retry",
+      "errorNetwork": "Cannot reach GitHub (api.github.com). This host is usually directly accessible; please check your network and retry, or open the repo manually, or switch to a network that can access GitHub.",
+      "errorRateLimited": "GitHub API rate limit: unauthenticated requests are capped at 60 per hour. Please try again later.",
+      "errorNotFound": "Skill not found. The repo may have been updated; please refresh the list.",
+      "errorForbidden": "GitHub denied access to this resource.",
+      "errorOther": "Failed to load remote skill: {{message}}",
+      "errorGeneric": "Something went wrong, please retry."
+    }
   },
   "styleSample": {
     "generated": "Generated",

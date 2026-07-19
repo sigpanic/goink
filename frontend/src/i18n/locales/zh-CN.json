@@ -426,10 +426,28 @@
     "typePalace": "建筑",
     "typeWater": "水域",
     "typeKeywords": {
-      "nature": ["森林", "洞穴", "山脉", "沼泽"],
-      "settlement": ["城市", "城镇", "村庄", "市场"],
-      "palace": ["王宫", "城堡", "神殿"],
-      "water": ["海洋", "河流", "湖泊"]
+      "nature": [
+        "森林",
+        "洞穴",
+        "山脉",
+        "沼泽"
+      ],
+      "settlement": [
+        "城市",
+        "城镇",
+        "村庄",
+        "市场"
+      ],
+      "palace": [
+        "王宫",
+        "城堡",
+        "神殿"
+      ],
+      "water": [
+        "海洋",
+        "河流",
+        "湖泊"
+      ]
     }
   },
   "storyarc": {
@@ -752,7 +770,55 @@
     "contributeFormatAuthor": "你的名字",
     "forkAndContribute": "Fork 并贡献",
     "viewTemplate": "查看模板",
-    "viewGuide": "查看贡献指南"
+    "viewGuide": "查看贡献指南",
+    "marketplace": {
+      "title": "Skill 市场",
+      "close": "关闭",
+      "search": "搜索 skill...",
+      "refresh": "刷新",
+      "loading": "加载中...",
+      "empty": "暂无 skill",
+      "repoLink": "访问 GitHub 仓库",
+      "pagination": "共 {{total}} 条 · 第 {{page}}/{{totalPages}} 页",
+      "pageSize": "每页 {{size}} 条",
+      "installed": "已安装 v{{version}}",
+      "installToUser": "安装到用户层",
+      "installToNovel": "安装到小说层",
+      "reinstallToUser": "重新安装到用户层",
+      "reinstallToNovel": "重新安装到小说层",
+      "installing": "安装中...",
+      "back": "返回",
+      "cancel": "取消",
+      "fieldName": "名称",
+      "fieldDescription": "简介",
+      "fieldCategory": "分类",
+      "fieldMode": "模式",
+      "fieldAuthor": "作者",
+      "fieldVersion": "版本",
+      "modeSmart": "智能",
+      "modeCommand": "指令",
+      "modePermanent": "常驻",
+      "contentLoading": "加载 skill 内容...",
+      "contentError": "加载 skill 内容失败",
+      "novelRequired": "请先选择小说再安装到小说层",
+      "installSuccess": "Skill 安装成功",
+      "installFailed": "Skill 安装失败",
+      "overwriteTitle": "覆盖确认",
+      "overwriteWarning": "如果继续，将使用远程内容替换本地 {{target}} 的 skill",
+      "targetUser": "用户层",
+      "targetNovel": "小说层",
+      "localContent": "本地当前内容",
+      "remoteContent": "远程新内容",
+      "confirmOverwrite": "确认覆盖",
+      "noLocalContent": "（无本地内容）",
+      "retry": "重试",
+      "errorNetwork": "无法连接 GitHub（api.github.com）。该域名在国内通常可直连，请检查网络后重试，或手动访问仓库、或切换到能访问 GitHub 的网络环境。",
+      "errorRateLimited": "GitHub API 限流：未认证请求每小时限制 60 次。请稍后再试。",
+      "errorNotFound": "未找到该 skill。可能仓库已更新，请刷新列表。",
+      "errorForbidden": "GitHub 拒绝访问该资源。",
+      "errorOther": "加载远程 skill 时出错：{{message}}",
+      "errorGeneric": "出错了，请重试。"
+    }
   },
   "styleSample": {
     "generated": "已生成",

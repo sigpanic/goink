@@ -90,8 +90,11 @@ import {
   UpdateReaderPerspective,
   DeleteReaderPerspective,
   DeleteSkill,
+  ListRemoteSkills,
+  GetRemoteSkillContent,
+  InstallRemoteSkill,
 } from '@/lib/wailsjs/go/app/App'
-import type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill } from '@/lib/wailsjs/go/models'
+import type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill, apperr, storage, remote } from '@/lib/wailsjs/go/models'
 
 export function useApp() {
   return useMemo(() => ({
@@ -185,7 +188,10 @@ export function useApp() {
     UpdateReaderPerspective,
     DeleteReaderPerspective,
     DeleteSkill,
+    ListRemoteSkills,
+    GetRemoteSkillContent,
+    InstallRemoteSkill,
   }), [])
 }
 
-export type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill }
+export type { app, imp, novel, chapter, config, llm, session, character, location, storyarc, timeline, reader, skill, apperr, storage, remote }
