@@ -271,6 +271,15 @@ var Builtin = map[string]Provider{
 				SupportsThinking: true,
 				SupportsVision:   true,
 			},
+			{
+				ID:               "kimi-k3",
+				Name:             "Kimi K3",
+				ContextWindow:    1_048_576,
+				MaxOutputTokens:  131_072,
+				SupportsThinking: true,
+				ReasoningLevels:  []string{"max"},
+				SupportsVision:   true,
+			},
 		},
 	},
 }
