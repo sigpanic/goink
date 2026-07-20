@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"strconv"
+	"strings"
 	"sync/atomic"
 	"time"
 
@@ -144,9 +145,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	ctx = storage.WithTurn(ctx, opts.SessionID, opts.TurnID)
 
 	loopCount := 0
-	fullResponse := ""
-	responseBuffer := ""
-	thinkingBuffer := ""
+	var responseBuffer strings.Builder
+	var thinkingBuffer strings.Builder
 	isThinking := false
 	recentPatterns := make([]string, 0, 6)
 	failCnt := make(map[string]int)
@@ -174,8 +174,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
-		// P2: 本轮 fullResponse snapshot，重试时恢复以避免内容重复累加
-		fullResponseSnapshot := fullResponse
 		// P2: 本轮 LLM 调用重试计数（不消耗 MaxTurns）
 		retryCount := 0
 		// token 预算检查：每轮开始时，超限触发压缩
@@ -221,7 +219,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				switch event.Type {
 				case llm.EventThinking:
 					isThinking = true
-					thinkingBuffer += event.Data
+					thinkingBuffer.WriteString(event.Data)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventThinking,
 						Data: event.Data, Timestamp: time.Now(),
@@ -234,8 +232,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						})
 						isThinking = false
 					}
-					responseBuffer += event.Data
-					fullResponse += event.Data
+					responseBuffer.WriteString(event.Data)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventContent,
 						Data: event.Data, Timestamp: time.Now(),
@@ -376,10 +373,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						})
 
 						// 清空本轮 buffers，避免重试后内容重复累加
-						responseBuffer = ""
-						thinkingBuffer = ""
+						// 注：本轮开始时 buffer 必为空（上一轮末已 Reset），所以 Reset 等价于恢复到本轮开始状态
+						responseBuffer.Reset()
+						thinkingBuffer.Reset()
 						isThinking = false
-						fullResponse = fullResponseSnapshot
 						// toolOutputs / pendingInjects 在本轮 streamLoop 内，
 						// EventError 发生时本轮 tool 还未执行（toolOutputs 为空），
 						// 不需要清空
@@ -389,7 +386,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							// 用户在退避期间取消 → 走 user_stopped 路径
 							// 不 emit EventError（前端已设 status='stopped'）
 							interrupted = true
-							return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
+							return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
 						case <-time.After(backoff):
 							goto RETRY_STREAM
 						}
@@ -400,11 +397,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						TurnID: opts.TurnID, Type: EventError,
 						ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
 					})
-					if responseBuffer != "" || thinkingBuffer != "" {
-						a.appendMsg("assistant", responseBuffer, thinkingBuffer,
+					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
+						a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
 							nil, &opts, runningTokens)
 					}
-					return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, event.Error
+					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, event.Error
 				}
 			}
 		}
@@ -416,8 +413,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now(),
 				})
 			}
-			if responseBuffer != "" || thinkingBuffer != "" {
-				a.appendMsg("assistant", responseBuffer, thinkingBuffer,
+			if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
+				a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
 					nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
 			break
@@ -425,7 +422,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 		// 1. assistant + tool_calls + tool_displays
 
-		a.appendMsg("assistant", responseBuffer, thinkingBuffer,
+		a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
 			map[string]any{
 				"tool_calls":    buildToolCalls(toolOutputs),
 				"tool_displays": buildToolDisplay(toolOutputs),
@@ -465,16 +462,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		recentPatterns = patterns
 
 		// 清空当前轮缓冲
-		thinkingBuffer = ""
-		responseBuffer = ""
-		fullResponse = ""
+		thinkingBuffer.Reset()
+		responseBuffer.Reset()
 		loopCount++
 	}
 
 	if interrupted {
-		return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
+		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
 	}
-	return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, nil
+	return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, nil
 }
 
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
