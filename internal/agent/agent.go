@@ -111,7 +111,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		AgentType:       req.AgentType,
 		SubTaskID:       req.ToolID,
 		EventSeq:        parentOpts.EventSeq,
-		MaxTurns:        50,
+		MaxTurns:        100,
 		Model:           parentOpts.Model,
 		ProviderName:    parentOpts.ProviderName,
 		ReasoningEffort: parentOpts.ReasoningEffort,
@@ -135,7 +135,7 @@ func agentTypeFromString(s string) agentcfg.AgentType {
 // Run 执行 Agent 循环，返回最终文本和轮数。
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, error) {
 	if opts.MaxTurns <= 0 {
-		opts.MaxTurns = 50
+		opts.MaxTurns = 100
 	}
 	if opts.Model == nil {
 		return AgentLoopResult{}, errors.New("agent: Model is required in RunOptions")
@@ -337,6 +337,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					a.updateUsage(ctx, event.Usage, runningTokens, opts)
 
 				case llm.EventError:
+					// 关键节点日志：agent 收到 EventError
+					if apiErr, ok := event.Error.(*llm.APIError); ok {
+						a.logger.Warn("agent event error",
+							"err", event.Error,
+							"status_code", apiErr.StatusCode,
+							"retryable", apiErr.Retryable)
+					} else {
+						a.logger.Warn("agent event error", "err", event.Error)
+					}
 					// 流错误：保存 partial 后返回
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventError,

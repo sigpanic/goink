@@ -127,6 +127,9 @@ func (c *Client) ChatStream(
 			if isTimeout {
 				msg = "服务器响应超时（首字节超过 60s）"
 				c.logger.Warn("llm first byte timeout", "err", err, "url", req.URL.String())
+			} else {
+				// 非超时网络错误（连接拒绝 / DNS 失败 / EOF / reset 等）
+				c.logger.Warn("llm network error", "err", err, "url", req.URL.String())
 			}
 
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
@@ -141,6 +144,15 @@ func (c *Client) ChatStream(
 		// HTTP 错误
 		if resp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(resp.Body)
+			// 关键节点日志：HTTP 4xx/5xx
+			bodyStr := string(errBody)
+			if len(bodyStr) > 500 {
+				bodyStr = bodyStr[:500]
+			}
+			c.logger.Warn("llm http error",
+				"status", resp.StatusCode,
+				"body", bodyStr,
+				"url", req.URL.String())
 			msg := parseDefaultError(errBody).Error()
 			if p.ParseError != nil {
 				msg = p.ParseError(errBody).Error()
@@ -369,6 +381,7 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	}
 
 	if err := scanner.Err(); err != nil {
+		c.logger.Warn("sse stream interrupted", "err", err)
 		ch <- StreamEvent{Type: EventError, Error: &APIError{
 			StatusCode: 0,
 			Message:    fmt.Sprintf("SSE stream read error: %s", err),
@@ -401,6 +414,7 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 
 	// 零产出检测：流结束但未收到任何有效内容，可能是服务商返回了非标准响应
 	if !hasContent {
+		c.logger.Warn("empty sse response")
 		ch <- StreamEvent{Type: EventError, Error: &APIError{
 			StatusCode: 0,
 			Message:    "流式响应为空，服务商可能不支持流式请求或返回了非标准格式",

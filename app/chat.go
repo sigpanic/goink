@@ -158,7 +158,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		Model:           model,
 		ProviderName:    input.ProviderName,
 		AgentType:       "main",
-		MaxTurns:        50,
+		MaxTurns:        100,
 		ReasoningEffort: input.ReasoningEffort,
 	})
 
@@ -380,6 +380,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	runningTokens := a.agent.InitRunningTokens(messages)
 
 	// 7. 执行压缩
+	// 注意：Compress 走 GenerateText 单次调用，不进入 agent loop，不需要 MaxTurns
 	opts := agent.RunOptions{
 		TurnID:        turnID,
 		SessionID:     sess.SessionID,
@@ -389,7 +390,6 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 		Model:         model,
 		ProviderName:  input.ProviderName,
 		AgentType:     "main",
-		MaxTurns:      50,
 	}
 
 	if err := a.agent.Compress(ctx, &opts, runningTokens); err != nil {
