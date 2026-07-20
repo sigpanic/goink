@@ -5,12 +5,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Client 是 LLM 流式调用的传输层。
@@ -26,10 +29,27 @@ type Client struct {
 func NewClient(providers map[string]Provider, log *slog.Logger) *Client {
 	return &Client{
 		providers: providers,
-		http: &http.Client{
-			Timeout: 0, // 流式请求不设超时，由 ctx 控制
+		http:      newHTTPClient(),
+		logger:    log,
+	}
+}
+
+// newHTTPClient 创建流式请求专用 http.Client：
+//   - ResponseHeaderTimeout: 60s 首字节超时（不含 body 读取）
+//   - DialContext: 10s TCP 连接超时
+//   - Client.Timeout: 0（不限制整体超时，body 读取由 ctx 控制）
+//
+// 注意：绝不能用 http.Client.Timeout，会切断 DeepSeek 思考模型长输出
+func newHTTPClient() *http.Client {
+	return &http.Client{
+		Timeout: 0,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout: 10 * time.Second,
+			}).DialContext,
+			ResponseHeaderTimeout: 60 * time.Second,
 		},
-		logger: log,
 	}
 }
 
@@ -96,10 +116,23 @@ func (c *Client) ChatStream(
 
 		resp, err := c.http.Do(req)
 		if err != nil {
+			// 判断是否首字节超时（ResponseHeaderTimeout 触发）
+			isTimeout := false
+			var netErr net.Error
+			if errors.As(err, &netErr) && netErr.Timeout() {
+				isTimeout = true
+			}
+
+			msg := "网络请求失败"
+			if isTimeout {
+				msg = "服务器响应超时（首字节超过 60s）"
+				c.logger.Warn("llm first byte timeout", "err", err, "url", req.URL.String())
+			}
+
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
-				Message:    fmt.Sprintf("request failed: %s", err),
-				Retryable:  true,
+				Message:    msg,
+				Retryable:  true, // 首字节超时和网络错误均可重试（由 P2 处理，本次只是标记）
 			}}
 			return
 		}

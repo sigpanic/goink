@@ -375,3 +375,4 @@ git blame 证实 [ChatPanel.tsx:1039-1045](file:///home/nianhe/projects/todo/fro
 - **v2（修订）**：增加根因 #9（误判 reasoning_content 破坏协议），新增 P1.5（partial ToAPI=false）
 - **v3（最终）**：核对 DeepSeek 官方文档后确认 v2 的根因 #9 完全错误。DeepSeek 协议是：纯对话场景 reasoning_content 回传被忽略，工具调用场景必须回传。Goink 当前行为完全符合协议。删除根因 #9 错误判断和 P1.5 错误方案。重新归因为 partial tool_calls 丢失导致上下文缺失（但不破坏协议），作为独立 issue 跟进。本次修复聚焦 P0-P3 + 配套方案
 - **v4（P1 实施记录）**：实施 P1 方案 C。后端 EventType 新增 `error` 类型，前端 rebuildTurns 加 `error` → `failed` 映射，app/chat.go 增加 EventType 选择逻辑（context.Canceled → user_stopped / apiErr 存在 → error / 其他 → system_interrupted）。session/types.go EventType 字段注释更新为 5 种值
+- **v5（P3 实施记录）**：实施 P3 流式超时方案。internal/llm/stream.go 引入 newHTTPClient() 工厂函数，配置 http.Transport.ResponseHeaderTimeout=60s + DialContext=10s，http.Client.Timeout 保持 0。首字节超时触发时返回 APIError{StatusCode:0, Retryable:true, Message:"服务器响应超时（首字节超过 60s）"}，由 P2 重试逻辑处理
