@@ -12,6 +12,7 @@ const (
 	EventToolCall                           // 工具调用状态变化
 	EventUsage                              // 每次 LLM 调用的 token 用量
 	EventError                              // 不可恢复错误
+	EventRetrying                           // 可恢复错误重试中（agent 层自动重试 LLM 调用）
 	EventCompression                        // 上下文压缩状态变化
 )
 
@@ -35,6 +36,9 @@ type AgentEvent struct {
 	Usage            map[string]any `json:"usage,omitempty"`             // token 用量详情（含 usage_ratio / detail）
 	CompressionPhase string         `json:"compression_phase,omitempty"` // "compressing" | "done"
 	Summary          string         `json:"summary,omitempty"`           // 压缩摘要文本
+	Attempt          int            `json:"attempt,omitempty"`           // EventRetrying 时：第几次重试（1-indexed）
+	MaxRetries       int            `json:"max_retries,omitempty"`       // EventRetrying 时：最大重试次数
+	BackoffMs        int64          `json:"backoff_ms,omitempty"`        // EventRetrying 时：本次退避毫秒数
 	Timestamp        time.Time      `json:"timestamp"`                   // 事件生成时间
 }
 

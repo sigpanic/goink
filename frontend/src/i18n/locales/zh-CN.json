@@ -124,6 +124,7 @@
     "configureModelFirst": "请先配置模型",
     "chatInterrupted": "对话被中断",
     "chatStopped": "对话已停止",
+    "retrying": "正在重试 {{attempt}}/{{max}}",
     "loadMessagesFailed": "加载消息失败",
     "startConversation": "输入消息开始对话",
     "chatError": "对话出错，请重试",

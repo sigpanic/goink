@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 )
 
 // Provider 定义一个大模型供应商的完整配置。
@@ -37,6 +38,7 @@ type APIError struct {
 	StatusCode int
 	Message    string
 	Retryable  bool
+	RetryAfter time.Duration // 服务商指定的重试等待时间（来自 Retry-After header），0 表示无指定
 }
 
 func (e *APIError) Error() string {

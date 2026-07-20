@@ -8,7 +8,8 @@ export enum AgentEventType {
   ToolCall = 3,
   Usage = 4,
   Error = 5,
-  Compression = 6,
+  Retrying = 6, // 可恢复错误重试中
+  Compression = 7,
 }
 
 // AgentEvent 与 Go 端 AgentEvent 的 JSON 序列化一一对应
@@ -30,6 +31,9 @@ export interface AgentEvent {
   usage?: Record<string, unknown>
   compression_phase?: string // "compressing" | "done"
   summary?: string
+  attempt?: number      // EventRetrying 时：第几次重试（1-indexed）
+  max_retries?: number  // EventRetrying 时：最大重试次数
+  backoff_ms?: number   // EventRetrying 时：本次退避毫秒数
   timestamp: string
 }
 
@@ -89,6 +93,11 @@ export interface Turn {
   status: 'streaming' | 'done' | 'failed' | 'interrupted' | 'stopped'
   errorMessage?: string
   compressionOnly?: boolean // 纯压缩 turn（手动压缩），无用户消息
+  retrying?: {              // P2: 可恢复错误重试状态
+    attempt: number         // 第几次重试（1-indexed）
+    maxRetries: number      // 最大重试次数
+    errorMessage: string    // 触发重试的错误信息
+  } | null
 }
 
 export function rebuildTurns(messages: session.Message[]): Turn[] {

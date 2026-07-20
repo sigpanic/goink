@@ -264,6 +264,17 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
   useEffect(() => { loadSlash() }, [loadSlash])
 
   const applyAgentEvent = useCallback((turnId: number, event: AgentEvent) => {
+    // P2: 流恢复事件清空 retrying 状态（agent 重试 LLM 调用成功）
+    if (event.type === AgentEventType.Thinking
+        || event.type === AgentEventType.ThinkingDone
+        || event.type === AgentEventType.Content
+        || event.type === AgentEventType.ToolCall) {
+      setTurns(prev => prev.map(turn =>
+        turn.turnId === turnId && turn.retrying
+          ? { ...turn, retrying: null }
+          : turn
+      ))
+    }
     switch (event.type) {
       case AgentEventType.Usage: {
         if (event.usage) {
@@ -274,7 +285,29 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       case AgentEventType.Error: {
         setTurns(prev => prev.map(turn =>
           turn.turnId === turnId
-            ? { ...turn, status: 'failed' as const, errorMessage: event.error || t('chat.chatError') }
+            ? {
+                ...turn,
+                status: 'failed' as const,
+                errorMessage: event.error || t('chat.chatError'),
+                retrying: null,
+              }
+            : turn
+        ))
+        return
+      }
+      case AgentEventType.Retrying: {
+        // P2: agent 层正在重试 LLM 调用，显示"重试 x/y"
+        setTurns(prev => prev.map(turn =>
+          turn.turnId === turnId
+            ? {
+                ...turn,
+                status: 'streaming' as const,
+                retrying: {
+                  attempt: event.attempt || 0,
+                  maxRetries: event.max_retries || 0,
+                  errorMessage: event.error || '',
+                },
+              }
             : turn
         ))
         return
@@ -1050,7 +1083,25 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                         </div>
                       </div>
                     )}
-                    {turn.status === 'streaming' && turn.segments.length === 0 && (
+                    {turn.retrying && (
+                      <div className="flex justify-center">
+                        <div className="bg-warning border border-warning-border rounded-lg px-3 py-2 text-xs text-warning-foreground max-w-[80%] flex items-center gap-2">
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                          <span>
+                            {t('chat.retrying', {
+                              attempt: turn.retrying.attempt,
+                              max: turn.retrying.maxRetries,
+                            })}
+                          </span>
+                          {turn.retrying.errorMessage && (
+                            <span className="opacity-70">
+                              · {turn.retrying.errorMessage}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {turn.status === 'streaming' && turn.segments.length === 0 && !turn.retrying && (
                       <div className="flex justify-start">
                         <div className="bg-muted rounded-lg rounded-bl-sm px-3 py-2">
                           <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />

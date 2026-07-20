@@ -11,6 +11,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -157,10 +158,14 @@ func (c *Client) ChatStream(
 			if p.ParseError != nil {
 				msg = p.ParseError(errBody).Error()
 			}
+			// 解析 Retry-After header（HTTP 429/503 等场景）
+			// 支持两种格式：秒数（"120"）或 HTTP-date（"Wed, 21 Oct 2026 07:28:00 GMT"）
+			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: resp.StatusCode,
 				Message:    msg,
 				Retryable:  statusRetryable(resp.StatusCode),
+				RetryAfter: retryAfter,
 			}}
 			return
 		}
@@ -446,4 +451,29 @@ func parseDefaultError(body []byte) error {
 		return fmt.Errorf("request failed: %s", string(body))
 	}
 	return fmt.Errorf("%s", resp.Error.Message)
+}
+
+// parseRetryAfter 解析 Retry-After header。
+// 支持两种格式：
+//   - 秒数：如 "120" 表示 120 秒后重试
+//   - HTTP-date：如 "Wed, 21 Oct 2026 07:28:00 GMT"
+//
+// 解析失败或为空返回 0。
+func parseRetryAfter(value string) time.Duration {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0
+	}
+	// 优先尝试秒数
+	if secs, err := strconv.Atoi(value); err == nil && secs >= 0 {
+		return time.Duration(secs) * time.Second
+	}
+	// 尝试 HTTP-date
+	if t, err := http.ParseTime(value); err == nil {
+		d := time.Until(t)
+		if d > 0 {
+			return d
+		}
+	}
+	return 0
 }

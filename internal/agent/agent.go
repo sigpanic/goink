@@ -174,6 +174,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
+		// P2: 本轮 fullResponse snapshot，重试时恢复以避免内容重复累加
+		fullResponseSnapshot := fullResponse
+		// P2: 本轮 LLM 调用重试计数（不消耗 MaxTurns）
+		retryCount := 0
 		// token 预算检查：每轮开始时，超限触发压缩
 		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.8 {
 			a.logger.Warn("token budget exceeded, triggering compression",
@@ -197,6 +201,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
+	RETRY_STREAM:
 		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 
 		// ---- SSE 流处理 ----
@@ -338,15 +343,59 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 				case llm.EventError:
 					// 关键节点日志：agent 收到 EventError
-					if apiErr, ok := event.Error.(*llm.APIError); ok {
+					var apiErr *llm.APIError
+					if errors.As(event.Error, &apiErr) {
 						a.logger.Warn("agent event error",
 							"err", event.Error,
 							"status_code", apiErr.StatusCode,
-							"retryable", apiErr.Retryable)
+							"retryable", apiErr.Retryable,
+							"retry_after_ms", apiErr.RetryAfter.Milliseconds())
 					} else {
 						a.logger.Warn("agent event error", "err", event.Error)
 					}
-					// 流错误：保存 partial 后返回
+
+					// P2: 可恢复错误重试（不重试 ctx.Canceled / 不可恢复错误 / 非 *APIError）
+					if apiErr != nil && apiErr.Retryable && retryCount < maxRetries {
+						retryCount++
+						backoff := computeBackoff(retryCount, apiErr.RetryAfter)
+						a.logger.Warn("agent retrying llm call",
+							"attempt", retryCount,
+							"max_retries", maxRetries,
+							"backoff_ms", backoff.Milliseconds(),
+							"status_code", apiErr.StatusCode)
+
+						// 通知前端：正在重试
+						emit(AgentEvent{
+							TurnID:     opts.TurnID,
+							Type:       EventRetrying,
+							Attempt:    retryCount,
+							MaxRetries: maxRetries,
+							BackoffMs:  backoff.Milliseconds(),
+							ErrMsg:     FriendlyError(event.Error),
+							Timestamp:  time.Now(),
+						})
+
+						// 清空本轮 buffers，避免重试后内容重复累加
+						responseBuffer = ""
+						thinkingBuffer = ""
+						isThinking = false
+						fullResponse = fullResponseSnapshot
+						// toolOutputs / pendingInjects 在本轮 streamLoop 内，
+						// EventError 发生时本轮 tool 还未执行（toolOutputs 为空），
+						// 不需要清空
+
+						select {
+						case <-ctx.Done():
+							// 用户在退避期间取消 → 走 user_stopped 路径
+							// 不 emit EventError（前端已设 status='stopped'）
+							interrupted = true
+							return AgentLoopResult{FinalText: fullResponse, ThinkingContent: thinkingBuffer, TurnCount: loopCount}, ctx.Err()
+						case <-time.After(backoff):
+							goto RETRY_STREAM
+						}
+					}
+
+					// 失败兜底：不可重试 或 重试次数耗尽 → 保存 partial 后返回
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventError,
 						ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
