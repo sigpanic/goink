@@ -1,4 +1,4 @@
-.PHONY: dev build frontend-dev frontend-build clean deps package lint
+.PHONY: dev build frontend-dev frontend-build clean deps package lint lint-frontend lint-go
 
 APP_NAME  := goink
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -39,8 +39,15 @@ frontend-build:
 	cd frontend && npm run build
 
 # 前端 ESLint 检查（阻断 error，允许现有 warn）
-lint:
+lint-frontend:
 	cd frontend && npx eslint .
+
+# Go 后端 golangci-lint 检查（配置见 .golangci.yml）
+lint-go:
+	CGO_ENABLED=1 golangci-lint run --timeout=10m ./...
+
+# 汇总：前端 + 后端 lint
+lint: lint-frontend lint-go
 
 # 打包（按当前平台）
 package:

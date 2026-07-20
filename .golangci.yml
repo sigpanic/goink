@@ -1,0 +1,33 @@
+version: "2"
+
+run:
+  timeout: 10m
+  go: "1.25"
+  build-tags:
+    - webkit2_41
+
+linters:
+  default: none
+  enable:
+    - errcheck
+    - govet
+    - ineffassign
+    - staticcheck
+    - unused
+  exclusions:
+    paths:
+      - "frontend/node_modules"
+      - "dev_test"
+      - "scripts"
+      - "build"
+    rules:
+      # 清理函数（defer Close/Rollback/Destroy）不检查返回值是行业惯例
+      - linters: [errcheck]
+        text: "Error return value of `.+\\.(Close|Rollback|Destroy)` is not checked"
+      # 测试文件不检查 errcheck（测试 helper 常忽略错误，golangci-lint 官方示例做法）
+      - path: _test\.go
+        linters: [errcheck]
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
