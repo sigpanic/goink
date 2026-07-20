@@ -5,7 +5,7 @@ import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
 import { useApp } from '@/hooks/useApp'
 import type { llm, app } from '@/hooks/useApp'
 import type { AgentEvent, Turn } from './types'
-import { AgentEventType, emptySegment, rebuildTurns } from './types'
+import { AgentEventType, emptySegment, filterSegmentsBySeq, rebuildTurns } from './types'
 import ChatInput from './ChatInput'
 import ChatControls from './ChatControls'
 import MessageBubble from './MessageBubble'
@@ -297,11 +297,14 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
       }
       case AgentEventType.Retrying: {
         // P2: agent 层正在重试 LLM 调用，显示"重试 x/y"
+        // 同步清空本轮 streamLoop 已渲染的 partial segments（保留历史 segments firstSeq=0）
+        const clearFromSeq = event.clear_from_seq ?? 0
         setTurns(prev => prev.map(turn =>
           turn.turnId === turnId
             ? {
                 ...turn,
                 status: 'streaming' as const,
+                segments: filterSegmentsBySeq(turn.segments, clearFromSeq),
                 retrying: {
                   attempt: event.attempt || 0,
                   maxRetries: event.max_retries || 0,
@@ -398,6 +401,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
             segments: [],
             finalText: '',
             toolStatus: 'executing' as const,
+            firstSeq: event.seq ?? 0,
           }
           updatedSegments = [...turn.segments, newSeg]
           subIdx = updatedSegments.length - 1
@@ -493,6 +497,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
               thinkingContent: chunk,
               thinkingDone: false,
               isStreaming: true,
+              firstSeq: event.seq ?? 0,
             })
           }
           return { ...turn, segments }
@@ -524,6 +529,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
               content: chunk,
               thinkingDone: true,
               isStreaming: true,
+              firstSeq: event.seq ?? 0,
             })
           }
           return { ...turn, segments }
@@ -561,6 +567,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                 segments: [],
                 finalText: '',
                 toolStatus: 'executing',
+                firstSeq: event.seq ?? 0,
               })
             }
             // 移除同 toolId 的 tool segment（可能由空 toolName 的早期事件误创建）
@@ -607,6 +614,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
               approvalType,
               approvalPayload,
               result: toolStatus === 'completed' ? event.metadata : undefined,
+              firstSeq: event.seq ?? 0,
             })
           }
 

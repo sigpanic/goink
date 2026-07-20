@@ -200,6 +200,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
 	RETRY_STREAM:
+		// 记录本轮 streamLoop 第一个事件 seq（前端据此清空本轮 partial segments）
+		// +1 是因为 emit 闭包是 `*eventSeq++; event.Seq = *eventSeq`（先自增再赋值）
+		streamStartSeq := *eventSeq + 1
 		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
 
 		// ---- SSE 流处理 ----
@@ -361,15 +364,16 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							"backoff_ms", backoff.Milliseconds(),
 							"status_code", apiErr.StatusCode)
 
-						// 通知前端：正在重试
+						// 通知前端：正在重试（附带本轮起点 seq，前端据此清空本轮 partial segments）
 						emit(AgentEvent{
-							TurnID:     opts.TurnID,
-							Type:       EventRetrying,
-							Attempt:    retryCount,
-							MaxRetries: maxRetries,
-							BackoffMs:  backoff.Milliseconds(),
-							ErrMsg:     FriendlyError(event.Error),
-							Timestamp:  time.Now(),
+							TurnID:       opts.TurnID,
+							Type:         EventRetrying,
+							Attempt:      retryCount,
+							MaxRetries:   maxRetries,
+							BackoffMs:    backoff.Milliseconds(),
+							ErrMsg:       FriendlyError(event.Error),
+							ClearFromSeq: streamStartSeq,
+							Timestamp:    time.Now(),
 						})
 
 						// 清空本轮 buffers，避免重试后内容重复累加

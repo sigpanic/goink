@@ -34,6 +34,7 @@ export interface AgentEvent {
   attempt?: number      // EventRetrying 时：第几次重试（1-indexed）
   max_retries?: number  // EventRetrying 时：最大重试次数
   backoff_ms?: number   // EventRetrying 时：本次退避毫秒数
+  clear_from_seq?: number // EventRetrying 时：本轮 streamLoop 起点事件 seq（前端据此清空本轮 partial segments）
   timestamp: string
 }
 
@@ -65,6 +66,9 @@ export interface TurnSegment {
   compressionPhase?: 'compressing' | 'done'
   // web_search / web_fetch 的富文本结果
   result?: Record<string, unknown>
+  // P2: 创建该 segment 时的事件 seq（实时流式用，>= 1）
+  // rebuildTurns 创建的历史 segment 默认 0，永远不会被 EventRetrying 清空（clear_from_seq >= 1）
+  firstSeq: number
 }
 
 export function emptySegment(id: string): TurnSegment {
@@ -81,7 +85,17 @@ export function emptySegment(id: string): TurnSegment {
     displayText: '',
     activityKind: '',
     error: '',
+    firstSeq: 0,
   }
+}
+
+// filterSegmentsBySeq 清空本轮 streamLoop 已渲染的 partial segments。
+// 规则：保留 firstSeq < clearFromSeq 的 segments（历史 + 前面轮）。
+// - 历史 segments（rebuildTurns 创建）firstSeq=0，clearFromSeq >= 1，永远保留
+// - 本轮 segments firstSeq >= clearFromSeq，被清空
+// 后端 emit EventRetrying 时附带 clear_from_seq = streamStartSeq = *eventSeq + 1
+export function filterSegmentsBySeq(segments: TurnSegment[], clearFromSeq: number): TurnSegment[] {
+  return segments.filter(s => s.firstSeq < clearFromSeq)
 }
 
 // Turn 是一次对话轮次：用户消息 + AI 回复的 segments

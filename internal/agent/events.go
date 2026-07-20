@@ -39,6 +39,7 @@ type AgentEvent struct {
 	Attempt          int            `json:"attempt,omitempty"`           // EventRetrying 时：第几次重试（1-indexed）
 	MaxRetries       int            `json:"max_retries,omitempty"`       // EventRetrying 时：最大重试次数
 	BackoffMs        int64          `json:"backoff_ms,omitempty"`        // EventRetrying 时：本次退避毫秒数
+	ClearFromSeq     int            `json:"clear_from_seq,omitempty"`    // EventRetrying 时：本轮 streamLoop 起点事件 seq（前端据此清空本轮 partial segments）
 	Timestamp        time.Time      `json:"timestamp"`                   // 事件生成时间
 }
 
