@@ -99,10 +99,14 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
 
   for (const msg of messages) {
     // 中断标记：根据 event_type 区分用户停止和系统中断
-    if (msg.event_type === 'user_stopped' || msg.event_type === 'system_interrupted') {
+    if (msg.event_type === 'user_stopped'
+        || msg.event_type === 'system_interrupted'
+        || msg.event_type === 'error') {
       const target = turns.find(t => t.turnId === msg.turn_id)
       if (target) {
-        target.status = msg.event_type === 'user_stopped' ? 'stopped' : 'interrupted'
+        if (msg.event_type === 'user_stopped') target.status = 'stopped'
+        else if (msg.event_type === 'error') target.status = 'failed'
+        else target.status = 'interrupted'
       }
       continue
     }

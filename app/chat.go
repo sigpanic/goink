@@ -15,6 +15,7 @@ import (
 	"novel/internal/agentcfg"
 	"novel/internal/config"
 	"novel/internal/git"
+	"novel/internal/llm"
 	"novel/internal/rollback"
 	"novel/internal/session"
 )
@@ -167,6 +168,11 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		eventType := "system_interrupted"
 		if errors.Is(runErr, context.Canceled) {
 			eventType = "user_stopped"
+		} else {
+			var apiErr *llm.APIError
+			if errors.As(runErr, &apiErr) {
+				eventType = "error"
+			}
 		}
 		a.session.DB.Create(&session.Message{
 			SessionID:  sess.SessionID,

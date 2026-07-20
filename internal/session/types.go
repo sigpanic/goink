@@ -43,7 +43,13 @@ type Message struct {
 	Version         int       `gorm:"column:version;not null;default:1;index"                      json:"version"`                   // 压缩代数，查询时 = session.active_version
 	ToAPI           bool      `gorm:"column:to_api;not null;default:0;index"                       json:"to_api"`                    // LLM context 是否需要此消息。注：default:0 原因同上，子 agent 的 ToAPI=false 不能被默认值覆盖
 	ToFrontend      bool      `gorm:"column:to_frontend;not null;default:0;index"                  json:"to_frontend"`               // 前端是否需要渲染此消息。注：default:0 必须与 Go false 一致，否则 GORM 跳过零值时 DB 填入默认值 1 导致泄漏
-	EventType       string    `gorm:"column:event_type"                                             json:"event_type,omitempty"`     // "compression" | "interrupt" | "error" | ""
+	// EventType: "" | "compression" | "user_stopped" | "system_interrupted" | "error"
+	// - "": 正常消息
+	// - "compression": 上下文压缩边界
+	// - "user_stopped": 用户手动停止（context.Canceled）
+	// - "system_interrupted": 后端主动中断（MaxTurns/死循环检测）
+	// - "error": 服务商错误（HTTP 4xx/5xx/网络/超时）
+	EventType       string    `gorm:"column:event_type"                                             json:"event_type,omitempty"`
 	AgentType       string    `gorm:"column:agent_type;not null;default:'main';index"              json:"agent_type"`                // "main" | "review" | "memory"
 	SubTaskID       string    `gorm:"column:sub_task_id;index"                                     json:"sub_task_id,omitempty"`     // run_subagent 的 tool call ID，前端路由子 Agent 消息用
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime;index"                       json:"created_at"`
