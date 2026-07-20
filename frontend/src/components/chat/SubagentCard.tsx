@@ -13,6 +13,12 @@ interface Props {
   agentType: 'memory' | 'review'
   segments: TurnSegment[]
   status: 'streaming' | 'done' | 'failed'
+  // P1: 子 agent 重试状态（由 EventRetrying 携带 sub_task_id 时设置）
+  retrying?: {
+    attempt: number
+    maxRetries: number
+    errorMessage: string
+  } | null
 }
 
 function getAgentMeta(t: TFunction): Record<string, { label: string; emoji: string }> {
@@ -22,7 +28,7 @@ function getAgentMeta(t: TFunction): Record<string, { label: string; emoji: stri
   }
 }
 
-export default memo(function SubagentCard({ agentType, segments, status }: Props) {
+export default memo(function SubagentCard({ agentType, segments, status, retrying }: Props) {
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(status !== 'streaming')
   const autoExpanded = useRef(false)
@@ -65,21 +71,24 @@ export default memo(function SubagentCard({ agentType, segments, status }: Props
 
         <span className="flex-1" />
 
-        {isStreaming && (
+        {/* P1: 子 agent 重试时优先显示重试 badge（覆盖 streaming 的"执行中"） */}
+        {retrying ? (
+          <span className="subagent-badge subagent-badge-running" title={retrying.errorMessage}>
+            <Loader2 size={10} className="animate-spin" /> {t('chat.retrying', { attempt: retrying.attempt, max: retrying.maxRetries })}
+          </span>
+        ) : isStreaming ? (
           <span className="subagent-badge subagent-badge-running">
             <Loader2 size={10} className="animate-spin" /> {t('chat.executing')}
           </span>
-        )}
-        {isDone && (
+        ) : isDone ? (
           <span className="subagent-badge subagent-badge-done">
             <CheckCircle2 size={10} /> {t('chat.done')}
           </span>
-        )}
-        {isFailed && (
+        ) : isFailed ? (
           <span className="subagent-badge subagent-badge-failed">
             <XCircle size={10} /> {t('chat.failed')}
           </span>
-        )}
+        ) : null}
       </button>
 
       <div

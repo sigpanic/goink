@@ -269,11 +269,23 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         || event.type === AgentEventType.ThinkingDone
         || event.type === AgentEventType.Content
         || event.type === AgentEventType.ToolCall) {
-      setTurns(prev => prev.map(turn =>
-        turn.turnId === turnId && turn.retrying
-          ? { ...turn, retrying: null }
-          : turn
-      ))
+      setTurns(prev => prev.map(turn => {
+        if (turn.turnId !== turnId) return turn
+        // P1: 子 agent 重试后流恢复，清空对应 subagent segment 的 retrying
+        if (event.sub_task_id) {
+          const subIdx = turn.segments.findIndex(s =>
+            s.type === 'subagent' && s.taskId === event.sub_task_id
+          )
+          if (subIdx >= 0 && turn.segments[subIdx].retrying) {
+            const newSegs = [...turn.segments]
+            newSegs[subIdx] = { ...turn.segments[subIdx], retrying: null }
+            return { ...turn, segments: newSegs }
+          }
+          return turn
+        }
+        // 主 turn 重试后流恢复
+        return turn.retrying ? { ...turn, retrying: null } : turn
+      }))
     }
     switch (event.type) {
       case AgentEventType.Usage: {
@@ -299,6 +311,30 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         // P2: agent 层正在重试 LLM 调用，显示"重试 x/y"
         // 同步清空本轮 streamLoop 已渲染的 partial segments（保留历史 segments firstSeq=0）
         const clearFromSeq = event.clear_from_seq ?? 0
+        // P1: 子 agent 重试时按 sub_task_id 路由到对应 subagent segment
+        // 后端 RunSubAgent 复用父 turn 的 TurnID+EventSeq，子 agent 重试触发的 EventRetrying
+        // 会冒泡到主 turn。前端必须按 sub_task_id 区分，否则主 turn 误显示 banner，
+        // 且子 agent 内 partial 不会被清空（bug 复现）。
+        if (event.sub_task_id) {
+          setTurns(prev => prev.map(turn => {
+            if (turn.turnId !== turnId) return turn
+            const subIdx = turn.segments.findIndex(s =>
+              s.type === 'subagent' && s.taskId === event.sub_task_id
+            )
+            if (subIdx < 0) return turn
+            const subSeg = { ...turn.segments[subIdx] }
+            subSeg.segments = filterSegmentsBySeq(subSeg.segments || [], clearFromSeq)
+            subSeg.retrying = {
+              attempt: event.attempt || 0,
+              maxRetries: event.max_retries || 0,
+              errorMessage: event.error || '',
+            }
+            const newSegs = [...turn.segments]
+            newSegs[subIdx] = subSeg
+            return { ...turn, segments: newSegs }
+          }))
+          return
+        }
         setTurns(prev => prev.map(turn =>
           turn.turnId === turnId
             ? {
@@ -418,7 +454,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
             if (last && last.type === 'text' && last.isStreaming) {
               subSegs[subSegs.length - 1] = { ...last, thinkingContent: last.thinkingContent + chunk }
             } else {
-              subSegs.push({ ...emptySegment(subSegId), thinkingContent: chunk, thinkingDone: false, isStreaming: true })
+              subSegs.push({ ...emptySegment(subSegId), thinkingContent: chunk, thinkingDone: false, isStreaming: true, firstSeq: event.seq ?? 0 })
             }
             break
           }
@@ -436,7 +472,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
             if (last && last.type === 'text' && last.isStreaming) {
               subSegs[subSegs.length - 1] = { ...last, content: last.content + chunk, thinkingDone: true }
             } else {
-              subSegs.push({ ...emptySegment(subSegId), content: chunk, thinkingDone: true, isStreaming: true })
+              subSegs.push({ ...emptySegment(subSegId), content: chunk, thinkingDone: true, isStreaming: true, firstSeq: event.seq ?? 0 })
             }
             break
           }
@@ -465,6 +501,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                 displayText: event.display_text || event.tool_name || '',
                 activityKind: event.activity_kind || '',
                 error: event.error || '',
+                firstSeq: event.seq ?? 0,
               })
             }
             break
@@ -1004,6 +1041,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                             agentType={seg.agentType}
                             segments={seg.segments || []}
                             status={seg.status || 'done'}
+                            retrying={seg.retrying}
                           />
                         )
                       }

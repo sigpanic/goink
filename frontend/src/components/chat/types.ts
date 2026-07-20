@@ -69,6 +69,13 @@ export interface TurnSegment {
   // P2: 创建该 segment 时的事件 seq（实时流式用，>= 1）
   // rebuildTurns 创建的历史 segment 默认 0，永远不会被 EventRetrying 清空（clear_from_seq >= 1）
   firstSeq: number
+  // P1: 子 agent 重试状态（主 turn 用 Turn.retrying，子 agent segment 用此字段）
+  // 仅 type='subagent' 的 segment 会用到，由 EventRetrying 携带 sub_task_id 时设置
+  retrying?: {
+    attempt: number
+    maxRetries: number
+    errorMessage: string
+  } | null
 }
 
 export function emptySegment(id: string): TurnSegment {
