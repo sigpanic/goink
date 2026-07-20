@@ -813,7 +813,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
     } catch (err) {
       setTurns(prev => prev.map(t => {
         if (t.id !== turnId) return t
-        if (t.status === 'stopped') return t
+        if (t.status === 'stopped' || t.status === 'failed') return t
         return { ...t, status: 'interrupted' as const, errorMessage: String(err) }
       }))
     } finally {
@@ -1039,7 +1039,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                     {turn.status === 'interrupted' && (
                       <div className="flex justify-center">
                         <div className="bg-danger-bg border border-danger-border rounded-lg px-3 py-2 text-xs text-red-500 max-w-[80%]">
-                          {t('chat.chatInterrupted')}
+                          {turn.errorMessage || t('chat.chatInterrupted')}
                         </div>
                       </div>
                     )}
