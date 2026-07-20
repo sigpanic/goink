@@ -17,6 +17,15 @@ func FriendlyError(err error) string {
 	}
 	var apiErr *llm.APIError
 	if errors.As(err, &apiErr) {
+		// 网络错误/首字节超时：StatusCode=0，无 HTTP 状态码
+		// base 用"网络错误"区分网络场景与其他对话错误
+		if apiErr.StatusCode == 0 {
+			const base = "网络错误"
+			if msg := strings.TrimSpace(apiErr.Message); msg != "" {
+				return fmt.Sprintf("%s：%s", base, msg)
+			}
+			return base
+		}
 		var base string
 		switch apiErr.StatusCode {
 		case 401:

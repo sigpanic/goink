@@ -123,9 +123,9 @@ func (c *Client) ChatStream(
 				isTimeout = true
 			}
 
-			msg := "网络请求失败"
+			msg := "网络连接失败，请检查网络后重试"
 			if isTimeout {
-				msg = "服务器响应超时（首字节超过 60s）"
+				msg = "服务器响应超时（首字节超过 60s），请稍后重试"
 				c.logger.Warn("llm first byte timeout", "err", err, "url", req.URL.String())
 			} else {
 				// 非超时网络错误（连接拒绝 / DNS 失败 / EOF / reset 等）
