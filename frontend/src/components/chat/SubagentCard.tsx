@@ -19,6 +19,8 @@ interface Props {
     maxRetries: number
     errorMessage: string
   } | null
+  // P1: 子 agent 最终失败原因（由 EventError 携带 sub_task_id 时设置）
+  errorMessage?: string
 }
 
 function getAgentMeta(t: TFunction): Record<string, { label: string; emoji: string }> {
@@ -28,7 +30,7 @@ function getAgentMeta(t: TFunction): Record<string, { label: string; emoji: stri
   }
 }
 
-export default memo(function SubagentCard({ agentType, segments, status, retrying }: Props) {
+export default memo(function SubagentCard({ agentType, segments, status, retrying, errorMessage }: Props) {
   const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(status !== 'streaming')
   const autoExpanded = useRef(false)
@@ -90,6 +92,10 @@ export default memo(function SubagentCard({ agentType, segments, status, retryin
           </span>
         ) : null}
       </button>
+
+      {isFailed && errorMessage && (
+        <div className="tool-error">{errorMessage.slice(0, 120)}</div>
+      )}
 
       <div
         className={`grid transition-all duration-300 ease-out ${

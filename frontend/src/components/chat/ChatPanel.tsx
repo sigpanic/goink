@@ -295,6 +295,27 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
         return
       }
       case AgentEventType.Error: {
+        // P1: 子 agent 失败时按 sub_task_id 路由到对应 subagent segment
+        // 后端 RunSubAgent 复用父 turn 的 TurnID+EventSeq，子 agent 失败触发的 EventError
+        // 会冒泡到主 turn。前端必须按 sub_task_id 区分，否则主 turn 误设为 failed。
+        if (event.sub_task_id) {
+          setTurns(prev => prev.map(turn => {
+            if (turn.turnId !== turnId) return turn
+            const subIdx = turn.segments.findIndex(s =>
+              s.type === 'subagent' && s.taskId === event.sub_task_id
+            )
+            if (subIdx < 0) return turn
+            const subSeg = { ...turn.segments[subIdx] }
+            subSeg.status = 'failed'
+            subSeg.errorMessage = event.error || t('chat.chatError')
+            subSeg.retrying = null
+            const newSegs = [...turn.segments]
+            newSegs[subIdx] = subSeg
+            return { ...turn, segments: newSegs }
+          }))
+          return
+        }
+        // 主 turn 失败
         setTurns(prev => prev.map(turn =>
           turn.turnId === turnId
             ? {
@@ -1042,6 +1063,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                             segments={seg.segments || []}
                             status={seg.status || 'done'}
                             retrying={seg.retrying}
+                            errorMessage={seg.errorMessage}
                           />
                         )
                       }

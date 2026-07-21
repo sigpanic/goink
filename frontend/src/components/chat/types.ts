@@ -76,6 +76,9 @@ export interface TurnSegment {
     maxRetries: number
     errorMessage: string
   } | null
+  // P1: 子 agent 最终失败原因（由 EventError 携带 sub_task_id 时设置）
+  // 与 retrying.errorMessage 的区别：retrying=null 后丢失，errorMessage 持久保留
+  errorMessage?: string
 }
 
 export function emptySegment(id: string): TurnSegment {
