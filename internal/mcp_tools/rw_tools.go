@@ -29,7 +29,7 @@ type EditArgs struct {
 	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
 	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文；search_replace 时为替换后的文本；line_range_replace 时为插入的新行" validate:"omitempty"`
 	ReplaceAll bool   `json:"replace_all" jsonschema:"description=是否替换所有匹配项。默认 false（仅替换第一个匹配）" validate:"omitempty"`
-	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
+	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
 	Reason     string `json:"reason" jsonschema:"description=修改原因，供人类审阅" validate:"omitempty"`
 	Title      string `json:"title" jsonschema:"description=章节标题。新建章节时必填；对已有章节传入时将覆盖原标题（仅 chapters/xxx.md 路径生效）" validate:"omitempty"`
@@ -576,8 +576,8 @@ title 参数：新建章节/大纲时传入标题；对已有章节传入非空 
 type ReadArgs struct {
 	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节文件格式为 chapters/001.md（三位数字），大纲为 outlines/001.md，故事状态为 goink.md" validate:"required"`
 	IncludeLines *bool  `json:"include_lines" jsonschema:"default=true,description=是否包含行号前缀（如 123|）。默认 true，用于精确引用和行范围编辑。传 false 获取纯文本"`
-	StartLine    int    `json:"start_line" jsonschema:"default=1,description=起始行号 1-based 含此行" validate:"omitempty,min=1"`
-	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末；设为 0 读取全部" validate:"omitempty,min=0"`
+	StartLine    int    `json:"start_line" jsonschema:"default=1,description=起始行号 1-based 含此行，必须 <= end_line" validate:"omitempty,min=1"`
+	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末；设为 0 使用默认值 2000" validate:"omitempty,min=0"`
 }
 
 // ReadTool 读取文件内容（章节正文或故事状态 goink.md）。
