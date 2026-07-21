@@ -354,6 +354,55 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						a.logger.Warn("agent event error", "err", event.Error)
 					}
 
+					// tool arguments 解析失败：丢弃所有输出 + appendMsg reminder + 走自动重试
+					// 与 P2 重试的区别：需要 appendMsg user reminder 告诉 LLM 刚才 tool call 解析失败
+					if apiErr != nil && apiErr.Kind == "tool_args_invalid" {
+						// 丢弃本轮所有输出（content + thinking + tool_calls）
+						responseBuffer.Reset()
+						thinkingBuffer.Reset()
+						isThinking = false
+
+						// appendMsg user reminder，告诉 LLM 刚才 tool call 解析失败
+						reminder := buildToolArgsReminder(apiErr.Message)
+						a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+
+						// 走自动重试路径（复用 P2 退避机制）
+						if retryCount < maxRetries {
+							retryCount++
+							backoff := computeBackoff(retryCount, 0)
+							a.logger.Warn("agent retrying llm call (tool_args_invalid)",
+								"attempt", retryCount,
+								"max_retries", maxRetries,
+								"backoff_ms", backoff.Milliseconds())
+
+							emit(AgentEvent{
+								TurnID:       opts.TurnID,
+								Type:         EventRetrying,
+								Attempt:      retryCount,
+								MaxRetries:   maxRetries,
+								BackoffMs:    backoff.Milliseconds(),
+								ErrMsg:       FriendlyError(event.Error),
+								ClearFromSeq: streamStartSeq,
+								Timestamp:    time.Now(),
+							})
+
+							select {
+							case <-ctx.Done():
+								interrupted = true
+								return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
+							case <-time.After(backoff):
+								goto RETRY_STREAM
+							}
+						}
+
+						// 重试次数耗尽 → 失败兜底（不保存 partial，已经 Reset）
+						emit(AgentEvent{
+							TurnID: opts.TurnID, Type: EventError,
+							ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
+						})
+						return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, event.Error
+					}
+
 					// P2: 可恢复错误重试（不重试 ctx.Canceled / 不可恢复错误 / 非 *APIError）
 					if apiErr != nil && apiErr.Retryable && retryCount < maxRetries {
 						retryCount++
@@ -514,6 +563,13 @@ func sumRunningTokens(tokens map[string]int) int {
 		total += n
 	}
 	return total
+}
+
+// buildToolArgsReminder 构造 tool arguments 解析失败的 reminder 消息。
+// 格式：<system-reminder> 包裹，告诉 LLM 刚才 tool call 解析失败，附带错误信息，提示转义。
+// errMsg 来自 stream.go 的 buildToolArgsInvalidMsg（已截断 200 字符）。
+func buildToolArgsReminder(errMsg string) string {
+	return fmt.Sprintf("<system-reminder>\n你刚才尝试了工具调用但是解析错误：%s\n请重新调用，注意字符串值里的双引号需要用 \\\" 转义\n</system-reminder>", errMsg)
 }
 
 // displayPhase 将 completed/failed 字符串转为 DisplayPhase。

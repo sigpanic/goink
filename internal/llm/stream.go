@@ -397,6 +397,18 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。
 	// 按 id 去重：DeepSeek 偶发会在不同 index 上发相同 id 的 tool_call，
 	// 这里保留首次出现的 slot，跳过后续重复 id，避免主 agent 重复执行 tool（特别是 run_subagent 等耗时工具）。
+	//
+	// 全丢弃策略：如果本轮有任意 tool arguments 解析失败，不发任何 EventToolCallEnd
+	// （成功的 tool call 也一起丢弃），直接发 EventError（Kind="tool_args_invalid"）。
+	// agent 层收到后丢弃 responseBuffer/thinkingBuffer + appendMsg reminder + 走自动重试。
+	// 这避免 "部分 tool call 执行了，部分没有" 导致的 assistant.tool_calls 协议矛盾。
+	type validToolCall struct {
+		idx int
+		raw string
+	}
+	var validToolCalls []validToolCall
+	var invalidToolErrors []string
+
 	seenToolIDs := make(map[string]bool, len(accumulated))
 	for i := range accumulated {
 		acc := &accumulated[i]
@@ -414,30 +426,69 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		}
 		raw := acc.arguments.String()
 		if !json.Valid([]byte(raw)) {
-			c.logger.Warn("tool arguments JSON invalid", "tool", acc.name, "raw", raw)
+			// 先 valid，不通过再 unmarshal 拿具体错误信息
+			var invalidErr error
+			var probe any
+			if invalidErr = json.Unmarshal([]byte(raw), &probe); invalidErr == nil {
+				// 理论不会走到这里（Valid 已返回 false），防御性代码
+				invalidErr = fmt.Errorf("invalid JSON")
+			}
+			c.logger.Warn("tool arguments JSON invalid", "tool", acc.name, "raw", raw, "err", invalidErr)
+			invalidToolErrors = append(invalidToolErrors, fmt.Sprintf("tool=%s: %s", acc.name, invalidErr.Error()))
 			continue
 		}
-		ch <- StreamEvent{
-			Type: EventToolCallEnd,
-			Delta: &ToolCallDelta{
-				ToolName:      acc.name,
-				ToolID:        acc.id,
-				ArgumentsText: raw,
-				ArgumentsJSON: json.RawMessage(raw),
-			},
-		}
-		hasContent = true
+		validToolCalls = append(validToolCalls, validToolCall{idx: i, raw: raw})
 	}
 
-	// 零产出检测：流结束但未收到任何有效内容，可能是服务商返回了非标准响应
-	if !hasContent {
-		c.logger.Warn("empty sse response")
+	// tool arguments 解析失败：全丢弃（不发送成功的 tool call），发 EventError（tool_args_invalid）
+	if len(invalidToolErrors) > 0 {
+		errMsg := buildToolArgsInvalidMsg(invalidToolErrors)
 		ch <- StreamEvent{Type: EventError, Error: &APIError{
 			StatusCode: 0,
-			Message:    "流式响应为空，服务商可能不支持流式请求或返回了非标准格式",
+			Message:    errMsg,
 			Retryable:  true,
+			Kind:       "tool_args_invalid",
 		}}
+	} else {
+		// 没有失败，发送完整的 tool call
+		for _, vtc := range validToolCalls {
+			acc := &accumulated[vtc.idx]
+			ch <- StreamEvent{
+				Type: EventToolCallEnd,
+				Delta: &ToolCallDelta{
+					ToolName:      acc.name,
+					ToolID:        acc.id,
+					ArgumentsText: vtc.raw,
+					ArgumentsJSON: json.RawMessage(vtc.raw),
+				},
+			}
+			hasContent = true
+		}
+
+		// 零产出检测：流结束但未收到任何有效内容，可能是服务商返回了非标准响应
+		if !hasContent {
+			c.logger.Warn("empty sse response")
+			ch <- StreamEvent{Type: EventError, Error: &APIError{
+				StatusCode: 0,
+				Message:    "流式响应为空，服务商可能不支持流式请求或返回了非标准格式",
+				Retryable:  true,
+			}}
+		}
 	}
+}
+
+// buildToolArgsInvalidMsg 构造 tool arguments 解析失败的错误信息。
+// 格式：tool arguments 解析失败（N 个）：tool=xxx: err; tool=yyy: err
+// 截断到 200 字符，避免 reminder 过长。
+func buildToolArgsInvalidMsg(errs []string) string {
+	const maxLen = 200
+	prefix := fmt.Sprintf("tool arguments 解析失败（%d 个）", len(errs))
+	detail := strings.Join(errs, "; ")
+	msg := prefix + "：" + detail
+	if len(msg) > maxLen {
+		msg = msg[:maxLen] + "..."
+	}
+	return msg
 }
 
 // statusRetryable 判断 HTTP 状态码对应的错误是否可重试。
