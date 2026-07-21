@@ -410,6 +410,43 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 - 用户日志 7524 行：同一 id `call_a9hDhfmLkboHAaoTtIsHKedq` 在 message[74] 重复出现，且用户连续重试 3 次都失败（7505/7524/7676 三次报错完全相同）
 - 用户日志 2955 行显示同一 turn（287）的 assistant 消息 `extra_metadata.tool_calls` 数组中确实存在 3 个 tool_call（call_00/01/02），证明 parallel tool calls 场景存在
 
+**v9 实证补充（2026-07-21 深度分析）**：
+
+用户日志 7312 行的 INSERT INTO `messages` SQL 完整记录了 turn 340 主 agent 的 assistant 消息，其 `extra_metadata.tool_calls` 数组含 **10 个元素**（5 个 id 各出现 2 次），`tool_displays` 也是 10 个（前 5 和后 5 完全相同）：
+
+| 序号 | name | id | arguments |
+|---|---|---|---|
+| 1 / 6 | get_preferences | call_a9hDhfmLkboHAaoTtIsHKedq | `{}` |
+| 2 / 7 | get_timeline | call_57Oj0jV1enUC69KUkzqMtU2p | `{"category":"foreshadowing","current_chapter":22,"page":1,"size":50,"status":"pending"}` |
+| 3 / 8 | get_story_arcs | call_7i4aZ4m8bpLpffqHSTVjFO40 | `{"arc_type":"main","current_chapter":22,"page":1,"size":50,"status":"active"}` |
+| 4 / 9 | get_reader_perspective | call_5Np3mdLIvJO66l6ZJfdWWuKx | `{}` |
+| 5 / 10 | run_subagent | call_3YoEbnwTzHm2Od0s9HMlk1YR | `{"agent_type":"review","instruction":"请对当前小说..."}` |
+
+前 5 个和后 5 个的 id、name、arguments **完全相同**。这证明 DeepSeek 在一次流式响应里发了 10 个不同 index 的 tool_calls，其中 index 0-4 和 index 5-9 的内容完全一致。
+
+**执行时间线**（主 agent 在一个 streamLoop 迭代内执行了 10 次 tool，跨度 130 秒）：
+
+| 时间 | tool | elapsed | 备注 |
+|---|---|---|---|
+| 16:06:31.609 | get_preferences | 0ms | 第 1 次 |
+| 16:06:31.633 | get_timeline | 24ms | 第 1 次 |
+| 16:06:31.637 | get_story_arcs | 3ms | 第 1 次 |
+| 16:06:31.639 | get_reader_perspective | 1ms | 第 1 次 |
+| 16:06:31.639 | run_subagent | 52288ms | 第 1 次（阻塞 52s） |
+| 16:07:23.928 | get_preferences | 0ms | **第 2 次（重复）** |
+| 16:07:23.930 | get_timeline | 2ms | **第 2 次（重复）** |
+| 16:07:23.933 | get_story_arcs | 2ms | **第 2 次（重复）** |
+| 16:07:23.934 | get_reader_perspective | 1ms | **第 2 次（重复）** |
+| 16:07:23.935 | run_subagent | 78467ms | **第 2 次（重复，阻塞 78s）** |
+
+run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完整的子 agent（子 agent 内部又调了 get_preferences 等工具，产生 7194-7204 和 7281-7291 的 review agent 消息）。这证明 tool 确实被执行了两次，不只是 toolOutputs 被重复追加。
+
+**排除其他路径**：
+
+- **排除 retry**：搜索 `agent retrying llm call` / `agent event error` / `sse stream interrupted` 在 turn 340 范围内无任何匹配，没有触发 agent.go:358-396 的 retry 逻辑
+- **排除 subagent 合并**：RunSubAgent（agent.go:91-122）创建独立的 subOpts.Messages，子 agent 的消息不会合并到主 agent 的 toolOutputs
+- **排除 ctx 取消/partial**：没有 context.Canceled，没有 EventError
+
 **与最新两个 commit 的关系**：
 
 | commit | 是否引入此 bug | 说明 |
@@ -419,11 +456,23 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 
 这是项目从一开始就没有 tool_call_id 去重逻辑的**固有问题**，由 DeepSeek 自身在 parallel tool calls 中偶发分配重复 id 触发。
 
-**修复建议**（仅方向，未动代码）：
+**修复方案**（v9 已实施方案 1 + 方案 3）：
 
-1. **源头去重**（推荐）：在 [internal/llm/stream.go:397-418](file:///home/nianhe/projects/todo/internal/llm/stream.go#L397-L418) 流结束后发射 `EventToolCallEnd` 之前，按 `id` 去重 `accumulated`（保留首次出现的 slot）
-2. **构造时去重**：在 [internal/agent/safety.go:57-70](file:///home/nianhe/projects/todo/internal/agent/safety.go#L57-L70) buildToolCalls 输出前按 `id` 去重（保留首次出现的 entry），同时同步截断对应 `tool` 消息
-3. **兜底防御**（必做）：在 [app/chat.go loadAPIMessages](file:///home/nianhe/projects/todo/app/chat.go) 出口做防御性校验，若发现重复 id 则截断或日志告警，防止 DB 中已有的历史脏数据再次发出去（用户 DB 中 message[74] 已是脏数据，仅修源头无法救已坏数据）
+1. **源头去重**（✅ 已实施）：[internal/llm/stream.go:397-430](file:///home/nianhe/projects/todo/internal/llm/stream.go#L397-L430) 流结束后遍历 `accumulated` 发射 `EventToolCallEnd` 之前，维护 `seenToolIDs map[string]bool`，若 `acc.id` 已存在则 `continue` 并 log warn。这样 DeepSeek 发的重复 id 在源头就被去重，只发 5 次 `EventToolCallEnd`，主 agent 只执行 5 次 tool（避免 run_subagent 被执行两次浪费 130s）
+2. **构造时去重**（❌ 不推荐）：在 [internal/agent/safety.go:57-70](file:///home/nianhe/projects/todo/internal/agent/safety.go#L57-L70) buildToolCalls 输出前按 `id` 去重。方案 1 实施后 toolOutputs 不会有重复 id，方案 2 是死代码。且方案 2 不能避免 tool 副作用（run_subagent 已经执行两次，去重只能避免持久化重复，不能挽回已浪费的资源）
+3. **兜底防御**（✅ 已实施）：[app/chat.go loadAPIMessages](file:///home/nianhe/projects/todo/app/chat.go) 出口加防御性校验。遍历所有消息时维护 `validToolCallIDs` 和 `seenToolMsgIDs` 两个 map：assistant 消息去重 `tool_calls`（保留首次出现的 id）；tool 消息跳过 orphan（无对应 tool_call）+ 跳过重复（每个 tool_call_id 只保留一条）。防止 DB 中已有的历史脏数据（如用户 message[74]）再次发给 DeepSeek 触发 400
+
+**已知未覆盖路径**（v10 评估，方案 D 不修）：
+
+[internal/agent/compress.go:105-113](file:///home/nianhe/projects/todo/internal/agent/compress.go#L105-L113) 压缩完成后重新加载新 version 消息时，直接调 `GetMessagesForAPI` + `ToAPIFormat`，**绕过 loadAPIMessages 去重防御**（代码注释"与 Chat() 走同一条路径"与实现不一致）。若 retainMessages 保留了含重复 tool_call_id 的脏数据到新 version，下次 Run 循环调 LLM 会触发 400 Duplicate tool_call_id。
+
+| 压缩环节 | 入口 | messages 来源 | 防御 |
+|---|---|---|---|
+| 手动压缩调 LLM | `CompressContext` → `loadAPIMessages` | DB → 去重 | ✅ 已防御 |
+| 自动压缩调 LLM | `agent.Run` → `a.Compress` → `generateSummary` | `opts.Messages`（来自 Chat 的 loadAPIMessages） | ✅ 已防御 |
+| 压缩后重新加载 | `compress.go:105-113` | `GetMessagesForAPI` + `ToAPIFormat` | ⚠️ 未防御 |
+
+**触发条件较窄**：需同时满足 (1) Bug A 产生脏数据（已修，新版本不会触发）(2) 脏数据被 retainMessages 保留到新 version（保留最近 15 条 user 消息开始的所有消息，含对应 assistant+tool）。鉴于 Bug A 源头已修，新版本不会产生新脏数据，此漏洞只对历史已污染 DB 有影响，且 loadAPIMessages 在 Chat 入口已兜底，**接受不修（方案 D）**。
 
 ### Bug B：read 工具切片越界 panic（P0，AI 反复调用失败）
 
@@ -517,3 +566,5 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 - **v6（配套实施记录）**：实施配套方案。agent.go MaxTurns 50→100；agent.go EventError 分支加 Warn 日志（含 status_code/retryable 字段）；stream.go HTTP 4xx/5xx 分支加 Warn 日志（body 截断 500 字符）；stream.go SSE 中断 / 空响应分支加 Warn 日志；stream.go 网络错误分支扩展为超时和非超时两类日志
 - **v7（配套补充）**：app/chat.go L161 主对话 MaxTurns 50→100；app/chat.go L392 压缩路径 `MaxTurns: 50` 删除（Grep 确认 compress.go 不读 opts.MaxTurns，Compress 走 GenerateText 单次调用不进入 agent loop，原字段是死代码）
 - **v8（用户日志实证分析）**：issue #26 用户上传完整 goink.log（8065 行，2026-07-21）。实证发现 3 个独立 bug（与 P0-P3 正交）：Bug A — Duplicate tool_call_id（DeepSeek parallel tool calls 偶发分配相同 id + Goink 全链路 8 个环节无去重，导致对话彻底中断）；Bug B — read 工具切片越界 panic（AI 传 start_line > end_line 时 rw_tools.go:638 无校验直接切片，对比 edit 工具已有校验）；Bug C — reasoning_content 缺失（thinking 模式 + tool-call 场景触发 DeepSeek 400）。新增"用户日志实证分析"章节，含错误分布统计、全链路去重缺失分析、修复方案对比、优先级建议。所有修复均未动代码，待用户决定方案
+- **v9（Bug A 深度分析 + 实施方案 1+3）**：深度分析 turn 340 的 7312 行 INSERT 实证，确认 DeepSeek 在一次响应里发了 10 个不同 index 的 tool_calls（index 0-4 和 index 5-9 的 id/name/arguments 完全相同），导致主 agent 在一个 streamLoop 迭代内执行 10 次 tool（含 run_subagent 被执行两次共 130s）。排除 retry/subagent 合并/ctx 取消等其他路径。实施方案 1（stream.go:397-430 源头去重，维护 seenToolIDs map 跳过重复 id）+ 方案 3（app/chat.go loadAPIMessages 出口防御，assistant 去重 tool_calls + tool 消息跳过 orphan/重复）。方案 2（buildToolCalls 构造时去重）不推荐，因方案 1 实施后为死代码且不能避免 tool 副作用。go build + go test ./internal/... ./app/... 全部通过
+- **v10（compress 路径评估 + 测试补充）**：评估压缩路径的 tool_call_id 去重覆盖情况。手动压缩入口（CompressContext）走 loadAPIMessages 已防御；自动压缩的 LLM 调用（generateSummary）用 opts.Messages（来自 Chat 的 loadAPIMessages）已防御；压缩后重新加载（compress.go:105-113）绕过防御，但触发条件窄（需 Bug A 脏数据被 retainMessages 保留），且 Bug A 源头已修，**接受不修（方案 D）**。新增 app/chat_test.go 单元测试覆盖 loadAPIMessages 的 5 个场景（正常无重复 / assistant.tool_calls 重复 id 去重 / orphan tool 消息跳过 / 重复 tool 消息只保留首次 / 跨 turn 不误判），go test 全部通过

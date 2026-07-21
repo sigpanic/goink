@@ -395,10 +395,22 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	}
 
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。
+	// 按 id 去重：DeepSeek 偶发会在不同 index 上发相同 id 的 tool_call，
+	// 这里保留首次出现的 slot，跳过后续重复 id，避免主 agent 重复执行 tool（特别是 run_subagent 等耗时工具）。
+	seenToolIDs := make(map[string]bool, len(accumulated))
 	for i := range accumulated {
 		acc := &accumulated[i]
 		if acc.name == "" || acc.arguments.Len() == 0 {
 			continue
+		}
+		// 按 id 去重（空 id 不去重，理论上不应出现）
+		if acc.id != "" {
+			if seenToolIDs[acc.id] {
+				c.logger.Warn("duplicate tool_call_id from provider, skipping",
+					"tool", acc.name, "tool_call_id", acc.id, "index", i)
+				continue
+			}
+			seenToolIDs[acc.id] = true
 		}
 		raw := acc.arguments.String()
 		if !json.Valid([]byte(raw)) {

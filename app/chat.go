@@ -261,14 +261,67 @@ func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, 
 }
 
 // loadAPIMessages 加载指定 version 的所有 to_api 消息，转为 map 格式。
+// 出口防御：历史 DB 数据可能存在重复 tool_call_id（DeepSeek 偶发 bug + 早期未去重），
+// 这里按 id 去重 assistant.tool_calls 和对应的 tool 消息，避免发给 DeepSeek 时触发 400。
 func (a *App) loadAPIMessages(ctx context.Context, sessionID string, version int) ([]map[string]any, error) {
 	msgs, err := a.session.GetMessagesForAPI(ctx, sessionID, version)
 	if err != nil {
 		return nil, err
 	}
 	result := make([]map[string]any, 0, len(msgs))
+	// validToolCallIDs: assistant 消息去重后的 tool_call id 集合
+	// seenToolMsgIDs: 已保留的 tool 消息 tool_call_id 集合（每个 id 只保留一条 tool 消息）
+	validToolCallIDs := make(map[string]bool)
+	seenToolMsgIDs := make(map[string]bool)
 	for _, m := range msgs {
-		result = append(result, m.ToAPIFormat())
+		api := m.ToAPIFormat()
+		role, _ := api["role"].(string)
+
+		// assistant 消息：去重 tool_calls，保留首次出现的 id
+		if role == "assistant" {
+			if tc, ok := api["tool_calls"].([]any); ok && len(tc) > 0 {
+				seen := make(map[string]bool, len(tc))
+				deduped := make([]any, 0, len(tc))
+				for _, item := range tc {
+					call, ok := item.(map[string]any)
+					if !ok {
+						deduped = append(deduped, item)
+						continue
+					}
+					id, _ := call["id"].(string)
+					if id != "" {
+						if seen[id] {
+							a.logger.Warn("duplicate tool_call_id in DB assistant tool_calls, skipping",
+								"session_id", sessionID, "tool_call_id", id)
+							continue
+						}
+						seen[id] = true
+						validToolCallIDs[id] = true
+					}
+					deduped = append(deduped, item)
+				}
+				api["tool_calls"] = deduped
+			}
+		}
+
+		// tool 消息：跳过没有对应 tool_call 的 orphan + 跳过重复 tool 消息
+		if role == "tool" {
+			if id, ok := api["tool_call_id"].(string); ok && id != "" {
+				if !validToolCallIDs[id] {
+					a.logger.Warn("orphan tool message without matching tool_call, skipping",
+						"session_id", sessionID, "tool_call_id", id)
+					continue
+				}
+				if seenToolMsgIDs[id] {
+					a.logger.Warn("duplicate tool message in DB, skipping",
+						"session_id", sessionID, "tool_call_id", id)
+					continue
+				}
+				seenToolMsgIDs[id] = true
+			}
+		}
+
+		result = append(result, api)
 	}
 	return result, nil
 }
