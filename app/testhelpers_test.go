@@ -69,7 +69,7 @@ func setupTestApp(t *testing.T) *App {
 	require.NoError(t, err, "load settings")
 
 	// Register operation log hooks.
-	storage.RegisterOplogHooks(db)
+	require.NoError(t, storage.RegisterOplogHooks(db))
 
 	// Domain stores.
 	novelStore := novel.NewStore(db, logger)

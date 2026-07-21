@@ -168,8 +168,10 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	}
 	a.settings = settings
 
-	// 5. 注册操作日志钩子
-	storage.RegisterOplogHooks(db)
+	// 5. 注册操作日志钩子（失败降级：回滚功能不可用，其余正常）
+	if err := storage.RegisterOplogHooks(db); err != nil {
+		a.logger.Error("注册操作日志钩子失败，回滚功能将不可用", "err", err)
+	}
 
 	// 6. 创建所有领域 store
 	a.novel = novel.NewStore(db, a.logger)

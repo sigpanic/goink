@@ -74,25 +74,39 @@ func (OperationLogRecord) TableName() string { return "operation_log" }
 //     需要此类操作的 store 方法必须显式调用独立的日志方法。
 //  2. 裸 SQL（db.Exec(...)）不走 callback，同样不会自动记录。
 //     当前所有 store 均无上述两种情况；保留此注释防止后续踩坑。
-func RegisterOplogHooks(db *gorm.DB) {
+func RegisterOplogHooks(db *gorm.DB) error {
 	// BeforeCreate: UPSERT 检测——PK 值已设置的实体可能是 ON CONFLICT 更新已有行，
 	// 先查旧值存入 InstanceSet。自增主键（值为零）的普通 INSERT 跳过此步。
-	db.Callback().Create().Before("gorm:before_create").Register("oplog:before_create", beforeCreate)
+	if err := db.Callback().Create().Before("gorm:before_create").Register("oplog:before_create", beforeCreate); err != nil {
+		return fmt.Errorf("register oplog:before_create: %w", err)
+	}
 
 	// AfterCreate: INSERT（或 UPSERT）→ 根据 beforeCreate 查到的旧值决定 operation 类型
-	db.Callback().Create().After("gorm:after_create").Register("oplog:after_create", afterCreate)
+	if err := db.Callback().Create().After("gorm:after_create").Register("oplog:after_create", afterCreate); err != nil {
+		return fmt.Errorf("register oplog:after_create: %w", err)
+	}
 
 	// BeforeUpdate: 取旧值暂存 InstanceSet
-	db.Callback().Update().Before("gorm:before_update").Register("oplog:before_update", beforeUpdate)
+	if err := db.Callback().Update().Before("gorm:before_update").Register("oplog:before_update", beforeUpdate); err != nil {
+		return fmt.Errorf("register oplog:before_update: %w", err)
+	}
 
 	// AfterUpdate: 用暂存旧值 + 新值 → 记录
-	db.Callback().Update().After("gorm:after_update").Register("oplog:after_update", afterUpdate)
+	if err := db.Callback().Update().After("gorm:after_update").Register("oplog:after_update", afterUpdate); err != nil {
+		return fmt.Errorf("register oplog:after_update: %w", err)
+	}
 
 	// BeforeDelete: 取旧值暂存（逻辑同 beforeUpdate）
-	db.Callback().Delete().Before("gorm:before_delete").Register("oplog:before_delete", beforeDelete)
+	if err := db.Callback().Delete().Before("gorm:before_delete").Register("oplog:before_delete", beforeDelete); err != nil {
+		return fmt.Errorf("register oplog:before_delete: %w", err)
+	}
 
 	// AfterDelete: 用暂存旧值 → 记录
-	db.Callback().Delete().After("gorm:after_delete").Register("oplog:after_delete", afterDelete)
+	if err := db.Callback().Delete().After("gorm:after_delete").Register("oplog:after_delete", afterDelete); err != nil {
+		return fmt.Errorf("register oplog:after_delete: %w", err)
+	}
+
+	return nil
 }
 
 // ── Create 回调 ─────────────────────────────────────────────

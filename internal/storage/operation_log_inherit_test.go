@@ -30,7 +30,9 @@ func setupOplogTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&TestEntity{}, &OperationLogRecord{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	RegisterOplogHooks(db)
+	if err := RegisterOplogHooks(db); err != nil {
+		t.Fatalf("register oplog hooks: %v", err)
+	}
 	return db
 }
 
