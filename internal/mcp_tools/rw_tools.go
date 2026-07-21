@@ -191,9 +191,9 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	if isChapterPath(a.Path) {
 		chapNum := parseChapterNum(a.Path)
 		rag.SubmitRefresh(tc.NovelID, chapNum, proposed)
-			if tc.SearchService != nil {
-				tc.SearchService.UpdateCachedChapter(tc.NovelID, chapNum, proposed)
-			}
+		if tc.SearchService != nil {
+			tc.SearchService.UpdateCachedChapter(tc.NovelID, chapNum, proposed)
+		}
 		stats := text.ComputeStats(proposed)
 
 		// 记录字数变化
@@ -628,6 +628,9 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	lines := strings.Split(content, "\n")
 	totalLines := len(lines)
 
+	if start > end {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("start_line(%d) 不能大于 end_line(%d)", start, end)}, nil
+	}
 	if start > totalLines {
 		return &ToolResult{Success: false, Error: fmt.Sprintf("起始行 %d 超出文件总行数 %d", start, totalLines)}, nil
 	}

@@ -369,6 +369,144 @@ git blame 证实 [ChatPanel.tsx:1039-1045](file:///home/nianhe/projects/todo/fro
 | [frontend/src/i18n/locales/zh-CN.json](file:///home/nianhe/projects/todo/frontend/src/i18n/locales/zh-CN.json) | 125 | `chatInterrupted` 文案定义 |
 | [internal/apperr/apperr.go](file:///home/nianhe/projects/todo/internal/apperr/apperr.go) | — | 已有 LLM 错误码体系可复用 |
 
+## 用户日志实证分析（2026-07-21）
+
+issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB），覆盖 2026-07-12 ~ 2026-07-17 共 6 天使用记录。本次实证分析从前述 P0-P3 + 配套方案之外**新发现 3 个独立 bug**，均为代码缺陷，与已实施的 P0-P3 修复正交。
+
+### 错误类型分布统计
+
+| 错误类型 | 出现次数 | 性质 | 与本次修复方案关系 |
+|---|---|---|---|
+| `[400] Duplicate value for 'tool_call_id'` | 3 次 | **代码 bug（新发现）** | 正交，独立修复 |
+| `[400] messages[74].reasoning_content is required for thinking tool-call history` | 1 次 | **代码 bug（新发现）** | 正交，独立修复 |
+| `tool panicked tool=read panic="slice bounds out of range [48:10]"` | 3 次（[48:10]/[89:15]/[54:40]） | **代码 bug（新发现）** | 正交，独立修复 |
+| `[403] chat pre-consumed quota failed` | 6 次 | 用户 API 余额不足 | 非代码问题， FriendlyError 改进后用户能看到原文 |
+| `[0] 流式响应为空，服务商可能不支持流式请求或返回了非标准格式` | 3 次 | 服务商问题 | P3 首字节超时不覆盖此场景，可观察 |
+| `context canceled` | 2 次 | 用户主动取消 | 正常行为 |
+| `压缩摘要生成失败` | 1 次 | 切模型导致 ctx 取消 | 正常行为 |
+
+### Bug A：Duplicate tool_call_id（P0，对话彻底中断根因之一）
+
+**现象**：DeepSeek 返回 `[400] Duplicate value for 'tool_call_id' of call_a9hDhfmLkboHAaoTtIsHKedq in message[74]`，明确指出 message[74] 的 `tool_calls` 数组里 `call_a9hDhfmLkboHAaoTtIsHKedq` 出现了两次。
+
+**根因**：DeepSeek 在单次响应中给不同 `index` 的 parallel tool_call 发了相同 `id`（这是 DeepSeek 服务端偶发行为，非 Goink bug），但 Goink 全链路**无任何 id 去重逻辑**，重复 id 被原样持久化到 DB，下次发给 DeepSeek 时被 400 拒绝。
+
+**全链路无去重的 8 个环节**：
+
+| 步骤 | 文件:行号 | 行为 |
+|---|---|---|
+| 1. 累积 | [internal/llm/stream.go:343-356](file:///home/nianhe/projects/todo/internal/llm/stream.go#L343-L356) | parseSSE 按 `index` 键化累积到 `accumulated[idx]`，**不按 id 去重**；两个不同 index 的 slot 可以共存同一 id |
+| 2. 发射 | [internal/llm/stream.go:397-418](file:///home/nianhe/projects/todo/internal/llm/stream.go#L397-L418) | 流结束后遍历 `accumulated` 所有 slot，**每个非空 slot 独立发一个 EventToolCallEnd**，重复 id 被发两次 |
+| 3. 收集 | [internal/agent/agent.go:261-339](file:///home/nianhe/projects/todo/internal/agent/agent.go#L261-L339) | `toolOutputs = append(toolOutputs, ...)`，**不去重** |
+| 4. 构造 | [internal/agent/safety.go:57-70](file:///home/nianhe/projects/todo/internal/agent/safety.go#L57-L70) | buildToolCalls 直接遍历输出 `[{id, type, function:{name, arguments}}]`，**不去重** |
+| 5. 持久化 | [internal/agent/agent.go:429-440](file:///home/nianhe/projects/todo/internal/agent/agent.go#L429-L440) | assistant 消息的 `ExtraMetadata.tool_calls = buildToolCalls(toolOutputs)`，**原样写入 DB** |
+| 6. 读出 | [internal/session/store.go](file:///home/nianhe/projects/todo/internal/session/store.go) GetMessagesForAPI | 按 `to_api=true AND version=?` 查询，**无任何过滤** |
+| 7. 转格式 | [internal/session/types.go:62-101](file:///home/nianhe/projects/todo/internal/session/types.go#L62-L101) | ToAPIFormat `payload["tool_calls"] = meta["tool_calls"]`，**直接透传** |
+| 8. 序列化 | [app/chat.go](file:///home/nianhe/projects/todo/app/chat.go) loadAPIMessages | 遍历调用 `ToAPIFormat()`，**不做任何校验** |
+
+**关键证据**：
+
+- 用户日志 7505 行：`time=2026-07-17T16:16:45.904+08:00 level=ERROR source=D:/a/goink/goink/app/chat.go:166 msg=对话失败 err="[400] Duplicate value for 'tool_call_id' of call_a9hDhfmLkboHAaoTtIsHKedq in message[74]"`
+- 用户日志 7524 行：同一 id `call_a9hDhfmLkboHAaoTtIsHKedq` 在 message[74] 重复出现，且用户连续重试 3 次都失败（7505/7524/7676 三次报错完全相同）
+- 用户日志 2955 行显示同一 turn（287）的 assistant 消息 `extra_metadata.tool_calls` 数组中确实存在 3 个 tool_call（call_00/01/02），证明 parallel tool calls 场景存在
+
+**与最新两个 commit 的关系**：
+
+| commit | 是否引入此 bug | 说明 |
+|---|---|---|
+| `86bf424` fix(chat): clear partial segments on retry via clear_from_seq | **否** | 只在 `EventRetrying` 事件中加 `ClearFromSeq` 字段，前端用于清空 partial segments；**未触及** parseSSE 累积、toolOutputs 处理、buildToolCalls、appendMsg、ToAPIFormat 任何一环 |
+| `1da9e8b` fix(chat): route subagent EventRetrying by sub_task_id | **否** | 纯前端路由修复，**完全未触及后端** |
+
+这是项目从一开始就没有 tool_call_id 去重逻辑的**固有问题**，由 DeepSeek 自身在 parallel tool calls 中偶发分配重复 id 触发。
+
+**修复建议**（仅方向，未动代码）：
+
+1. **源头去重**（推荐）：在 [internal/llm/stream.go:397-418](file:///home/nianhe/projects/todo/internal/llm/stream.go#L397-L418) 流结束后发射 `EventToolCallEnd` 之前，按 `id` 去重 `accumulated`（保留首次出现的 slot）
+2. **构造时去重**：在 [internal/agent/safety.go:57-70](file:///home/nianhe/projects/todo/internal/agent/safety.go#L57-L70) buildToolCalls 输出前按 `id` 去重（保留首次出现的 entry），同时同步截断对应 `tool` 消息
+3. **兜底防御**（必做）：在 [app/chat.go loadAPIMessages](file:///home/nianhe/projects/todo/app/chat.go) 出口做防御性校验，若发现重复 id 则截断或日志告警，防止 DB 中已有的历史脏数据再次发出去（用户 DB 中 message[74] 已是脏数据，仅修源头无法救已坏数据）
+
+### Bug B：read 工具切片越界 panic（P0，AI 反复调用失败）
+
+**现象**：日志显示 3 次 panic：
+
+| 时间 | panic 信息 | 推算参数 |
+|---|---|---|
+| 2026-07-13 09:04:37 | `slice bounds out of range [48:10]` | start_line=49, end_line=10 |
+| 2026-07-15 11:04:19 | `slice bounds out of range [89:15]` | start_line=90, end_line=15 |
+| 2026-07-16 08:04:28 | `slice bounds out of range [54:40]` | start_line=55, end_line=40 |
+
+**根因**：AI 调用 read 工具时传入了 `start_line > end_line` 的参数，代码无校验直接切片 `lines[start-1 : end]`，导致越界 panic。
+
+**确切位置**：[internal/mcp_tools/rw_tools.go:638](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L638) `selected := lines[start-1 : end]`
+
+**参数处理流程**（以 start_line=49, end_line=10 为例）：
+
+| 行号 | 代码 | 结果 |
+|------|------|------|
+| 619 | `start := a.StartLine` | `start = 49` |
+| 620-622 | `if start == 0 { start = 1 }` | 不触发，`start = 49` |
+| 623 | `end := a.EndLine` | `end = 10` |
+| 624-626 | `if end == 0 { end = 2000 }` | 不触发，`end = 10` |
+| 628-629 | `lines := strings.Split(...)`; `totalLines := len(lines)` | 假设 `totalLines = 50` |
+| 631-633 | `if start > totalLines` → 49 > 50? **否**，不报错 | 跳过 |
+| 634-636 | `if end > totalLines` → 10 > 50? **否**，`end` 保持 10 | 跳过 |
+| **638** | `selected := lines[start-1 : end]` → `lines[48:10]` | **PANIC** |
+
+**对比 edit 工具**：[rw_tools.go:311-313](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L311-L313) 和 [:508](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L508) 都有 `start > end` 校验，**read 工具漏了**。
+
+**次要问题**：[internal/mcp_tools/base.go:224-233](file:///home/nianhe/projects/todo/internal/mcp_tools/base.go#L224-L233) panic recover 后返回通用错误 `"服务器内部错误，请稍后重试"`，AI 看不到真实原因（"start_line 不能大于 end_line"），倾向用相同参数重试，形成 panic 循环。
+
+**为什么 validator 拦不住**：[rw_tools.go:576-581](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L576-L581) ReadArgs 的 validate tag 只校验单字段下界（`min=1`/`min=0`），`go-playground/validator` 的 struct tag **无法表达跨字段约束**（start_line <= end_line）。
+
+**修复方案选择**（待用户决定，未动代码）：
+
+| 方案 | 实现 | 优点 | 缺点 |
+|---|---|---|---|
+| **A. 校验返回业务错误**（推荐） | rw_tools.go:631 之前加 `if start > end { return 业务错误 }` | 与 edit 工具一致；AI 看到真实原因后能修正参数；字段语义清晰 | AI 偶发犯错时调用失败一次 |
+| B. 容忍自动交换 | `if start > end { start, end = end, start }` | 用户能得到结果 | AI 不知道自己错了，下次还可能这样传；start_line/end_line 字段名暗示起点终点，自动交换语义模糊；与 edit 工具行为不一致 |
+
+**推荐方案 A**，理由：
+
+1. 与 edit 工具保持一致（edit 已有 `start_line 不能大于 end_line` 校验）
+2. 让 AI 看到真实错误，下次调用时修正
+3. 字段语义清晰，避免歧义
+4. 已有现成模式可复用
+
+**配套增强**（可选）：
+
+1. 在 [rw_tools.go:700-713](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L700-L713) `readDescription` 和 ReadArgs 字段 description 中明确写"start_line 必须 <= end_line"
+2. 仿照 [search_replace_test.go:555](file:///home/nianhe/projects/todo/internal/mcp_tools/search_replace_test.go#L555) `TestLineRangeReplace_StartAfterEnd`，新增 `TestReadTool_StartAfterEnd` 覆盖该分支
+
+### Bug C：reasoning_content 缺失（P1，DeepSeek 兼容性）
+
+**现象**：`[400] messages[74].reasoning_content is required for thinking tool-call history (request id: 20260717161627994112599q0IgJL6N)`
+
+**背景**：用户在 16:16:02 切换到 `deepseek/deepseek-v4-flash + reasoning_effort=high` 模型后立即触发。DeepSeek 协议要求 thinking 模式下的 tool-call 历史 message 必须带 `reasoning_content` 字段（详见本文档根因 #9 的协议引用）。
+
+**疑似位置**：[internal/session/types.go:62-101](file:///home/nianhe/projects/todo/internal/session/types.go#L62-L101) ToAPIFormat 序列化 assistant 消息时，未把 `thinking_content` 字段以 DeepSeek 期望的字段名 `reasoning_content` 透传出去。
+
+**需要进一步确认**：
+
+1. ToAPIFormat 是否在所有路径下都透传 `reasoning_content` 字段（尤其是 thinking 模式的 assistant 消息）
+2. 是否在某个版本切换/压缩路径中丢失了 `thinking_content`
+3. 用户日志 7480 行显示该 turn 加载了 87 条 `to_api=true` 消息，需要定位 message[74] 是哪条消息、其 `thinking_content` 字段是否为空
+
+**修复建议**（待进一步调查）：在 ToAPIFormat 出口加日志，若 `role=assistant` 且 `thinking_content != ""` 但序列化后 payload 中无 `reasoning_content` 字段则告警；或在 loadAPIMessages 出口对 thinking 模式消息做字段完整性校验。
+
+### 其他非 bug 发现
+
+1. **用户余额不足**（6 次 403）：用户 API 余额 ＄0.42 / 需要 ＄0.47 等场景。P0 修复 FriendlyError 保留原文后，用户能看到"预扣费额度失败"等真实原因，体验改善
+2. **流式响应为空**（3 次）：可能是用户切换的"向量引擎/little"等第三方服务商不支持流式或返回非标准格式。P3 首字节超时不覆盖此场景（首字节已收到，但 body 为空），可考虑在 [stream.go:370-376](file:///home/nianhe/projects/todo/internal/llm/stream.go#L370-L376) 空响应分支加更详细日志
+3. **read 工具 panic 后 AI 行为**：日志 2955-2961 行显示 panic 后 AI 仍然成功调用了另外两个 read（call_01/call_02），说明 panic recover 机制有效，但 AI 对失败的工具调用不知道原因，可能影响后续推理质量
+
+### 新增修复优先级
+
+| 优先级 | Bug | 修复位置 | 是否阻塞 |
+|---|---|---|---|
+| **P0** | Bug A（tool_call_id 去重） | stream.go + safety.go + loadAPIMessages | 阻塞，对话彻底中断无法恢复 |
+| **P0** | Bug B（read 工具越界校验） | rw_tools.go:631 | 非阻塞但高频，影响 AI 工具调用成功率 |
+| **P1** | Bug C（reasoning_content 缺失） | types.go ToAPIFormat | 阻塞 thinking 模式 + tool-call 场景 |
+
 ## 修订历史
 
 - **v1（初稿）**：识别 8 层根因，提出 P0-P3 + 配套方案
@@ -378,3 +516,4 @@ git blame 证实 [ChatPanel.tsx:1039-1045](file:///home/nianhe/projects/todo/fro
 - **v5（P3 实施记录）**：实施 P3 流式超时方案。internal/llm/stream.go 引入 newHTTPClient() 工厂函数，配置 http.Transport.ResponseHeaderTimeout=60s + DialContext=10s，http.Client.Timeout 保持 0。首字节超时触发时返回 APIError{StatusCode:0, Retryable:true, Message:"服务器响应超时（首字节超过 60s）"}，由 P2 重试逻辑处理
 - **v6（配套实施记录）**：实施配套方案。agent.go MaxTurns 50→100；agent.go EventError 分支加 Warn 日志（含 status_code/retryable 字段）；stream.go HTTP 4xx/5xx 分支加 Warn 日志（body 截断 500 字符）；stream.go SSE 中断 / 空响应分支加 Warn 日志；stream.go 网络错误分支扩展为超时和非超时两类日志
 - **v7（配套补充）**：app/chat.go L161 主对话 MaxTurns 50→100；app/chat.go L392 压缩路径 `MaxTurns: 50` 删除（Grep 确认 compress.go 不读 opts.MaxTurns，Compress 走 GenerateText 单次调用不进入 agent loop，原字段是死代码）
+- **v8（用户日志实证分析）**：issue #26 用户上传完整 goink.log（8065 行，2026-07-21）。实证发现 3 个独立 bug（与 P0-P3 正交）：Bug A — Duplicate tool_call_id（DeepSeek parallel tool calls 偶发分配相同 id + Goink 全链路 8 个环节无去重，导致对话彻底中断）；Bug B — read 工具切片越界 panic（AI 传 start_line > end_line 时 rw_tools.go:638 无校验直接切片，对比 edit 工具已有校验）；Bug C — reasoning_content 缺失（thinking 模式 + tool-call 场景触发 DeepSeek 400）。新增"用户日志实证分析"章节，含错误分布统计、全链路去重缺失分析、修复方案对比、优先级建议。所有修复均未动代码，待用户决定方案
