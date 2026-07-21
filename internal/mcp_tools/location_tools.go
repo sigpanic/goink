@@ -445,7 +445,7 @@ func (t *CreateLocationRelationTool) Execute(ctx context.Context, args any, tc T
 	var pairs []pair
 	for key := range seen {
 		var aID, bID int64
-		fmt.Sscanf(key, "%d-%d", &aID, &bID)
+		_, _ = fmt.Sscanf(key, "%d-%d", &aID, &bID)
 		pairs = append(pairs, pair{aID, bID})
 	}
 	var existing []location.LocationRelation

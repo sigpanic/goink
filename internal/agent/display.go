@@ -192,7 +192,7 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 		// rw 工具的 outlines/ 路径特殊处理
 		if path, ok := args["path"].(string); ok && strings.HasPrefix(path, "outlines/") {
 			var n int
-			fmt.Sscanf(path, "outlines/%d.md", &n)
+			_, _ = fmt.Sscanf(path, "outlines/%d.md", &n)
 			label := fmt.Sprintf("第%d章大纲", n)
 			switch name {
 			case "edit":

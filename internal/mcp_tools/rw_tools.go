@@ -532,7 +532,7 @@ func isChapterPath(p string) bool {
 
 func parseChapterNum(p string) int {
 	var n int
-	fmt.Sscanf(p, "chapters/%d.md", &n)
+	_, _ = fmt.Sscanf(p, "chapters/%d.md", &n)
 	return n
 }
 
@@ -546,7 +546,7 @@ func isSkillPath(p string) bool {
 
 func parseOutlineNum(p string) int {
 	var n int
-	fmt.Sscanf(p, "outlines/%d.md", &n)
+	_, _ = fmt.Sscanf(p, "outlines/%d.md", &n)
 	return n
 }
 

@@ -61,6 +61,7 @@ frontend/         React 19 + TypeScript + Tailwind 4 + shadcn/ui
 - **Commit style**: English, specific, no Co-Authored-By, no emoji
 - **User communicates in Chinese** — respond in Chinese
 - **Edit tool + Chinese text**: When Edit tool fails on Go files with Chinese characters ("String to replace not found"), stretch `old_string` to include surrounding ASCII lines as anchors. Before editing, `gofmt -w file.go` and verify indentation with `cat -A`. See `docs/experience/edit-tool-unicode-match-failure.md`.
+- **Edit tool + same file**: When editing the same file multiple times, run Edits sequentially, never in parallel. Parallel Edits on the same file race — the later Edit writes based on the pre-edit version, silently overwriting the earlier Edit's change (observed: two Edits on rw_tools.go, the second reverted the first).
 
 ## CGO / ONNX notes
 
