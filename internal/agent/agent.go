@@ -388,7 +388,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 							select {
 							case <-ctx.Done():
-								interrupted = true
 								return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
 							case <-time.After(backoff):
 								goto RETRY_STREAM
@@ -438,7 +437,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						case <-ctx.Done():
 							// 用户在退避期间取消 → 走 user_stopped 路径
 							// 不 emit EventError（前端已设 status='stopped'）
-							interrupted = true
 							return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
 						case <-time.After(backoff):
 							goto RETRY_STREAM

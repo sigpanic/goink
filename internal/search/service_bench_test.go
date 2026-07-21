@@ -68,7 +68,6 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 	// 在第 1500 章埋关键搜索词
 	targetChapter := 1500
 	targetContent := paragraph[:len(paragraph)/2] + "张三拔剑刺向李四咽喉" + paragraph[len(paragraph)/2:]
-	contentPerChapter = paragraph
 
 	// 懒加载方式直接注入缓存，跳过文件 IO
 	svc.mu.Lock()

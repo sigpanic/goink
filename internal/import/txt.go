@@ -150,7 +150,6 @@ func parseTxt(filePath string) (*Result, error) {
 			// loose 额外匹配不超过行首模式 50%，或完全重叠（extra=0）
 			if extra >= 0 && extra <= len(r.matches)/2 {
 				bestIdx = r.idx
-				bestCount = len(r.matches)
 				break
 			}
 		}
