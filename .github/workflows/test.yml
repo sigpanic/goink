@@ -36,6 +36,9 @@ jobs:
       - name: Install sqlite3 headers
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
 
+      - name: Create frontend/dist placeholder for go:embed
+        run: mkdir -p frontend/dist && touch frontend/dist/.gitkeep
+
       - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
