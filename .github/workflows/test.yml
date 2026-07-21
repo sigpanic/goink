@@ -36,7 +36,7 @@ jobs:
       - name: Install sqlite3 headers
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
 
-      - uses: golangci/golangci-lint-action@v6
+      - uses: golangci/golangci-lint-action@v7
         with:
           version: v2.12.2
           args: --timeout=10m
