@@ -618,6 +618,6 @@ func parseArgs(raw json.RawMessage) map[string]any {
 		return nil
 	}
 	var m map[string]any
-	json.Unmarshal(raw, &m)
+	_ = json.Unmarshal(raw, &m)
 	return m
 }

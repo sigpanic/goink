@@ -326,7 +326,9 @@ func (t *UpdateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 	// ParentLocationID 为 nil 有两种情况：LLM 没传 vs 传了 null。
 	// 前者不应视为"有修改"，后者应（清除父节点）。检查 RawArgs 区分。
 	var raw map[string]any
-	json.Unmarshal(tc.RawArgs, &raw)
+	if err := json.Unmarshal(tc.RawArgs, &raw); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 	_, hasParent := raw["parent_location_id"]
 
 	if a.Name == "" && a.LocationType == "" && a.Description == "" && a.DetailJSON == "" && a.Tags == "" && !hasParent {

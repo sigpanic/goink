@@ -305,7 +305,7 @@ func SchemaOf(v any) json.RawMessage {
 
 	b, _ := json.Marshal(s)
 	var full map[string]any
-	json.Unmarshal(b, &full)
+	_ = json.Unmarshal(b, &full)
 
 	clean := map[string]any{"type": full["type"]}
 	if props, ok := full["properties"]; ok {
