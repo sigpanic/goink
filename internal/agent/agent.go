@@ -118,7 +118,16 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		ReasoningEffort: parentOpts.ReasoningEffort,
 	}
 	result, err := a.Run(ctx, subOpts)
-	return result.FinalText, err
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			// 用户取消：返回明确文案（与 flushInterruptedTools 一致），供 run_subagent 存入 ToolResult.Error 供历史回放显示
+			return result.FinalText, fmt.Errorf("%s", "操作被中断")
+		}
+		// 友好化 error，与 EventError 的 ErrMsg=FriendlyError(event.Error) 保持一致
+		// 供 run_subagent 工具存入 ToolResult.Error，历史回放与实时流式显示一致
+		return result.FinalText, fmt.Errorf("%s", FriendlyError(err))
+	}
+	return result.FinalText, nil
 }
 
 // agentTypeFromString 将字符串转为 AgentType。

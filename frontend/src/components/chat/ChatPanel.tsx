@@ -614,6 +614,7 @@ export default function ChatPanel({ novelId, onApprove, onReject, onApprovalFile
                 agentType,
                 status: toolStatus === 'executing' ? 'streaming' : toolStatus === 'failed' ? 'failed' : 'done',
                 toolStatus,
+                errorMessage: toolStatus === 'failed' ? (event.error || '') : segments[subIdx].errorMessage,
               }
             } else {
               segments.push({

@@ -282,6 +282,10 @@ func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {
 		if resultFieldTools[to.name] && to.result != nil && to.result.Success && to.result.Data != nil {
 			entry["result"] = to.result.Data
 		}
+		// 失败时持久化 error，供前端历史回放显示
+		if to.result != nil && !to.result.Success && to.result.Error != "" {
+			entry["error"] = to.result.Error
+		}
 		toolDisplays = append(toolDisplays, entry)
 	}
 	return toolDisplays

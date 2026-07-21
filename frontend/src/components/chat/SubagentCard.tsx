@@ -94,7 +94,7 @@ export default memo(function SubagentCard({ agentType, segments, status, retryin
       </button>
 
       {isFailed && errorMessage && (
-        <div className="tool-error">{errorMessage.slice(0, 120)}</div>
+        <div className="tool-error">{errorMessage.slice(0, 60)}</div>
       )}
 
       <div
@@ -147,6 +147,9 @@ export default memo(function SubagentCard({ agentType, segments, status, retryin
               }
               return null
             })}
+            {isFailed && errorMessage && (
+              <div className="tool-error">{errorMessage.slice(0, 120)}</div>
+            )}
           </div>
         </div>
       </div>

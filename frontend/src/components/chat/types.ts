@@ -237,7 +237,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
               toolStatus: phase && (phase === 'executing' || phase === 'completed' || phase === 'failed') ? phase : 'completed',
               displayText: td.display_text,
               activityKind: td.activity_kind,
-              error: '',
+              error: td.error || '',
             })
           }
         }
@@ -267,7 +267,19 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
         // run_subagent：在此位置插入子 Agent 卡片
         if (td.tool_name === 'run_subagent') {
           const cached = subagentCache.get(td.tool_id)
-          if (cached) current.segments.push(cached)
+          if (cached) {
+            // P1: 从 tool_display 的 phase 修正 subagent segment 的 status
+            // rebuildTurns 创建 subagent segment 时默认 status='done'，
+            // 这里根据 run_subagent 的 phase 修正为 failed（历史回放保留失败状态）
+            if (td.phase === 'failed') {
+              cached.status = 'failed'
+            }
+            // 从 tool_display.error 恢复 errorMessage（历史回放）
+            if (td.error) {
+              cached.errorMessage = td.error
+            }
+            current.segments.push(cached)
+          }
           continue
         }
         current.segments.push({
@@ -278,7 +290,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
           toolStatus: (td.phase === 'completed' || td.phase === 'failed' || td.phase === 'executing') ? td.phase : 'completed',
           displayText: td.display_text || td.tool_name,
           activityKind: td.activity_kind || '',
-          error: '',
+          error: td.error || '',
           result: td.result,
         })
       }
@@ -295,6 +307,7 @@ interface ToolDisplay {
   activity_kind: string
   phase: string
   result?: Record<string, unknown>
+  error?: string
 }
 
 function parseToolDisplays(extraMetadata?: string): ToolDisplay[] {

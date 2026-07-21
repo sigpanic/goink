@@ -39,7 +39,10 @@ func (t *RunSubagentTool) Execute(ctx context.Context, args any, tc ToolContext)
 		ToolID:      tc.ToolID,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("子 Agent 执行失败: %w", err)
+		return &ToolResult{
+			Success: false,
+			Error:   err.Error(),
+		}, nil
 	}
 
 	return &ToolResult{
