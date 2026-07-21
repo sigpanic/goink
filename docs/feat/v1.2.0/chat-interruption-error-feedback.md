@@ -377,9 +377,9 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 
 | 错误类型 | 出现次数 | 性质 | 与本次修复方案关系 |
 |---|---|---|---|
-| `[400] Duplicate value for 'tool_call_id'` | 3 次 | **代码 bug（新发现）** | 正交，独立修复 |
+| `[400] Duplicate value for 'tool_call_id'` | 3 次 | **代码 bug（已修复）** | 正交，已修复（commit 3961850） |
 | `[400] messages[74].reasoning_content is required for thinking tool-call history` | 1 次 | **代码 bug（根因已定位）** | 由 v1.3.0 多 Provider 适配解决（见 [v1.3.0 文档](file:///home/nianhe/projects/todo/docs/feat/v1.3.0/multi-provider-adapter.md)） |
-| `tool panicked tool=read panic="slice bounds out of range [48:10]"` | 3 次（[48:10]/[89:15]/[54:40]） | **代码 bug（新发现）** | 正交，独立修复 |
+| `tool panicked tool=read panic="slice bounds out of range [48:10]"` | 3 次（[48:10]/[89:15]/[54:40]） | **代码 bug（已修复）** | 正交，已修复 |
 | `[403] chat pre-consumed quota failed` | 6 次 | 用户 API 余额不足 | 非代码问题， FriendlyError 改进后用户能看到原文 |
 | `[0] 流式响应为空，服务商可能不支持流式请求或返回了非标准格式` | 3 次 | 服务商问题 | P3 首字节超时不覆盖此场景，可观察 |
 | `context canceled` | 2 次 | 用户主动取消 | 正常行为 |
@@ -389,7 +389,7 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 
 **现象**：DeepSeek 返回 `[400] Duplicate value for 'tool_call_id' of call_a9hDhfmLkboHAaoTtIsHKedq in message[74]`，明确指出 message[74] 的 `tool_calls` 数组里 `call_a9hDhfmLkboHAaoTtIsHKedq` 出现了两次。
 
-**根因**：DeepSeek 在单次响应中给不同 `index` 的 parallel tool_call 发了相同 `id`（这是 DeepSeek 服务端偶发行为，非 Goink bug），但 Goink 全链路**无任何 id 去重逻辑**，重复 id 被原样持久化到 DB，下次发给 DeepSeek 时被 400 拒绝。
+**根因**：GPT（`xiangliang/gpt-5.3-codex` 中转）在单次响应中给不同 `index` 的 parallel tool_call 偶发分配了相同 `id`（GPT 服务端偶发行为，非 Goink bug），Goink 全链路**无任何 id 去重逻辑**，重复 id 被原样持久化到 DB，切换到 DeepSeek 时被 400 拒绝（DeepSeek 比 GPT 更严格地校验 tool_call_id 唯一性）。
 
 **全链路无去重的 8 个环节**：
 
@@ -422,7 +422,7 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 | 4 / 9 | get_reader_perspective | call_5Np3mdLIvJO66l6ZJfdWWuKx | `{}` |
 | 5 / 10 | run_subagent | call_3YoEbnwTzHm2Od0s9HMlk1YR | `{"agent_type":"review","instruction":"请对当前小说..."}` |
 
-前 5 个和后 5 个的 id、name、arguments **完全相同**。这证明 DeepSeek 在一次流式响应里发了 10 个不同 index 的 tool_calls，其中 index 0-4 和 index 5-9 的内容完全一致。
+前 5 个和后 5 个的 id、name、arguments **完全相同**。这证明 GPT（`xiangliang/gpt-5.3-codex` 中转）在一次流式响应里发了 10 个不同 index 的 tool_calls，其中 index 0-4 和 index 5-9 的内容完全一致。
 
 **执行时间线**（主 agent 在一个 streamLoop 迭代内执行了 10 次 tool，跨度 130 秒）：
 
@@ -507,7 +507,7 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 
 **为什么 validator 拦不住**：[rw_tools.go:576-581](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L576-L581) ReadArgs 的 validate tag 只校验单字段下界（`min=1`/`min=0`），`go-playground/validator` 的 struct tag **无法表达跨字段约束**（start_line <= end_line）。
 
-**修复方案选择**（待用户决定，未动代码）：
+**修复方案选择**（已实施方案 A）：
 
 | 方案 | 实现 | 优点 | 缺点 |
 |---|---|---|---|
@@ -556,7 +556,7 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 | 优先级 | Bug | 修复位置 | 是否阻塞 |
 |---|---|---|---|
 | **P0** | Bug A（tool_call_id 去重） | stream.go + safety.go + loadAPIMessages | 阻塞，对话彻底中断无法恢复 |
-| **P0** | Bug B（read 工具越界校验） | rw_tools.go:631 | 非阻塞但高频，影响 AI 工具调用成功率 |
+| **P0** | Bug B（read 工具越界校验） | rw_tools.go:631 | 非阻塞但高频，**已修复**（方案 A） |
 | **P1** | Bug C（reasoning_content 缺失） | v1.3.0 stream.go 加 reasoning 解析 | 阻塞 thinking 模式 + tool-call 场景，由 v1.3.0 多 Provider 适配解决 |
 
 ## 修订历史
@@ -568,7 +568,8 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 - **v5（P3 实施记录）**：实施 P3 流式超时方案。internal/llm/stream.go 引入 newHTTPClient() 工厂函数，配置 http.Transport.ResponseHeaderTimeout=60s + DialContext=10s，http.Client.Timeout 保持 0。首字节超时触发时返回 APIError{StatusCode:0, Retryable:true, Message:"服务器响应超时（首字节超过 60s）"}，由 P2 重试逻辑处理
 - **v6（配套实施记录）**：实施配套方案。agent.go MaxTurns 50→100；agent.go EventError 分支加 Warn 日志（含 status_code/retryable 字段）；stream.go HTTP 4xx/5xx 分支加 Warn 日志（body 截断 500 字符）；stream.go SSE 中断 / 空响应分支加 Warn 日志；stream.go 网络错误分支扩展为超时和非超时两类日志
 - **v7（配套补充）**：app/chat.go L161 主对话 MaxTurns 50→100；app/chat.go L392 压缩路径 `MaxTurns: 50` 删除（Grep 确认 compress.go 不读 opts.MaxTurns，Compress 走 GenerateText 单次调用不进入 agent loop，原字段是死代码）
-- **v8（用户日志实证分析）**：issue #26 用户上传完整 goink.log（8065 行，2026-07-21）。实证发现 3 个独立 bug（与 P0-P3 正交）：Bug A — Duplicate tool_call_id（DeepSeek parallel tool calls 偶发分配相同 id + Goink 全链路 8 个环节无去重，导致对话彻底中断）；Bug B — read 工具切片越界 panic（AI 传 start_line > end_line 时 rw_tools.go:638 无校验直接切片，对比 edit 工具已有校验）；Bug C — reasoning_content 缺失（thinking 模式 + tool-call 场景触发 DeepSeek 400）。新增"用户日志实证分析"章节，含错误分布统计、全链路去重缺失分析、修复方案对比、优先级建议。所有修复均未动代码，待用户决定方案
-- **v9（Bug A 深度分析 + 实施方案 1+3）**：深度分析 turn 340 的 7312 行 INSERT 实证，确认 DeepSeek 在一次响应里发了 10 个不同 index 的 tool_calls（index 0-4 和 index 5-9 的 id/name/arguments 完全相同），导致主 agent 在一个 streamLoop 迭代内执行 10 次 tool（含 run_subagent 被执行两次共 130s）。排除 retry/subagent 合并/ctx 取消等其他路径。实施方案 1（stream.go:397-430 源头去重，维护 seenToolIDs map 跳过重复 id）+ 方案 3（app/chat.go loadAPIMessages 出口防御，assistant 去重 tool_calls + tool 消息跳过 orphan/重复）。方案 2（buildToolCalls 构造时去重）不推荐，因方案 1 实施后为死代码且不能避免 tool 副作用。go build + go test ./internal/... ./app/... 全部通过
+- **v8（用户日志实证分析）**：issue #26 用户上传完整 goink.log（8065 行，2026-07-21）。实证发现 3 个独立 bug（与 P0-P3 正交）：Bug A — Duplicate tool_call_id（GPT parallel tool calls 偶发分配相同 id + Goink 全链路 8 个环节无去重，导致对话彻底中断）；Bug B — read 工具切片越界 panic（AI 传 start_line > end_line 时 rw_tools.go:638 无校验直接切片，对比 edit 工具已有校验）；Bug C — reasoning_content 缺失（thinking 模式 + tool-call 场景触发 DeepSeek 400）。新增"用户日志实证分析"章节，含错误分布统计、全链路去重缺失分析、修复方案对比、优先级建议。所有修复均未动代码，待用户决定方案
+- **v9（Bug A 深度分析 + 实施方案 1+3）**：深度分析 turn 340 的 7312 行 INSERT 实证，确认 GPT（xiangliang/gpt-5.3-codex 中转）在一次响应里发了 10 个不同 index 的 tool_calls（index 0-4 和 index 5-9 的 id/name/arguments 完全相同），导致主 agent 在一个 streamLoop 迭代内执行 10 次 tool（含 run_subagent 被执行两次共 130s）。排除 retry/subagent 合并/ctx 取消等其他路径。实施方案 1（stream.go:397-430 源头去重，维护 seenToolIDs map 跳过重复 id）+ 方案 3（app/chat.go loadAPIMessages 出口防御，assistant 去重 tool_calls + tool 消息跳过 orphan/重复）。方案 2（buildToolCalls 构造时去重）不推荐，因方案 1 实施后为死代码且不能避免 tool 副作用。go build + go test ./internal/... ./app/... 全部通过
 - **v10（compress 路径评估 + 测试补充）**：评估压缩路径的 tool_call_id 去重覆盖情况。手动压缩入口（CompressContext）走 loadAPIMessages 已防御；自动压缩的 LLM 调用（generateSummary）用 opts.Messages（来自 Chat 的 loadAPIMessages）已防御；压缩后重新加载（compress.go:105-113）绕过防御，但触发条件窄（需 Bug A 脏数据被 retainMessages 保留），且 Bug A 源头已修，**接受不修（方案 D）**。新增 app/chat_test.go 单元测试覆盖 loadAPIMessages 的 5 个场景（正常无重复 / assistant.tool_calls 重复 id 去重 / orphan tool 消息跳过 / 重复 tool 消息只保留首次 / 跨 turn 不误判），go test 全部通过
 - **v11（Bug C 根因定位 + 指向 v1.3.0）**：v1.3.0 多 Provider 适配文档已完成根因分析，Bug C 的根因不是 ToAPIFormat 未透传 reasoning_content，而是 stream.go:316 只解析 reasoning_content 不解析 reasoning，导致 GPT 模型生成的消息 ThinkingContent="" 被存入 DB，后续 ToAPIFormat 把空 ThinkingContent 透传成 reasoning_content=""，被中转站 vectorengine.cn 严格 schema 校验拒绝。更新 Bug C 章节（L529-546）为"根因已定位"，错误分布表（L381）和优先级表（L560）状态同步更新，指向 v1.3.0 文档。Bug C 由 v1.3.0 阶段 1 GPT 适配解决（stream.go 加 delta.reasoning 解析），v1.2.0 不修
+- **v12（Bug A 根因订正 + Bug B 状态更新）**：根据日志 L7101-L7112 实证，turn 340（16:06:31）用的模型是 `xiangliang/gpt-5.3-codex`（GPT 中转），不是 DeepSeek。订正 Bug A 根因：重复 tool_call_id 是 GPT 偶发分配的，不是 DeepSeek；DeepSeek 只是后来拒绝接收含重复 id 的 message[74] 时报 400（DeepSeek 比 GPT 更严格地校验 tool_call_id 唯一性）。更新 L392/L425 根因描述 + v8/v9 修订历史。Bug B（read 工具越界）确认已修复（rw_tools.go:631-633 已加 `if start > end` 校验，返回业务错误 `"start_line(xxx) 不能大于 end_line(xxx)"`），更新错误分布表（L382）、Bug B 章节（L504/L510）、优先级表（L559）为已修复状态
