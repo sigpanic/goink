@@ -73,7 +73,7 @@ export default memo(function SubagentCard({ agentType, segments, status, retryin
 
         <span className="flex-1" />
 
-        {/* P1: 子 agent 重试时优先显示重试 badge（覆盖 streaming 的"执行中"） */}
+        {/* P1: 子 agent 重试时优先显示重试 badge（覆盖 streaming 的执行中） */}
         {retrying ? (
           <span className="subagent-badge subagent-badge-running" title={retrying.errorMessage}>
             <Loader2 size={10} className="animate-spin" /> {t('chat.retrying', { attempt: retrying.attempt, max: retrying.maxRetries })}
