@@ -58,8 +58,12 @@ func (s *Store) Get(novelID int64, name string) (*Skill, bool) {
 // ListMeta 返回所有可用 skill 的元数据，按 name 去重（novel > user > builtin）。
 // 每次调用自动刷新磁盘数据。
 func (s *Store) ListMeta(novelID int64) []SkillMeta {
-	s.ReloadUser(config.UserSkillsDir())
-	s.ReloadNovel(novelID, config.NovelSkillsDir(novelID))
+	if err := s.ReloadUser(config.UserSkillsDir()); err != nil {
+		s.logger.Warn("ListMeta: 刷新用户 skill 失败", "err", err)
+	}
+	if err := s.ReloadNovel(novelID, config.NovelSkillsDir(novelID)); err != nil {
+		s.logger.Warn("ListMeta: 刷新小说 skill 失败", "novel_id", novelID, "err", err)
+	}
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()

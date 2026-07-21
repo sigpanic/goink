@@ -1,12 +1,18 @@
 package session
 
 import (
+	"io"
+	"log/slog"
 	"testing"
 )
 
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
+}
+
 func TestToAPIFormat_UserMessage(t *testing.T) {
 	m := &Message{Role: "user", Content: "你好"}
-	result := m.ToAPIFormat()
+	result := m.ToAPIFormat(discardLogger())
 	if result["role"] != "user" {
 		t.Errorf("role: got %v", result["role"])
 	}
@@ -24,7 +30,7 @@ func TestToAPIFormat_AssistantWithThinking(t *testing.T) {
 		Content:         "回复内容",
 		ThinkingContent: "思考过程",
 	}
-	result := m.ToAPIFormat()
+	result := m.ToAPIFormat(discardLogger())
 	if result["role"] != "assistant" {
 		t.Errorf("role: got %v", result["role"])
 	}
@@ -38,7 +44,7 @@ func TestToAPIFormat_AssistantWithToolCalls(t *testing.T) {
 		Role:  "assistant",
 		ExtraMetadata: `{"tool_calls":[{"id":"1","function":{"name":"read","arguments":"{}"}}]}`,
 	}
-	result := m.ToAPIFormat()
+	result := m.ToAPIFormat(discardLogger())
 	if tc, ok := result["tool_calls"]; !ok || tc == nil {
 		t.Error("tool_calls should be present")
 	}
@@ -53,7 +59,7 @@ func TestToAPIFormat_ToolMessage(t *testing.T) {
 		Role: "tool",
 		ExtraMetadata: `{"tool_call_id":"call_123","tool_name":"read"}`,
 	}
-	result := m.ToAPIFormat()
+	result := m.ToAPIFormat(discardLogger())
 	if result["role"] != "tool" {
 		t.Errorf("role: got %v", result["role"])
 	}
@@ -67,7 +73,7 @@ func TestToAPIFormat_ToolMessage(t *testing.T) {
 
 func TestToAPIFormat_SystemMessage(t *testing.T) {
 	m := &Message{Role: "system", Content: "系统提示"}
-	result := m.ToAPIFormat()
+	result := m.ToAPIFormat(discardLogger())
 	if result["role"] != "system" {
 		t.Errorf("role: got %v", result["role"])
 	}

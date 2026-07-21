@@ -194,7 +194,9 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 		return nil
 	}
 
-	q.vs.DeleteNovel(ctx, novelID)
+	if err := q.vs.DeleteNovel(ctx, novelID); err != nil {
+		return fmt.Errorf("rag: rebuild: delete old vectors: %w", err)
+	}
 
 	var batch []Chunk
 	batchCount := 0

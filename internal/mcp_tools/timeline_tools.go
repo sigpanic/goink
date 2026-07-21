@@ -241,7 +241,9 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 		return nil, fmt.Errorf("query timeline entry: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &entry)
+	if err := json.Unmarshal(tc.RawArgs, &entry); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&entry).Error; err != nil {
 		return nil, fmt.Errorf("save timeline entry: %w", err)

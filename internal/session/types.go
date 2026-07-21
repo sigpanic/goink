@@ -2,6 +2,7 @@ package session
 
 import (
 	"encoding/json"
+	"log/slog"
 	"time"
 )
 
@@ -59,7 +60,7 @@ func (Message) TableName() string { return "messages" }
 
 // ToAPIFormat 转为 OpenAI Chat Completions 兼容的消息格式。
 // 从 ExtraMetadata 提取 tool_calls、thinking_content、tool_call_id 拼入对应字段。
-func (m *Message) ToAPIFormat() map[string]any {
+func (m *Message) ToAPIFormat(logger *slog.Logger) map[string]any {
 	payload := map[string]any{
 		"role":    m.Role,
 		"content": m.Content,
@@ -71,7 +72,9 @@ func (m *Message) ToAPIFormat() map[string]any {
 		}
 		var meta map[string]any
 		if m.ExtraMetadata != "" {
-			json.Unmarshal([]byte(m.ExtraMetadata), &meta)
+			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
+				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
+			}
 		}
 		if meta != nil {
 			if tc, ok := meta["tool_calls"]; ok {
@@ -86,7 +89,9 @@ func (m *Message) ToAPIFormat() map[string]any {
 	if m.Role == "tool" {
 		var meta map[string]any
 		if m.ExtraMetadata != "" {
-			json.Unmarshal([]byte(m.ExtraMetadata), &meta)
+			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
+				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
+			}
 		}
 		if meta != nil {
 			if id, ok := meta["tool_call_id"]; ok {

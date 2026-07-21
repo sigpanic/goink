@@ -354,7 +354,9 @@ func (t *UpdateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 		}
 	}
 
-	json.Unmarshal(tc.RawArgs, &loc)
+	if err := json.Unmarshal(tc.RawArgs, &loc); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&loc).Error; err != nil {
 		return nil, fmt.Errorf("save location: %w", err)
@@ -535,7 +537,9 @@ func (t *UpdateLocationRelationTool) Execute(ctx context.Context, args any, tc T
 		return nil, fmt.Errorf("query relation: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &rel)
+	if err := json.Unmarshal(tc.RawArgs, &rel); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&rel).Error; err != nil {
 		return nil, fmt.Errorf("save relation: %w", err)

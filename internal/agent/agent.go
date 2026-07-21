@@ -547,7 +547,7 @@ func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[strin
 		a.logger.Error("持久化消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 	}
 
-	apiFormat := msg.ToAPIFormat()
+	apiFormat := msg.ToAPIFormat(a.logger)
 	opts.Messages = append(opts.Messages, apiFormat)
 	n, err := llm.CountMessageTokens(apiFormat)
 	if err != nil {

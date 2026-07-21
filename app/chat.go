@@ -274,7 +274,7 @@ func (a *App) loadAPIMessages(ctx context.Context, sessionID string, version int
 	validToolCallIDs := make(map[string]bool)
 	seenToolMsgIDs := make(map[string]bool)
 	for _, m := range msgs {
-		api := m.ToAPIFormat()
+		api := m.ToAPIFormat(a.logger)
 		role, _ := api["role"].(string)
 
 		// assistant 消息：去重 tool_calls，保留首次出现的 id

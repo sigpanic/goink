@@ -109,7 +109,7 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	opts.ActiveVersion = newVersion
 	opts.Messages = make([]map[string]any, len(apiMsgs))
 	for i, m := range apiMsgs {
-		opts.Messages[i] = m.ToAPIFormat()
+		opts.Messages[i] = m.ToAPIFormat(a.logger)
 	}
 
 	newTokens := a.InitRunningTokens(opts.Messages)

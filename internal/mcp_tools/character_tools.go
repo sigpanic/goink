@@ -256,7 +256,9 @@ func (t *UpdateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 		return nil, fmt.Errorf("query character: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &ch)
+	if err := json.Unmarshal(tc.RawArgs, &ch); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&ch).Error; err != nil {
 		return nil, fmt.Errorf("save character: %w", err)
@@ -326,7 +328,9 @@ func (t *UpdateCharacterRelationshipTool) editRelation(ctx context.Context, a *U
 		return &ToolResult{Success: false, Error: fmt.Sprintf("关系 %d 不属于当前小说", a.RelationID)}, nil
 	}
 
-	json.Unmarshal(tc.RawArgs, &rel)
+	if err := json.Unmarshal(tc.RawArgs, &rel); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&rel).Error; err != nil {
 		return nil, fmt.Errorf("save relation: %w", err)

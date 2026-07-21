@@ -254,7 +254,9 @@ func (t *UpdateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 		return nil, fmt.Errorf("query arc: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &arc)
+	if err := json.Unmarshal(tc.RawArgs, &arc); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&arc).Error; err != nil {
 		return nil, fmt.Errorf("save arc: %w", err)
@@ -393,7 +395,9 @@ func (t *UpdateArcNodeTool) Execute(ctx context.Context, args any, tc ToolContex
 		return nil, fmt.Errorf("query node: %w", err)
 	}
 
-	json.Unmarshal(tc.RawArgs, &node)
+	if err := json.Unmarshal(tc.RawArgs, &node); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&node).Error; err != nil {
 		return nil, fmt.Errorf("save node: %w", err)
