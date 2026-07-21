@@ -553,7 +553,7 @@ func TestCallOptions_WithoutReasoningEffort(t *testing.T) {
 
 func TestExtract_NilChapters(t *testing.T) {
 	e := &Extractor{Chapters: nil, LLMClient: nil}
-	_, err := e.Extract(nil, ExtractPatternInput{NovelID: 1, ProviderName: "p", ModelID: "m"})
+	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 1, ProviderName: "p", ModelID: "m"})
 	if err == nil {
 		t.Fatal("expected error for nil Chapters")
 	}
@@ -569,7 +569,7 @@ func TestExtract_NilLLM(t *testing.T) {
 		Chapters:  &chapter.Store{},
 		LLMClient: nil,
 	}
-	_, err := e.Extract(nil, ExtractPatternInput{NovelID: 1, ProviderName: "p", ModelID: "m"})
+	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 1, ProviderName: "p", ModelID: "m"})
 	if err == nil {
 		t.Fatal("expected error for nil LLMClient")
 	}
@@ -583,7 +583,7 @@ func TestExtract_InvalidNovelID(t *testing.T) {
 		Chapters:  &chapter.Store{},
 		LLMClient: &llm.Client{},
 	}
-	_, err := e.Extract(nil, ExtractPatternInput{NovelID: 0, ProviderName: "p", ModelID: "m"})
+	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 0, ProviderName: "p", ModelID: "m"})
 	if err == nil {
 		t.Fatal("expected error for novel_id <= 0")
 	}
@@ -597,7 +597,7 @@ func TestExtract_EmptyProvider(t *testing.T) {
 		Chapters:  &chapter.Store{},
 		LLMClient: &llm.Client{},
 	}
-	_, err := e.Extract(nil, ExtractPatternInput{NovelID: 1, ProviderName: "", ModelID: "m"})
+	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 1, ProviderName: "", ModelID: "m"})
 	if err == nil {
 		t.Fatal("expected error for empty provider")
 	}
