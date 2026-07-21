@@ -3,7 +3,6 @@ package mcp_tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 )
 
 // ── run_subagent ─────────────────────────────────────────
@@ -29,7 +28,10 @@ func (t *RunSubagentTool) Execute(ctx context.Context, args any, tc ToolContext)
 	a := args.(*RunSubagentArgs)
 
 	if tc.RunSubAgent == nil {
-		return nil, fmt.Errorf("子 Agent 运行器未配置")
+		return &ToolResult{
+			Success: false,
+			Error:   "子 Agent 运行器未配置",
+		}, nil
 	}
 
 	report, err := tc.RunSubAgent(ctx, SubAgentRequest{

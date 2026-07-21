@@ -210,7 +210,7 @@ func (t *UpdatePreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 	}
 
 	if err := json.Unmarshal(tc.RawArgs, &item); err != nil {
-		return nil, fmt.Errorf("unmarshal preference: %w", err)
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
 	}
 
 	if err := tc.DB.WithContext(ctx).Save(&item).Error; err != nil {
