@@ -27,6 +27,12 @@ linters:
       # 测试文件不检查 errcheck（测试 helper 常忽略错误，golangci-lint 官方示例做法）
       - path: _test\.go
         linters: [errcheck]
+      # defer 清理临时文件，失败无法恢复
+      - linters: [errcheck]
+        source: "defer\\s+os\\.Remove"
+      # gorm 事务内追加错误，返回 *gorm.DB 无意义
+      - linters: [errcheck]
+        source: "\\.AddError\\("
 
 issues:
   max-issues-per-linter: 0

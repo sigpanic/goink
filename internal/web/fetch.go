@@ -192,7 +192,7 @@ func isEncodingGarbled(text string) bool {
 func compressionRatio(data []byte) float64 {
 	var buf bytes.Buffer
 	w := gzip.NewWriter(&buf)
-	w.Write(data)
+	_, _ = w.Write(data)
 	w.Close()
 	return float64(buf.Len()) / float64(len(data))
 }

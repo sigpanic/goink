@@ -62,7 +62,7 @@ type fanWriter struct{ writers []io.Writer }
 
 func (fw *fanWriter) Write(p []byte) (int, error) {
 	for _, w := range fw.writers {
-		w.Write(p)
+		_, _ = w.Write(p)
 	}
 	return len(p), nil
 }
