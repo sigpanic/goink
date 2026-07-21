@@ -212,8 +212,7 @@ func parseTxt(filePath string) (*Result, error) {
 		}, nil
 	}
 
-	var chapters []Chapter
-	chapters = splitByPositions(content, candidates)
+	chapters := splitByPositions(content, candidates)
 
 	if len(chapters) == 0 {
 		return nil, fmt.Errorf("未能从文件中提取到章节")

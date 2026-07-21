@@ -276,7 +276,7 @@ func linePreview(content string, start, end int) string {
 		if i == ctxStart {
 			b.WriteString("─── 改动区间 ───\n")
 		}
-		b.WriteString(fmt.Sprintf("%d|%s\n", i+1, lines[i]))
+		fmt.Fprintf(&b, "%d|%s\n", i+1, lines[i])
 		if i == ctxEnd-1 {
 			b.WriteString("─── 改动结束 ───\n")
 		}

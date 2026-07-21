@@ -54,11 +54,11 @@ type OperationLogRecord struct {
 	ID        int64     `gorm:"column:id;primaryKey;autoIncrement"`
 	SessionID string    `gorm:"column:session_id;not null;index:idx_oplog_rollback,priority:1"`
 	TurnID    int       `gorm:"column:turn_id;not null;index:idx_oplog_rollback,priority:2"`
-	Operation string    `gorm:"column:operation;not null"`  // "create" | "update" | "delete"
+	Operation string    `gorm:"column:operation;not null"`                                    // "create" | "update" | "delete"
 	Table     string    `gorm:"column:table_name;not null;index:idx_oplog_entity,priority:1"` // 目标表名，如 "characters"
 	EntityID  string    `gorm:"column:entity_id;not null;index:idx_oplog_entity,priority:2"`  // JSON 化的主键条件，如 {"id":5} 或 {"novel_id":1,"scope":"next"}
-	OldValues string    `gorm:"column:old_values"`          // JSON，create 时为 ""
-	NewValues string    `gorm:"column:new_values"`          // JSON，delete 时为 ""
+	OldValues string    `gorm:"column:old_values"`                                            // JSON，create 时为 ""
+	NewValues string    `gorm:"column:new_values"`                                            // JSON，delete 时为 ""
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
@@ -301,7 +301,7 @@ func getPKValues(db *gorm.DB) map[string]any {
 	}
 
 	destValue := reflect.ValueOf(db.Statement.Dest)
-	if destValue.Kind() == reflect.Ptr {
+	if destValue.Kind() == reflect.Pointer {
 		destValue = destValue.Elem()
 	}
 	if destValue.Kind() != reflect.Struct {

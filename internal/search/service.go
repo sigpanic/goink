@@ -125,9 +125,10 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	} else {
 		for _, e := range timelineEntries {
 			subtitle := e.Category
-			if e.Category == "foreshadowing" {
+			switch e.Category {
+			case "foreshadowing":
 				subtitle = "伏笔"
-			} else if e.Category == "user_directive" {
+			case "user_directive":
 				subtitle = "用户指令"
 			}
 			results = append(results, Result{

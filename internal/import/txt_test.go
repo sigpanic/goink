@@ -307,7 +307,7 @@ func TestParseTxt_FullWidthPunctuationChapters(t *testing.T) {
 func TestParseTxt_LargeFile50Chapters(t *testing.T) {
 	var sb strings.Builder
 	for i := 1; i <= 50; i++ {
-		sb.WriteString(fmt.Sprintf("第%d章 章节标题%d\n", i, i))
+		fmt.Fprintf(&sb, "第%d章 章节标题%d\n", i, i)
 		sb.WriteString("这是本章节的正文内容，包含足够的文字来模拟真实小说。\n\n")
 	}
 	path := writeTxtFile(t, "大文件50章.txt", sb.String())
@@ -341,7 +341,7 @@ func TestParseTxt_LargeFile50ChineseNumeralChapters(t *testing.T) {
 	}
 	var sb strings.Builder
 	for _, num := range chineseNums {
-		sb.WriteString(fmt.Sprintf("第%s章 标题%s\n", num, num))
+		fmt.Fprintf(&sb, "第%s章 标题%s\n", num, num)
 		sb.WriteString("这是本章节的正文内容，模拟真实小说的长度。\n\n")
 	}
 	path := writeTxtFile(t, "大文件50中文数字章.txt", sb.String())
@@ -954,7 +954,7 @@ func TestChapterPatterns_SpecialMarkers(t *testing.T) {
 		// 不应匹配
 		{"这是序章的内容", false},
 		{"他写了一篇后记", false},
-		{"序章内容很多", false},  // 行首匹配但后面紧跟非空格字符，不应匹配
+		{"序章内容很多", false}, // 行首匹配但后面紧跟非空格字符，不应匹配
 		{"", false},
 	}
 	for _, tc := range tests {

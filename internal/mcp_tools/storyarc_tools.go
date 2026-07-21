@@ -61,10 +61,11 @@ func (t *GetStoryArcsTool) executeContext(ctx context.Context, a *GetStoryArcsAr
 	var activeIDs []int64
 
 	for _, arc := range arcs {
-		if arc.Status == "active" {
+		switch arc.Status {
+		case "active":
 			activeArcs = append(activeArcs, arc)
 			activeIDs = append(activeIDs, arc.ID)
-		} else if arc.Status == "paused" {
+		case "paused":
 			pausedArcs = append(pausedArcs, arc)
 		}
 	}

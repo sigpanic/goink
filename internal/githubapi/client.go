@@ -155,10 +155,7 @@ func isNetworkError(err error) bool {
 		return true
 	}
 	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	return false
+	return errors.As(err, &netErr)
 }
 
 // classifyStatus 根据 HTTP 状态码和已解析的 rate limit 信息分类错误。
@@ -166,12 +163,12 @@ func isNetworkError(err error) bool {
 // 注意：GitHub API 的 rate limit 实际返回 403（而非标准 429），
 // 通过 response header 的 X-RateLimit-Remaining: 0 来区分 rate limit 与真 forbidden。
 func classifyStatus(status int, rl *RateLimit) Kind {
-	switch {
-	case status == http.StatusNotFound:
+	switch status {
+	case http.StatusNotFound:
 		return KindNotFound
-	case status == http.StatusTooManyRequests:
+	case http.StatusTooManyRequests:
 		return KindRateLimited
-	case status == http.StatusForbidden:
+	case http.StatusForbidden:
 		// GitHub 特有行为：rate limit 时返回 403 + X-RateLimit-Remaining: 0
 		if rl != nil && rl.Remaining == 0 {
 			return KindRateLimited
