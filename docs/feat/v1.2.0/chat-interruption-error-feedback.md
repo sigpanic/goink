@@ -378,7 +378,7 @@ issue #26 用户 Snorlax-bit 上传了完整 `goink.log`（8065 行，4.9MB）�
 | 错误类型 | 出现次数 | 性质 | 与本次修复方案关系 |
 |---|---|---|---|
 | `[400] Duplicate value for 'tool_call_id'` | 3 次 | **代码 bug（新发现）** | 正交，独立修复 |
-| `[400] messages[74].reasoning_content is required for thinking tool-call history` | 1 次 | **代码 bug（新发现）** | 正交，独立修复 |
+| `[400] messages[74].reasoning_content is required for thinking tool-call history` | 1 次 | **代码 bug（根因已定位）** | 由 v1.3.0 多 Provider 适配解决（见 [v1.3.0 文档](file:///home/nianhe/projects/todo/docs/feat/v1.3.0/multi-provider-adapter.md)） |
 | `tool panicked tool=read panic="slice bounds out of range [48:10]"` | 3 次（[48:10]/[89:15]/[54:40]） | **代码 bug（新发现）** | 正交，独立修复 |
 | `[403] chat pre-consumed quota failed` | 6 次 | 用户 API 余额不足 | 非代码问题， FriendlyError 改进后用户能看到原文 |
 | `[0] 流式响应为空，服务商可能不支持流式请求或返回了非标准格式` | 3 次 | 服务商问题 | P3 首字节超时不覆盖此场景，可观察 |
@@ -526,21 +526,24 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 1. 在 [rw_tools.go:700-713](file:///home/nianhe/projects/todo/internal/mcp_tools/rw_tools.go#L700-L713) `readDescription` 和 ReadArgs 字段 description 中明确写"start_line 必须 <= end_line"
 2. 仿照 [search_replace_test.go:555](file:///home/nianhe/projects/todo/internal/mcp_tools/search_replace_test.go#L555) `TestLineRangeReplace_StartAfterEnd`，新增 `TestReadTool_StartAfterEnd` 覆盖该分支
 
-### Bug C：reasoning_content 缺失（P1，DeepSeek 兼容性）
+### Bug C：reasoning_content 缺失（P1，DeepSeek 兼容性，根因已定位）
 
 **现象**：`[400] messages[74].reasoning_content is required for thinking tool-call history (request id: 20260717161627994112599q0IgJL6N)`
 
 **背景**：用户在 16:16:02 切换到 `deepseek/deepseek-v4-flash + reasoning_effort=high` 模型后立即触发。DeepSeek 协议要求 thinking 模式下的 tool-call 历史 message 必须带 `reasoning_content` 字段（详见本文档根因 #9 的协议引用）。
 
-**疑似位置**：[internal/session/types.go:62-101](file:///home/nianhe/projects/todo/internal/session/types.go#L62-L101) ToAPIFormat 序列化 assistant 消息时，未把 `thinking_content` 字段以 DeepSeek 期望的字段名 `reasoning_content` 透传出去。
+**根因已定位**（详见 [v1.3.0 多 Provider 适配文档](file:///home/nianhe/projects/todo/docs/feat/v1.3.0/multi-provider-adapter.md)）：
 
-**需要进一步确认**：
+1. message[74] 用 `xiangliang/gpt-5.3-codex`（GPT 中转）生成
+2. GPT 模型返回 `reasoning` 字段（OpenAI 标准），不返回 `reasoning_content`（DeepSeek 扩展）
+3. Goink 的 [internal/llm/stream.go:316](file:///home/nianhe/projects/todo/internal/llm/stream.go#L316) **只解析 `reasoning_content`，不解析 `reasoning`** → `ThinkingContent=""` 被存入 DB
+4. 用户切换到 `向量引擎/deepseek-v4-flash`（DeepSeek 中转），Goink 把历史消息回传
+5. [internal/session/types.go:79-81](file:///home/nianhe/projects/todo/internal/session/types.go#L79-L81) 在 `ThinkingContent=""` 且含 `tool_calls` 时设 `payload["reasoning_content"]=""`
+6. **DeepSeek 官方接受空字符串**，但中转站 `vectorengine.cn` 自己加了更严格的 schema 校验（Pydantic "required" 语义），要求非空 → 报 400
 
-1. ToAPIFormat 是否在所有路径下都透传 `reasoning_content` 字段（尤其是 thinking 模式的 assistant 消息）
-2. 是否在某个版本切换/压缩路径中丢失了 `thinking_content`
-3. 用户日志 7480 行显示该 turn 加载了 87 条 `to_api=true` 消息，需要定位 message[74] 是哪条消息、其 `thinking_content` 字段是否为空
+**修复方案**（v1.3.0 阶段 1 GPT 适配）：在 [internal/llm/stream.go:316](file:///home/nianhe/projects/todo/internal/llm/stream.go#L316) 附近加 `delta.reasoning` 字符串解析，让 GPT 模型生成的消息不再出现 `ThinkingContent=""` 脏数据。详见 [v1.3.0 文档](file:///home/nianhe/projects/todo/docs/feat/v1.3.0/multi-provider-adapter.md) 阶段 1。
 
-**修复建议**（待进一步调查）：在 ToAPIFormat 出口加日志，若 `role=assistant` 且 `thinking_content != ""` 但序列化后 payload 中无 `reasoning_content` 字段则告警；或在 loadAPIMessages 出口对 thinking 模式消息做字段完整性校验。
+**v1.2.0 不修**：Bug C 根因是 GPT 协议适配缺失，属于 v1.3.0 多 Provider 适配范围，v1.2.0 不处理。
 
 ### 其他非 bug 发现
 
@@ -554,7 +557,7 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 |---|---|---|---|
 | **P0** | Bug A（tool_call_id 去重） | stream.go + safety.go + loadAPIMessages | 阻塞，对话彻底中断无法恢复 |
 | **P0** | Bug B（read 工具越界校验） | rw_tools.go:631 | 非阻塞但高频，影响 AI 工具调用成功率 |
-| **P1** | Bug C（reasoning_content 缺失） | types.go ToAPIFormat | 阻塞 thinking 模式 + tool-call 场景 |
+| **P1** | Bug C（reasoning_content 缺失） | v1.3.0 stream.go 加 reasoning 解析 | 阻塞 thinking 模式 + tool-call 场景，由 v1.3.0 多 Provider 适配解决 |
 
 ## 修订历史
 
@@ -568,3 +571,4 @@ run_subagent 被执行两次（日志 7212 + 7309 行），每次都启动了完
 - **v8（用户日志实证分析）**：issue #26 用户上传完整 goink.log（8065 行，2026-07-21）。实证发现 3 个独立 bug（与 P0-P3 正交）：Bug A — Duplicate tool_call_id（DeepSeek parallel tool calls 偶发分配相同 id + Goink 全链路 8 个环节无去重，导致对话彻底中断）；Bug B — read 工具切片越界 panic（AI 传 start_line > end_line 时 rw_tools.go:638 无校验直接切片，对比 edit 工具已有校验）；Bug C — reasoning_content 缺失（thinking 模式 + tool-call 场景触发 DeepSeek 400）。新增"用户日志实证分析"章节，含错误分布统计、全链路去重缺失分析、修复方案对比、优先级建议。所有修复均未动代码，待用户决定方案
 - **v9（Bug A 深度分析 + 实施方案 1+3）**：深度分析 turn 340 的 7312 行 INSERT 实证，确认 DeepSeek 在一次响应里发了 10 个不同 index 的 tool_calls（index 0-4 和 index 5-9 的 id/name/arguments 完全相同），导致主 agent 在一个 streamLoop 迭代内执行 10 次 tool（含 run_subagent 被执行两次共 130s）。排除 retry/subagent 合并/ctx 取消等其他路径。实施方案 1（stream.go:397-430 源头去重，维护 seenToolIDs map 跳过重复 id）+ 方案 3（app/chat.go loadAPIMessages 出口防御，assistant 去重 tool_calls + tool 消息跳过 orphan/重复）。方案 2（buildToolCalls 构造时去重）不推荐，因方案 1 实施后为死代码且不能避免 tool 副作用。go build + go test ./internal/... ./app/... 全部通过
 - **v10（compress 路径评估 + 测试补充）**：评估压缩路径的 tool_call_id 去重覆盖情况。手动压缩入口（CompressContext）走 loadAPIMessages 已防御；自动压缩的 LLM 调用（generateSummary）用 opts.Messages（来自 Chat 的 loadAPIMessages）已防御；压缩后重新加载（compress.go:105-113）绕过防御，但触发条件窄（需 Bug A 脏数据被 retainMessages 保留），且 Bug A 源头已修，**接受不修（方案 D）**。新增 app/chat_test.go 单元测试覆盖 loadAPIMessages 的 5 个场景（正常无重复 / assistant.tool_calls 重复 id 去重 / orphan tool 消息跳过 / 重复 tool 消息只保留首次 / 跨 turn 不误判），go test 全部通过
+- **v11（Bug C 根因定位 + 指向 v1.3.0）**：v1.3.0 多 Provider 适配文档已完成根因分析，Bug C 的根因不是 ToAPIFormat 未透传 reasoning_content，而是 stream.go:316 只解析 reasoning_content 不解析 reasoning，导致 GPT 模型生成的消息 ThinkingContent="" 被存入 DB，后续 ToAPIFormat 把空 ThinkingContent 透传成 reasoning_content=""，被中转站 vectorengine.cn 严格 schema 校验拒绝。更新 Bug C 章节（L529-546）为"根因已定位"，错误分布表（L381）和优先级表（L560）状态同步更新，指向 v1.3.0 文档。Bug C 由 v1.3.0 阶段 1 GPT 适配解决（stream.go 加 delta.reasoning 解析），v1.2.0 不修
