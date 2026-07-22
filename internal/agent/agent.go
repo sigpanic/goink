@@ -125,7 +125,9 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		}
 		// 友好化 error，与 EventError 的 ErrMsg=FriendlyError(event.Error) 保持一致
 		// 供 run_subagent 工具存入 ToolResult.Error，历史回放与实时流式显示一致
-		return result.FinalText, fmt.Errorf("%s", FriendlyError(err))
+		// 截断到 200 字符：此处 error 经 run_subagent 转 ToolResult 后作为 tool response 进入 LLM 上下文，
+		// 截断防服务商返回的过长 message 传播为注入载体（其余 AgentEvent.ErrMsg 调用方不进 LLM，不截断）
+		return result.FinalText, fmt.Errorf("%s", truncateErrMsg(FriendlyError(err), 200))
 	}
 	return result.FinalText, nil
 }

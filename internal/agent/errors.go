@@ -9,6 +9,16 @@ import (
 	"novel/internal/llm"
 )
 
+// truncateErrMsg 按 rune 截断字符串到 maxLen，用于防止过长内容（含潜在注入载体）进入 LLM 上下文。
+// rune 截断避免破坏 UTF-8 多字节字符。
+func truncateErrMsg(s string, maxLen int) string {
+	r := []rune(s)
+	if len(r) > maxLen {
+		return string(r[:maxLen]) + "..."
+	}
+	return s
+}
+
 // FriendlyError 将 LLM 错误转换为用户友好的消息。
 // 原始 error 应由调用方另行记录日志。
 func FriendlyError(err error) string {
