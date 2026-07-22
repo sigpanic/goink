@@ -184,10 +184,9 @@ jobs:
           cp EULA.md dist/
           cd dist && shopt -s nullglob && sha256sum *.{exe,AppImage,dmg} > sha256sums.txt
 
-      - name: Create Release
+      - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
           token: ${{ secrets.SYNC_PAT }}
           repository: sigpanic/goink
           files: dist/*
-          generate_release_notes: true
