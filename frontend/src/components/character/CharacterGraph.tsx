@@ -11,8 +11,6 @@ interface Props {
   focusId?: number;
 }
 
-const NODE_COLOR = { fill: "#e0f2fe", stroke: "#38a8df", text: "#0c4a6e" };
-
 function nodeId(id: number) {
   return `character-${id}`;
 }
@@ -173,10 +171,10 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
         data: { character: char },
         style: {
           size: [80, 34],
-          fill: NODE_COLOR.fill,
-          stroke: NODE_COLOR.stroke,
+          fill: C.nodeFill,
+          stroke: C.nodeStroke,
           labelText: char.name,
-          labelFill: NODE_COLOR.text,
+          labelFill: C.nodeText,
           labelPlacement: "center" as const,
         },
       };

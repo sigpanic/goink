@@ -226,9 +226,10 @@ export default function SkillMarketplace({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, pageSize, debouncedQuery]);
 
-  // Load remote content when entering detail phase
+  // Load remote content when entering detail phase.
+  // 返回 content 字符串，调用方直接用返回值，避免闭包捕获过期的 remoteContent state。
   const loadRemoteContent = useCallback(
-    async (name: string) => {
+    async (name: string): Promise<string> => {
       setContentLoading(true);
       setContentError("");
       setRemoteContent("");
@@ -238,12 +239,15 @@ export default function SkillMarketplace({
         if (code && code !== "ok") {
           const cls = classifyError(code, res?.err_msg ?? "", t);
           setContentError(cls.message);
-        } else {
-          setRemoteContent(res?.data ?? "");
+          return "";
         }
+        const content = res?.data ?? "";
+        setRemoteContent(content);
+        return content;
       } catch (e: unknown) {
         const msg = e instanceof Error ? e.message : String(e);
         setContentError(t("skill.marketplace.errorOther", { message: msg }));
+        return "";
       } finally {
         setContentLoading(false);
       }
@@ -328,11 +332,11 @@ export default function SkillMarketplace({
       if (local) {
         // has same-name local skill → enter confirm_overwrite phase
         setLocalContent(local);
-        // ensure remote content loaded; copy to remoteContentForConfirm
-        if (!remoteContent) {
-          await loadRemoteContent(selectedSkill.name);
-        }
-        setRemoteContentForConfirm(remoteContent);
+        // 直接用 loadRemoteContent 返回值，避免闭包捕获过期的 remoteContent state；
+        // 已有缓存时复用，否则拉取
+        const remote =
+          remoteContent || (await loadRemoteContent(selectedSkill.name));
+        setRemoteContentForConfirm(remote);
         setPhase("confirm_overwrite");
       } else {
         await doInstall(target, selectedSkill.name);
@@ -348,18 +352,6 @@ export default function SkillMarketplace({
       doInstall,
     ],
   );
-
-  // When entering confirm_overwrite, remoteContent may have been just loaded asynchronously.
-  // Use an effect to sync remoteContentForConfirm once remoteContent changes during confirm phase.
-  useEffect(() => {
-    if (
-      phase === "confirm_overwrite" &&
-      remoteContent &&
-      !remoteContentForConfirm
-    ) {
-      setRemoteContentForConfirm(remoteContent);
-    }
-  }, [phase, remoteContent, remoteContentForConfirm]);
 
   // Confirm overwrite
   const handleConfirmOverwrite = useCallback(async () => {
@@ -866,6 +858,10 @@ export default function SkillMarketplace({
                 <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2">
                   {remoteContentForConfirm ? (
                     <CompareView split={remoteForConfirmSplit} t={t} />
+                  ) : contentError ? (
+                    <div className="px-3 py-2 text-xs text-destructive bg-danger-bg border border-danger-border rounded-md">
+                      {contentError}
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Loader2 className="w-3 h-3 animate-spin" />
