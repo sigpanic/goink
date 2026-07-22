@@ -433,8 +433,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 							Timestamp:    time.Now(),
 						})
 
-						// 清空本轮 buffers，避免重试后内容重复累加
-						// 注：本轮开始时 buffer 必为空（上一轮末已 Reset），所以 Reset 等价于恢复到本轮开始状态
+						// 清空本轮 buffers，避免重试后 partial 内容重复累加。
+						// Reset 等价于恢复到本轮 streamLoop 开始状态（buffer 在 streamLoop 开始时必为空：
+						// 首次进入是外层 turn 顶部已确保空；重试进入是上次末已 Reset）。
 						responseBuffer.Reset()
 						thinkingBuffer.Reset()
 						isThinking = false
