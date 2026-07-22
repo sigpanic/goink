@@ -2,9 +2,9 @@
 
 **IMPORTANT — READ CAREFULLY:** By downloading, installing, or using the Software, you agree to be bound by the terms of this Agreement. If you do not agree, do not install or use the Software.
 
-This is a legal agreement between you (either an individual or an entity) and the copyright holder of Goink ("Licensor") governing your use of the Goink software in binary form (the "Software").
+This is a legal agreement between you (either an individual or an entity) and 响滩 (sigpanic), the copyright holder of Goink ("Licensor"), governing your use of the Goink software in binary form (the "Software").
 
-The source code of the Software is separately licensed under the GNU Affero General Public License v3 (AGPL v3) and is publicly available at https://github.com/sigpanic/goink. This Agreement applies only to official binary distributions compiled and released by Licensor.
+The source code of the Software is separately licensed under the GNU Affero General Public License v3 (AGPL v3) and is published at https://github.com/sigpanic/goink. The public repository lags behind binary releases; the source code corresponding to a given binary release is published there after a delay. This Agreement applies only to official binary distributions compiled and released by Licensor.
 
 ## 1. License Grant
 
