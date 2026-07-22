@@ -218,7 +218,7 @@ type UpdateReaderPerspectiveEntryArgs struct {
 	RevealedChapter int    `json:"revealed_chapter" jsonschema:"description=实际揭露或回收的章节号（设置后该条目不再出现在活跃列表中）" validate:"omitempty,min=0"`
 	PlantedChapter  int    `json:"planted_chapter" jsonschema:"description=在哪章种下的章节号" validate:"omitempty,min=1"`
 	RelatedTruth    string `json:"related_truth" jsonschema:"description=作者视角的真实情况（支持所有类型）"`
-	Type            string `json:"type" jsonschema:"description=条目类型,enum=known,enum=suspense,enum=misconception"`
+	Type            string `json:"type" jsonschema:"description=条目类型,enum=known,enum=suspense,enum=misconception" validate:"omitempty,oneof=known suspense misconception"`
 }
 
 // UpdateReaderPerspectiveEntryTool 更新读者认知条目。

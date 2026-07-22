@@ -1,6 +1,7 @@
 package mcp_tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"log/slog"
@@ -209,7 +210,11 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 
 	// 反序列化 + 校验
 	args := t.NewArgs()
-	if err := json.Unmarshal(rawArgs, args); err != nil {
+	// DisallowUnknownFields：拒绝 schema 外字段，防止 LLM 传 id/novel_id 等额外字段
+	// 经第二次 Unmarshal（工具内部）覆盖 entity 不可变字段
+	dec := json.NewDecoder(bytes.NewReader(rawArgs))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(args); err != nil {
 		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}
 	}
 	if err := r.validate.Struct(args); err != nil {

@@ -18,8 +18,8 @@ import (
 // GetStoryArcsArgs 是 get_story_arcs 的参数。
 type GetStoryArcsArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"description=当前章节号。传入时对活跃弧线做窗口切分并检测异常，暂停弧线显示断点和恢复条件。写新章时必填" validate:"omitempty,min=1"`
-	ArcType        string `json:"arc_type" jsonschema:"description=按类型筛选,enum=main,enum=sub,enum=character,enum=background"`
-	Status         string `json:"status" jsonschema:"description=按状态筛选,enum=active,enum=paused,enum=completed,enum=abandoned"`
+	ArcType        string `json:"arc_type" jsonschema:"description=按类型筛选,enum=main,enum=sub,enum=character,enum=background" validate:"omitempty,oneof=main sub character background"`
+	Status         string `json:"status" jsonschema:"description=按状态筛选,enum=active,enum=paused,enum=completed,enum=abandoned" validate:"omitempty,oneof=active paused completed abandoned"`
 	PageArgs              // 嵌入分页参数（仅不传 current_chapter 时生效）
 }
 
@@ -218,9 +218,9 @@ type UpdateStoryArcArgs struct {
 	ArcID        int64  `json:"arc_id" jsonschema:"required,description=弧线ID"                         validate:"required,min=1"`
 	Name         string `json:"name" jsonschema:"description=新的弧线名称"`
 	Description  string `json:"description" jsonschema:"description=新的描述"`
-	ArcType      string `json:"arc_type" jsonschema:"description=新的弧线类型,enum=main,enum=sub,enum=character,enum=background"`
+	ArcType      string `json:"arc_type" jsonschema:"description=新的弧线类型,enum=main,enum=sub,enum=character,enum=background" validate:"omitempty,oneof=main sub character background"`
 	Importance   int    `json:"importance" jsonschema:"description=新的重要度1-5,minimum=1,maximum=5"`
-	Status       string `json:"status" jsonschema:"description=新状态,enum=active,enum=paused,enum=completed,enum=abandoned"`
+	Status       string `json:"status" jsonschema:"description=新状态,enum=active,enum=paused,enum=completed,enum=abandoned" validate:"omitempty,oneof=active paused completed abandoned"`
 	ReactivateAt string `json:"reactivate_at" jsonschema:"description=暂停弧线的恢复条件，自然语言。状态改为paused时填写"`
 }
 
@@ -362,7 +362,7 @@ type UpdateArcNodeArgs struct {
 	Description   string `json:"description" jsonschema:"description=新的描述"`
 	TargetChapter int    `json:"target_chapter" jsonschema:"description=新的目标章节号,minimum=1" validate:"omitempty,min=1"`
 	ActualChapter int    `json:"actual_chapter" jsonschema:"description=实际发生的章节号（标记完成时填入）"`
-	Status        string `json:"status" jsonschema:"description=新状态,enum=pending,enum=completed,enum=abandoned"`
+	Status        string `json:"status" jsonschema:"description=新状态,enum=pending,enum=completed,enum=abandoned" validate:"omitempty,oneof=pending completed abandoned"`
 }
 
 // UpdateArcNodeTool 更新弧线节点（PATCH 语义）。

@@ -287,9 +287,9 @@ type UpdateCharacterRelationshipTool struct{}
 
 func (t *UpdateCharacterRelationshipTool) Name() string { return "update_character_relationship" }
 func (t *UpdateCharacterRelationshipTool) Description() string {
-	return "更新角色关系。两种用法：" +
-		"1) 编辑已有关系——提供 relation_id，修改描述措辞；" +
-		"2) 关系演变——提供 source_character_id + target_character_id，旧关系自动保留为历史，新关系设为当前。" +
+	return "更新角色关系。两种用法（互斥，不可同时传）：" +
+		"1) 编辑已有关系——只传 relation_id，修改描述措辞，不要传 source_character_id/target_character_id；" +
+		"2) 创建或演变关系——只传 source_character_id + target_character_id（不要传 relation_id）。两个角色之前无关系时即新建；已有关系时旧关系自动归档为历史，新关系设为当前。" +
 		"relation_describe 用自然语言描述，如'师徒但暗中互相提防'，不要用简单枚举词。"
 }
 func (t *UpdateCharacterRelationshipTool) Category() ToolCategory { return CategoryWritingAssistant }
@@ -303,15 +303,25 @@ func (t *UpdateCharacterRelationshipTool) NewArgs() any      { return &UpdateCha
 func (t *UpdateCharacterRelationshipTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateCharacterRelationshipArgs)
 
+	// 从原始参数判断字段是否存在（不能用结构体零值，否则无法区分"省略"和"显式 0"，
+	// LLM 显式传 0 会绕过 ==0 判断进入 editRelation，Unmarshal 把 source/target 覆盖为 0）
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(tc.RawArgs, &m); err != nil {
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
+	_, hasRelationID := m["relation_id"]
+	_, hasSource := m["source_character_id"]
+	_, hasTarget := m["target_character_id"]
+
 	switch {
-	case a.RelationID > 0 && a.SourceCharacterID == 0 && a.TargetCharacterID == 0:
+	case hasRelationID && !hasSource && !hasTarget:
 		return t.editRelation(ctx, a, tc)
-	case a.SourceCharacterID > 0 && a.TargetCharacterID > 0 && a.RelationID == 0:
+	case !hasRelationID && hasSource && hasTarget:
 		return t.evolveRelation(ctx, a, tc)
 	default:
 		return &ToolResult{
 			Success: false,
-			Error:   "需要提供 relation_id（编辑已有关系）或 source_character_id + target_character_id（建立新关系）",
+			Error:   "参数组合非法：编辑关系只传 relation_id，演进关系只传 source_character_id + target_character_id，两者互斥，不要同时传",
 		}, nil
 	}
 }
