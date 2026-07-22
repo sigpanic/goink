@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
 	"novel/internal/config"
+	"novel/internal/git"
 	"novel/internal/githubapi"
 	"novel/internal/skill"
 )
@@ -163,6 +165,13 @@ func (s *Service) GetRemoteSkillContent(ctx context.Context, name string) (strin
 //
 // 不做存在性判断，前端弹确认框处理覆盖语义。
 func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, novelID int64) error {
+	// 路径校验：与 app.DeleteSkill 一致，name 必须是纯文件名（不含路径分隔符/后缀），
+	// 防止远程 index.json 被污染时 name 含 ../ 逃出 skills 目录写任意文件
+	safeName := strings.TrimSuffix(filepath.Base(name), ".md")
+	if safeName == "" || safeName != name {
+		return fmt.Errorf("remote: invalid skill name %q", name)
+	}
+
 	content, err := s.GetRemoteSkillContent(ctx, name)
 	if err != nil {
 		return err
@@ -177,7 +186,10 @@ func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, n
 		return fmt.Errorf("remote: create skill dir %s: %w", dir, err)
 	}
 
-	dst := filepath.Join(dir, name+".md")
+	dst, err := git.SafePath(dir, name+".md")
+	if err != nil {
+		return fmt.Errorf("remote: invalid skill path: %w", err)
+	}
 	if err := os.WriteFile(dst, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("remote: write skill file %s: %w", dst, err)
 	}
