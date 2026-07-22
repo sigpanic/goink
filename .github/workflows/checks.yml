@@ -66,3 +66,15 @@ jobs:
         with:
           version: v2.12.2
           args: --timeout=10m
+
+  fmt-go:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: gofmt
+        run: test -z "$(gofmt -l .)" || { echo "Files not gofmt'd:"; gofmt -l .; exit 1; }
