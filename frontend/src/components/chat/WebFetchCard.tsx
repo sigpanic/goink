@@ -1,36 +1,40 @@
-import { memo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
-import { Globe, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
-import Markdown from '@/components/Markdown'
-import './WebFetchCard.css'
+import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { Globe, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
+import Markdown from "@/components/Markdown";
+import "./WebFetchCard.css";
 
 interface Props {
-  result: Record<string, unknown>
-  displayText: string
+  result: Record<string, unknown>;
+  displayText: string;
 }
 
 function openExternal(url: string, t: TFunction) {
-  if (window.confirm(`${t('chat.openInBrowser')}\n${url}`)) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+  if (window.confirm(`${t("chat.openInBrowser")}\n${url}`)) {
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 }
 
 export default memo(function WebFetchCard({ result, displayText }: Props) {
-  const { t } = useTranslation()
-  const [contentOpen, setContentOpen] = useState(false)
+  const { t } = useTranslation();
+  const [contentOpen, setContentOpen] = useState(false);
 
-  const url = (result.url as string) || ''
-  const title = (result.title as string) || ''
-  const text = (result.text as string) || ''
-  const wordCount = text.replace(/\s/g, '').length
+  const url = (result.url as string) || "";
+  const title = (result.title as string) || "";
+  const text = (result.text as string) || "";
+  const wordCount = text.replace(/\s/g, "").length;
 
   return (
     <div className="fetch-card completed">
       <div className="fetch-card-row">
-        <span className="fetch-card-icon"><Globe size={14} /></span>
+        <span className="fetch-card-icon">
+          <Globe size={14} />
+        </span>
         <span className="fetch-card-label">{displayText}</span>
-        <span className="fetch-card-badge fetch-card-badge-done">{t('chat.done')}</span>
+        <span className="fetch-card-badge fetch-card-badge-done">
+          {t("chat.done")}
+        </span>
       </div>
 
       <div className="fetch-card-meta">
@@ -44,9 +48,7 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
             <ExternalLink size={12} />
           </button>
         </div>
-        {url && (
-          <span className="fetch-card-url">{url}</span>
-        )}
+        {url && <span className="fetch-card-url">{url}</span>}
       </div>
 
       {text && (
@@ -55,8 +57,12 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
             className="fetch-card-content-toggle"
             onClick={() => setContentOpen(!contentOpen)}
           >
-            {contentOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            {t('chat.pageContent', { count: wordCount })}
+            {contentOpen ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
+            {t("chat.pageContent", { count: wordCount })}
           </button>
           {contentOpen && (
             <div className="fetch-card-content-body">
@@ -66,5 +72,5 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
         </div>
       )}
     </div>
-  )
-})
+  );
+});

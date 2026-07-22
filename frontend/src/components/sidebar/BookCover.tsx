@@ -1,17 +1,18 @@
-import { useState } from 'react'
-import defaultCover from '@/assets/covers/default-cover.jpg'
+import { useState } from "react";
+import defaultCover from "@/assets/covers/default-cover.jpg";
 
 interface Props {
-  novelId?: number
-  refreshKey?: number
+  novelId?: number;
+  refreshKey?: number;
 }
 
 export default function BookCover({ novelId, refreshKey }: Props) {
-  const [errored, setErrored] = useState(false)
+  const [errored, setErrored] = useState(false);
 
-  const src = novelId && !errored
-    ? `/covers/${novelId}?v=${refreshKey ?? 0}`
-    : defaultCover
+  const src =
+    novelId && !errored
+      ? `/covers/${novelId}?v=${refreshKey ?? 0}`
+      : defaultCover;
 
   return (
     <div className="w-full aspect-[3/4] rounded-md overflow-hidden shadow-sm select-none relative bg-muted">
@@ -23,5 +24,5 @@ export default function BookCover({ novelId, refreshKey }: Props) {
         className="w-full h-full object-cover block"
       />
     </div>
-  )
+  );
 }

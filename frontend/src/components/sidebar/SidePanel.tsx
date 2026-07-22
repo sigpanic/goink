@@ -1,97 +1,127 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { novel, chapter } from '@/hooks/useApp'
-import NovelList from './NovelList'
-import ChapterList from './ChapterList'
-import CharacterList from '@/components/character/CharacterList'
-import LocationList from '@/components/location/LocationList'
-import SkillList from '@/components/skill/SkillList'
-import SearchPanel from '@/components/search/SearchPanel'
-import TimelineList from '@/components/timeline/TimelineList'
-import ArcList from '@/components/storyarc/ArcList'
-import ReaderList from '@/components/reader/ReaderList'
-import PreferenceList from '@/components/preference/PreferenceList'
-import StyleSampleList from '@/components/style/StyleSampleList'
-import type { SearchResult } from '@/components/search/SearchPanel'
-import GitHistoryList from '@/components/git/GitHistoryList'
-import type { git } from '@/lib/wailsjs/go/models'
+import { useState, useCallback, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import type { novel, chapter } from "@/hooks/useApp";
+import NovelList from "./NovelList";
+import ChapterList from "./ChapterList";
+import CharacterList from "@/components/character/CharacterList";
+import LocationList from "@/components/location/LocationList";
+import SkillList from "@/components/skill/SkillList";
+import SearchPanel from "@/components/search/SearchPanel";
+import TimelineList from "@/components/timeline/TimelineList";
+import ArcList from "@/components/storyarc/ArcList";
+import ReaderList from "@/components/reader/ReaderList";
+import PreferenceList from "@/components/preference/PreferenceList";
+import StyleSampleList from "@/components/style/StyleSampleList";
+import type { SearchResult } from "@/components/search/SearchPanel";
+import GitHistoryList from "@/components/git/GitHistoryList";
+import type { git } from "@/lib/wailsjs/go/models";
 
 interface Props {
-  activePanel: string
-  novels: novel.Novel[]
-  novelId: number
-  onSelectNovel: (n: novel.Novel) => void
-  onSelectChapter: (ch: chapter.Chapter) => void
-  onSelectGoink: () => void
-  onExportNovel: (novelId: number) => void
-  target: { path: string; title: string } | null
-  showCreate: boolean
-  setShowCreate: (v: boolean) => void
-  title: string
-  setTitle: (v: string) => void
-  description: string
-  setDescription: (v: string) => void
-  onCreateNovel: () => void
-  activeSkillName: string | null
-  onSelectSkill: (path: string, title: string, readOnly: boolean) => void
-  onEditSkill: (path: string, title: string, readOnly: boolean) => void
-  onNewSkill: (name: string) => void
-  onSearchNavigateEntity: (panelId: string, entityId: number) => void
-  onSearchNavigateChapter: (filePath: string, title: string, chapterNum: number, matchPos: number, matchLen: number) => void
-  searchQuery: string
-  searchResults: SearchResult[]
-  onSearchChange: (query: string, results: SearchResult[]) => void
-  onSelectGitFile: (file: git.FileDiff) => void
-  onSelectStyleSample: (id: number) => void
-  sidePanelWidth: number
-  onSidePanelResize: (w: number) => void
+  activePanel: string;
+  novels: novel.Novel[];
+  novelId: number;
+  onSelectNovel: (n: novel.Novel) => void;
+  onSelectChapter: (ch: chapter.Chapter) => void;
+  onSelectGoink: () => void;
+  onExportNovel: (novelId: number) => void;
+  target: { path: string; title: string } | null;
+  showCreate: boolean;
+  setShowCreate: (v: boolean) => void;
+  title: string;
+  setTitle: (v: string) => void;
+  description: string;
+  setDescription: (v: string) => void;
+  onCreateNovel: () => void;
+  activeSkillName: string | null;
+  onSelectSkill: (path: string, title: string, readOnly: boolean) => void;
+  onEditSkill: (path: string, title: string, readOnly: boolean) => void;
+  onNewSkill: (name: string) => void;
+  onSearchNavigateEntity: (panelId: string, entityId: number) => void;
+  onSearchNavigateChapter: (
+    filePath: string,
+    title: string,
+    chapterNum: number,
+    matchPos: number,
+    matchLen: number,
+  ) => void;
+  searchQuery: string;
+  searchResults: SearchResult[];
+  onSearchChange: (query: string, results: SearchResult[]) => void;
+  onSelectGitFile: (file: git.FileDiff) => void;
+  onSelectStyleSample: (id: number) => void;
+  sidePanelWidth: number;
+  onSidePanelResize: (w: number) => void;
 }
 
 export default function SidePanel({
   activePanel,
-  novels, novelId, onSelectNovel,
-  onSelectChapter, onSelectGoink, onExportNovel, target,
-  showCreate, setShowCreate, title, setTitle, description, setDescription,
+  novels,
+  novelId,
+  onSelectNovel,
+  onSelectChapter,
+  onSelectGoink,
+  onExportNovel,
+  target,
+  showCreate,
+  setShowCreate,
+  title,
+  setTitle,
+  description,
+  setDescription,
   onCreateNovel,
-  activeSkillName, onSelectSkill, onEditSkill, onNewSkill,
-  onSearchNavigateEntity, onSearchNavigateChapter,
-  searchQuery, searchResults, onSearchChange,
+  activeSkillName,
+  onSelectSkill,
+  onEditSkill,
+  onNewSkill,
+  onSearchNavigateEntity,
+  onSearchNavigateChapter,
+  searchQuery,
+  searchResults,
+  onSearchChange,
   onSelectGitFile,
   onSelectStyleSample,
   sidePanelWidth,
   onSidePanelResize,
 }: Props) {
-  const { t } = useTranslation()
-  const [isDragging, setIsDragging] = useState(false)
-  const startXRef = useRef(0)
-  const startWidthRef = useRef(sidePanelWidth)
+  const { t } = useTranslation();
+  const [isDragging, setIsDragging] = useState(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(sidePanelWidth);
 
-  const handleResizeMouseDown = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    setIsDragging(true)
-    startXRef.current = e.clientX
-    startWidthRef.current = sidePanelWidth
-  }, [sidePanelWidth])
+  const handleResizeMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault();
+      setIsDragging(true);
+      startXRef.current = e.clientX;
+      startWidthRef.current = sidePanelWidth;
+    },
+    [sidePanelWidth],
+  );
 
   useEffect(() => {
-    if (!isDragging) return
+    if (!isDragging) return;
     const onMove = (e: MouseEvent) => {
-      const delta = e.clientX - startXRef.current
-      onSidePanelResize(startWidthRef.current + delta)
-    }
-    const onUp = () => setIsDragging(false)
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
+      const delta = e.clientX - startXRef.current;
+      onSidePanelResize(startWidthRef.current + delta);
+    };
+    const onUp = () => setIsDragging(false);
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
     return () => {
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-    }
-  }, [isDragging, onSidePanelResize])
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [isDragging, onSidePanelResize]);
 
   return (
-    <aside className="shrink-0 flex flex-col bg-sidebar border-r relative select-none cursor-default" style={{ width: sidePanelWidth }}>
-      {isDragging && <div className="fixed inset-0 z-50 cursor-col-resize select-none" />}
-      {activePanel === 'search' ? (
+    <aside
+      className="shrink-0 flex flex-col bg-sidebar border-r relative select-none cursor-default"
+      style={{ width: sidePanelWidth }}
+    >
+      {isDragging && (
+        <div className="fixed inset-0 z-50 cursor-col-resize select-none" />
+      )}
+      {activePanel === "search" ? (
         <SearchPanel
           novelId={novelId}
           query={searchQuery}
@@ -100,7 +130,7 @@ export default function SidePanel({
           onNavigateEntity={onSearchNavigateEntity}
           onNavigateChapter={onSearchNavigateChapter}
         />
-      ) : activePanel === 'skills' ? (
+      ) : activePanel === "skills" ? (
         <SkillList
           novelId={novelId}
           activeSkillName={activeSkillName}
@@ -108,7 +138,7 @@ export default function SidePanel({
           onEditSkill={onEditSkill}
           onNewSkill={onNewSkill}
         />
-      ) : activePanel === 'novels' ? (
+      ) : activePanel === "novels" ? (
         <NovelList
           novels={novels}
           novelId={novelId}
@@ -121,7 +151,7 @@ export default function SidePanel({
           setDescription={setDescription}
           onCreateNovel={onCreateNovel}
         />
-      ) : activePanel === 'chapters' ? (
+      ) : activePanel === "chapters" ? (
         <ChapterList
           novelId={novelId}
           target={target}
@@ -129,31 +159,30 @@ export default function SidePanel({
           onSelectGoink={onSelectGoink}
           onExportNovel={() => onExportNovel(novelId)}
         />
-      ) : activePanel === 'characters' ? (
+      ) : activePanel === "characters" ? (
         <CharacterList novelId={novelId} />
-      ) : activePanel === 'locations' ? (
+      ) : activePanel === "locations" ? (
         <LocationList novelId={novelId} />
-      ) : activePanel === 'storyarcs' ? (
+      ) : activePanel === "storyarcs" ? (
         <ArcList novelId={novelId} />
-      ) : activePanel === 'timeline' ? (
+      ) : activePanel === "timeline" ? (
         <TimelineList novelId={novelId} />
-      ) : activePanel === 'reader' ? (
+      ) : activePanel === "reader" ? (
         <ReaderList novelId={novelId} />
-      ) : activePanel === 'preferences' ? (
+      ) : activePanel === "preferences" ? (
         <PreferenceList novelId={novelId} />
-      ) : activePanel === 'git' ? (
-        <GitHistoryList
-          novelId={novelId}
-          onSelectFile={onSelectGitFile}
-        />
-      ) : activePanel === 'style-samples' ? (
+      ) : activePanel === "git" ? (
+        <GitHistoryList novelId={novelId} onSelectFile={onSelectGitFile} />
+      ) : activePanel === "style-samples" ? (
         <StyleSampleList
           onSelectSample={onSelectStyleSample}
           novelId={novelId}
         />
       ) : (
         <div className="flex-1 flex items-center justify-center">
-          <p className="text-xs text-muted-foreground">{t('sidebar.comingSoon')}</p>
+          <p className="text-xs text-muted-foreground">
+            {t("sidebar.comingSoon")}
+          </p>
         </div>
       )}
       <div
@@ -162,5 +191,5 @@ export default function SidePanel({
         onMouseDown={handleResizeMouseDown}
       />
     </aside>
-  )
+  );
 }

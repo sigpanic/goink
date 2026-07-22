@@ -1,31 +1,40 @@
-import { Heart, ExternalLink, FileText, GitFork } from 'lucide-react'
-import { useTranslation } from 'react-i18next'
-import { BrowserOpenURL } from '@/lib/wailsjs/runtime/runtime'
+import { Heart, ExternalLink, FileText, GitFork } from "lucide-react";
+import { useTranslation } from "react-i18next";
+import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 
-const REPO = 'sigpanic/goink-skills'
-const BRANCH = 'main'
+const REPO = "sigpanic/goink-skills";
+const BRANCH = "main";
 
 interface Props {
-  open: boolean
-  onClose: () => void
+  open: boolean;
+  onClose: () => void;
 }
 
 export default function SkillContributeDialog({ open, onClose }: Props) {
-  const { t } = useTranslation()
+  const { t } = useTranslation();
 
-  if (!open) return null
+  if (!open) return null;
 
   const links = {
     template: `https://github.com/${REPO}/blob/${BRANCH}/.template/skill.md`,
     fork: `https://github.com/${REPO}/fork`,
     guide: `https://github.com/${REPO}/blob/${BRANCH}/README.md`,
-  }
+  };
 
   const steps = [
-    { icon: <GitFork className="w-5 h-5 shrink-0" />, text: t('skill.contributeStep1') },
-    { icon: <FileText className="w-5 h-5 shrink-0" />, text: t('skill.contributeStep2') },
-    { icon: <Heart className="w-5 h-5 shrink-0" />, text: t('skill.contributeStep3') },
-  ]
+    {
+      icon: <GitFork className="w-5 h-5 shrink-0" />,
+      text: t("skill.contributeStep1"),
+    },
+    {
+      icon: <FileText className="w-5 h-5 shrink-0" />,
+      text: t("skill.contributeStep2"),
+    },
+    {
+      icon: <Heart className="w-5 h-5 shrink-0" />,
+      text: t("skill.contributeStep3"),
+    },
+  ];
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
@@ -34,25 +43,25 @@ export default function SkillContributeDialog({ open, onClose }: Props) {
         {/* Header */}
         <div className="flex items-center gap-2 px-5 py-4 border-b">
           <Heart className="w-5 h-5 text-rose-500" />
-          <h2 className="text-base font-semibold">{t('skill.contribute')}</h2>
+          <h2 className="text-base font-semibold">{t("skill.contribute")}</h2>
           <button
             onClick={onClose}
             className="ml-auto text-muted-foreground hover:text-foreground transition-colors text-sm"
           >
-            {t('common.close')}
+            {t("common.close")}
           </button>
         </div>
 
         <div className="px-5 py-4 space-y-5">
           {/* Description */}
           <p className="text-sm text-muted-foreground leading-relaxed">
-            {t('skill.contributeDesc')}
+            {t("skill.contributeDesc")}
           </p>
 
           {/* Steps */}
           <div className="space-y-3">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              {t('skill.contributeHowTo')}
+              {t("skill.contributeHowTo")}
             </h3>
             {steps.map((step, i) => (
               <div key={i} className="flex items-start gap-2.5">
@@ -70,15 +79,15 @@ export default function SkillContributeDialog({ open, onClose }: Props) {
           {/* Format reference */}
           <div className="space-y-2">
             <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
-              {t('skill.contributeFormatTitle')}
+              {t("skill.contributeFormatTitle")}
             </h3>
             <pre className="text-xs font-mono bg-muted/60 rounded-lg p-3 leading-relaxed text-foreground/70 overflow-x-auto">
-{`---
+              {`---
 name: my-skill
-description: ${t('skill.contributeFormatDesc')}
-category: ${t('skill.contributeFormatCategory')}
+description: ${t("skill.contributeFormatDesc")}
+category: ${t("skill.contributeFormatCategory")}
 mode: auto
-author: ${t('skill.contributeFormatAuthor')}
+author: ${t("skill.contributeFormatAuthor")}
 version: 1
 ---`}
             </pre>
@@ -91,7 +100,7 @@ version: 1
               className="flex items-center justify-center gap-1.5 h-9 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors cursor-pointer"
             >
               <GitFork className="w-4 h-4" />
-              {t('skill.forkAndContribute')}
+              {t("skill.forkAndContribute")}
               <ExternalLink className="w-3.5 h-3.5 opacity-60" />
             </button>
             <div className="flex gap-2">
@@ -100,13 +109,13 @@ version: 1
                 className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-sm font-medium border hover:bg-muted transition-colors cursor-pointer"
               >
                 <FileText className="w-4 h-4" />
-                {t('skill.viewTemplate')}
+                {t("skill.viewTemplate")}
               </button>
               <button
                 onClick={() => BrowserOpenURL(links.guide)}
                 className="flex-1 flex items-center justify-center gap-1.5 h-8 rounded-lg text-sm font-medium border hover:bg-muted transition-colors cursor-pointer"
               >
-                {t('skill.viewGuide')}
+                {t("skill.viewGuide")}
                 <ExternalLink className="w-3.5 h-3.5 opacity-60" />
               </button>
             </div>
@@ -114,5 +123,5 @@ version: 1
         </div>
       </div>
     </div>
-  )
+  );
 }

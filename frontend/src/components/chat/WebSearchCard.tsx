@@ -1,46 +1,54 @@
-import { memo, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { TFunction } from 'i18next'
-import { Search, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react'
-import Markdown from '@/components/Markdown'
-import './WebSearchCard.css'
+import { memo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { Search, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
+import Markdown from "@/components/Markdown";
+import "./WebSearchCard.css";
 
 interface SourceItem {
-  title: string
-  url: string
+  title: string;
+  url: string;
 }
 
 interface Props {
-  result: Record<string, unknown>
+  result: Record<string, unknown>;
 }
 
 function openExternal(url: string, t: TFunction) {
-  if (window.confirm(`${t('chat.openInBrowser')}\n${url}`)) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+  if (window.confirm(`${t("chat.openInBrowser")}\n${url}`)) {
+    window.open(url, "_blank", "noopener,noreferrer");
   }
 }
 
 export default memo(function WebSearchCard({ result }: Props) {
-  const { t } = useTranslation()
-  const [summaryOpen, setSummaryOpen] = useState(false)
+  const { t } = useTranslation();
+  const [summaryOpen, setSummaryOpen] = useState(false);
 
-  const queries = (result.queries as string[]) || []
-  const summary = (result.summary as string) || ''
-  const sources = (result.sources as SourceItem[]) || []
+  const queries = (result.queries as string[]) || [];
+  const summary = (result.summary as string) || "";
+  const sources = (result.sources as SourceItem[]) || [];
 
   return (
     <div className="web-card completed">
       <div className="web-card-row">
-        <span className="web-card-icon"><Search size={14} /></span>
-        <span className="web-card-label">{t('chat.searchComplete')}</span>
-        <span className="web-card-badge web-card-badge-done">{t('chat.done')}</span>
+        <span className="web-card-icon">
+          <Search size={14} />
+        </span>
+        <span className="web-card-label">{t("chat.searchComplete")}</span>
+        <span className="web-card-badge web-card-badge-done">
+          {t("chat.done")}
+        </span>
       </div>
 
       {queries.length > 0 && (
         <div className="web-card-queries">
-          <span className="web-card-queries-label">{t('chat.searchQuery')}</span>
+          <span className="web-card-queries-label">
+            {t("chat.searchQuery")}
+          </span>
           {queries.map((q, i) => (
-            <span key={i} className="web-card-query-tag">{q}</span>
+            <span key={i} className="web-card-query-tag">
+              {q}
+            </span>
           ))}
         </div>
       )}
@@ -56,7 +64,9 @@ export default memo(function WebSearchCard({ result }: Props) {
             >
               <span className="web-card-source-index">{i + 1}</span>
               <div className="web-card-source-body">
-                <span className="web-card-source-title">{s.title || s.url}</span>
+                <span className="web-card-source-title">
+                  {s.title || s.url}
+                </span>
                 <span className="web-card-source-url">{s.url}</span>
               </div>
               <ExternalLink size={12} className="web-card-source-ext" />
@@ -71,8 +81,12 @@ export default memo(function WebSearchCard({ result }: Props) {
             className="web-card-summary-toggle"
             onClick={() => setSummaryOpen(!summaryOpen)}
           >
-            {summaryOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-            {t('chat.searchResultSummary')}
+            {summaryOpen ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )}
+            {t("chat.searchResultSummary")}
           </button>
           {summaryOpen && (
             <div className="web-card-summary-body">
@@ -82,5 +96,5 @@ export default memo(function WebSearchCard({ result }: Props) {
         </div>
       )}
     </div>
-  )
-})
+  );
+});

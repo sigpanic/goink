@@ -1,56 +1,77 @@
-import { useState, useEffect } from 'react'
-import { useTranslation } from 'react-i18next'
-import { useApp } from '@/hooks/useApp'
-import { Toaster } from 'sonner'
-import InitView from '@/views/InitView'
-import WorkspaceView from '@/views/WorkspaceView'
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import { useApp } from "@/hooks/useApp";
+import { Toaster } from "sonner";
+import InitView from "@/views/InitView";
+import WorkspaceView from "@/views/WorkspaceView";
 
-type View = 'loading' | 'init' | 'workspace'
+type View = "loading" | "init" | "workspace";
 
 export default function App() {
-  const { t } = useTranslation()
-  const [view, setView] = useState<View>('loading')
-  const [initialNovelId, setInitialNovelId] = useState(0)
-  const [fromInit, setFromInit] = useState(false)
-  const app = useApp()
+  const { t } = useTranslation();
+  const [view, setView] = useState<View>("loading");
+  const [initialNovelId, setInitialNovelId] = useState(0);
+  const [fromInit, setFromInit] = useState(false);
+  const app = useApp();
 
   useEffect(() => {
-    app.IsInitialized().then(async (ok) => {
-      if (ok) {
-        const settings = await app.GetSettings()
-        setInitialNovelId(settings?.last_novel_id ?? 0)
-        setView('workspace')
-      } else {
-        setView('init')
-      }
-    }).catch((err) => {
-      console.error('App initialization failed', err)
-      setView('init')
-    })
-  }, [app])
+    app
+      .IsInitialized()
+      .then(async (ok) => {
+        if (ok) {
+          const settings = await app.GetSettings();
+          setInitialNovelId(settings?.last_novel_id ?? 0);
+          setView("workspace");
+        } else {
+          setView("init");
+        }
+      })
+      .catch((err) => {
+        console.error("App initialization failed", err);
+        setView("init");
+      });
+  }, [app]);
 
-  if (view === 'loading') {
+  if (view === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen bg-background">
-        <p className="text-muted-foreground">{t('app.loading')}</p>
+        <p className="text-muted-foreground">{t("app.loading")}</p>
       </div>
-    )
+    );
   }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <Toaster position="top-center" richColors toastOptions={{ actionButtonStyle: { backgroundColor: 'var(--primary)', color: 'var(--primary-foreground)', border: 'none', padding: '2px 10px', borderRadius: '4px', fontSize: '12px' } }} />
-      {view === 'init' && (
-        <InitView onInitialized={async () => {
-          const settings = await app.GetSettings()
-          setInitialNovelId(settings?.last_novel_id ?? 0)
-          setFromInit(true)
-          setView('workspace')
-        }} />
+      <Toaster
+        position="top-center"
+        richColors
+        toastOptions={{
+          actionButtonStyle: {
+            backgroundColor: "var(--primary)",
+            color: "var(--primary-foreground)",
+            border: "none",
+            padding: "2px 10px",
+            borderRadius: "4px",
+            fontSize: "12px",
+          },
+        }}
+      />
+      {view === "init" && (
+        <InitView
+          onInitialized={async () => {
+            const settings = await app.GetSettings();
+            setInitialNovelId(settings?.last_novel_id ?? 0);
+            setFromInit(true);
+            setView("workspace");
+          }}
+        />
       )}
-      {view === 'workspace' && (
-        <WorkspaceView initialNovelId={initialNovelId} initialShowHelp={fromInit} />
+      {view === "workspace" && (
+        <WorkspaceView
+          initialNovelId={initialNovelId}
+          initialShowHelp={fromInit}
+        />
       )}
     </div>
-  )
+  );
 }

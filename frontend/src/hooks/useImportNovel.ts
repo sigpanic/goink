@@ -1,201 +1,227 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useTranslation } from 'react-i18next'
-import type { imp, llm, config } from '@/lib/wailsjs/go/models'
-import type { app } from '@/lib/wailsjs/go/models'
-import { EventsOn } from '@/lib/wailsjs/runtime/runtime'
+import { useCallback, useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import type { imp, llm, config } from "@/lib/wailsjs/go/models";
+import type { app } from "@/lib/wailsjs/go/models";
+import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 
 export type ImportProgressStage =
-  | 'idle'
-  | 'select_file'
-  | 'parse'
-  | 'create_novel'
-  | 'write_chapters'
-  | 'commit'
-  | 'done'
-  | 'error'
-  | 'needs_llm'
-  | 'analyzing'
+  | "idle"
+  | "select_file"
+  | "parse"
+  | "create_novel"
+  | "write_chapters"
+  | "commit"
+  | "done"
+  | "error"
+  | "needs_llm"
+  | "analyzing";
 
 export interface ImportProgressState {
-  stage: ImportProgressStage
-  message: string
-  current: number
-  total: number
-  percent: number
-  novel_id?: number
+  stage: ImportProgressStage;
+  message: string;
+  current: number;
+  total: number;
+  percent: number;
+  novel_id?: number;
 }
 
 const INITIAL_IMPORT_PROGRESS: ImportProgressState = {
-  stage: 'idle',
-  message: '',
+  stage: "idle",
+  message: "",
   current: 0,
   total: 0,
   percent: 0,
-}
+};
 
 interface UseImportNovelOptions {
   app: {
-    ImportNovel: (input: app.ImportNovelInput) => Promise<imp.ImportResult>
-    PickAndImportNovel: () => Promise<imp.ImportResult>
-    ImportWithLLM: (input: app.ImportWithLLMInput) => Promise<imp.ImportResult>
-    GetModels: () => Promise<llm.AvailableModel[]>
-    GetSettings: () => Promise<config.AppSettings>
-    [key: string]: unknown
-  }
-  onImported: (result: imp.ImportResult) => Promise<void>
+    ImportNovel: (input: app.ImportNovelInput) => Promise<imp.ImportResult>;
+    PickAndImportNovel: () => Promise<imp.ImportResult>;
+    ImportWithLLM: (input: app.ImportWithLLMInput) => Promise<imp.ImportResult>;
+    GetModels: () => Promise<llm.AvailableModel[]>;
+    GetSettings: () => Promise<config.AppSettings>;
+    [key: string]: unknown;
+  };
+  onImported: (result: imp.ImportResult) => Promise<void>;
 }
 
 function errorMessage(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback
+  return err instanceof Error ? err.message : fallback;
 }
 
 export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
-  const { t } = useTranslation()
-  const [open, setOpen] = useState(false)
-  const [progress, setProgress] = useState<ImportProgressState>({ ...INITIAL_IMPORT_PROGRESS, message: t('novel.importPreparing2') })
-  const [error, setError] = useState('')
-  const [skippedCount, setskipped_count] = useState(0)
-  const [skippedChapters, setskipped_chapters] = useState<{ title: string; reason: string }[]>([])
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [progress, setProgress] = useState<ImportProgressState>({
+    ...INITIAL_IMPORT_PROGRESS,
+    message: t("novel.importPreparing2"),
+  });
+  const [error, setError] = useState("");
+  const [skippedCount, setskipped_count] = useState(0);
+  const [skippedChapters, setskipped_chapters] = useState<
+    { title: string; reason: string }[]
+  >([]);
 
   // LLM 兜底相关状态
-  const [filePath, setFilePath] = useState('')
-  const [modelKey, setModelKey] = useState('')
-  const [models, setModels] = useState<llm.AvailableModel[]>([])
+  const [filePath, setFilePath] = useState("");
+  const [modelKey, setModelKey] = useState("");
+  const [models, setModels] = useState<llm.AvailableModel[]>([]);
 
   useEffect(() => {
-    const unsubscribe = EventsOn('import:progress', (data: ImportProgressState) => {
-      setProgress({
-        stage: data.stage,
-        message: data.message,
-        current: data.current ?? 0,
-        total: data.total ?? 0,
-        percent: data.percent ?? 0,
-        novel_id: data.novel_id,
-      })
-      if (data.stage === 'error') {
-        setError(data.message)
-      }
-    })
-    return unsubscribe
-  }, [])
+    const unsubscribe = EventsOn(
+      "import:progress",
+      (data: ImportProgressState) => {
+        setProgress({
+          stage: data.stage,
+          message: data.message,
+          current: data.current ?? 0,
+          total: data.total ?? 0,
+          percent: data.percent ?? 0,
+          novel_id: data.novel_id,
+        });
+        if (data.stage === "error") {
+          setError(data.message);
+        }
+      },
+    );
+    return unsubscribe;
+  }, []);
 
   // 加载模型列表
   useEffect(() => {
-    let cancelled = false
-    app.GetModels().then(list => {
-      if (cancelled) return
-      if (list?.length) {
-        setModels(list)
-        app.GetSettings().then(s => {
-          if (cancelled) return
-          let key = s?.selected_model_key || ''
-          if (!list.find(m => m.Key === key)) key = list[0].Key
-          setModelKey(key)
-        })
-      }
-    }).catch(() => {})
-    return () => { cancelled = true }
-  }, [app])
+    let cancelled = false;
+    app
+      .GetModels()
+      .then((list) => {
+        if (cancelled) return;
+        if (list?.length) {
+          setModels(list);
+          app.GetSettings().then((s) => {
+            if (cancelled) return;
+            let key = s?.selected_model_key || "";
+            if (!list.find((m) => m.Key === key)) key = list[0].Key;
+            setModelKey(key);
+          });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [app]);
 
   const reset = useCallback(() => {
-    setOpen(false)
-    setError('')
-    setskipped_count(0)
-    setskipped_chapters([])
-    setFilePath('')
-    setProgress({ ...INITIAL_IMPORT_PROGRESS, message: t('novel.importPreparing2') })
-  }, [t])
-
-  const startImport = useCallback(async (fp?: string) => {
-    setError('')
+    setOpen(false);
+    setError("");
+    setskipped_count(0);
+    setskipped_chapters([]);
+    setFilePath("");
     setProgress({
       ...INITIAL_IMPORT_PROGRESS,
-      stage: fp ? 'parse' : 'select_file',
-      message: fp ? t('novel.importParsing2') : t('novel.importSelectFile2'),
-    })
-    setOpen(true)
+      message: t("novel.importPreparing2"),
+    });
+  }, [t]);
 
-    let result: imp.ImportResult | null
-    try {
-      result = fp
-        ? await app.ImportNovel({ file_path: fp })
-        : await app.PickAndImportNovel()
-    } catch (err: unknown) {
-      setProgress(prev => ({
-        ...prev,
-        stage: 'error',
-        message: t('novel.importRollbackDone'),
-        percent: 100,
-      }))
-      setError(errorMessage(err, t('novel.importFailedRetry')))
-      return
-    }
+  const startImport = useCallback(
+    async (fp?: string) => {
+      setError("");
+      setProgress({
+        ...INITIAL_IMPORT_PROGRESS,
+        stage: fp ? "parse" : "select_file",
+        message: fp ? t("novel.importParsing2") : t("novel.importSelectFile2"),
+      });
+      setOpen(true);
 
-    if (!result) {
-      reset()
-      return
-    }
+      let result: imp.ImportResult | null;
+      try {
+        result = fp
+          ? await app.ImportNovel({ file_path: fp })
+          : await app.PickAndImportNovel();
+      } catch (err: unknown) {
+        setProgress((prev) => ({
+          ...prev,
+          stage: "error",
+          message: t("novel.importRollbackDone"),
+          percent: 100,
+        }));
+        setError(errorMessage(err, t("novel.importFailedRetry")));
+        return;
+      }
 
-    // 正则分割失败，提示用户使用 AI 分析
-    if (result.needs_llm) {
-      const resolvedPath = fp || ''
-      setFilePath(resolvedPath)
-      setProgress(prev => ({
-        ...prev,
-        stage: 'needs_llm',
-        message: t('novel.importNeedsLLM'),
-        percent: 0,
-      }))
-      return
-    }
+      if (!result) {
+        reset();
+        return;
+      }
 
-    setskipped_count(result.skipped_count ?? 0)
-    setskipped_chapters((result.skipped_chapters ?? []) as { title: string; reason: string }[])
+      // 正则分割失败，提示用户使用 AI 分析
+      if (result.needs_llm) {
+        const resolvedPath = fp || "";
+        setFilePath(resolvedPath);
+        setProgress((prev) => ({
+          ...prev,
+          stage: "needs_llm",
+          message: t("novel.importNeedsLLM"),
+          percent: 0,
+        }));
+        return;
+      }
 
-    try {
-      await onImported(result)
-    } catch (err: unknown) {
-      setError(errorMessage(err, t('novel.importFailedRetry')))
-    }
-  }, [app, onImported, reset, t])
+      setskipped_count(result.skipped_count ?? 0);
+      setskipped_chapters(
+        (result.skipped_chapters ?? []) as { title: string; reason: string }[],
+      );
+
+      try {
+        await onImported(result);
+      } catch (err: unknown) {
+        setError(errorMessage(err, t("novel.importFailedRetry")));
+      }
+    },
+    [app, onImported, reset, t],
+  );
 
   // 用户点"AI 分析"→ 调 ImportWithLLM，LLM 分析后直接导入
   const startLLMImport = useCallback(async () => {
-    if (!filePath || !modelKey) return
-    const [providerName, modelID] = modelKey.split('/')
-    if (!providerName || !modelID) return
+    if (!filePath || !modelKey) return;
+    const [providerName, modelID] = modelKey.split("/");
+    if (!providerName || !modelID) return;
 
-    setError('')
-    setProgress(prev => ({
+    setError("");
+    setProgress((prev) => ({
       ...prev,
-      stage: 'analyzing',
-      message: t('novel.importAnalyzing'),
+      stage: "analyzing",
+      message: t("novel.importAnalyzing"),
       percent: 30,
-    }))
+    }));
 
     try {
       const result = await app.ImportWithLLM({
         file_path: filePath,
         provider_name: providerName,
         model_id: modelID,
-      })
+      });
 
-      setskipped_count(result.skipped_count ?? 0)
-      setskipped_chapters((result.skipped_chapters ?? []) as { title: string; reason: string }[])
+      setskipped_count(result.skipped_count ?? 0);
+      setskipped_chapters(
+        (result.skipped_chapters ?? []) as { title: string; reason: string }[],
+      );
 
-      await onImported(result)
+      await onImported(result);
     } catch (err: unknown) {
-      setProgress(prev => ({
+      setProgress((prev) => ({
         ...prev,
-        stage: 'error',
-        message: t('novel.importRollbackDone'),
+        stage: "error",
+        message: t("novel.importRollbackDone"),
         percent: 100,
-      }))
-      setError(errorMessage(err, t('novel.importFailedRetry')))
+      }));
+      setError(errorMessage(err, t("novel.importFailedRetry")));
     }
-  }, [app, filePath, modelKey, onImported, t])
+  }, [app, filePath, modelKey, onImported, t]);
 
-  const modelOptions = models.map(m => ({ value: m.Key, label: m.ModelName }))
+  const modelOptions = models.map((m) => ({
+    value: m.Key,
+    label: m.ModelName,
+  }));
 
   return {
     startImport,
@@ -211,5 +237,5 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
       skippedChapters,
       onClose: reset,
     },
-  }
+  };
 }
