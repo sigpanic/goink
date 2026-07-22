@@ -52,7 +52,7 @@ export default function SessionHistory({
   const loadingRef = useRef(false);
   const searchRef = useRef("");
 
-  const loadPageRef = useRef<(p: number) => void>(null as any);
+  const loadPageRef = useRef<((p: number) => void) | null>(null);
 
   useEffect(() => {
     loadPageRef.current = async (p: number) => {

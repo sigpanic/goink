@@ -102,11 +102,12 @@ function ApprovalBody({
   payload?: Record<string, unknown>;
 }) {
   const { t } = useTranslation();
+  const s = (v: unknown) => (v == null ? "" : String(v));
   const typeLabels = getTypeLabels(t);
   if (type === "delete" && payload?.deleted) {
     const d = payload.deleted as Record<string, unknown>;
     const label =
-      typeLabels[String(d.type)] ?? String(d.type ?? t("chat.record"));
+      typeLabels[s(d.type)] ?? s(d.type ?? t("chat.record"));
     const nameOrTitle = (d.name ?? d.title) as string | undefined;
     const title = nameOrTitle ?? `#${d.id}`;
 
@@ -114,9 +115,9 @@ function ApprovalBody({
       return (
         <span>
           {t("chat.confirmDeleteCharacterRelation", {
-            source: String(d.source),
-            target: String(d.target),
-            relation: String(d.relation),
+            source: s(d.source),
+            target: s(d.target),
+            relation: s(d.relation),
           })}
         </span>
       );
@@ -125,9 +126,9 @@ function ApprovalBody({
       return (
         <span>
           {t("chat.confirmDeleteLocationRelation", {
-            locationA: String(d.location_a),
-            locationB: String(d.location_b),
-            relation: String(d.relation),
+            locationA: s(d.location_a),
+            locationB: s(d.location_b),
+            relation: s(d.relation),
           })}
         </span>
       );
@@ -137,7 +138,7 @@ function ApprovalBody({
         <span>
           {t("chat.confirmDeleteArcNode", {
             title,
-            storyArc: String(d.story_arc),
+            storyArc: s(d.story_arc),
           })}
         </span>
       );
@@ -146,9 +147,9 @@ function ApprovalBody({
       return (
         <span>
           {t("chat.confirmDeleteReaderEntry", {
-            id: String(d.id),
-            entryType: String(d.entry_type),
-            plantedChapter: String(d.planted_chapter),
+            id: s(d.id),
+            entryType: s(d.entry_type),
+            plantedChapter: s(d.planted_chapter),
           })}
         </span>
       );
@@ -157,8 +158,8 @@ function ApprovalBody({
       return (
         <span>
           {t("chat.confirmDeletePreference", {
-            category: String(d.category),
-            id: String(d.id),
+            category: s(d.category),
+            id: s(d.id),
           })}
         </span>
       );
@@ -193,10 +194,11 @@ function ApprovalBody({
 // 复用 ApprovalBody 的字段读取逻辑，但使用 deletedEntity* i18n key（"已删除 xxx"）。
 function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
   const { t } = useTranslation();
+  const s = (v: unknown) => (v == null ? "" : String(v));
   const typeLabels = getTypeLabels(t);
   const label =
-    typeLabels[String(deleted.type)] ??
-    String(deleted.type ?? t("chat.record"));
+    typeLabels[s(deleted.type)] ??
+    s(deleted.type ?? t("chat.record"));
   const nameOrTitle = (deleted.name ?? deleted.title) as string | undefined;
   const title = nameOrTitle ?? `#${deleted.id}`;
 
@@ -204,9 +206,9 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
     return (
       <span>
         {t("chat.deletedEntityCharacterRelation", {
-          source: String(deleted.source),
-          target: String(deleted.target),
-          relation: String(deleted.relation),
+          source: s(deleted.source),
+          target: s(deleted.target),
+          relation: s(deleted.relation),
         })}
       </span>
     );
@@ -215,9 +217,9 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
     return (
       <span>
         {t("chat.deletedEntityLocationRelation", {
-          locationA: String(deleted.location_a),
-          locationB: String(deleted.location_b),
-          relation: String(deleted.relation),
+          locationA: s(deleted.location_a),
+          locationB: s(deleted.location_b),
+          relation: s(deleted.relation),
         })}
       </span>
     );
@@ -227,7 +229,7 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
       <span>
         {t("chat.deletedEntityArcNode", {
           title,
-          storyArc: String(deleted.story_arc),
+          storyArc: s(deleted.story_arc),
         })}
       </span>
     );
@@ -236,9 +238,9 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
     return (
       <span>
         {t("chat.deletedEntityReaderEntry", {
-          id: String(deleted.id),
-          entryType: String(deleted.entry_type),
-          plantedChapter: String(deleted.planted_chapter),
+          id: s(deleted.id),
+          entryType: s(deleted.entry_type),
+          plantedChapter: s(deleted.planted_chapter),
         })}
       </span>
     );
@@ -247,8 +249,8 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
     return (
       <span>
         {t("chat.deletedEntityPreference", {
-          category: String(deleted.category),
-          id: String(deleted.id),
+          category: s(deleted.category),
+          id: s(deleted.id),
         })}
       </span>
     );
