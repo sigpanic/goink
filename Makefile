@@ -1,4 +1,4 @@
-.PHONY: dev build frontend-dev frontend-build clean deps package lint lint-frontend lint-go
+.PHONY: dev build frontend frontend-dev frontend-build clean deps package lint lint-frontend lint-go
 
 APP_NAME  := goink
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")

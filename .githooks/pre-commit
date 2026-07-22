@@ -19,12 +19,9 @@ staged=$(git diff --cached --name-only)
 
 has_go=false
 has_fe=false
-for f in $staged; do
-    case "$f" in
-        frontend/*) has_fe=true ;;
-        *.go) has_go=true ;;
-    esac
-done
+# 用 grep 按行匹配，避免 for 循环对含空格文件名拆词（POSIX sh 兼容）
+if printf '%s\n' "$staged" | grep -q '^frontend/'; then has_fe=true; fi
+if printf '%s\n' "$staged" | grep -q '\.go$'; then has_go=true; fi
 
 # Skip if no code changes (docs/config only)
 if [ "$has_go" = false ] && [ "$has_fe" = false ]; then
