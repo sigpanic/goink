@@ -471,11 +471,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						TurnID: opts.TurnID, Type: EventError,
 						ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
 					})
+					finalText := responseBuffer.String()
+					thinkingContent := thinkingBuffer.String()
 					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-						a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
+						a.appendMsg("assistant", finalText, thinkingContent,
 							nil, &opts, runningTokens)
 					}
-					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, event.Error
+					return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, event.Error
 				}
 			}
 		}

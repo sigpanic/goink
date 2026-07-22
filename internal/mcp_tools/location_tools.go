@@ -435,20 +435,16 @@ func (t *CreateLocationRelationTool) Execute(ctx context.Context, args any, tc T
 	}
 
 	// 预校验：批量检查是否已存在关系边
-	seen := make(map[string]bool)
+	type pair struct{ a, b int64 }
+	seen := make(map[pair]bool)
+	var pairs []pair
 	for _, item := range a.Relations {
-		key := fmt.Sprintf("%d-%d", item.LocationA, item.LocationB)
-		if seen[key] {
+		p := pair{item.LocationA, item.LocationB}
+		if seen[p] {
 			return &ToolResult{Success: false, Error: fmt.Sprintf("参数中存在重复的关系：地点 %d 和 %d", item.LocationA, item.LocationB)}, nil
 		}
-		seen[key] = true
-	}
-	type pair struct{ a, b int64 }
-	var pairs []pair
-	for key := range seen {
-		var aID, bID int64
-		_, _ = fmt.Sscanf(key, "%d-%d", &aID, &bID)
-		pairs = append(pairs, pair{aID, bID})
+		seen[p] = true
+		pairs = append(pairs, p)
 	}
 	var existing []location.LocationRelation
 	for _, p := range pairs {

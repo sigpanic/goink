@@ -88,7 +88,7 @@ type TimelineEntry struct {
 	Importance      int       `gorm:"column:importance;default:3"             json:"importance"`       // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
 	SourceChapter   int       `gorm:"column:source_chapter"                   json:"source_chapter"`   // 在哪章创建/埋下的，创建后不可变
 	Source          string    `gorm:"column:source"                           json:"source"`           // "ai" | "user"，谁创建的
-	ResolvedChapter int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"` // 在哪章回收，NULL 表示未回收
+	ResolvedChapter int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"` // 在哪章回收，0 表示未回收
 	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
 	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
 }
