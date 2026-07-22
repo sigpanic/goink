@@ -33,6 +33,18 @@ jobs:
       - name: ESLint
         run: cd frontend && npx eslint .
 
+  prettier:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Prettier
+        run: cd frontend && npx prettier --check "src/**/*.{ts,tsx}"
+
   lint-go:
     runs-on: ubuntu-latest
     env:
