@@ -208,8 +208,8 @@ func TestArcUpdate(t *testing.T) {
 	db.WithContext(ctx).Create(&arc)
 
 	type UpdateInput struct {
-		Name    string `json:"name,omitempty"`
-		Status  string `json:"status,omitempty"`
+		Name   string `json:"name,omitempty"`
+		Status string `json:"status,omitempty"`
 	}
 	input := UpdateInput{Status: "paused", Name: ""}
 	if err := db.WithContext(ctx).Model(&StoryArc{}).Where("id = ?", arc.ID).Updates(&input).Error; err != nil {

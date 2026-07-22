@@ -153,10 +153,10 @@ func TestUpdateTimelineEntry(t *testing.T) {
 	require.NoError(t, err)
 
 	err = app.UpdateTimelineEntry(novelID, entry.ID, UpdateTimelineEntryInput{
-		Title:         "伏笔A-更新",
-		Content:       "新内容",
-		Status:        "resolved",
-		Importance:    5,
+		Title:      "伏笔A-更新",
+		Content:    "新内容",
+		Status:     "resolved",
+		Importance: 5,
 	})
 	require.NoError(t, err)
 

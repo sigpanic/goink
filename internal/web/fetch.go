@@ -13,9 +13,9 @@ import (
 	"strings"
 	"time"
 
+	readability "codeberg.org/readeck/go-readability/v2"
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
-	readability "codeberg.org/readeck/go-readability/v2"
 )
 
 const (
@@ -263,6 +263,7 @@ var antiCrawlCookies = []string{
 	"visid_incap", // Incapsula
 	"ak_bmsc",     // Akamai Bot Manager
 }
+
 // 注意：__cf_bm 是 Cloudflare Bot Management 的普适令牌，正常页面也会设置，不能作为拦截信号
 
 // isAntiCrawlHeaders 检测 HTTP 响应头中是否包含反爬/CDN 防护指纹。

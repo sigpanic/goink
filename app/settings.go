@@ -104,4 +104,3 @@ func (a *App) RebuildNovelIndex(novelID int64) error {
 	defer cancel()
 	return rq.RebuildNovel(ctx, novelID)
 }
-

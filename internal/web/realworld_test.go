@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
+	readability "codeberg.org/readeck/go-readability/v2"
 	md "github.com/JohannesKaufmann/html-to-markdown"
 	"github.com/PuerkitoBio/goquery"
-	readability "codeberg.org/readeck/go-readability/v2"
 )
 
 // realWorldSite 代表一个待测试的真实网站。

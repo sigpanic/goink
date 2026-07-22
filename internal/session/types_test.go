@@ -41,7 +41,7 @@ func TestToAPIFormat_AssistantWithThinking(t *testing.T) {
 
 func TestToAPIFormat_AssistantWithToolCalls(t *testing.T) {
 	m := &Message{
-		Role:  "assistant",
+		Role:          "assistant",
 		ExtraMetadata: `{"tool_calls":[{"id":"1","function":{"name":"read","arguments":"{}"}}]}`,
 	}
 	result := m.ToAPIFormat(discardLogger())
@@ -56,7 +56,7 @@ func TestToAPIFormat_AssistantWithToolCalls(t *testing.T) {
 
 func TestToAPIFormat_ToolMessage(t *testing.T) {
 	m := &Message{
-		Role: "tool",
+		Role:          "tool",
 		ExtraMetadata: `{"tool_call_id":"call_123","tool_name":"read"}`,
 	}
 	result := m.ToAPIFormat(discardLogger())

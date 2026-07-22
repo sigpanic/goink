@@ -185,9 +185,9 @@ func TestTlUpdateEntry(t *testing.T) {
 	db.WithContext(ctx).Create(&entry)
 
 	type UpdateInput struct {
-		Title    string `json:"title,omitempty"`
-		Content  string `json:"content,omitempty"`
-		Status   string `json:"status,omitempty"`
+		Title   string `json:"title,omitempty"`
+		Content string `json:"content,omitempty"`
+		Status  string `json:"status,omitempty"`
 	}
 	input := UpdateInput{Status: "resolved", Content: ""}
 	if err := db.WithContext(ctx).Model(&TimelineEntry{}).Where("id = ?", entry.ID).Updates(&input).Error; err != nil {

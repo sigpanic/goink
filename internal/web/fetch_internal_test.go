@@ -59,7 +59,7 @@ func TestIsEncodingGarbled(t *testing.T) {
 				"DDoS protection by Cloudflare. Ray ID: 8a7f3c2e1b9d4f6a. " +
 				"Your request has been blocked. If you are the site owner, contact support.",
 			garbled: false,
-			reason: "反爬页面是可读英文，由 isAntiCrawl 处理",
+			reason:  "反爬页面是可读英文，由 isAntiCrawl 处理",
 		},
 
 		// === 应被拦截 ===
@@ -247,7 +247,7 @@ func main() {
     mux := http.NewServeMux()
     mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
         w.WriteHeader(http.StatusOK)
-        fmt.Fprintln(w, `+"`"+`{"status":"ok"}`+"`"+`)
+        fmt.Fprintln(w, ` + "`" + `{"status":"ok"}` + "`" + `)
     })
 
     srv := &http.Server{Addr: ":8080", Handler: mux,
@@ -349,10 +349,10 @@ import (
 )
 
 type Config struct {
-    APIKey      string `+"`"+`json:"api_key"`+"`"+`
-    BaseURL     string `+"`"+`json:"base_url"`+"`"+`
-    Model       string `+"`"+`json:"model"`+"`"+`
-    MaxTokens   int    `+"`"+`json:"max_tokens"`+"`"+`
+    APIKey      string ` + "`" + `json:"api_key"` + "`" + `
+    BaseURL     string ` + "`" + `json:"base_url"` + "`" + `
+    Model       string ` + "`" + `json:"model"` + "`" + `
+    MaxTokens   int    ` + "`" + `json:"max_tokens"` + "`" + `
 }
 
 func Load(path string) (*Config, error) {

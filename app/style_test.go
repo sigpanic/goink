@@ -73,10 +73,10 @@ func TestGetStyleSample(t *testing.T) {
 	novel := createTestNovel(t, app)
 
 	created, err := app.CreateStyleSample(CreateStyleSampleInput{
-		NovelID:  novel.ID,
-		Name:     "待查询",
-		Content:  "完整内容",
-		Tags:     []string{"test"},
+		NovelID: novel.ID,
+		Name:    "待查询",
+		Content: "完整内容",
+		Tags:    []string{"test"},
 	})
 	require.NoError(t, err)
 
@@ -133,10 +133,10 @@ func TestDeleteStyleSample(t *testing.T) {
 	novel := createTestNovel(t, app)
 
 	created, err := app.CreateStyleSample(CreateStyleSampleInput{
-		NovelID:  novel.ID,
-		Name:     "待删除",
-		Content:  "内容",
-		Tags:     nil,
+		NovelID: novel.ID,
+		Name:    "待删除",
+		Content: "内容",
+		Tags:    nil,
 	})
 	require.NoError(t, err)
 
@@ -159,10 +159,10 @@ func TestComputeStyleStats(t *testing.T) {
 	var ids []int64
 	for i := 0; i < 3; i++ {
 		sample, err := app.CreateStyleSample(CreateStyleSampleInput{
-			NovelID:  novel.ID,
-			Name:     string(rune('A'+rune(i))),
-			Content:  "这是第一句。这是第二句，包含逗号。这是第三句！这是第四句？",
-			Tags:     nil,
+			NovelID: novel.ID,
+			Name:    string(rune('A' + rune(i))),
+			Content: "这是第一句。这是第二句，包含逗号。这是第三句！这是第四句？",
+			Tags:    nil,
 		})
 		require.NoError(t, err)
 		ids = append(ids, sample.ID)

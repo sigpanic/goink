@@ -7,6 +7,7 @@ import "strings"
 // - K2 系列：不使用 reasoning_effort，通过 thinking.type 控制思考
 //   - k2.6/k2.5 不传 thinking → 服务端默认开启，无需干涉
 //   - kimi-k2.7-code 始终思考，不应传入 thinking 参数
+//
 // - K3 系列：始终思考，使用顶层 reasoning_effort 控制（当前仅支持 "max"）
 //   - 不要使用 K2.x 的 thinking 参数（官方明确禁止）
 //   - reasoning_effort 保留（由 buildPayload 根据 ReasoningLevels 注入）

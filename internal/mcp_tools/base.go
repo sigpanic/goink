@@ -54,9 +54,9 @@ type ToolContext struct {
 	Approver     approval.Approver                                                // 审批能力，nil 表示工具无需审批
 	EmitApproval func(toolID string, approvalType string, payload map[string]any) // 向 agent 事件流推送审批事件（EventToolCall, phase="awaiting_approval"）
 
-	RunSubAgent   RunSubAgentFunc                                                // 子 Agent 运行器，由 agent 包注入
-	SkillStore    *skill.Store                                                   // 技能存储，read 工具用于读取内置 skill
-	SearchService *search.Service                                                // 搜索服务，write 工具用于更新正文缓存
+	RunSubAgent   RunSubAgentFunc                                                       // 子 Agent 运行器，由 agent 包注入
+	SkillStore    *skill.Store                                                          // 技能存储，read 工具用于读取内置 skill
+	SearchService *search.Service                                                       // 搜索服务，write 工具用于更新正文缓存
 	WebSearch     func(ctx context.Context, query string) (*llm.WebSearchResult, error) // 网络搜索，由 agent 注入 DeepSeek 闭包；nil 表示未配置
 }
 

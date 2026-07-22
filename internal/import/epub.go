@@ -152,8 +152,8 @@ func parseEpub(filePath string, logger *slog.Logger) (*Result, error) {
 	}
 
 	return &Result{
-		Title:        strings.TrimSpace(o.Metadata.Title),
-		Chapters:     chapters,
+		Title:           strings.TrimSpace(o.Metadata.Title),
+		Chapters:        chapters,
 		SkippedChapters: skippedChapters,
 	}, nil
 }

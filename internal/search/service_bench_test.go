@@ -227,4 +227,3 @@ func TestSearchContent_PrintStats(t *testing.T) {
 	elapsedEmpty := time.Since(startEmpty)
 	t.Logf("searchContent(空查询) 遍历 27 MB 耗时: %v", elapsedEmpty)
 }
-

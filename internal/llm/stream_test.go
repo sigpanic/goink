@@ -84,9 +84,9 @@ func TestStatusRetryable(t *testing.T) {
 		code int
 		want bool
 	}{
-		{429, true},  // 限流
-		{408, true},  // 超时
-		{500, true},  // 服务端错误
+		{429, true}, // 限流
+		{408, true}, // 超时
+		{500, true}, // 服务端错误
 		{502, true},
 		{503, true},
 		{599, true},  // 5xx 上界

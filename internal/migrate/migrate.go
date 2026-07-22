@@ -16,8 +16,8 @@ import (
 	"novel/internal/session"
 	"novel/internal/storage"
 	"novel/internal/storyarc"
-	"novel/internal/timeline"
 	"novel/internal/style"
+	"novel/internal/timeline"
 	"novel/internal/writing"
 )
 
