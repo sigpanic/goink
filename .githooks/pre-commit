@@ -7,6 +7,9 @@
 #   Both              → all of the above
 #   Neither (docs)    → skip
 #
+# Output strategy: 成功时静默（只显示 ✓），失败时显示最后 50 行用于排错。
+# 避免大量构建输出（如 vite 的 dist/assets 列表）污染 AI 上下文。
+#
 # Mirrors CI checks in .github/workflows/checks.yml + frontend-checks.yml + test.yml.
 # Required by .trae/rules/编码规则.md (auto-run, no manual validation needed).
 #
@@ -28,24 +31,34 @@ if [ "$has_go" = false ] && [ "$has_fe" = false ]; then
     exit 0
 fi
 
+# run_check 描述 命令...
+# 成功时只输出 ✓，失败时输出最后 50 行（避免大量构建日志污染 AI 上下文）
+run_check() {
+    desc="$1"
+    shift
+    output=$("$@" 2>&1)
+    status=$?
+    if [ $status -eq 0 ]; then
+        echo "  ✓ $desc"
+    else
+        echo "  ✖ $desc failed (last 50 lines):" >&2
+        printf '%s\n' "$output" | tail -50 >&2
+        return 1
+    fi
+}
+
 echo "── Pre-commit validation ──"
 
 if [ "$has_go" = true ]; then
-    echo "  [go] build ./..."
-    go build ./... || { echo "  ✖ go build failed" >&2; exit 1; }
-    echo "  [go] test ./..."
-    go test ./... || { echo "  ✖ go test failed" >&2; exit 1; }
-    echo "  [go] golangci-lint"
-    CGO_ENABLED=1 golangci-lint run --timeout=10m ./... || { echo "  ✖ golangci-lint failed" >&2; exit 1; }
+    run_check "[go] build ./..." go build ./... || exit 1
+    run_check "[go] test ./..." go test ./... || exit 1
+    run_check "[go] golangci-lint" env CGO_ENABLED=1 golangci-lint run --timeout=10m ./... || exit 1
 fi
 
 if [ "$has_fe" = true ]; then
-    echo "  [fe] npm run build"
-    (cd frontend && npm run build) || { echo "  ✖ npm run build failed" >&2; exit 1; }
-    echo "  [fe] npm run lint"
-    (cd frontend && npm run lint) || { echo "  ✖ npm run lint failed" >&2; exit 1; }
-    echo "  [fe] npm run test"
-    (cd frontend && npm run test) || { echo "  ✖ npm run test failed" >&2; exit 1; }
+    run_check "[fe] npm run build" sh -c 'cd frontend && npm run build' || exit 1
+    run_check "[fe] npm run lint" sh -c 'cd frontend && npm run lint' || exit 1
+    run_check "[fe] npm run test" sh -c 'cd frontend && npm run test' || exit 1
 fi
 
 echo "  ✓ All checks passed"
