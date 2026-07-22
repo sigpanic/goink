@@ -49,6 +49,12 @@ lint-go:
 # 汇总：前端 + 后端 lint
 lint: lint-frontend lint-go
 
+# 代码统计（需安装 cloc）
+stats:
+	cloc --exclude-dir=node_modules,dist,wailsjs,build,python-master,goink-skills,dev_test,docs.local,release,assets,docs,.github,.githooks,.claude,.git \
+		--not-match-f='(?i)(\.pb\.go$$|\.gen\.go$$|\.generated\.go$$|\.svg$$|\.png$$|\.jpg$$|\.ico$$)' \
+		.
+
 # 打包（按当前平台）
 package:
 	@case "$$(uname -s)" in \
