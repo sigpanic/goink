@@ -197,8 +197,8 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
     - /builtin/skills/<name>.md   — 系统内置技能（只读）
     - ~/.goink/skills/<name>.md   — 用户级技能
 - **相对路径**（不以 / 或 ~ 开头）：相对于当前小说仓库根目录，类似代码仓库内的相对路径。
-    - chapters/001.md             — 章节文件
-    - outlines/001.md             — 章节大纲
+    - chapters/001.md             — 章节文件（3-6 位数字补齐的章节号）
+    - outlines/001.md             — 章节大纲（3-6 位数字补齐的章节号）
     - goink.md                    — 故事状态文档
     - skills/<name>.md            — 小说级技能
 

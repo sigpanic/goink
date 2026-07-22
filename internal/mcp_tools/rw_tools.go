@@ -24,14 +24,14 @@ import (
 
 // EditArgs 是 edit 工具的参数。
 type EditArgs struct {
-	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节文件格式为 chapters/001.md（三位数字），大纲为 outlines/001.md，故事状态为 goink.md" validate:"required"`
+	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节文件 chapters/001.md（3-6 位数字补齐）、大纲 outlines/001.md（3-6 位数字补齐）、故事状态 goink.md、技能 skills/<name>.md（小说级）或 ~/.goink/skills/<name>.md（用户级）" validate:"required"`
 	ChangeType string `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
 	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
-	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文；search_replace 时为替换后的文本；line_range_replace 时为插入的新行" validate:"omitempty"`
+	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文（必填，传空会报错；若要清空整个文件请改用 line_range_replace(1, total_lines, \"\")，total_lines 从 read 返回获取）；search_replace 时为替换后的文本（传空则删除匹配到的文本）；line_range_replace 时为替换该行范围的新内容（传空则删除该范围行）" validate:"omitempty"`
 	ReplaceAll bool   `json:"replace_all" jsonschema:"description=是否替换所有匹配项。默认 false（仅替换第一个匹配）" validate:"omitempty"`
 	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
-	Reason     string `json:"reason" jsonschema:"description=修改原因，供人类审阅" validate:"omitempty"`
+	Reason     string `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
 	Title      string `json:"title" jsonschema:"description=章节标题。新建章节时必填；对已有章节传入时将覆盖原标题（仅 chapters/xxx.md 路径生效）" validate:"omitempty"`
 }
 
@@ -289,6 +289,9 @@ func linePreview(content string, start, end int) string {
 func applyChange(a *EditArgs, current string) (string, error) {
 	switch a.ChangeType {
 	case "full_replace":
+		if a.NewContent == "" {
+			return "", fmt.Errorf("full_replace 模式需要提供 new_content；若要清空整个文件请用 line_range_replace(1, 总行数, \"\")")
+		}
 		return a.NewContent, nil
 
 	case "search_replace":
@@ -552,21 +555,18 @@ func parseOutlineNum(p string) int {
 
 // ── 工具描述 ──────────────────────────────────────────────
 
-const editDescription = `编辑小说文件（章节正文或大纲或故事状态 goink.md 或技能文件）。支持三种编辑模式：
+const editDescription = `编辑小说文件（章节正文、大纲、故事状态 goink.md 或技能文件）。支持三种编辑模式：full_replace（全文替换）、search_replace（查找替换）、line_range_replace（行范围替换）。
 
-1. **full_replace** — 全文替换整个文件。new_content 为完整的替换后内容。
-2. **search_replace** — 查找并替换指定文本。search_text 为要查找的原文片段（请从文件中精确复制），new_content 为替换后的文本。replace_all=false（默认）仅替换第一个匹配项，replace_all=true 替换所有匹配。如果连续两次 search_replace 因"未找到匹配"失败，直接用 line_range_replace 代替——不要在同一种模式上反复重试。
-3. **line_range_replace** — 替换指定行范围。start_line 和 end_line 为 1-based 行号（含两端），new_content 为插入的新内容。
+各模式必填参数：
+- full_replace：new_content
+- search_replace：search_text + new_content
+- line_range_replace：start_line + end_line + new_content
+所有模式都必填：path、change_type、reason
+（new_content 传空的具体行为见 new_content 参数说明）
 
-路径格式：
-- chapters/001.md ~ chapters/999999.md（三位数字补齐的章节文件）
-- outlines/001.md ~ outlines/999999.md（章节大纲文件）
-- goink.md（故事状态文档）
-- skills/<name>.md（小说级技能）
-- ~/.goink/skills/<name>.md（用户级技能）
-只用上述路径。
-
-title 参数：新建章节/大纲时传入标题；对已有章节传入非空 title 将覆盖原标题（不传或传空字符串则保留原标题）。
+模式选择策略：
+- search_replace 连续两次因"未找到匹配"失败，直接换 line_range_replace，不要在同一种模式上反复重试
+- line_range_replace 使用前务必重新 read 确认行号（行号可能因前序操作偏移）；执行后会返回 before/after 上下文，若 before 与预期不符说明行号偏移，需重新 read 修正后再试
 
 所有修改会先生成 git diff 提交用户审批，审批通过后才写入文件。被拒绝时返回用户反馈，可根据反馈修正后重试。`
 
@@ -574,10 +574,10 @@ title 参数：新建章节/大纲时传入标题；对已有章节传入非空 
 
 // ReadArgs 是 read 工具的参数。
 type ReadArgs struct {
-	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节文件格式为 chapters/001.md（三位数字），大纲为 outlines/001.md，故事状态为 goink.md" validate:"required"`
+	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节文件 chapters/001.md（3-6 位数字补齐）、大纲 outlines/001.md（3-6 位数字补齐）、故事状态 goink.md、技能 skills/<name>.md（小说级）、~/.goink/skills/<name>.md（用户级）或 /builtin/skills/<name>.md（内置，只读）" validate:"required"`
 	IncludeLines *bool  `json:"include_lines" jsonschema:"default=true,description=是否包含行号前缀（如 123|）。默认 true，用于精确引用和行范围编辑。传 false 获取纯文本"`
 	StartLine    int    `json:"start_line" jsonschema:"default=1,description=起始行号 1-based 含此行，必须 <= end_line" validate:"omitempty,min=1"`
-	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末；设为 0 使用默认值 2000" validate:"omitempty,min=0"`
+	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末。不传或传 0 均按默认 2000 处理" validate:"omitempty,min=0"`
 }
 
 // ReadTool 读取文件内容（章节正文或故事状态 goink.md）。
@@ -702,18 +702,10 @@ func (t *ReadTool) readBuiltinSkill(a *ReadArgs, tc ToolContext) (*ToolResult, e
 
 const readDescription = `读取小说文件或技能文件。
 
-路径格式（与 edit 工具一致）：
-- chapters/001.md ~ chapters/999999.md（章节文件）
-- outlines/001.md ~ outlines/999999.md（章节大纲）
-- goink.md（故事状态文档）
-- skills/<name>.md（小说级技能）
-- ~/.goink/skills/<name>.md（用户级技能）
-- /builtin/skills/<name>.md（内置技能，只读）
 特性：
-- 默认添加行号前缀（123|），方便后续 edit 工具进行 line_range_replace 和 search_replace
-- start_line 和 end_line 支持行范围读取：默认读前 2000 行，可通过调整参数翻页或精确引用
-- 返回 total_lines 表示全文行数，用于判断是否被截断
-- include_lines=false 返回纯文本（不含行号）`
+- 默认添加行号前缀，方便后续 edit 工具进行 line_range_replace 和 search_replace
+- 返回 total_lines 表示全文行数，用于判断是否被截断；可用 line_range_replace(1, total_lines, "") 清空整个文件
+- start_line 和 end_line 支持行范围读取，用于翻页或精确引用`
 
 // ── 注册 ──────────────────────────────────────────────────
 
