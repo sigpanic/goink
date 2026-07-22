@@ -412,6 +412,13 @@ export default function SkillMarketplace({
               <h2 className="text-base font-semibold">
                 {t("skill.marketplace.title")}
               </h2>
+              <button
+                onClick={() => BrowserOpenURL(REPO_URL)}
+                className="inline-flex items-center justify-center w-7 h-7 rounded-lg hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title={t("skill.marketplace.repoLink")}
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
