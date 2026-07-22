@@ -1,0 +1,56 @@
+name: Checks
+
+on:
+  push:
+    branches: [master, dev]
+  pull_request:
+    branches: [master]
+
+jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: gitleaks/gitleaks-action@v2
+        with:
+          config-path: .gitleaks.toml
+
+  lint-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Install frontend deps
+        run: cd frontend && npm ci
+
+      - name: ESLint
+        run: cd frontend && npx eslint .
+
+  lint-go:
+    runs-on: ubuntu-latest
+    env:
+      CGO_ENABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Install sqlite3 headers
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
+
+      - name: Create frontend/dist placeholder for go:embed
+        run: mkdir -p frontend/dist && touch frontend/dist/.gitkeep
+
+      - uses: golangci/golangci-lint-action@v7
+        with:
+          version: v2.12.2
+          args: --timeout=10m

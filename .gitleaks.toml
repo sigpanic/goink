@@ -1,0 +1,25 @@
+# Gitleaks secret detection config
+# See: https://github.com/gitleaks/gitleaks?tab=readme-ov-file#configuration
+
+title = "Goink Gitleaks config"
+
+# Use default rules as baseline, then customize
+[extend]
+useDefault = true
+
+# Allowlist specific paths that contain test fixtures or false positives
+[allowlist]
+  description = "Global allowlist for known false positives"
+  paths = [
+    '''go\.sum''',
+    '''package-lock\.json''',
+    '''frontend/src/test/''',
+    '''docs/''',
+    '''\.github/workflows/''',
+  ]
+
+  # Allowlist test/demo tokens that appear in docs or test fixtures
+  regexes = [
+    '''ghp_example_token''',
+    '''sk-test-''',
+  ]
