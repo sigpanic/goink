@@ -56,7 +56,7 @@ description: 发布新版本：检查 dev 分支待合并提交，提 PR（英�
 - 因为 release 由 CI 自动关联，手写 notes 不会被覆盖（已验证）
 - 命令：
   ```
-  gh release create vX.Y.Z --title "vX.Y.Z" --notes "中文 release notes"
+  gh release create vX.Y.Z -R sigpanic/goink --title "vX.Y.Z" --notes "中文 release notes"
   ```
 
 ## 6. 切回 dev
