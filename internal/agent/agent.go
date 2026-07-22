@@ -402,12 +402,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 								Timestamp:    time.Now(),
 							})
 
+							timer := time.NewTimer(backoff)
 							select {
 							case <-ctx.Done():
+								timer.Stop()
 								return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
-							case <-time.After(backoff):
-								goto RETRY_STREAM
+							case <-timer.C:
 							}
+							goto RETRY_STREAM
 						}
 
 						// 重试次数耗尽 → 失败兜底（不保存 partial，已经 Reset）
@@ -450,14 +452,16 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						// EventError 发生时本轮 tool 还未执行（toolOutputs 为空），
 						// 不需要清空
 
+						timer := time.NewTimer(backoff)
 						select {
 						case <-ctx.Done():
 							// 用户在退避期间取消 → 走 user_stopped 路径
 							// 不 emit EventError（前端已设 status='stopped'）
+							timer.Stop()
 							return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
-						case <-time.After(backoff):
-							goto RETRY_STREAM
+						case <-timer.C:
 						}
+						goto RETRY_STREAM
 					}
 
 					// 失败兜底：不可重试 或 重试次数耗尽 → 保存 partial 后返回

@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 )
 
@@ -85,7 +86,7 @@ func (c *Client) ChatStream(
 		return ch
 	}
 
-	ch := make(chan StreamEvent, 8)
+	ch := make(chan StreamEvent, 32)
 	go func() {
 		defer close(ch)
 
@@ -125,18 +126,26 @@ func (c *Client) ChatStream(
 			}
 
 			msg := "网络连接失败，请检查网络后重试"
+			retryable := true
 			if isTimeout {
 				msg = "服务器响应超时（首字节超过 60s），请稍后重试"
 				c.logger.Warn("llm first byte timeout", "err", err, "url", req.URL.String())
 			} else {
-				// 非超时网络错误（连接拒绝 / DNS 失败 / EOF / reset 等）
-				c.logger.Warn("llm network error", "err", err, "url", req.URL.String())
+				// 非超时网络错误：区分永久性（DNS NXDOMAIN / 连接拒绝）与瞬时性（EOF / reset）
+				var dnsErr *net.DNSError
+				var opErr *net.OpError
+				if (errors.As(err, &dnsErr) && dnsErr.IsNotFound) ||
+					(errors.As(err, &opErr) && errors.Is(opErr.Err, syscall.ECONNREFUSED)) {
+					retryable = false
+					msg = "网络连接被拒绝或域名无法解析，请检查网络配置"
+				}
+				c.logger.Warn("llm network error", "err", err, "url", req.URL.String(), "retryable", retryable)
 			}
 
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
 				Message:    msg,
-				Retryable:  true, // 首字节超时和网络错误均可重试（由 P2 处理，本次只是标记）
+				Retryable:  retryable,
 			}}
 			return
 		}
@@ -144,7 +153,7 @@ func (c *Client) ChatStream(
 
 		// HTTP 错误
 		if resp.StatusCode >= 400 {
-			errBody, _ := io.ReadAll(resp.Body)
+			errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 8*1024))
 			// 关键节点日志：HTTP 4xx/5xx
 			bodyStr := string(errBody)
 			if len(bodyStr) > 500 {
@@ -392,6 +401,9 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 			Message:    fmt.Sprintf("SSE stream read error: %s", err),
 			Retryable:  true,
 		}}
+		// 流异常中断：不再做 tool call 收尾，避免与 invalidToolErrors 分支叠加
+		// 产生第二个 EventError（scanner.Err 后 accumulated 数据不可信，保守丢弃）
+		return
 	}
 
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。
