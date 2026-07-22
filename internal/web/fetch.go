@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -33,6 +34,10 @@ const (
 )
 
 var cookieJar, _ = cookiejar.New(nil)
+
+// dataImageRegex 匹配 markdown 内联图片的 data: URL（base64），用于移除以避免 base64 污染 LLM 上下文。
+// base64 标准字符集 A-Za-z0-9+/= 不含 ')'，[^)]* 不会跨图片误匹配。
+var dataImageRegex = regexp.MustCompile(`!\[[^\]]*\]\(data:image/[^)]*\)`)
 
 // FetchResult 是网页抓取结果。
 type FetchResult struct {
@@ -141,6 +146,8 @@ func Fetch(rawURL string) (*FetchResult, error) {
 	}
 
 	text = strings.TrimSpace(text)
+	// 移除 base64 内联图片（data: URL），避免 base64 数据污染 LLM 上下文
+	text = dataImageRegex.ReplaceAllString(text, "")
 	textLen := len([]rune(text))
 	if isEncodingGarbled(text) {
 		return nil, fmt.Errorf("网页编码异常，无法解析")
