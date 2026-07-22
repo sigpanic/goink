@@ -279,7 +279,7 @@ export namespace app {
 	    detail_json?: string;
 	    target_chapter: number;
 	    importance?: number;
-	    source_chapter_id?: number;
+	    source_chapter?: number;
 	    source?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -294,7 +294,7 @@ export namespace app {
 	        this.detail_json = source["detail_json"];
 	        this.target_chapter = source["target_chapter"];
 	        this.importance = source["importance"];
-	        this.source_chapter_id = source["source_chapter_id"];
+	        this.source_chapter = source["source_chapter"];
 	        this.source = source["source"];
 	    }
 	}
@@ -797,7 +797,7 @@ export namespace app {
 	    target_chapter?: number;
 	    importance?: number;
 	    status?: string;
-	    resolved_chapter_id?: number;
+	    resolved_chapter?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateTimelineEntryInput(source);
@@ -811,7 +811,7 @@ export namespace app {
 	        this.target_chapter = source["target_chapter"];
 	        this.importance = source["importance"];
 	        this.status = source["status"];
-	        this.resolved_chapter_id = source["resolved_chapter_id"];
+	        this.resolved_chapter = source["resolved_chapter"];
 	    }
 	}
 
@@ -1015,7 +1015,7 @@ export namespace character {
 	    target_character_id: number;
 	    relation_describe: string;
 	    description: string;
-	    chapter_id: number;
+	    chapter_number: number;
 	    is_current: boolean;
 	    // Go type: time
 	    created_at: any;
@@ -1032,7 +1032,7 @@ export namespace character {
 	        this.target_character_id = source["target_character_id"];
 	        this.relation_describe = source["relation_describe"];
 	        this.description = source["description"];
-	        this.chapter_id = source["chapter_id"];
+	        this.chapter_number = source["chapter_number"];
 	        this.is_current = source["is_current"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
@@ -2358,9 +2358,9 @@ export namespace timeline {
 	    detail_json: string;
 	    target_chapter: number;
 	    importance: number;
-	    source_chapter_id: number;
+	    source_chapter: number;
 	    source: string;
-	    resolved_chapter_id: number;
+	    resolved_chapter: number;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -2381,9 +2381,9 @@ export namespace timeline {
 	        this.detail_json = source["detail_json"];
 	        this.target_chapter = source["target_chapter"];
 	        this.importance = source["importance"];
-	        this.source_chapter_id = source["source_chapter_id"];
+	        this.source_chapter = source["source_chapter"];
 	        this.source = source["source"];
-	        this.resolved_chapter_id = source["resolved_chapter_id"];
+	        this.resolved_chapter = source["resolved_chapter"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }

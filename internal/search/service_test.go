@@ -538,7 +538,7 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "foreshadowing", Status: "pending",
 		Title: "青龙刀的传说", Content: "王五提起传说中的青龙刀，暗示其与张三的身世有关",
-		TargetChapter: 5, SourceChapterID: 1, Importance: 5, Source: "ai",
+		TargetChapter: 5, SourceChapter: 1, Importance: 5, Source: "ai",
 	})
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "user_directive", Status: "pending",

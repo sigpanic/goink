@@ -30,7 +30,7 @@ Timeline 是 AI 写作的剧情追踪系统，用于管理伏笔回收和用户�
 | `version` | 编辑历史审计，非 AI 写作核心需求 |
 | `last_editor` | source 字段已区分 ai/user |
 | `original_ai_output` | Python 保存但从不回读 |
-| `resolved_at` | 可通过 resolved_chapter_id 推导 |
+| `resolved_at` | 可通过 resolved_chapter 推导 |
 | `time_horizon` | target_chapter 已表达时间远近，无需额外字段 |
 
 ### 表拆分（Python 1 张 → Go 2 张）
@@ -149,6 +149,6 @@ far  → 全量注入（完整 content，1 行）
 | 模块 | 关系 |
 |------|------|
 | Novel | `novel_id` FK，级联删除 |
-| Chapter | `source_chapter_id` / `resolved_chapter_id` 引用章节 |
+| Chapter | `source_chapter` / `resolved_chapter` 引用章节号 |
 | Character | timeline可以记录角色名称（写入工具描述/系统提示词） 告诉llm如果这个节点需要用到xx角色，就把角色名写进去，后续可以搜出来角色 |
 | StoryArc | 未来的弧线里程碑通过 TimelineEntry 追踪（预留 detail_json 中的 arc 引用） |

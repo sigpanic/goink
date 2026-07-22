@@ -5,12 +5,12 @@ import "time"
 // WritingLog 记录每次保存的字数变化。正数表示新增，负数表示删除。
 // 多行同一天的不同保存各自独立，查询时按 date GROUP BY SUM(word_delta)。
 type WritingLog struct {
-	ID        int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	Date      string    `gorm:"column:date;not null;index:idx_writing_date;size:10"` // "2006-01-02"
-	NovelID   int64     `gorm:"column:novel_id;not null;default:0;index"`
-	ChapterID int64     `gorm:"column:chapter_id;not null;default:0;index"`
-	WordDelta int       `gorm:"column:word_delta;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	ID            int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	Date          string    `gorm:"column:date;not null;index:idx_writing_date;size:10"` // "2006-01-02"
+	NovelID       int64     `gorm:"column:novel_id;not null;default:0;index"`
+	ChapterNumber int       `gorm:"column:chapter_number;not null;default:0;index"`
+	WordDelta     int       `gorm:"column:word_delta;not null"`
+	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
 func (WritingLog) TableName() string { return "writing_log" }

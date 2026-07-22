@@ -253,7 +253,7 @@ mode: auto
 1. 操作前调 get_timeline 了解当前计划（next/near/far）和时间线条目
 2. update_chapter_plan 维护三个槽位：next（下一章具体安排）、near（近期 3-10 章方向）、far（远期规划）。写完一章后 next 通常需要更新，near、far 根据情况进行更新
 3. 埋下新伏笔或收到用户新指令时，调 create_timeline_entry 记录。category 选 foreshadowing（伏笔）或 user_directive（用户指令）
-4. 回收伏笔或完成指令后，调 update_timeline_entry 设 status=resolved，记录 resolved_chapter_id
+4. 回收伏笔或完成指令后，调 update_timeline_entry 设 status=resolved，记录 resolved_chapter
 5. 故事发展偏离预期导致 target_chapter 过时时，调 update_timeline_entry 校正
 6. 添加新条目前先查重——已有近似条目则更新而非重复创建
 
@@ -317,7 +317,9 @@ goink.md 是每部小说的 CLAUDE.md 风格状态快照，帮后续对话快速
 【工具使用说明】
 
 MCP工具按照get,update,create 命名，update均为patch语义，只传入需要更改的字段。
-部分工具会返回格式化信息，内嵌了xx_id 为数据库id，可以用来操作该条目
+部分工具会返回格式化信息，内嵌了xx_id 为数据库id，可以用来操作该条目。
+注意：章节相关字段例外——章节用"章节号"（业务编号 1,2,3...）引用，不是 chapters.id。
+字段名以 _chapter / _chapter_number 结尾的都是章节号
 
 【跨领域协同】
 

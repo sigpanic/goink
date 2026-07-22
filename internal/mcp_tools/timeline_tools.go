@@ -111,14 +111,14 @@ func (t *GetTimelineTool) executeFull(ctx context.Context, a *GetTimelineArgs, t
 
 // CreateTimelineEntryItem 是单条伏笔/用户指令的创建参数。
 type CreateTimelineEntryItem struct {
-	Category        string `json:"category" jsonschema:"required,description=条目类型,enum=foreshadowing,enum=user_directive" validate:"required,oneof=foreshadowing user_directive"`
-	Title           string `json:"title" jsonschema:"required,description=简短标题"                                   validate:"required"`
-	Content         string `json:"content" jsonschema:"description=详细描述"`
-	DetailJSON      string `json:"detail_json" jsonschema:"description=字符串形式的JSON，结构化数据"`
-	TargetChapter   int    `json:"target_chapter" jsonschema:"required,description=预计回收章节号（不准确不要紧，后续可调整）"        validate:"required,min=1"`
-	Importance      int    `json:"importance" jsonschema:"description=重要度1-5,default=3,minimum=1,maximum=5"         validate:"omitempty,min=1,max=5"`
-	SourceChapterID int64  `json:"source_chapter_id" jsonschema:"description=在哪章创建/埋下的"`
-	Source          string `json:"source" jsonschema:"description=来源,default=ai"`
+	Category      string `json:"category" jsonschema:"required,description=条目类型,enum=foreshadowing,enum=user_directive" validate:"required,oneof=foreshadowing user_directive"`
+	Title         string `json:"title" jsonschema:"required,description=简短标题"                                   validate:"required"`
+	Content       string `json:"content" jsonschema:"description=详细描述"`
+	DetailJSON    string `json:"detail_json" jsonschema:"description=字符串形式的JSON，结构化数据"`
+	TargetChapter int    `json:"target_chapter" jsonschema:"required,description=预计回收章节号（不准确不要紧，后续可调整）"        validate:"required,min=1"`
+	Importance    int    `json:"importance" jsonschema:"description=重要度1-5,default=3,minimum=1,maximum=5"         validate:"omitempty,min=1,max=5"`
+	SourceChapter int    `json:"source_chapter" jsonschema:"description=在哪章创建/埋下的"`
+	Source        string `json:"source" jsonschema:"description=来源,default=ai"`
 }
 
 // CreateTimelineEntryArgs 是 create_timeline_entry 的参数。
@@ -160,16 +160,16 @@ func (t *CreateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 				importance = 3
 			}
 			entry := timeline.TimelineEntry{
-				NovelID:         tc.NovelID,
-				Category:        item.Category,
-				Title:           item.Title,
-				Content:         item.Content,
-				DetailJSON:      item.DetailJSON,
-				TargetChapter:   item.TargetChapter,
-				Importance:      importance,
-				SourceChapterID: item.SourceChapterID,
-				Source:          source,
-				Status:          "pending",
+				NovelID:       tc.NovelID,
+				Category:      item.Category,
+				Title:         item.Title,
+				Content:       item.Content,
+				DetailJSON:    item.DetailJSON,
+				TargetChapter: item.TargetChapter,
+				Importance:    importance,
+				SourceChapter: item.SourceChapter,
+				Source:        source,
+				Status:        "pending",
 			}
 			if err := tx.Create(&entry).Error; err != nil {
 				failedName = item.Title
@@ -197,14 +197,14 @@ func (t *CreateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 
 // UpdateTimelineEntryArgs 是 update_timeline_entry 的参数。
 type UpdateTimelineEntryArgs struct {
-	EntryID           int64  `json:"entry_id" jsonschema:"required,description=条目ID"              validate:"required,min=1"`
-	Title             string `json:"title" jsonschema:"description=新的标题"`
-	Content           string `json:"content" jsonschema:"description=新的描述"`
-	DetailJSON        string `json:"detail_json" jsonschema:"description=新的结构化数据（完全替换旧的）"`
-	TargetChapter     int    `json:"target_chapter" jsonschema:"description=新的目标章节号,minimum=1" validate:"omitempty,min=1"`
-	Importance        int    `json:"importance" jsonschema:"description=新的重要度1-5,minimum=1,maximum=5"`
-	Status            string `json:"status" jsonschema:"description=新状态,enum=pending,enum=resolved,enum=abandoned"`
-	ResolvedChapterID int64  `json:"resolved_chapter_id" jsonschema:"description=在哪章回收（标记resolved时填入）"`
+	EntryID         int64  `json:"entry_id" jsonschema:"required,description=条目ID"              validate:"required,min=1"`
+	Title           string `json:"title" jsonschema:"description=新的标题"`
+	Content         string `json:"content" jsonschema:"description=新的描述"`
+	DetailJSON      string `json:"detail_json" jsonschema:"description=新的结构化数据（完全替换旧的）"`
+	TargetChapter   int    `json:"target_chapter" jsonschema:"description=新的目标章节号,minimum=1" validate:"omitempty,min=1"`
+	Importance      int    `json:"importance" jsonschema:"description=新的重要度1-5,minimum=1,maximum=5"`
+	Status          string `json:"status" jsonschema:"description=新状态,enum=pending,enum=resolved,enum=abandoned"`
+	ResolvedChapter int    `json:"resolved_chapter" jsonschema:"description=在哪章回收（标记resolved时填入）"`
 }
 
 // UpdateTimelineEntryTool 更新伏笔或用户指令。
@@ -213,8 +213,8 @@ type UpdateTimelineEntryTool struct{}
 func (t *UpdateTimelineEntryTool) Name() string { return "update_timeline_entry" }
 func (t *UpdateTimelineEntryTool) Description() string {
 	return "更新已有的伏笔或用户指令。只需传入要修改的字段。" +
-		"常见用途：回收伏笔（status=resolved + resolved_chapter_id）、调整 target_chapter、修改内容。" +
-		"category 和 source_chapter_id 创建后不可变。"
+		"常见用途：回收伏笔（status=resolved + resolved_chapter）、调整 target_chapter、修改内容。" +
+		"category 和 source_chapter 创建后不可变。"
 }
 func (t *UpdateTimelineEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -227,7 +227,7 @@ func (t *UpdateTimelineEntryTool) NewArgs() any      { return &UpdateTimelineEnt
 func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateTimelineEntryArgs)
 
-	if a.Title == "" && a.Content == "" && a.DetailJSON == "" && a.TargetChapter == 0 && a.Importance == 0 && a.Status == "" && a.ResolvedChapterID == 0 {
+	if a.Title == "" && a.Content == "" && a.DetailJSON == "" && a.TargetChapter == 0 && a.Importance == 0 && a.Status == "" && a.ResolvedChapter == 0 {
 		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
 	}
 

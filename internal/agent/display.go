@@ -10,13 +10,7 @@ import (
 // toolDisplayNames 工具名 → 中文展示名称。
 var toolDisplayNames = map[string]string{
 	"get_chapter_list":                "查看章节目录",
-	"get_chapter_content":             "读取章节正文",
-	"edit_chapter":                    "编辑章节内容",
-	"create_new_chapter":              "创建新章节",
-	"get_creative_profile":            "查看创作规则",
-	"update_creative_profile":         "设置创作规则",
 	"search_story_memory":             "搜索故事记忆",
-	"get_character_memory":            "查询角色记忆",
 	"get_timeline":                    "查看故事时间线",
 	"create_timeline_entry":           "记录追踪条目",
 	"update_timeline_entry":           "更新追踪条目",
@@ -26,7 +20,6 @@ var toolDisplayNames = map[string]string{
 	"update_location":                 "更新地点设定",
 	"create_location_relation":        "创建地点关系",
 	"update_location_relation":        "更新地点关系",
-	"get_novel_info":                  "查看小说信息",
 	"get_characters":                  "查看角色信息",
 	"get_character_relations":         "查看人物关系",
 	"create_character":                "创建新角色",
@@ -44,7 +37,6 @@ var toolDisplayNames = map[string]string{
 	"get_preferences":                 "查看创作偏好",
 	"create_preference":               "创建创作偏好",
 	"update_preference":               "更新创作偏好",
-	"lint_chapter":                    "章节文本检查",
 	"delete_record":                   "删除记录",
 	"edit":                            "编辑文件内容",
 	"read":                            "读取文件内容",
@@ -55,13 +47,7 @@ var toolDisplayNames = map[string]string{
 // toolActivityKinds 工具名 → 前端展示类别。
 var toolActivityKinds = map[string]string{
 	"get_chapter_list":                "browse",
-	"get_chapter_content":             "view",
-	"edit_chapter":                    "write",
-	"create_new_chapter":              "create",
-	"get_creative_profile":            "memory",
-	"update_creative_profile":         "memory",
 	"search_story_memory":             "memory",
-	"get_character_memory":            "memory",
 	"get_timeline":                    "view",
 	"create_timeline_entry":           "write",
 	"update_timeline_entry":           "edit",
@@ -71,7 +57,6 @@ var toolActivityKinds = map[string]string{
 	"update_location":                 "edit",
 	"create_location_relation":        "create",
 	"update_location_relation":        "edit",
-	"get_novel_info":                  "view",
 	"get_characters":                  "view",
 	"get_character_relations":         "view",
 	"create_character":                "create",
@@ -89,7 +74,6 @@ var toolActivityKinds = map[string]string{
 	"get_preferences":                 "view",
 	"create_preference":               "create",
 	"update_preference":               "edit",
-	"lint_chapter":                    "review",
 	"delete_record":                   "delete",
 	"edit":                            "write",
 	"read":                            "view",
@@ -99,10 +83,8 @@ var toolActivityKinds = map[string]string{
 
 // chapterTools 需要查章节标题的工具集。
 var chapterTools = map[string]bool{
-	"get_chapter_content": true,
-	"edit_chapter":        true,
-	"edit":                true,
-	"read":                true,
+	"edit": true,
+	"read": true,
 }
 
 // deleteRecordTableLabels 把 delete_record 的 args.table 映射到中文展示前缀。
@@ -168,10 +150,6 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 		if cn, ok := chapterNumber(args); ok {
 			label := a.lookupChapterBrief(novelID, cn)
 			switch name {
-			case "get_chapter_content":
-				baseText = "查看 " + label
-			case "edit_chapter":
-				baseText = "编辑 " + label
 			case "edit":
 				baseText = "编辑 " + label
 			case "read":

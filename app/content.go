@@ -77,13 +77,7 @@ func (a *App) SaveContent(input SaveContentInput) error {
 			Where("novel_id = ? AND chapter_number = ?", input.NovelID, chapNum).
 			Scan(&oldWC)
 		if delta := stats.WordCount - oldWC; delta != 0 && a.writing != nil {
-			var chapID int64
-			a.chapter.DB.WithContext(a.ctx).
-				Model(&chapter.Chapter{}).
-				Select("id").
-				Where("novel_id = ? AND chapter_number = ?", input.NovelID, chapNum).
-				Scan(&chapID)
-			a.writing.LogDelta(a.ctx, input.NovelID, chapID, delta)
+			a.writing.LogDelta(a.ctx, input.NovelID, chapNum, delta)
 		}
 
 		if err := a.chapter.DB.WithContext(a.ctx).

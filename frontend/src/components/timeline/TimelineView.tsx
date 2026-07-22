@@ -43,10 +43,10 @@ type EditForm = {
   importance: number
   detail_json: string
   status: string
-  resolved_chapter_id: number
+  resolved_chapter: number
   // create-only
   category?: string
-  source_chapter_id?: number
+  source_chapter?: number
   source?: string
 }
 
@@ -57,7 +57,7 @@ const EDIT_FORM_EMPTY: EditForm = {
   importance: 3,
   detail_json: '',
   status: 'pending',
-  resolved_chapter_id: 0,
+  resolved_chapter: 0,
 }
 
 export default function TimelineView({ novelId, focusEntryId }: Props) {
@@ -102,7 +102,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
     if (focusEntryId && focusEntryId > 0 && entries.length > 0) {
       const entry = entries.find(e => e.id === focusEntryId)
       if (entry) {
-        setWindowCenter(entry.target_chapter || entry.source_chapter_id || 1)
+        setWindowCenter(entry.target_chapter || entry.source_chapter || 1)
       }
     }
   }, [focusEntryId, entries])
@@ -179,7 +179,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       importance: entry.importance,
       detail_json: entry.detail_json || '',
       status: entry.status,
-      resolved_chapter_id: entry.resolved_chapter_id,
+      resolved_chapter: entry.resolved_chapter,
     })
     setEditMode({ type: 'edit', entry })
   }
@@ -215,7 +215,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
         content: form.content,
         target_chapter: form.target_chapter,
         importance: form.importance,
-        source_chapter_id: 0,
+        source_chapter: 0,
         detail_json: form.detail_json,
         source: 'user',
       })
@@ -240,7 +240,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
         target_chapter: form.target_chapter,
         importance: form.importance,
         status: form.status,
-        resolved_chapter_id: form.status === 'resolved' ? form.resolved_chapter_id || form.target_chapter : 0,
+        resolved_chapter: form.status === 'resolved' ? form.resolved_chapter || form.target_chapter : 0,
       }
       await app.UpdateTimelineEntry(novelId, editMode.entry.id, payload)
       setEditMode(null)
@@ -275,7 +275,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
         target_chapter: entry.target_chapter,
         importance: entry.importance,
         status: newStatus,
-        resolved_chapter_id: newStatus === 'resolved' ? entry.target_chapter : 0,
+        resolved_chapter: newStatus === 'resolved' ? entry.target_chapter : 0,
       })
       await load()
     } catch (err) {
@@ -574,8 +574,8 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
                                 <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
                                   <span className="text-tag-amber-foreground text-[11px]">{importStars(entry.importance)}</span>
                                   <span>{t('timeline.targetChapterN', { n: entry.target_chapter })}</span>
-                                  {entry.source_chapter_id > 0 && <span>· {t('timeline.plantedInChapter', { n: entry.source_chapter_id })}</span>}
-                                  {entry.resolved_chapter_id > 0 && <span className="text-tag-green-foreground">· {t('timeline.recoveredInChapter', { n: entry.resolved_chapter_id })}</span>}
+                                  {entry.source_chapter > 0 && <span>· {t('timeline.plantedInChapter', { n: entry.source_chapter })}</span>}
+                                  {entry.resolved_chapter > 0 && <span className="text-tag-green-foreground">· {t('timeline.recoveredInChapter', { n: entry.resolved_chapter })}</span>}
                                   <span className="text-muted-foreground">· {entry.source === 'ai' ? t('timeline.ai') : t('timeline.user')}</span>
                                 </div>
                               </div>

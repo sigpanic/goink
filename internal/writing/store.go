@@ -20,18 +20,18 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 }
 
 // LogDelta 记录一次字数变化。delta 为 0 时跳过。
-func (s *Store) LogDelta(ctx context.Context, novelID, chapterID int64, delta int) {
+func (s *Store) LogDelta(ctx context.Context, novelID int64, chapterNumber int, delta int) {
 	if delta == 0 {
 		return
 	}
 	record := WritingLog{
-		Date:      time.Now().Format("2006-01-02"),
-		NovelID:   novelID,
-		ChapterID: chapterID,
-		WordDelta: delta,
+		Date:          time.Now().Format("2006-01-02"),
+		NovelID:       novelID,
+		ChapterNumber: chapterNumber,
+		WordDelta:     delta,
 	}
 	if err := s.DB.WithContext(ctx).Create(&record).Error; err != nil {
-		s.logger.Warn("记录写作日志失败", "novel_id", novelID, "chapter_id", chapterID, "delta", delta, "err", err)
+		s.logger.Warn("记录写作日志失败", "novel_id", novelID, "chapter_number", chapterNumber, "delta", delta, "err", err)
 	}
 }
 

@@ -40,7 +40,7 @@ func (Character) TableName() string { return "characters" }
 //   - update_character_relationship: 变更时开启事务，旧行 SET is_current = false，INSERT 新行，COMMIT
 //   - get_character_network: 查当前全图，返回 nodes(Character 列表) + edges(CharacterRelation 列表) 可以加入ids参数只查涉及到的人的关系网
 //   - get_character_history: WHERE source_id = X AND target_id = Y ORDER BY created_at，
-//     可选通过 chapter_id JOIN chapters 拉取对应章节摘要补充上下文
+//     可选通过 chapter_number JOIN chapters 拉取对应章节摘要补充上下文
 //
 // TODO
 // 后续可实现前端的可视化关系图绘制
@@ -51,7 +51,7 @@ type CharacterRelation struct {
 	TargetCharacterID int64     `gorm:"column:target_character_id;not null;index"   json:"target_character_id"` // 关系接收方
 	RelationDescribe  string    `gorm:"column:relation_describe;not null"          json:"relation_describe"`    // 自由文本，LLM 自行描述，如 "亦师亦敌"、"朋友、高中同学"，工具描述的时候需要告诉llm详细描述而不是简单的type
 	Description       string    `gorm:"column:description"                          json:"description"`         // 当前关系阶段的详细描述
-	ChapterID         int64     `gorm:"column:chapter_id"                           json:"chapter_id"`          // 此关系在哪个章节确立/变更，可用于拉取章节细节作为 LLM 上下文
+	ChapterNumber     int       `gorm:"column:chapter_number"                      json:"chapter_number"`       // 此关系在哪个章节确立/变更，可用于拉取章节细节作为 LLM 上下文
 	IsCurrent         bool      `gorm:"column:is_current;not null;index"            json:"is_current"`          // true=当前有效关系，false=历史记录
 	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"            json:"created_at"`
 }

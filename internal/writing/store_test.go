@@ -62,8 +62,8 @@ func TestGetDailyActivity_Basic(t *testing.T) {
 	ctx := context.Background()
 
 	today := time.Now().Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 1, WordDelta: 200})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 2, WordDelta: 300})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 1, WordDelta: 200})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 2, WordDelta: 300})
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
@@ -83,8 +83,8 @@ func TestGetDailyActivity_FiltersNegative(t *testing.T) {
 	ctx := context.Background()
 
 	today := time.Now().Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 1, WordDelta: -100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 2, WordDelta: 200})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 1, WordDelta: -100})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 2, WordDelta: 200})
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
@@ -106,8 +106,8 @@ func TestGetDailyActivity_MultipleDays(t *testing.T) {
 
 	d1 := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
 	d2 := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	db.Create(&WritingLog{Date: d1, NovelID: 1, ChapterID: 1, WordDelta: 100})
-	db.Create(&WritingLog{Date: d2, NovelID: 1, ChapterID: 1, WordDelta: 250})
+	db.Create(&WritingLog{Date: d1, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: d2, NovelID: 1, ChapterNumber: 1, WordDelta: 250})
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
@@ -131,8 +131,8 @@ func TestGetWritingStats_Basic(t *testing.T) {
 
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 1, WordDelta: 500})
-	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterID: 2, WordDelta: 300})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 1, WordDelta: 500})
+	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterNumber: 2, WordDelta: 300})
 
 	stats, err := s.GetWritingStats(ctx, 2, 5)
 	if err != nil {
@@ -161,9 +161,9 @@ func TestGetWritingStats_CurrentStreak(t *testing.T) {
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	dayBefore := time.Now().AddDate(0, 0, -2).Format("2006-01-02")
 
-	db.Create(&WritingLog{Date: dayBefore, NovelID: 1, ChapterID: 1, WordDelta: 100})
-	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterID: 1, WordDelta: 100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: dayBefore, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
 
 	stats, err := s.GetWritingStats(ctx, 1, 1)
 	if err != nil {
@@ -186,8 +186,8 @@ func TestGetWritingStats_BrokenStreak(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	gapDay := time.Now().AddDate(0, 0, -3).Format("2006-01-02") // 断了
 
-	db.Create(&WritingLog{Date: gapDay, NovelID: 1, ChapterID: 1, WordDelta: 100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: gapDay, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
+	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterNumber: 1, WordDelta: 100})
 
 	stats, err := s.GetWritingStats(ctx, 1, 1)
 	if err != nil {

@@ -205,10 +205,10 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 			Scan(&oldWC)
 		if delta := stats.WordCount - oldWC; delta != 0 {
 			tc.DB.WithContext(ctx).Create(&writing.WritingLog{
-				Date:      time.Now().Format("2006-01-02"),
-				NovelID:   tc.NovelID,
-				ChapterID: int64(chapNum),
-				WordDelta: delta,
+				Date:          time.Now().Format("2006-01-02"),
+				NovelID:       tc.NovelID,
+				ChapterNumber: chapNum,
+				WordDelta:     delta,
 			})
 		}
 

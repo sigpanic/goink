@@ -55,6 +55,25 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		}
 	}
 
+	// ── 字段改名迁移 ──
+	// 背景：Python→Go 迁移时，timeline/writing/character 的章节引用字段
+	// 语义从 chapters.id 改成章节号，但字段名沿用了 Python 版的 _id 后缀。
+	// 此处统一改名纠正。幂等：列已改名或新库直接建新列名时，RENAME 报错忽略。
+	renameColumns := []struct {
+		table, oldCol, newCol string
+	}{
+		{"time_entries", "source_chapter_id", "source_chapter"},
+		{"time_entries", "resolved_chapter_id", "resolved_chapter"},
+		{"writing_log", "chapter_id", "chapter_number"},
+		{"character_relations", "chapter_id", "chapter_number"},
+	}
+	for _, r := range renameColumns {
+		sql := fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", r.table, r.oldCol, r.newCol)
+		if err := db.Exec(sql).Error; err != nil {
+			log.Warn("迁移：字段改名失败（如列已改名或不存在则无害）", "table", r.table, "old", r.oldCol, "new", r.newCol, "err", err)
+		}
+	}
+
 	log.Info("数据库迁移完成", "tables", len(models))
 	return nil
 }

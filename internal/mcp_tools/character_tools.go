@@ -279,7 +279,7 @@ type UpdateCharacterRelationshipArgs struct {
 	TargetCharacterID int64  `json:"target_character_id" jsonschema:"description=建立新关系时的接收方角色ID。旧关系自动变为历史"`
 	RelationDescribe  string `json:"relation_describe"   jsonschema:"description=自由文本描述关系，如'师徒、暗中较量'。详细描述而非简单分类词。编辑已有关系时可不传"`
 	Description       string `json:"description"         jsonschema:"description=当前关系阶段的详细描述"`
-	ChapterID         int64  `json:"chapter_id"          jsonschema:"description=此关系确立/变化的章节ID"`
+	ChapterNumber     int    `json:"chapter_number"      jsonschema:"description=此关系确立/变化的章节号"`
 }
 
 // UpdateCharacterRelationshipTool 创建或更新角色关系。
@@ -389,7 +389,7 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 			TargetCharacterID: a.TargetCharacterID,
 			RelationDescribe:  a.RelationDescribe,
 			Description:       a.Description,
-			ChapterID:         a.ChapterID,
+			ChapterNumber:     a.ChapterNumber,
 			IsCurrent:         true,
 		}
 		if err := tx.Create(&newRel).Error; err != nil {

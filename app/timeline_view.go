@@ -56,14 +56,14 @@ func (a *App) UpdateChapterPlan(novelID int64, input UpdateChapterPlanInput) err
 
 // CreateTimelineEntryInput 是 CreateTimelineEntry 的参数。
 type CreateTimelineEntryInput struct {
-	Category        string `json:"category"`                    // "foreshadowing" | "user_directive"，必填
-	Title           string `json:"title"`                       // 简短标题，必填
-	Content         string `json:"content,omitempty"`           // 详细描述
-	DetailJSON      string `json:"detail_json,omitempty"`       // JSON 字符串
-	TargetChapter   int    `json:"target_chapter"`              // 预计回收章节号，必填
-	Importance      int    `json:"importance,omitempty"`        // 重要度 1-5
-	SourceChapterID int64  `json:"source_chapter_id,omitempty"` // 在哪章创建
-	Source          string `json:"source,omitempty"`            // "ai" | "user"
+	Category      string `json:"category"`                 // "foreshadowing" | "user_directive"，必填
+	Title         string `json:"title"`                    // 简短标题，必填
+	Content       string `json:"content,omitempty"`        // 详细描述
+	DetailJSON    string `json:"detail_json,omitempty"`    // JSON 字符串
+	TargetChapter int    `json:"target_chapter"`           // 预计回收章节号，必填
+	Importance    int    `json:"importance,omitempty"`     // 重要度 1-5
+	SourceChapter int    `json:"source_chapter,omitempty"` // 在哪章创建
+	Source        string `json:"source,omitempty"`         // "ai" | "user"
 }
 
 // CreateTimelineEntry 创建一条伏笔或用户指令。
@@ -72,16 +72,16 @@ func (a *App) CreateTimelineEntry(novelID int64, input CreateTimelineEntryInput)
 		return nil, fmt.Errorf("标题、类型、目标章节不能为空")
 	}
 	entry := timeline.TimelineEntry{
-		NovelID:         novelID,
-		Category:        input.Category,
-		Title:           input.Title,
-		Content:         input.Content,
-		DetailJSON:      input.DetailJSON,
-		TargetChapter:   input.TargetChapter,
-		Importance:      input.Importance,
-		SourceChapterID: input.SourceChapterID,
-		Source:          input.Source,
-		Status:          "pending",
+		NovelID:       novelID,
+		Category:      input.Category,
+		Title:         input.Title,
+		Content:       input.Content,
+		DetailJSON:    input.DetailJSON,
+		TargetChapter: input.TargetChapter,
+		Importance:    input.Importance,
+		SourceChapter: input.SourceChapter,
+		Source:        input.Source,
+		Status:        "pending",
 	}
 	if entry.Source == "" {
 		entry.Source = "user"
@@ -98,13 +98,13 @@ func (a *App) CreateTimelineEntry(novelID int64, input CreateTimelineEntryInput)
 // UpdateTimelineEntryInput 是 UpdateTimelineEntry 的参数。
 // 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
 type UpdateTimelineEntryInput struct {
-	Title             string `json:"title,omitempty"`
-	Content           string `json:"content,omitempty"`
-	DetailJSON        string `json:"detail_json,omitempty"`
-	TargetChapter     int    `json:"target_chapter,omitempty"`
-	Importance        int    `json:"importance,omitempty"`
-	Status            string `json:"status,omitempty"`              // "pending" | "resolved" | "abandoned"
-	ResolvedChapterID int64  `json:"resolved_chapter_id,omitempty"` // 标记 resolved 时填入
+	Title           string `json:"title,omitempty"`
+	Content         string `json:"content,omitempty"`
+	DetailJSON      string `json:"detail_json,omitempty"`
+	TargetChapter   int    `json:"target_chapter,omitempty"`
+	Importance      int    `json:"importance,omitempty"`
+	Status          string `json:"status,omitempty"`           // "pending" | "resolved" | "abandoned"
+	ResolvedChapter int    `json:"resolved_chapter,omitempty"` // 标记 resolved 时填入
 }
 
 // UpdateTimelineEntry 更新伏笔或用户指令。只更新非零值字段。

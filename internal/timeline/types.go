@@ -49,7 +49,7 @@ type ChapterPlan struct {
 //   - version           → 编辑历史审计，非 AI 写作核心需求
 //   - last_editor       → source 字段已区分 ai/user
 //   - original_ai_output → Python 保存但从不回读
-//   - resolved_at       → 可通过 resolved_chapter_id 推导
+//   - resolved_at       → 可通过 resolved_chapter 推导
 //   - time_horizon      → target_chapter 已表达时间远近，无需额外字段
 //
 // 排序规则：target_chapter ASC, importance DESC
@@ -67,7 +67,7 @@ type ChapterPlan struct {
 //
 // Review Agent 职责（每章写完后自动触发）：
 //  1. 故事进展超出预期 → 调整 target_chapter（第 200 章 → 第 250 章）
-//  2. 伏笔已被故事自然回收但未标记 → 标记 status=resolved, resolved_chapter_id=当前章
+//  2. 伏笔已被故事自然回收但未标记 → 标记 status=resolved, resolved_chapter=当前章
 //  3. 与当前剧情冲突的条目 → 上报主 agent，主 agent 决定修改或通知用户
 //  4. 暂时考虑review agent提供意见给主agent，再去更新状态，也就是说创作完，先维护状态，然后启动review，同时review 章节内容和状态维护的正确性
 //
@@ -75,22 +75,22 @@ type ChapterPlan struct {
 //   - get_timeline：统一返回 chapter_plans + time_entries，内部查两张表，AI 无感知表结构
 //   - add_timeline_entry：批量创建 1-6 条，事务写入。内部根据 category 路由到此表
 //   - update_timeline_entry：更新单条（title/content/importance/target_chapter/status），
-//     标记 resolved 时记录 resolved_chapter_id
+//     标记 resolved 时记录 resolved_chapter
 type TimelineEntry struct {
-	ID                int64     `gorm:"column:id;primaryKey;autoIncrement"      json:"id"`
-	NovelID           int64     `gorm:"column:novel_id;not null;index"          json:"novel_id"`
-	Category          string    `gorm:"column:category;not null;index"          json:"category"`            // "foreshadowing" | "user_directive"，约束枚举
-	Status            string    `gorm:"column:status;not null;index"            json:"status"`              // "pending" | "resolved" | "abandoned"
-	Title             string    `gorm:"column:title;not null"                   json:"title"`               // 简短标题
-	Content           string    `gorm:"column:content"                          json:"content"`             // 详细描述
-	DetailJSON        string    `gorm:"column:detail_json"                      json:"detail_json"`         // JSON，category 相关结构化数据（伏笔类型、提示文本等）
-	TargetChapter     int       `gorm:"column:target_chapter;not null"          json:"target_chapter"`      // 预计回收章节号，主排序键，必填。不用于过滤，不准确不影响可见性，这个需要提醒llm完成的时候留下准确的id
-	Importance        int       `gorm:"column:importance;default:3"             json:"importance"`          // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
-	SourceChapterID   int64     `gorm:"column:source_chapter_id"                json:"source_chapter_id"`   // 在哪章创建/埋下的，创建后不可变
-	Source            string    `gorm:"column:source"                           json:"source"`              // "ai" | "user"，谁创建的
-	ResolvedChapterID int64     `gorm:"column:resolved_chapter_id"              json:"resolved_chapter_id"` // 在哪章回收，NULL 表示未回收
-	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
-	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
+	ID              int64     `gorm:"column:id;primaryKey;autoIncrement"      json:"id"`
+	NovelID         int64     `gorm:"column:novel_id;not null;index"          json:"novel_id"`
+	Category        string    `gorm:"column:category;not null;index"          json:"category"`         // "foreshadowing" | "user_directive"，约束枚举
+	Status          string    `gorm:"column:status;not null;index"            json:"status"`           // "pending" | "resolved" | "abandoned"
+	Title           string    `gorm:"column:title;not null"                   json:"title"`            // 简短标题
+	Content         string    `gorm:"column:content"                          json:"content"`          // 详细描述
+	DetailJSON      string    `gorm:"column:detail_json"                      json:"detail_json"`      // JSON，category 相关结构化数据（伏笔类型、提示文本等）
+	TargetChapter   int       `gorm:"column:target_chapter;not null"          json:"target_chapter"`   // 预计回收章节号，主排序键，必填。不用于过滤，不准确不影响可见性，这个需要提醒llm完成的时候留下准确的章节号
+	Importance      int       `gorm:"column:importance;default:3"             json:"importance"`       // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
+	SourceChapter   int       `gorm:"column:source_chapter"                   json:"source_chapter"`   // 在哪章创建/埋下的，创建后不可变
+	Source          string    `gorm:"column:source"                           json:"source"`           // "ai" | "user"，谁创建的
+	ResolvedChapter int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"` // 在哪章回收，NULL 表示未回收
+	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
 }
 
 // TableName 指定 GORM 表名。
