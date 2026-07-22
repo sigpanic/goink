@@ -50,8 +50,12 @@
 }
 
 @keyframes compression-shimmer {
-  0%   { background-position: 250% 0; }
-  100% { background-position: -250% 0; }
+  0% {
+    background-position: 250% 0;
+  }
+  100% {
+    background-position: -250% 0;
+  }
 }
 
 .compression-done {

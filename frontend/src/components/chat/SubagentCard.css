@@ -18,10 +18,12 @@
 
 /* ── Streaming glow ── */
 .subagent-streaming.subagent-memory {
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--tag-amber-foreground) 14%, transparent);
+  box-shadow: 0 0 0 1px
+    color-mix(in oklab, var(--tag-amber-foreground) 14%, transparent);
 }
 .subagent-streaming.subagent-review {
-  box-shadow: 0 0 0 1px color-mix(in oklab, var(--tag-teal-foreground) 14%, transparent);
+  box-shadow: 0 0 0 1px
+    color-mix(in oklab, var(--tag-teal-foreground) 14%, transparent);
 }
 
 /* ── Header ── */
@@ -50,8 +52,12 @@
   font-weight: 600;
   font-size: 0.8rem;
 }
-.subagent-memory .subagent-label { color: var(--tag-amber-foreground); }
-.subagent-review  .subagent-label { color: var(--tag-teal-foreground); }
+.subagent-memory .subagent-label {
+  color: var(--tag-amber-foreground);
+}
+.subagent-review .subagent-label {
+  color: var(--tag-teal-foreground);
+}
 
 /* ── Badges ── */
 .subagent-badge {

@@ -106,8 +106,7 @@ function ApprovalBody({
   const typeLabels = getTypeLabels(t);
   if (type === "delete" && payload?.deleted) {
     const d = payload.deleted as Record<string, unknown>;
-    const label =
-      typeLabels[s(d.type)] ?? s(d.type ?? t("chat.record"));
+    const label = typeLabels[s(d.type)] ?? s(d.type ?? t("chat.record"));
     const nameOrTitle = (d.name ?? d.title) as string | undefined;
     const title = nameOrTitle ?? `#${d.id}`;
 
@@ -197,8 +196,7 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
   const s = (v: unknown) => (v == null ? "" : String(v));
   const typeLabels = getTypeLabels(t);
   const label =
-    typeLabels[s(deleted.type)] ??
-    s(deleted.type ?? t("chat.record"));
+    typeLabels[s(deleted.type)] ?? s(deleted.type ?? t("chat.record"));
   const nameOrTitle = (deleted.name ?? deleted.title) as string | undefined;
   const title = nameOrTitle ?? `#${deleted.id}`;
 

@@ -79,7 +79,9 @@
   background: transparent;
   color: oklch(0.45 0 0);
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
 .fetch-card-ext-btn:hover {

@@ -42,7 +42,8 @@
   margin-top: 0.75em;
   margin-bottom: 0.25em;
 }
-.prose-sm :where(pre, table, blockquote, hr):not(:where([class~="not-prose"] *)) {
+.prose-sm
+  :where(pre, table, blockquote, hr):not(:where([class~="not-prose"] *)) {
   margin-top: 0.55em;
   margin-bottom: 0.55em;
 }
@@ -59,7 +60,12 @@
 }
 
 /* ── 中文排版微调 ─────────────────────────────────────────── */
-.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+.prose h1,
+.prose h2,
+.prose h3,
+.prose h4,
+.prose h5,
+.prose h6 {
   letter-spacing: 0; /* 中文不需要负字间距 */
 }
 
@@ -89,8 +95,12 @@
   border-radius: 0 var(--radius-md) var(--radius-md) 0;
 }
 
-.prose blockquote > :first-child { margin-top: 0; }
-.prose blockquote > :last-child { margin-bottom: 0; }
+.prose blockquote > :first-child {
+  margin-top: 0;
+}
+.prose blockquote > :last-child {
+  margin-bottom: 0;
+}
 
 /* ── 表格 ─────────────────────────────────────────────────── */
 .prose table {
@@ -161,7 +171,13 @@
 .prose hr {
   border: 0;
   height: 1px;
-  background: linear-gradient(to right, transparent, var(--border) 20%, var(--border) 80%, transparent);
+  background: linear-gradient(
+    to right,
+    transparent,
+    var(--border) 20%,
+    var(--border) 80%,
+    transparent
+  );
 }
 
 /* ── 图片 ─────────────────────────────────────────────────── */
@@ -242,7 +258,9 @@
   background: transparent;
   font-size: 0.75rem;
   opacity: 0;
-  transition: color 150ms ease, opacity 150ms ease;
+  transition:
+    color 150ms ease,
+    opacity 150ms ease;
 }
 
 .markdown-code-block:hover .markdown-code-copy,
@@ -312,7 +330,9 @@
   color: var(--muted-foreground);
   font-size: 0.82rem;
   cursor: pointer;
-  transition: color 150ms ease, background 150ms ease;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
 }
 
 .mermaid-zoom-btn:hover:not(:disabled) {
@@ -333,7 +353,9 @@
   border-radius: calc(var(--radius-sm) * 0.8);
   border: 0;
   background: transparent;
-  transition: color 150ms ease, background 150ms ease;
+  transition:
+    color 150ms ease,
+    background 150ms ease;
   font-variant-numeric: tabular-nums;
 }
 
@@ -388,8 +410,12 @@
 }
 
 @keyframes mermaid-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 /* ── KaTeX 显示公式 ────────────────────────────────────────── */
