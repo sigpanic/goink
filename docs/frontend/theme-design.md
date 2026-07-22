@@ -93,14 +93,14 @@ g6/cytoscape 不接受 CSS 变量，JS 维护 `Record<Theme, Colors>`：
 
 ### 6. PALETTE（数据可视化弧线色）
 
-用于 StoryArcGraph 和 ArcListView 区分不同故事弧线。两套常量：
+用于 StoryArcGraph 和 ArcListView 区分不同故事弧线。常量定义在 `components/storyarc/arcColors.ts`（独立文件，已从 theme-check 的 oklch 检查中豁免，与 graphColors.ts 同类）：
 
 ```ts
 const PALETTE_LIGHT = [{ fill: '#dbeafe', stroke: '#3b82f6', text: '#1d4ed8', edge: '#60a5fa' }, ...]
 const PALETTE_DARK  = [{ fill: 'oklch(0.58 0.15 255 / 0.15)', stroke: 'oklch(0.72 0.15 255)', ... }, ...]
 ```
 
-组件通过 `useTheme().theme` 选组：`PALETTE = { light: PALETTE_LIGHT, dark: PALETTE_DARK }[theme]`。
+组件通过 `arcPalette(theme)` 选组：`PALETTE = arcPalette(theme)`，未知主题回退到 PALETTE_LIGHT。
 
 ### 7. 不动的东西
 
@@ -113,7 +113,7 @@ const PALETTE_DARK  = [{ fill: 'oklch(0.58 0.15 255 / 0.15)', stroke: 'oklch(0.7
 1. `index.css`：复制 `[data-theme="dark"]` block，改名为 `[data-theme="xxx"]`，调色值
 2. `hooks/useTheme.ts`：`THEMES` 数组加 `'xxx'`，`NEXT` 字典加一行
 3. `components/graphColors.ts`：`C` 字典加 `xxx: { ... }` 一组色
-4. 弧线组件中 PALETTE 字典加 `xxx: PALETTE_XXX`
+4. `components/storyarc/arcColors.ts`：加 `PALETTE_XXX` 常量，并在 `arcPalette` 函数加 `theme === "xxx"` 分支
 5. WorkspaceView 主题切换按钮改成下拉（或加三态切换）
 6. `index.html` 的防闪脚本无需改动（`resolveTheme` 会从 localStorage 读取）
 

@@ -51,6 +51,7 @@ const SKIP_DIRS = new Set([
 const SKIP_FILES = new Set([
   'index.css',           // Theme token definitions
   'graphColors.ts',      // Canvas palette, uses Record<Theme, Colors>
+  'arcColors.ts',        // Story arc palette, oklch absolute values (theme-design.md §6)
   'useTheme.ts',         // Theme hook itself, contains dark: intentionally
 ])
 
