@@ -185,6 +185,9 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		pendingInjects := make(map[string][]mcp_tools.InjectMessage)
 		// P2: 本轮 LLM 调用重试计数（不消耗 MaxTurns）
 		retryCount := 0
+		// tool_args_invalid 首次提醒标志：同一 turn 内只加一次 reminder，
+		// 避免重试耗尽后 DB 残留多条孤立 user reminder 污染下轮 LLM 上下文
+		reminderAdded := false
 		// token 预算检查：每轮开始时，超限触发压缩
 		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.8 {
 			a.logger.Warn("token budget exceeded, triggering compression",
@@ -372,8 +375,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						isThinking = false
 
 						// appendMsg user reminder，告诉 LLM 刚才 tool call 解析失败
-						reminder := buildToolArgsReminder(apiErr.Message)
-						a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+						// 仅首次 tool_args_invalid 时追加，避免重试耗尽后残留多条孤立 reminder
+						if !reminderAdded {
+							reminder := buildToolArgsReminder(apiErr.Message)
+							a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+							reminderAdded = true
+						}
 
 						// 走自动重试路径（复用 P2 退避机制）
 						if retryCount < maxRetries {
