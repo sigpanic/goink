@@ -1,0 +1,52 @@
+#!/bin/sh
+# Pre-commit validation hook (frontend/backend split)
+#
+# Runs checks based on staged files:
+#   Go files staged   → go build + go test + golangci-lint
+#   Frontend staged   → npm run build + npm run lint + npm run test
+#   Both              → all of the above
+#   Neither (docs)    → skip
+#
+# Mirrors CI checks in .github/workflows/checks.yml + frontend-checks.yml + test.yml.
+# Required by .trae/rules/编码规则.md (auto-run, no manual validation needed).
+#
+# Setup: git config --local core.hooksPath .githooks (already configured)
+
+staged=$(git diff --cached --name-only)
+
+has_go=false
+has_fe=false
+for f in $staged; do
+    case "$f" in
+        frontend/*) has_fe=true ;;
+        *.go) has_go=true ;;
+    esac
+done
+
+# Skip if no code changes (docs/config only)
+if [ "$has_go" = false ] && [ "$has_fe" = false ]; then
+    exit 0
+fi
+
+echo "── Pre-commit validation ──"
+
+if [ "$has_go" = true ]; then
+    echo "  [go] build ./..."
+    go build ./... || { echo "  ✖ go build failed" >&2; exit 1; }
+    echo "  [go] test ./..."
+    go test ./... || { echo "  ✖ go test failed" >&2; exit 1; }
+    echo "  [go] golangci-lint"
+    CGO_ENABLED=1 golangci-lint run --timeout=10m ./... || { echo "  ✖ golangci-lint failed" >&2; exit 1; }
+fi
+
+if [ "$has_fe" = true ]; then
+    echo "  [fe] npm run build"
+    (cd frontend && npm run build) || { echo "  ✖ npm run build failed" >&2; exit 1; }
+    echo "  [fe] npm run lint"
+    (cd frontend && npm run lint) || { echo "  ✖ npm run lint failed" >&2; exit 1; }
+    echo "  [fe] npm run test"
+    (cd frontend && npm run test) || { echo "  ✖ npm run test failed" >&2; exit 1; }
+fi
+
+echo "  ✓ All checks passed"
+exit 0
