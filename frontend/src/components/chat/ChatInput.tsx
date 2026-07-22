@@ -1,7 +1,27 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ArrowUp, Square, Zap, Play, Star } from "lucide-react";
 import type { app } from "@/hooks/useApp";
 import SlashMenu from "./SlashMenu";
+
+// charMatch 检查 q 的所有字符是否按顺序出现在 s 中（模糊匹配）
+const charMatch = (s: string, q: string): boolean => {
+  let qi = 0;
+  for (let i = 0; i < s.length && qi < q.length; i++) {
+    if (s[i] === q[qi]) qi++;
+  }
+  return qi === q.length;
+};
+
+// score 计算匹配得分，越低越好（0=完全匹配，1=前缀，2=包含，3=字符顺序，4=描述，5=不匹配）
+const score = (c: app.SlashCommand, q: string): number => {
+  const name = c.name.toLowerCase();
+  if (name === q) return 0;
+  if (name.startsWith(q)) return 1;
+  if (name.includes(q)) return 2;
+  if (charMatch(name, q)) return 3;
+  if (c.description.toLowerCase().includes(q)) return 4;
+  return 5;
+};
 
 interface Props {
   disabled: boolean;
@@ -35,16 +55,22 @@ export default function ChatInput({
   );
 
   const q = slashFilter.toLowerCase();
-  const filteredItems = slashItems.filter(
-    (c) =>
-      c.name.toLowerCase().includes(q) ||
-      c.description.toLowerCase().includes(q),
-  );
+  // filteredItems 用 score 过滤+排序，与 SlashMenu 渲染列表一致（修复高亮≠选中 bug）
+  const filteredItems = useMemo(() => {
+    if (!q) return slashItems;
+    return slashItems
+      .filter((c) => score(c, q) < 5)
+      .sort((a, b) => score(a, q) - score(b, q));
+  }, [slashItems, q]);
+
+  // 跟踪上次 filter 值，filter 变化时同步重置 slashIndex（避免 useEffect 异步窗口导致 Enter 取到 undefined）
+  const prevFilterRef = useRef("");
 
   const closeSlash = useCallback(() => {
     setSlashOpen(false);
     setSlashFilter("");
     setSlashIndex(0);
+    prevFilterRef.current = "";
   }, []);
 
   const applySlashSelection = useCallback(
@@ -82,8 +108,12 @@ export default function ChatInput({
         }
         setActiveCommand(null);
         updateSlashPos();
-        setSlashFilter(value.slice(1));
-        setSlashIndex(0);
+        const newFilter = value.slice(1);
+        if (newFilter !== prevFilterRef.current) {
+          setSlashIndex(0);
+        }
+        prevFilterRef.current = newFilter;
+        setSlashFilter(newFilter);
         setSlashOpen(true);
         onListSlash();
       } else {
@@ -242,7 +272,6 @@ export default function ChatInput({
       {slashOpen && filteredItems.length > 0 && (
         <SlashMenu
           slashItems={filteredItems}
-          filterText={slashFilter}
           selectedIndex={slashIndex}
           position={slashPos}
           onSelect={applySlashSelection}
