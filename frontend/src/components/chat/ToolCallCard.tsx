@@ -13,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { memo, useState, useRef, useCallback } from "react";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import "./ToolCallCard.css";
@@ -294,11 +295,12 @@ function ApprovalView({
       </div>
       <div className="approval-body">
         <ApprovalBody type={approvalType} payload={approvalPayload} />
-        <textarea
+        <AutoGrowTextarea
           value={feedback}
           onChange={handleInput}
           placeholder={t("chat.feedbackOptional")}
-          rows={1}
+          minHeight={36}
+          maxHeight={120}
           className="approval-feedback"
         />
         <div className="approval-actions">
