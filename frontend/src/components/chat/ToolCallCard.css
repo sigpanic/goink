@@ -107,11 +107,16 @@
   padding: 0.15rem 0.6rem 0.35rem;
   color: color-mix(in oklab, var(--tool-red-border) 80%, var(--foreground));
   font-size: 0.68rem;
+  border-top: 1px solid
+    color-mix(in oklab, var(--tool-red-border) 12%, transparent);
+}
+
+/* preview 行：单行省略下沉到 span，避免 .tool-error 的 overflow 裁剪 popover */
+.tool-error-preview {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  border-top: 1px solid
-    color-mix(in oklab, var(--tool-red-border) 12%, transparent);
 }
 
 /* ── Error popover（hover 显示完整错误，参考 ContextRing 的 delay 防消失）── */
@@ -121,7 +126,9 @@
   left: 0;
   margin-bottom: 4px;
   z-index: 50;
-  background: var(--background);
+  background:
+    linear-gradient(var(--tool-red), var(--tool-red)),
+    var(--background);
   color: var(--foreground);
   border: 1px solid var(--border);
   border-radius: 0.5rem;

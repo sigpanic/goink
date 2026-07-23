@@ -422,7 +422,7 @@ export default memo(function ToolCallCard({
           onMouseEnter={showErrorEnter}
           onMouseLeave={showErrorLeave}
         >
-          {error.slice(0, 120)}
+          <span className="tool-error-preview">{error.slice(0, 120)}</span>
           {showFullError && <div className="tool-error-popover">{error}</div>}
         </div>
       )}
