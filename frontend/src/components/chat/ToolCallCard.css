@@ -103,6 +103,7 @@
 
 /* ── Error line ── */
 .tool-error {
+  position: relative;
   padding: 0.15rem 0.6rem 0.35rem;
   color: color-mix(in oklab, var(--tool-red-border) 80%, var(--foreground));
   font-size: 0.68rem;
@@ -111,6 +112,27 @@
   white-space: nowrap;
   border-top: 1px solid
     color-mix(in oklab, var(--tool-red-border) 12%, transparent);
+}
+
+/* ── Error popover（hover 显示完整错误，参考 ContextRing 的 delay 防消失）── */
+.tool-error-popover {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 4px;
+  z-index: 50;
+  background: var(--background);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.72rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-width: 360px;
+  max-height: 200px;
+  overflow-y: auto;
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.15);
 }
 
 /* ── Result body (delete_record 完成态具体内容) ── */

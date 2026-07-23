@@ -12,7 +12,7 @@ import {
   AlertTriangle,
   Trash2,
 } from "lucide-react";
-import { memo, useState } from "react";
+import { memo, useState, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
 import "./ToolCallCard.css";
@@ -341,6 +341,20 @@ export default memo(function ToolCallCard({
 }: Props) {
   const { t } = useTranslation();
 
+  // 失败错误信息 hover（参考 ContextRing 的 delay 模式，避免鼠标移到 popover 时消失）
+  const [showFullError, setShowFullError] = useState(false);
+  const hideTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const showErrorEnter = useCallback(() => {
+    if (hideTimerRef.current) {
+      clearTimeout(hideTimerRef.current);
+      hideTimerRef.current = null;
+    }
+    setShowFullError(true);
+  }, []);
+  const showErrorLeave = useCallback(() => {
+    hideTimerRef.current = setTimeout(() => setShowFullError(false), 150);
+  }, []);
+
   // 审批中状态
   if (status === "awaiting_approval" && onApprove && onReject) {
     return (
@@ -403,7 +417,14 @@ export default memo(function ToolCallCard({
       )}
 
       {isFailed && error && (
-        <div className="tool-error">{error.slice(0, 120)}</div>
+        <div
+          className="tool-error"
+          onMouseEnter={showErrorEnter}
+          onMouseLeave={showErrorLeave}
+        >
+          {error.slice(0, 120)}
+          {showFullError && <div className="tool-error-popover">{error}</div>}
+        </div>
       )}
     </div>
   );
