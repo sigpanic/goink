@@ -5,7 +5,7 @@ import (
 	"log/slog"
 	"sync"
 
-	"novel/internal/config"
+	"github.com/sigpanic/goink/internal/config"
 )
 
 // Store 在内存中管理三层 skill（内置、用户、小说），支持热重载。

@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/storage"
-	"novel/internal/storyarc"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/storyarc"
 )
 
 // GetStoryArcs 返回指定小说的全部叙事弧线。弧线通常 3-5 条，全量无分页。

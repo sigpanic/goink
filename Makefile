@@ -3,7 +3,7 @@
 APP_NAME  := goink
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR := build
-LDFLAGS   := -X internal/version.Version=$(VERSION)
+LDFLAGS   := -X github.com/sigpanic/goink/internal/version.Version=$(VERSION)
 
 # 启动 Wails 开发模式（Go 后端 + Vite HMR 前端）
 dev:

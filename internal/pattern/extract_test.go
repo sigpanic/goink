@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/chapter"
-	"novel/internal/llm"
-	"novel/internal/skill"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/skill"
 )
 
 // ---------------------------------------------------------------------------

@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/storage"
-	"novel/internal/timeline"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/timeline"
 )
 
 // ── get_timeline ────────────────────────────────────────

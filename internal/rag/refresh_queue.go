@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"novel/internal/chapter"
-	"novel/internal/git"
-	"novel/internal/novel"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
 )
 
 // RefreshTask 是一次向量刷新任务。

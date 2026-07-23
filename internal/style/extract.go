@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"strings"
 
-	"novel/internal/llm"
-	"novel/internal/skill"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/skill"
 )
 
 // Extract 分析样本文字的写作风格，生成仿写 skill。

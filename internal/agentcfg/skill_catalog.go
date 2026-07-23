@@ -3,7 +3,7 @@ package agentcfg
 import (
 	"strings"
 
-	"novel/internal/skill"
+	"github.com/sigpanic/goink/internal/skill"
 )
 
 // BuildSkillCatalog 将 auto 模式的 skill 元数据格式化为 LLM 可用的技能目录。

@@ -7,12 +7,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"novel/internal/apperr"
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/skill"
-	"novel/internal/skill/remote"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/skill"
+	"github.com/sigpanic/goink/internal/skill/remote"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ListSkillsInput 是 ListSkills 的入参。

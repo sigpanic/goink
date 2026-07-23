@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // getVectorStore returns the shared VectorStore singleton initialized in TestMain.

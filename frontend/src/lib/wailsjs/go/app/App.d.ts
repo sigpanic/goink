@@ -134,7 +134,7 @@ export function GetSession(arg1:string):Promise<app.SessionDetail>;
 
 export function GetSessionMessages(arg1:string):Promise<Array<session.Message>>;
 
-export function GetSessions(arg1:app.GetSessionsInput):Promise<storage.PageResult_novel_app_SessionMeta_>;
+export function GetSessions(arg1:app.GetSessionsInput):Promise<storage.PageResult_github_com_sigpanic_goink_app_SessionMeta_>;
 
 export function GetSettings():Promise<config.AppSettings>;
 
@@ -160,13 +160,13 @@ export function InstallRemoteSkill(arg1:app.InstallRemoteSkillInput):Promise<app
 
 export function IsInitialized():Promise<boolean>;
 
-export function ListRemoteSkills(arg1:app.ListRemoteSkillsInput):Promise<apperr.Result_novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__>;
+export function ListRemoteSkills(arg1:app.ListRemoteSkillsInput):Promise<apperr.Result_github_com_sigpanic_goink_internal_storage_PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta__>;
 
 export function ListSkills(arg1:app.ListSkillsInput):Promise<Array<skill.SkillMeta>>;
 
 export function ListSlashCommands(arg1:app.ListSlashCommandsInput):Promise<Array<app.SlashCommand>>;
 
-export function ListStyleSamples(arg1:app.ListStyleSamplesInput):Promise<storage.PageResult_novel_internal_style_Sample_>;
+export function ListStyleSamples(arg1:app.ListStyleSamplesInput):Promise<storage.PageResult_github_com_sigpanic_goink_internal_style_Sample_>;
 
 export function PickAndImportNovel():Promise<imp.ImportResult>;
 

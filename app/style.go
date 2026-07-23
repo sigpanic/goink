@@ -4,10 +4,10 @@ import (
 	"context"
 	"fmt"
 
-	"novel/internal/agent"
-	"novel/internal/storage"
-	"novel/internal/style"
-	"novel/internal/text"
+	"github.com/sigpanic/goink/internal/agent"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/style"
+	"github.com/sigpanic/goink/internal/text"
 )
 
 // ListStyleSamplesInput 是列出风格素材的入参。

@@ -13,11 +13,11 @@ import (
 	"github.com/invopop/jsonschema"
 	"gorm.io/gorm"
 
-	"novel/internal/approval"
-	"novel/internal/llm"
-	"novel/internal/search"
-	"novel/internal/skill"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/approval"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/search"
+	"github.com/sigpanic/goink/internal/skill"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── 接口 ──────────────────────────────────────────────

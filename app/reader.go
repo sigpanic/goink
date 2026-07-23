@@ -3,8 +3,8 @@ package app
 import (
 	"fmt"
 
-	"novel/internal/reader"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // CreateReaderPerspectiveInput 是创建读者认知条目的入参。

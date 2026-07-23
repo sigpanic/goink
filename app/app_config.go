@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"runtime"
 
-	"novel/internal/config"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // GetAppConfig 返回当前运行时配置信息（供前端诊断）。

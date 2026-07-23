@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"novel/internal/platform"
+	"github.com/sigpanic/goink/internal/platform"
 )
 
 // ErrNotInitialized 表示指针文件不存在，应用尚未完成首次初始化。没初始化弹出来初始化界面，如果初始化了但是还是出错就谈配置错误恢复

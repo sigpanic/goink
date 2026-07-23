@@ -3,8 +3,8 @@ package app
 import (
 	"fmt"
 
-	"novel/internal/chapter"
-	"novel/internal/git"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/git"
 )
 
 // CreateChapterInput 是创建章节的入参。

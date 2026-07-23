@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // Store 管理 Sample 持久化。

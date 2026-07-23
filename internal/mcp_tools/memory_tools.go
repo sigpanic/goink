@@ -8,8 +8,8 @@ import (
 	"fmt"
 	"strings"
 
-	"novel/internal/chapter"
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // ── search_story_memory ──────────────────────────────────

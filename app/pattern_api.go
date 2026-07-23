@@ -6,8 +6,8 @@ import (
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"novel/internal/agent"
-	"novel/internal/pattern"
+	"github.com/sigpanic/goink/internal/agent"
+	"github.com/sigpanic/goink/internal/pattern"
 )
 
 type ExtractPatternInput = pattern.ExtractPatternInput

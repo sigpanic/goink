@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/storage"
 
 	"gorm.io/gorm"
 )

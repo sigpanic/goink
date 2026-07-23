@@ -1,9 +1,9 @@
 package app
 
 import (
-	"novel/internal/config"
-	"novel/internal/update"
-	"novel/internal/version"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/update"
+	"github.com/sigpanic/goink/internal/version"
 )
 
 // CheckUpdate 检查 GitHub Release 是否有新版本。

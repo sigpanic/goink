@@ -13,8 +13,8 @@ import (
 	"strings"
 	"time"
 
-	"novel/internal/config"
-	"novel/internal/platform"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/platform"
 )
 
 // Repo 管理单部小说的 Git 仓库，提供文件读写和版本控制。

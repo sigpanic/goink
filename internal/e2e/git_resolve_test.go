@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/platform"
+	"github.com/sigpanic/goink/internal/platform"
 )
 
 func TestResolveGit_NoSystemFallback(t *testing.T) {

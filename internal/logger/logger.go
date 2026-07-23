@@ -8,7 +8,7 @@ import (
 
 	"gopkg.in/natefinch/lumberjack.v2"
 
-	"novel/internal/config"
+	"github.com/sigpanic/goink/internal/config"
 )
 
 // New 创建结构化日志器。

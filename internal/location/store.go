@@ -8,7 +8,7 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // Store 管理 Location 和 LocationRelation 持久化。DB 导出供调用方做简单 CRUD。

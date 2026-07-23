@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/storage"
-	"novel/internal/storyarc"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/storyarc"
 )
 
 // ── get_story_arcs ─────────────────────────────────────

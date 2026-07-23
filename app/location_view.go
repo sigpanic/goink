@@ -5,7 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/location"
+	"github.com/sigpanic/goink/internal/location"
 )
 
 // GetLocations 返回指定小说的全部地点，供前端侧边栏嵌套树和关系图节点渲染。

@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/location"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── get_locations ──────────────────────────────────────

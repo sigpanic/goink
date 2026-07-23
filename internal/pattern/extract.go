@@ -13,12 +13,12 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/chapter"
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/llm"
-	"novel/internal/mcp_tools"
-	"novel/internal/skill"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/skill"
 )
 
 const (

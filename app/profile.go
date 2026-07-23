@@ -1,9 +1,9 @@
 package app
 
 import (
-	"novel/internal/chapter"
-	"novel/internal/novel"
-	"novel/internal/writing"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/writing"
 )
 
 // GetWritingActivity 返回最近 months 个月每日写作字数汇总。

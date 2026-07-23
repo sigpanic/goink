@@ -9,17 +9,17 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
-	"novel/internal/chapter"
-	"novel/internal/character"
-	"novel/internal/config"
-	"novel/internal/export"
-	"novel/internal/git"
-	"novel/internal/location"
-	"novel/internal/novel"
-	"novel/internal/reader"
-	"novel/internal/session"
-	"novel/internal/storyarc"
-	"novel/internal/timeline"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/export"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/storyarc"
+	"github.com/sigpanic/goink/internal/timeline"
 )
 
 // ── 小说 ──────────────────────────────────────────────────

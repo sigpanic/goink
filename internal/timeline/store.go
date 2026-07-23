@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/git"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // Store 管理 ChapterPlan 和 TimelineEntry 持久化。DB 导出供调用方做简单 CRUD。

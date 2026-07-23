@@ -52,7 +52,7 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          wails build -tags webkit2_41 -o goink.exe -ldflags "-X internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink.exe -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
 
       - name: Install Inno Setup
         run: choco install innosetup -y --limit-output
@@ -107,7 +107,7 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          wails build -tags webkit2_41 -o goink -ldflags "-X internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
 
       - name: Package (AppImage)
         run: |
@@ -153,7 +153,7 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          wails build -tags webkit2_41 -o goink -ldflags "-X internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
 
       - name: Package (DMG)
         run: |

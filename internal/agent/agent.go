@@ -15,14 +15,14 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/agentcfg"
-	"novel/internal/approval"
-	"novel/internal/llm"
-	"novel/internal/mcp_tools"
-	"novel/internal/search"
-	"novel/internal/session"
-	"novel/internal/skill"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/agentcfg"
+	"github.com/sigpanic/goink/internal/approval"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/search"
+	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/skill"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // Agent 是对话编排核心，持有运行所需的所有基础设施。

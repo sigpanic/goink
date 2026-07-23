@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"strings"
 
-	"novel/internal/config"
+	"github.com/sigpanic/goink/internal/config"
 )
 
 // ── 文件路径 ──────────────────────────────────────────────

@@ -8,7 +8,7 @@ import (
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"novel/internal/llm"
+	"github.com/sigpanic/goink/internal/llm"
 )
 
 // InitRunningTokens 对初始消息列表逐条 token 计数，返回按 role 的分组统计。

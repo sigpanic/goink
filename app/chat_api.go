@@ -4,10 +4,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"novel/internal/config"
-	"novel/internal/llm"
-	"novel/internal/session"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // SessionMeta 是前端会话列表的轻量视图。

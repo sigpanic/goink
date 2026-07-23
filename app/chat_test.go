@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"novel/internal/session"
+	"github.com/sigpanic/goink/internal/session"
 )
 
 // newUserMsg 构造一条 user 消息，Version=1, ToAPI=true, ToFrontend=true, AgentType="main".

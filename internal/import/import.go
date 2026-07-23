@@ -8,11 +8,11 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/chapter"
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/novel"
-	"novel/internal/text"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/text"
 )
 
 // ImportResult 是完整导入流程的结果。

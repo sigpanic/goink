@@ -9,8 +9,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/character"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── get_characters ────────────────────────────────────

@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // Store 管理 Novel 持久化。DB 导出供调用方做简单 CRUD。

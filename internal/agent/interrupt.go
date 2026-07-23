@@ -1,8 +1,8 @@
 package agent
 
 import (
-	"novel/internal/llm"
-	"novel/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
 // flushInterruptedTools 排干 stream 中待执行的 tool_call_end 事件，

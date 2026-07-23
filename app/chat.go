@@ -11,13 +11,13 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/agent"
-	"novel/internal/agentcfg"
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/llm"
-	"novel/internal/rollback"
-	"novel/internal/session"
+	"github.com/sigpanic/goink/internal/agent"
+	"github.com/sigpanic/goink/internal/agentcfg"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/rollback"
+	"github.com/sigpanic/goink/internal/session"
 )
 
 // ChatInput 是一次对话请求的入参。

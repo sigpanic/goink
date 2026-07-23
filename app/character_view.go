@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/character"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // GetCharacters 返回指定小说的全部角色，供前端侧边栏列表和关系图节点渲染。

@@ -819,18 +819,18 @@ export namespace app {
 
 export namespace apperr {
 	
-	export class Result__novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__ {
-	    data?: storage.PageResult_novel_internal_skill_remote_RemoteSkillMeta_;
+	export class Result__github_com_sigpanic_goink_internal_storage_PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta__ {
+	    data?: storage.PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_;
 	    err_code: string;
 	    err_msg?: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new Result__novel_internal_storage_PageResult_novel_internal_skill_remote_RemoteSkillMeta__(source);
+	        return new Result__github_com_sigpanic_goink_internal_storage_PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta__(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.data = this.convertValues(source["data"], storage.PageResult_novel_internal_skill_remote_RemoteSkillMeta_);
+	        this.data = this.convertValues(source["data"], storage.PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_);
 	        this.err_code = source["err_code"];
 	        this.err_msg = source["err_msg"];
 	    }
@@ -1995,7 +1995,7 @@ export namespace skill {
 
 export namespace storage {
 	
-	export class PageResult_novel_app_SessionMeta_ {
+	export class PageResult_github_com_sigpanic_goink_app_SessionMeta_ {
 	    items: app.SessionMeta[];
 	    total: number;
 	    page: number;
@@ -2003,7 +2003,7 @@ export namespace storage {
 	    total_pages: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new PageResult_novel_app_SessionMeta_(source);
+	        return new PageResult_github_com_sigpanic_goink_app_SessionMeta_(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -2033,7 +2033,7 @@ export namespace storage {
 		    return a;
 		}
 	}
-	export class PageResult_novel_internal_skill_remote_RemoteSkillMeta_ {
+	export class PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_ {
 	    items: remote.RemoteSkillMeta[];
 	    total: number;
 	    page: number;
@@ -2041,7 +2041,7 @@ export namespace storage {
 	    total_pages: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new PageResult_novel_internal_skill_remote_RemoteSkillMeta_(source);
+	        return new PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_(source);
 	    }
 	
 	    constructor(source: any = {}) {
@@ -2071,7 +2071,7 @@ export namespace storage {
 		    return a;
 		}
 	}
-	export class PageResult_novel_internal_style_Sample_ {
+	export class PageResult_github_com_sigpanic_goink_internal_style_Sample_ {
 	    items: style.Sample[];
 	    total: number;
 	    page: number;
@@ -2079,7 +2079,7 @@ export namespace storage {
 	    total_pages: number;
 	
 	    static createFrom(source: any = {}) {
-	        return new PageResult_novel_internal_style_Sample_(source);
+	        return new PageResult_github_com_sigpanic_goink_internal_style_Sample_(source);
 	    }
 	
 	    constructor(source: any = {}) {

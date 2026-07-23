@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/novel"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
 
 	epub "github.com/bmaupin/go-epub"
 	"github.com/yuin/goldmark"

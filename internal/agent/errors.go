@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"novel/internal/llm"
+	"github.com/sigpanic/goink/internal/llm"
 )
 
 // truncateErrMsg 按 rune 截断字符串到 maxLen，用于防止过长内容（含潜在注入载体）进入 LLM 上下文。

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/git"
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // setupChinesePipelineTest returns the shared VectorStore and creates a git repo

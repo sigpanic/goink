@@ -5,8 +5,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/git"
-	"novel/internal/novel"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
 )
 
 // NovelState 构建小说上下文快照（原 System3），每轮对话开头注入。

@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"novel/internal/config"
+	"github.com/sigpanic/goink/internal/config"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

@@ -16,10 +16,10 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
-	"novel/app"
-	"novel/internal/config"
-	"novel/internal/logger"
-	"novel/internal/platform"
+	"github.com/sigpanic/goink/app"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/logger"
+	"github.com/sigpanic/goink/internal/platform"
 )
 
 //go:embed all:frontend/dist

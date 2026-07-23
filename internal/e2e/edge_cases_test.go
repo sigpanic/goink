@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/config"
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // verifyEmbedding validates that a vector has dim=512 and L2 norm ≈ 1.0.

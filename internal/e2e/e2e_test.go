@@ -13,11 +13,11 @@ import (
 
 	ort "github.com/yalue/onnxruntime_go"
 
-	"novel/internal/config"
-	"novel/internal/migrate"
-	"novel/internal/platform"
-	"novel/internal/rag"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/migrate"
+	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 func TestMain(m *testing.M) {

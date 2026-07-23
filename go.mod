@@ -1,4 +1,4 @@
-module novel
+module github.com/sigpanic/goink
 
 go 1.25.0
 

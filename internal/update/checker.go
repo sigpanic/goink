@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"novel/internal/version"
+	"github.com/sigpanic/goink/internal/version"
 )
 
 const (

@@ -9,9 +9,9 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/chapter"
-	"novel/internal/novel"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── get_chapter_list ─────────────────────────────────

@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"novel/internal/chapter"
-	"novel/internal/git"
-	"novel/internal/novel"
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // setupRefreshQueueTest sets up dependencies for RefreshQueue E2E testing.

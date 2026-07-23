@@ -8,14 +8,14 @@ import (
 	"sync"
 	"unicode/utf8"
 
-	"novel/internal/chapter"
-	"novel/internal/character"
-	"novel/internal/git"
-	"novel/internal/location"
-	"novel/internal/rag"
-	"novel/internal/storage"
-	"novel/internal/storyarc"
-	"novel/internal/timeline"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/storyarc"
+	"github.com/sigpanic/goink/internal/timeline"
 )
 
 // Service 协调全局搜索：实体 LIKE + 正文精确 + RAG 语义。

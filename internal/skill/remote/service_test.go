@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"novel/internal/githubapi"
+	"github.com/sigpanic/goink/internal/githubapi"
 )
 
 // mockFetcher 实现 rawContentFetcher 接口，按 path 返回预设内容或错误。

@@ -9,7 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/reader"
+	"github.com/sigpanic/goink/internal/reader"
 )
 
 // ── get_reader_perspective ──────────────────────────────

@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/novel"
-	"novel/internal/rag"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/rag"
 )
 
 // SaveSettingsInput 是保存设置的入参。

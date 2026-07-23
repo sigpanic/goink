@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"novel/internal/novel"
+	"github.com/sigpanic/goink/internal/novel"
 )
 
 func exportTxt(n *novel.Novel, chapters []ChapterWithContent) ([]byte, string, error) {

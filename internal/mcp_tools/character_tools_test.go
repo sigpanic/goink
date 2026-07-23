@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
 // newTestRegistry 构造一个注册了全部工具的 Registry，logger 丢弃输出。

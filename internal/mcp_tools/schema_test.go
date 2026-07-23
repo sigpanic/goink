@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
 // ── 单元测试：SchemaOf 内联切片元素 ──────────────────────────

@@ -28,8 +28,8 @@ import (
 	"errors"
 	"strings"
 
-	"novel/internal/githubapi"
-	"novel/internal/llm"
+	"github.com/sigpanic/goink/internal/githubapi"
+	"github.com/sigpanic/goink/internal/llm"
 )
 
 // Code 是应用层错误码，作为前端契约的稳定标识。

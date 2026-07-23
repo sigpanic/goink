@@ -8,12 +8,12 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/character"
-	"novel/internal/location"
-	"novel/internal/novel"
-	"novel/internal/reader"
-	"novel/internal/storyarc"
-	"novel/internal/timeline"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/storyarc"
+	"github.com/sigpanic/goink/internal/timeline"
 )
 
 // ── delete_record ──────────────────────────────────────

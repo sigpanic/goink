@@ -11,10 +11,10 @@ import (
 	"sync"
 	"time"
 
-	"novel/internal/config"
-	"novel/internal/git"
-	"novel/internal/githubapi"
-	"novel/internal/skill"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/githubapi"
+	"github.com/sigpanic/goink/internal/skill"
 )
 
 // 远程 skill 仓库标识。

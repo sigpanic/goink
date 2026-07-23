@@ -6,8 +6,8 @@ import (
 
 	"gorm.io/gorm"
 
-	"novel/internal/git"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // RollbackBeforeTurn 回退到 targetTurn 开始之前的状态。

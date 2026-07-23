@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/git"
+	"github.com/sigpanic/goink/internal/git"
 )
 
 // createE2ERepo creates a novel directory and initializes a git repo using bundled git.

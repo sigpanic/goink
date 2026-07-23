@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"novel/internal/config"
+	"github.com/sigpanic/goink/internal/config"
 )
 
 func TestGetNovels_Empty(t *testing.T) {

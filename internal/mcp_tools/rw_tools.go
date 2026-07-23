@@ -12,12 +12,12 @@ import (
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"novel/internal/chapter"
-	"novel/internal/git"
-	"novel/internal/rag"
-	"novel/internal/skill"
-	"novel/internal/text"
-	"novel/internal/writing"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/skill"
+	"github.com/sigpanic/goink/internal/text"
+	"github.com/sigpanic/goink/internal/writing"
 )
 
 // ── edit ──────────────────────────────────────────────────

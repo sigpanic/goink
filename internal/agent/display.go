@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"novel/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
 // toolDisplayNames 工具名 → 中文展示名称。

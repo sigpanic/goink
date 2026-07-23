@@ -7,11 +7,11 @@ import (
 	"path/filepath"
 	"testing"
 
-	"novel/internal/config"
-	"novel/internal/migrate"
-	"novel/internal/platform"
-	"novel/internal/rag"
-	"novel/internal/storage"
+	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/migrate"
+	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 func TestAppLifecycle_InitWithConfig(t *testing.T) {

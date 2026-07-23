@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"novel/internal/chapter"
-	"novel/internal/novel"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/novel"
 )
 
 func testNovel() *novel.Novel {

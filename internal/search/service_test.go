@@ -13,12 +13,12 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
-	"novel/internal/chapter"
-	"novel/internal/character"
-	"novel/internal/location"
-	"novel/internal/storage"
-	"novel/internal/storyarc"
-	"novel/internal/timeline"
+	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/character"
+	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/storyarc"
+	"github.com/sigpanic/goink/internal/timeline"
 )
 
 var dbSeq atomic.Int64
