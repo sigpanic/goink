@@ -280,7 +280,7 @@ func (e *Extractor) preAnalyzeBoundaries(ctx context.Context, input ExtractPatte
 	onStatus := func(s LLMStatus) {
 		e.emit(input, Progress{Stage: StageBoundaries, LLMStatus: s})
 	}
-	raw, err := e.callTool(ctx, input, outputBoundariesTool, BoundaryHintsOutput{}, boundaryMessages(chapters), 1, onStatus)
+	raw, err := e.callTool(ctx, input, outputBoundariesTool, BoundaryHintsOutput{}, boundaryMessages(chapters), 1, 0, onStatus)
 	if err != nil {
 		return nil, fmt.Errorf("分析章节标题边界失败: %w", err)
 	}
@@ -327,7 +327,7 @@ func (e *Extractor) ensureSummaries(ctx context.Context, input ExtractPatternInp
 			BatchIndex: i + 1,
 			BatchTotal: len(batches),
 		})
-		raw, err := e.callTool(ctx, input, outputChapterSummariesTool, ChapterSummariesOutput{}, summaryMessages(batch, boundaries), 2, nil)
+		raw, err := e.callTool(ctx, input, outputChapterSummariesTool, ChapterSummariesOutput{}, summaryMessages(batch, boundaries), 2, 0, nil)
 		if err != nil {
 			return nil, fmt.Errorf("生成章节摘要失败: %w", err)
 		}
@@ -390,7 +390,7 @@ func (e *Extractor) initialChunks(ctx context.Context, input ExtractPatternInput
 			BatchIndex: i + 1,
 			BatchTotal: len(batches),
 		})
-		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, initialChunkMessages(batch), 2, nil)
+		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, initialChunkMessages(batch), 2, 0, nil)
 		if err != nil {
 			return nil, trace, fmt.Errorf("生成初始阶段块失败: %w", err)
 		}
@@ -437,7 +437,7 @@ func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInpu
 			BatchIndex: i + 1,
 			BatchTotal: len(batches),
 		})
-		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, compressChunkMessages(batch, round), 2, nil)
+		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, compressChunkMessages(batch, round), 2, 0, nil)
 		if err != nil {
 			return nil, trace, fmt.Errorf("第%d轮压缩失败: %w", round, err)
 		}
@@ -468,49 +468,45 @@ func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInpu
 	return all, trace, nil
 }
 
-// finalSkill Step 3：所有阶段块 → 流式生成最终套路技能
+// finalSkill Step 3：所有阶段块 → 通过 output_skill 工具调用生成最终套路技能
 func (e *Extractor) finalSkill(ctx context.Context, input ExtractPatternInput, chunks []Chunk) (string, error) {
-	opts := callOptions(input)
-	maxTokens := 8192
-	opts.MaxTokens = &maxTokens
-	events := e.LLMClient.ChatStream(ctx, input.ProviderName, finalSkillMessages(chunks), nil, input.ModelID, opts)
-	var b strings.Builder
-	sentThinking := false
-	sentGenerating := false
-	for evt := range events {
-		switch evt.Type {
-		case llm.EventError:
-			return "", evt.Error
-		case llm.EventThinking:
-			if !sentThinking {
-				sentThinking = true
-				e.emit(input, Progress{Stage: StageFinalizing, LLMStatus: LLMThinking})
-			}
-		case llm.EventContent:
-			if !sentGenerating {
-				sentGenerating = true
-				e.emit(input, Progress{Stage: StageFinalizing, LLMStatus: LLMGenerating})
-			}
-			b.WriteString(evt.Data)
-		}
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
+	onStatus := func(s LLMStatus) {
+		e.emit(input, Progress{Stage: StageFinalizing, LLMStatus: s})
 	}
-	if err := ctx.Err(); err != nil {
+	raw, err := e.callTool(ctx, input, "output_skill", SkillOutput{}, finalSkillMessages(chunks), 2, 32000, onStatus)
+	if err != nil {
 		return "", err
 	}
-	raw := strings.TrimSpace(b.String())
-	if raw == "" {
-		return "", fmt.Errorf("LLM 返回了空的技能内容")
+	var out SkillOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return "", fmt.Errorf("解析生成的技能失败: %w", err)
 	}
-	return raw, nil
+	if strings.TrimSpace(out.Name) == "" || strings.TrimSpace(out.Content) == "" {
+		return "", fmt.Errorf("LLM 返回的技能内容不完整")
+	}
+	return buildSkillMarkdown(out.Name, out.Description, out.Content), nil
+}
+
+// buildSkillMarkdown 组装完整的 skill markdown：固定 frontmatter + 正文。
+func buildSkillMarkdown(name, description, content string) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "name: %s\n", name)
+	fmt.Fprintf(&b, "description: %s\n", description)
+	b.WriteString("category: 套路模板\n")
+	b.WriteString("mode: auto\n")
+	b.WriteString("author: ai\n")
+	b.WriteString("version: 1\n")
+	b.WriteString("---\n\n")
+	b.WriteString(strings.TrimSpace(content))
+	b.WriteString("\n")
+	return b.String()
 }
 
 // callTool 请求 LLM 调用指定工具，返回结构化 JSON。
 // 部分供应商的 thinking mode 不兼容 tool_choice，因此只提供 tools，由提示词约束模型调用目标工具。
 // onStatus 回调在 LLM 流事件时被调用，用于推送 thinking/generating 状态。
-func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, toolName string, schema any, messages []map[string]any, attempts int, onStatus func(LLMStatus)) (json.RawMessage, error) {
+func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, toolName string, schema any, messages []map[string]any, attempts int, maxTokens int, onStatus func(LLMStatus)) (json.RawMessage, error) {
 	tools := []map[string]any{{
 		"type": "function",
 		"function": map[string]any{
@@ -520,6 +516,9 @@ func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, too
 		},
 	}}
 	opts := callOptions(input)
+	if maxTokens > 0 {
+		opts.MaxTokens = &maxTokens
+	}
 	var allErrs []error
 	for i := range attempts {
 		if i > 0 {

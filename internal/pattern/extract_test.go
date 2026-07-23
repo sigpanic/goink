@@ -841,23 +841,16 @@ func TestCompressChunks_MockLLM(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestFinalSkill_MockLLM(t *testing.T) {
-	skillContent := `---
-name: 逆袭模式
-description: 适合底层逆袭类故事
-category: 套路模板
-mode: auto
-author: ai
-version: 1
----
-# 逆袭模式
-## 套路概览
-底层主角通过努力改变命运。
-## 阶段拆解
-第一阶段：平凡日常
-第二阶段：机缘降临
-第三阶段：逆袭成功`
+	out := SkillOutput{
+		Name:        "逆袭模式",
+		Description: "适合底层逆袭类故事",
+		Content: "# 逆袭模式\n" +
+			"## 套路概览\n底层主角通过努力改变命运。\n" +
+			"## 阶段拆解\n第一阶段：平凡日常\n第二阶段：机缘降临\n第三阶段：逆袭成功",
+	}
+	argsJSON, _ := json.Marshal(out)
 
-	e := testExtractor(mockToolHandler("", "", skillContent))
+	e := testExtractor(mockToolHandler("output_skill", string(argsJSON), ""))
 	chunks := []Chunk{
 		{Name: "崛起", StartChapter: 1, EndChapter: 5, Content: "主角觉醒"},
 	}
@@ -865,6 +858,9 @@ version: 1
 	raw, err := e.finalSkill(context.Background(), defaultInput(), chunks)
 	if err != nil {
 		t.Fatalf("finalSkill: %v", err)
+	}
+	if !strings.Contains(raw, "name: 逆袭模式") {
+		t.Errorf("final skill should contain frontmatter name, got:\n%s", raw)
 	}
 	if !strings.Contains(raw, "逆袭模式") {
 		t.Errorf("final skill should contain 逆袭模式, got:\n%s", raw)
@@ -889,6 +885,7 @@ func TestCallTool_ToolNotCalled(t *testing.T) {
 		BoundaryHintsOutput{},
 		boundaryMessages(makeChapters(5, 50)),
 		1,
+		0,
 		nil,
 	)
 	if err == nil {
@@ -915,6 +912,7 @@ func TestCallTool_UnknownProvider(t *testing.T) {
 		BoundaryHintsOutput{},
 		boundaryMessages(makeChapters(5, 50)),
 		1,
+		0,
 		nil,
 	)
 	if err == nil {

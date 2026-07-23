@@ -110,6 +110,12 @@ type ChunksOutput struct {
 	Chunks []Chunk `json:"chunks" jsonschema:"required,description=压缩后的叙事阶段块列表"`
 }
 
+type SkillOutput struct {
+	Name        string `json:"name" jsonschema:"required,description=技能名称（中文模式名）"`
+	Description string `json:"description" jsonschema:"required,description=一句话描述何时使用此叙事模式"`
+	Content     string `json:"content" jsonschema:"required,description=技能正文 markdown，含 ## 套路概览/阶段拆解/爽点节奏/角色功能模板/可复用叙事规律/使用注意 等章节，不含 frontmatter"`
+}
+
 // ChapterSource 是从 DB 元数据和 git 正文拼出的章节数据传递对象
 type ChapterSource struct {
 	ID            int64

@@ -112,7 +112,7 @@ export function usePatternProgress(runningTaskId: string | null) {
         const next = toState(data);
         const eventIndex = eventSeqRef.current++;
         setProgress(next);
-        setEvents((prev) => [toEvent(next, eventIndex), ...prev].slice(0, 10));
+        setEvents((prev) => [toEvent(next, eventIndex), ...prev]);
       },
     );
     return unsubscribe;
