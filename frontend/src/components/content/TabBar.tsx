@@ -1,3 +1,4 @@
+import { useRef, useEffect } from "react";
 import { X } from "lucide-react";
 
 interface Props {
@@ -13,10 +14,28 @@ export default function TabBar({
   onSelect,
   onClose,
 }: Props) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      // 仅在 tab 栏横向溢出时把纵向滚轮转为横向滚动，避免 tab 较少时拦截滚轮
+      if (el.scrollWidth <= el.clientWidth) return;
+      e.preventDefault();
+      el.scrollLeft += e.deltaY;
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [tabs.length]);
+
   if (tabs.length === 0) return null;
 
   return (
-    <div className="flex items-center bg-muted/30 border-b shrink-0 overflow-x-auto">
+    <div
+      ref={scrollRef}
+      className="flex items-center bg-muted/30 border-b shrink-0 overflow-x-auto"
+    >
       {tabs.map((tab) => (
         <div
           key={tab.id}
