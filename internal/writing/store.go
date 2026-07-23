@@ -102,7 +102,7 @@ func (s *Store) computeStreaks(ctx context.Context) (current, longest int) {
 
 	var parsed []time.Time
 	for _, d := range dates {
-		t, err := time.Parse("2006-01-02", d)
+		t, err := time.ParseInLocation("2006-01-02", d, time.Local)
 		if err != nil {
 			continue
 		}
@@ -124,9 +124,9 @@ func (s *Store) computeStreaks(ctx context.Context) (current, longest int) {
 	}
 
 	// 当前连续：从最后一天往回数
-	today := time.Now().Truncate(24 * time.Hour)
+	today, _ := time.ParseInLocation("2006-01-02", time.Now().Format("2006-01-02"), time.Local)
 	yesterday := today.AddDate(0, 0, -1)
-	lastDate := parsed[len(parsed)-1].Truncate(24 * time.Hour)
+	lastDate := parsed[len(parsed)-1]
 	if lastDate.Equal(today) || lastDate.Equal(yesterday) {
 		current = 1
 		for i := len(parsed) - 1; i > 0; i-- {
