@@ -5,8 +5,9 @@
 //   - 作为基础设施：提供泛型 Result[T] 包装，让需要分类错误反馈的 Wails API 有统一形态
 //   - 零侵入：不强制重构现有 API，只在新增 API 上启用；旧 API 保持原签名
 //   - 可扩展：错误码用字符串而非 int 枚举，便于后续新增场景直接加值
-//   - 后端语义保留：CodeFromError 通过 errors.As 提取底层 *githubapi.Error / *llm.APIError，
-//     不丢失原始 Kind/StatusCode 信息
+//   - 解耦：apperr 只定义 Coder 接口与 Code 常量，不 import 任何业务/协议包；
+//     各领域 error 类型实现 Coder 接口，CodeFromError 用 errors.As 提取接口统一分发，
+//     新领域接入无需改动 apperr
 //
 // 错误码按模块分区组织（通用 / githubapi / llm）。同样语义（如 404）在不同模块
 // 有不同错误码字符串（githubapi.not_found vs llm.not_found），便于前端针对模块做
@@ -24,13 +25,7 @@
 //	}
 package apperr
 
-import (
-	"errors"
-	"strings"
-
-	"github.com/sigpanic/goink/internal/githubapi"
-	"github.com/sigpanic/goink/internal/llm"
-)
+import "errors"
 
 // Code 是应用层错误码，作为前端契约的稳定标识。
 // 空字符串 "" 表示成功（零值），其他值对应不同错误类别。
@@ -105,8 +100,23 @@ func Err[T any](err error) *Result[T] {
 // 类型别名而非新定义类型，便于 Wails 绑定生成器输出干净的 TS 类型。
 type Empty = struct{}
 
-// CodeFromError 只做调度，具体映射逻辑在各模块专属函数里。
-// 同一个语义（如 404）在不同模块前端反馈可能不同，故错误码带模块前缀。
+// Coder 由携带应用层错误码的 error 实现。
+// 各领域 error 类型实现此接口，CodeFromError 用 errors.As 提取接口统一分发，
+// apperr 无需 import 任何业务/协议包。
+type Coder interface {
+	Code() Code
+}
+
+// CodeFromError 从 error 提取应用层错误码。
+// 调度策略：1 次 errors.As 提取 Coder 接口，遍历 Unwrap 链找实现 Coder 的 error。
+// 同一个语义（如 404）在不同模块前端反馈可能不同，故错误码带模块前缀，
+// 具体映射逻辑由各领域 error 的 Code() 方法实现，apperr 不感知领域类型。
+//
+// 不变量：非 nil err 永不返回 CodeOK。
+//   - nil err → CodeOK
+//   - 实现 Coder 且 Code() 返回非 CodeOK → 返回该 Code
+//   - 实现 Coder 但 Code() 误返回 CodeOK → 降级 CodeInternal，避免错误被静默吞成成功
+//   - 未实现 Coder → CodeInternal
 //
 // 注意：remote.Service 用 fmt.Errorf("remote: ...: %w", err) 包装，
 // errors.As 能穿透多层 wrap 直达底层，比字符串前缀匹配可靠。
@@ -114,52 +124,14 @@ func CodeFromError(err error) Code {
 	if err == nil {
 		return CodeOK
 	}
-	var ghErr *githubapi.Error
-	if errors.As(err, &ghErr) {
-		return codeFromGitHubAPIError(ghErr)
-	}
-	var llmErr *llm.APIError
-	if errors.As(err, &llmErr) {
-		return codeFromLLMAPIError(llmErr)
-	}
-	// 业务层 fmt.Errorf("remote: invalid target %q", target) 等约定
-	msg := err.Error()
-	if strings.Contains(msg, "invalid") || strings.Contains(msg, "requires non-zero") {
-		return CodeInvalid
+	var c Coder
+	if errors.As(err, &c) {
+		code := c.Code()
+		if code == CodeOK {
+			// 不变量兜底：Coder 误返回 CodeOK 时降级，避免错误被静默吞成成功。
+			return CodeInternal
+		}
+		return code
 	}
 	return CodeInternal
-}
-
-// codeFromGitHubAPIError 映射 *githubapi.Error.Kind → apperr.Code。
-// githubapi 的 404 表示仓库文件不存在（如 skill 被移除），前端反馈应区别于 llm 404。
-func codeFromGitHubAPIError(err *githubapi.Error) Code {
-	switch err.Kind {
-	case githubapi.KindNetwork:
-		return CodeGitHubAPINetwork
-	case githubapi.KindRateLimited:
-		return CodeGitHubAPIRateLimited
-	case githubapi.KindNotFound:
-		return CodeGitHubAPINotFound
-	case githubapi.KindForbidden:
-		return CodeGitHubAPIForbidden
-	default:
-		return CodeGitHubAPIOther
-	}
-}
-
-// codeFromLLMAPIError 映射 *llm.APIError.StatusCode → apperr.Code。
-// llm 的 404 表示模型不存在，前端反馈应区别于 githubapi 404。
-func codeFromLLMAPIError(err *llm.APIError) Code {
-	switch {
-	case err.StatusCode == 429:
-		return CodeLLMRateLimited
-	case err.StatusCode == 404:
-		return CodeLLMNotFound
-	case err.StatusCode == 403:
-		return CodeLLMForbidden
-	case err.StatusCode >= 500:
-		return CodeLLMServerError
-	default:
-		return CodeLLMClientError
-	}
 }

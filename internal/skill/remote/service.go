@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/githubapi"
@@ -99,11 +100,11 @@ func defaultDirResolver(target string, novelID int64) (string, error) {
 		return config.UserSkillsDir(), nil
 	case "novel":
 		if novelID == 0 {
-			return "", fmt.Errorf("remote: install to novel layer requires non-zero novelID")
+			return "", apperr.NewInvalid("remote: install to novel layer requires non-zero novelID")
 		}
 		return config.NovelSkillsDir(novelID), nil
 	default:
-		return "", fmt.Errorf("remote: invalid target %q (want user or novel)", target)
+		return "", apperr.NewInvalid(fmt.Sprintf("remote: invalid target %q (want user or novel)", target))
 	}
 }
 
@@ -169,7 +170,7 @@ func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, n
 	// 防止远程 index.json 被污染时 name 含 ../ 逃出 skills 目录写任意文件
 	safeName := strings.TrimSuffix(filepath.Base(name), ".md")
 	if safeName == "" || safeName != name {
-		return fmt.Errorf("remote: invalid skill name %q", name)
+		return apperr.NewInvalid(fmt.Sprintf("remote: invalid skill name %q", name))
 	}
 
 	content, err := s.GetRemoteSkillContent(ctx, name)
@@ -188,7 +189,7 @@ func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, n
 
 	dst, err := git.SafePath(dir, name+".md")
 	if err != nil {
-		return fmt.Errorf("remote: invalid skill path: %w", err)
+		return &apperr.BusinessError{CodeVal: apperr.CodeInvalid, Msg: "remote: invalid skill path", Cause: err}
 	}
 	if err := os.WriteFile(dst, []byte(content), 0o644); err != nil {
 		return fmt.Errorf("remote: write skill file %s: %w", dst, err)

@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/sigpanic/goink/internal/apperr"
 )
 
 const (
@@ -70,6 +72,24 @@ func (e *Error) Error() string {
 
 // Unwrap 暴露底层错误，支持 errors.Is/errors.As。
 func (e *Error) Unwrap() error { return e.Cause }
+
+// Code 实现 apperr.Coder 接口，按 Kind 映射到 apperr.Code。
+// 映射逻辑从 apperr.codeFromGitHubAPIError 搬来（v1.3.0 集中映射改接口模式后，
+// apperr 不再 import githubapi，改由各领域 error 自行实现 Code()）。
+func (e *Error) Code() apperr.Code {
+	switch e.Kind {
+	case KindNetwork:
+		return apperr.CodeGitHubAPINetwork
+	case KindRateLimited:
+		return apperr.CodeGitHubAPIRateLimited
+	case KindNotFound:
+		return apperr.CodeGitHubAPINotFound
+	case KindForbidden:
+		return apperr.CodeGitHubAPIForbidden
+	default: // 含 KindOther
+		return apperr.CodeGitHubAPIOther
+	}
+}
 
 // RateLimit 携带本次请求后的 rate limit 配额信息。
 // GitHub 在每个 API 响应的 header 中返回这些字段。

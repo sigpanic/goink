@@ -99,20 +99,22 @@ func TestErr_WrappedError_PreservesLLMStatusCode(t *testing.T) {
 	assert.Equal(t, apperr.CodeLLMNotFound, res.ErrCode)
 }
 
-// TestErr_InvalidTarget_String 验证业务层 "invalid" 约定字符串映射到 CodeInvalid。
-func TestErr_InvalidTarget_String(t *testing.T) {
-	err := errors.New(`remote: invalid target "foo"`)
+// TestErr_BusinessError_Invalid 验证 apperr.NewInvalid 构造的 *BusinessError 走 apperr.Err 后 ErrCode 为 CodeInvalid。
+// v1.3.0 取消 strings.Contains fallback 后，业务层校验错误必须用 NewInvalid 显式结构化。
+func TestErr_BusinessError_Invalid(t *testing.T) {
+	err := apperr.NewInvalid("remote: invalid target")
 	res := apperr.Err[string](err)
 	require.NotNil(t, res)
 	assert.Equal(t, apperr.CodeInvalid, res.ErrCode)
+	assert.Equal(t, "remote: invalid target", res.ErrMsg)
 }
 
-// TestErr_RequiresNonZero_String 验证 "requires non-zero" 约定字符串映射到 CodeInvalid。
-func TestErr_RequiresNonZero_String(t *testing.T) {
-	err := errors.New("remote: install to novel layer requires non-zero novelID")
-	res := apperr.Err[string](err)
-	require.NotNil(t, res)
-	assert.Equal(t, apperr.CodeInvalid, res.ErrCode)
+// TestCodeFromError_CodeOKDegraded 验证 CodeOK 不变量：
+// 当 Coder 实现的 Code() 误返回 CodeOK（如 struct literal 绕过构造函数、Code 字段取零值）时，
+// CodeFromError 必须降级为 CodeInternal，绝不把非 nil err 静默吞成成功。
+func TestCodeFromError_CodeOKDegraded(t *testing.T) {
+	err := &apperr.BusinessError{CodeVal: apperr.CodeOK, Msg: "x"}
+	assert.Equal(t, apperr.CodeInternal, apperr.CodeFromError(err))
 }
 
 // TestErr_UnknownError_Fallback 验证未识别错误 fallback 到 CodeInternal。

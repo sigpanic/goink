@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/sigpanic/goink/internal/apperr"
 )
 
 // Provider 定义一个大模型供应商的完整配置。
@@ -44,6 +46,24 @@ type APIError struct {
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("[%d] %s", e.StatusCode, e.Message)
+}
+
+// Code 实现 apperr.Coder 接口，将 StatusCode 映射为 apperr.Code 供 apperr.CodeFromError 提取。
+// 映射逻辑从 apperr.codeFromLLMAPIError 搬来（v1.3.0 集中映射改接口模式），
+// apperr 不再 import llm，依赖方向反转为 llm → apperr。
+func (e *APIError) Code() apperr.Code {
+	switch {
+	case e.StatusCode == 429:
+		return apperr.CodeLLMRateLimited
+	case e.StatusCode == 404:
+		return apperr.CodeLLMNotFound
+	case e.StatusCode == 403:
+		return apperr.CodeLLMForbidden
+	case e.StatusCode >= 500:
+		return apperr.CodeLLMServerError
+	default:
+		return apperr.CodeLLMClientError
+	}
 }
 
 // CallOptions LLM 调用的可选参数。nil 时全部使用 Provider/ModelInfo 默认值。
