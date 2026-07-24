@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "preview": "vite preview",
     "i18n:check": "node scripts/i18n-check.mjs",
-    "theme:check": "node scripts/theme-check.mjs"
+    "theme:check": "node scripts/theme-check.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx}\""
   },
   "dependencies": {
     "@antv/g6": "^5.1.1",
@@ -60,6 +62,7 @@
     "i18next-parser": "^9.3.0",
     "jsdom": "^29.1.1",
     "postcss": "^8.5.15",
+    "prettier": "^3.9.6",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
