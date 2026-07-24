@@ -34,7 +34,9 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   const { t } = useTranslation();
   const userSelectedNovelRef = useRef(false);
   const [view, setView] = useState<View>("select");
-  const [sessionParams, setSessionParams] = useState<SessionParams | null>(null);
+  const [sessionParams, setSessionParams] = useState<SessionParams | null>(
+    null,
+  );
   const [targetNovelId, setTargetNovelId] = useState(currentNovelId);
   const [novels, setNovels] = useState<novel.Novel[]>([]);
   const [chapters, setChapters] = useState<chapter.Chapter[]>([]);
@@ -122,8 +124,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     [chapters, scope, selected],
   );
   const activeChapterCount = scope === "all" ? chapters.length : selected.size;
-  const canExtract =
-    targetNovelId > 0 && activeChapterCount >= 5 && !!modelKey;
+  const canExtract = targetNovelId > 0 && activeChapterCount >= 5 && !!modelKey;
   const allSelected =
     (scope === "all" && chapters.length > 0) ||
     (scope === "selected" &&
