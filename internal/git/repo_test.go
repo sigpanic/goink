@@ -22,22 +22,8 @@ func TestMain(m *testing.M) {
 func testRepo(t *testing.T, commits int) (*Repo, string, func()) {
 	t.Helper()
 
-	// 清理 hook 环境下继承的 GIT_AUTHOR_*/GIT_COMMITTER_* 环境变量。
-	// git commit 跑 pre-commit hook 时会从 config 读 author 设到这些环境变量，
-	// 优先级高于仓库级 config，导致 testRepo 设的 user.name="Goink" 不生效。
-	savedEnv := map[string]string{}
-	for _, key := range []string{"GIT_AUTHOR_NAME", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_NAME", "GIT_COMMITTER_EMAIL", "GIT_AUTHOR_DATE", "GIT_COMMITTER_DATE"} {
-		if val, ok := os.LookupEnv(key); ok {
-			savedEnv[key] = val
-		}
-		os.Unsetenv(key)
-	}
-	t.Cleanup(func() {
-		for key, val := range savedEnv {
-			os.Setenv(key, val)
-		}
-	})
-
+	// GIT_* 环境变量（含 GIT_AUTHOR_*）已在 runCmd.filteredGitEnv 统一剥离，
+	// 此处无需再手动清理 hook 注入的 env。
 	dir, err := os.MkdirTemp("", "git-test-*")
 	if err != nil {
 		t.Fatalf("create temp dir: %v", err)

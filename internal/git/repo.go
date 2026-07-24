@@ -533,11 +533,30 @@ func (r *Repo) runInDir(args ...string) (stdout, stderr string, err error) {
 func runCmd(gitBin, dir string, args ...string) (stdout, stderr string, err error) {
 	cmd := exec.Command(gitBin, args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
+	cmd.Env = filteredGitEnv()
 	var outBuf, errBuf bytes.Buffer
 	cmd.Stdout = &outBuf
 	cmd.Stderr = &errBuf
 	platform.SetPlatformAttr(cmd)
 	err = cmd.Run()
 	return outBuf.String(), errBuf.String(), err
+}
+
+// filteredGitEnv 返回剥离所有 GIT_ 前缀环境变量后的 env 列表，并追加 LC_ALL=C。
+//
+// GIT_* 是 git 的覆盖/劫持命名空间（GIT_DIR / GIT_WORK_TREE / GIT_INDEX_FILE /
+// GIT_AUTHOR_* 等）。当本进程处于 git hook 子进程内时（例如 pre-commit 触发 go test），
+// git 会向环境注入 GIT_DIR 等绝对路径，导致 Repo 经 runCmd 派生的 git 子进程被劫持到
+// 父仓库而非 cmd.Dir 指向的目标仓库。剥离 GIT_* 从根上消除该劫持。
+//
+// Repo 始终通过 cmd.Dir 定位仓库、从不依赖 GIT_DIR，故剥离对生产零副作用；
+// HOME / PATH / 系统变量等 git 真正需要的环境变量（非 GIT_ 前缀）原样保留。
+func filteredGitEnv() []string {
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, kv := range os.Environ() {
+		if !strings.HasPrefix(kv, "GIT_") {
+			env = append(env, kv)
+		}
+	}
+	return append(env, "LC_ALL=C")
 }
