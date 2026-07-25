@@ -214,7 +214,7 @@ export function UpdateLocation(arg1:number,arg2:number,arg3:app.UpdateLocationIn
 
 export function UpdateNovel(arg1:number,arg2:app.UpdateNovelInput):Promise<novel.Novel>;
 
-export function UpdatePreference(arg1:number,arg2:app.UpdatePreferenceInput):Promise<novel.PreferenceItem>;
+export function UpdatePreference(arg1:number,arg2:number,arg3:app.UpdatePreferenceInput):Promise<novel.PreferenceItem>;
 
 export function UpdateReaderPerspective(arg1:number,arg2:number,arg3:app.UpdateReaderPerspectiveInput):Promise<void>;
 

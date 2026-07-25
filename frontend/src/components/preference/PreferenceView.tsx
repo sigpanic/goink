@@ -17,9 +17,10 @@ type EditMode =
 type EditForm = {
   category: string;
   content: string;
+  isGlobal: boolean;
 };
 
-const EMPTY_FORM: EditForm = { category: "", content: "" };
+const EMPTY_FORM: EditForm = { category: "", content: "", isGlobal: false };
 
 export default function PreferenceView({ novelId }: Props) {
   const app = useApp();
@@ -60,13 +61,13 @@ export default function PreferenceView({ novelId }: Props) {
 
   function openCreate(isGlobal: boolean) {
     setError(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, isGlobal });
     setEditMode({ type: "create", isGlobal });
   }
 
   function openEdit(item: novel.PreferenceItem) {
     setError(null);
-    setForm({ category: item.category, content: item.content });
+    setForm({ category: item.category, content: item.content, isGlobal: item.is_global });
     setEditMode({ type: "edit", item });
   }
 
@@ -86,14 +87,15 @@ export default function PreferenceView({ novelId }: Props) {
     try {
       if (editMode.type === "create") {
         await app.CreatePreference(novelId, {
-          is_global: editMode.isGlobal,
+          is_global: form.isGlobal,
           category: form.category || t("preference.uncategorized"),
           content: form.content,
         });
       } else {
-        await app.UpdatePreference(editMode.item.id, {
+        await app.UpdatePreference(novelId, editMode.item.id, {
           category: form.category,
           content: form.content,
+          is_global: form.isGlobal,
         });
       }
       setEditMode(null);
@@ -273,6 +275,29 @@ export default function PreferenceView({ novelId }: Props) {
   function renderFormFields() {
     return (
       <div className="space-y-3">
+        {editMode?.type === "edit" && (
+          <div>
+            <label className="text-xs font-medium text-muted-foreground mb-1 block">
+              {t("preference.scope")}
+            </label>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, isGlobal: true }))}
+                className={`px-3 py-1 rounded text-xs transition-colors ${form.isGlobal ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+              >
+                {t("preference.global")}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm((f) => ({ ...f, isGlobal: false }))}
+                className={`px-3 py-1 rounded text-xs transition-colors ${!form.isGlobal ? "bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground hover:text-foreground"}`}
+              >
+                {t("preference.book")}
+              </button>
+            </div>
+          </div>
+        )}
         <div>
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("preference.category")}

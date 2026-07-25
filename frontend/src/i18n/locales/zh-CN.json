@@ -680,6 +680,7 @@
     "searchPreference": "搜索偏好...",
     "noMatchingPreference": "无匹配偏好",
     "noPreference": "暂无偏好",
+    "scope": "归属",
     "global": "全局",
     "book": "本书"
   },

@@ -206,10 +206,15 @@ type CreatePreferenceInput struct {
 // CreatePreference 创建一条创作偏好。
 func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*novel.PreferenceItem, error) {
 	item := novel.PreferenceItem{
-		NovelID:  novelID,
 		IsGlobal: input.IsGlobal,
 		Category: input.Category,
 		Content:  input.Content,
+	}
+	// is_global=true 时 NovelID 置 0（全局偏好不归属任何小说），否则归属当前小说
+	if input.IsGlobal {
+		item.NovelID = 0
+	} else {
+		item.NovelID = novelID
 	}
 	if err := a.novel.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create preference: %w", err)
@@ -218,26 +223,34 @@ func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*nov
 }
 
 // UpdatePreferenceInput 是更新偏好的入参。
+// 采用 PUT 语义：前端全量传，后端全量覆盖。
+// 不走 PatchAndSave（偏好可能全局 NovelID=0 + is_global 切换需特殊处理 NovelID）。
 type UpdatePreferenceInput struct {
-	Category string `json:"category,omitempty"`
-	Content  string `json:"content,omitempty"`
-	IsGlobal *bool  `json:"is_global,omitempty"`
+	Category string `json:"category"`
+	Content  string `json:"content"`
+	IsGlobal bool   `json:"is_global"`
 }
 
 // UpdatePreference 更新一条创作偏好。
-func (a *App) UpdatePreference(id int64, input UpdatePreferenceInput) (*novel.PreferenceItem, error) {
+// novelID 由前端显式传入（当前工作区小说），用于 is_global 切换时填 NovelID。
+// PUT 语义：前端全量传 category/content/is_global，后端全量覆盖 + db.Save（走 GORM 回调）。
+func (a *App) UpdatePreference(novelID int64, id int64, input UpdatePreferenceInput) (*novel.PreferenceItem, error) {
 	var item novel.PreferenceItem
 	if err := a.novel.DB.WithContext(a.ctx).First(&item, id).Error; err != nil {
 		return nil, fmt.Errorf("update preference: %w", err)
 	}
-	if input.Category != "" {
-		item.Category = input.Category
+	// 归属校验：只能改全局偏好或当前小说的偏好
+	if !item.IsGlobal && item.NovelID != novelID {
+		return nil, fmt.Errorf("update preference: 无权修改其他小说的偏好")
 	}
-	if input.Content != "" {
-		item.Content = input.Content
-	}
-	if input.IsGlobal != nil {
-		item.IsGlobal = *input.IsGlobal
+	// PUT 全量覆盖
+	item.Category = input.Category
+	item.Content = input.Content
+	item.IsGlobal = input.IsGlobal
+	if input.IsGlobal {
+		item.NovelID = 0
+	} else {
+		item.NovelID = novelID
 	}
 	if err := a.novel.DB.WithContext(a.ctx).Save(&item).Error; err != nil {
 		return nil, fmt.Errorf("update preference: %w", err)

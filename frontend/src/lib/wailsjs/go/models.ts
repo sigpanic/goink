@@ -711,9 +711,9 @@ export namespace app {
 	    }
 	}
 	export class UpdatePreferenceInput {
-	    category?: string;
-	    content?: string;
-	    is_global?: boolean;
+	    category: string;
+	    content: string;
+	    is_global: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdatePreferenceInput(source);

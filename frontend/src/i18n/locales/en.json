@@ -703,6 +703,7 @@
     "searchPreference": "Search preferences...",
     "noMatchingPreference": "No matching preferences",
     "noPreference": "No preferences yet",
+    "scope": "Scope",
     "global": "Global",
     "book": "Book"
   },

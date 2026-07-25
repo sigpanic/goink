@@ -181,7 +181,7 @@ func TestPreferences(t *testing.T) {
 	assert.Equal(t, novelPref.ID, result.Novel[0].ID)
 
 	// --- Update preference ---
-	updated, err := a.UpdatePreference(novelPref.ID, UpdatePreferenceInput{
+	updated, err := a.UpdatePreference(nv.ID, novelPref.ID, UpdatePreferenceInput{
 		Category: "trait",
 		Content:  "Protagonist is very quiet now",
 	})

@@ -386,8 +386,8 @@ export function UpdateNovel(arg1, arg2) {
   return window['go']['app']['App']['UpdateNovel'](arg1, arg2);
 }
 
-export function UpdatePreference(arg1, arg2) {
-  return window['go']['app']['App']['UpdatePreference'](arg1, arg2);
+export function UpdatePreference(arg1, arg2, arg3) {
+  return window['go']['app']['App']['UpdatePreference'](arg1, arg2, arg3);
 }
 
 export function UpdateReaderPerspective(arg1, arg2, arg3) {
