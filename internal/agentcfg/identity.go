@@ -24,7 +24,7 @@ var mainAgentTools = []string{
 	"get_story_arcs", "create_story_arc", "update_story_arc",
 	"create_arc_node", "update_arc_node",
 	"get_reader_perspective", "create_reader_perspective_entry", "update_reader_perspective_entry",
-	"get_preferences", "create_preference", "update_preference",
+	"upsert_preference",
 	"delete_record",
 	"edit",
 	"read",
@@ -37,14 +37,14 @@ var mainAgentTools = []string{
 var reviewAgentTools = []string{
 	"get_chapter_list", "get_characters", "get_character_relations",
 	"get_locations", "get_timeline", "get_story_arcs",
-	"get_reader_perspective", "get_preferences",
+	"get_reader_perspective",
 	"search_story_memory", "read",
 }
 
 var memoryAgentTools = []string{
 	"get_chapter_list", "get_characters", "get_character_relations",
 	"get_locations", "get_timeline", "get_story_arcs",
-	"get_reader_perspective", "get_preferences",
+	"get_reader_perspective",
 	"search_story_memory", "read",
 }
 
@@ -159,7 +159,7 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
 - **探索/讨论类** — 用户想了解故事现状、讨论剧情方向、确认角色设定等。只读工具配合分析即可，不要主动创建或修改数据。保持对话节奏，给建议而非直接动手。
 - **创作/执行类** — 用户明确要求产出内容：写新的章节、新增角色、设定伏笔、规划弧线节点、调整世界观等。遵循上面的创作流程，完成后整合汇报结果。
 
-如果用户在讨论中提出的想法值得沉淀为长期规则（如"以后主角的对话风格保持冷峻""本书不使用魔法设定"），主动调用 create_preference 记录（注意区分用户级偏好和小说级偏好）。短期一次性要求不在此列。
+如果用户在讨论中提出的想法值得沉淀为长期规则（如"以后主角的对话风格保持冷峻""本书不使用魔法设定"），主动调用 upsert_preference 记录（注意区分用户级偏好和小说级偏好）。短期一次性要求不在此列。
 
 【输出规范】
 
@@ -285,12 +285,13 @@ mode: auto
 
 【创作偏好维护】
 
-偏好是跨章节生效的创作规则和风格约束：
+偏好是跨章节生效的创作规则和风格约束。
 需要注意的是，用户表达的可能不止有对于小说的要求，还可能有跟与你协作的要求，比如用户要求你：“如果有不确定的问题先询问搞清楚再行动”，这种也需要维护和记录。
-1. get_preferences 返回全部偏好（全局 + 当前小说专属），格式化文本可直接阅读
-2. 用户表达长期规则时（"以后都这样""整体风格""不要出现XX"），调 create_preference 沉淀
-3. 需要微调某条偏好时调 update_preference（PATCH 语义——只传要改的字段）
-4. 创作前不确定风格方向时，调 get_preferences 确认长期规则
+
+开局已全量注入偏好到上下文（带 [#id | 分类] 前缀，按全局/小说专属分组），无需工具读取。
+1. 用户表达长期规则时（“以后都这样”“整体风格”“不要出现XX”），调 upsert_preference 沉淀
+2. 需要微调某条已有偏好时，从注入里取该条 id，调 upsert_preference 传入 id + 要改的字段（PATCH 语义——只传要改的字段）
+3. 已存在相似分类的偏好时，优先更新已有条目（在原文基础上合并）而非创建重复条目
 
 【故事状态文档维护】
 

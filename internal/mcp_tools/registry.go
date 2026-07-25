@@ -4,6 +4,7 @@ package mcp_tools
 // 新增工具后在此方法中调用对应的 Register 函数。
 func RegisterAllTools(r *Registry) {
 	RegisterNovelTools(r)
+	RegisterPreferenceTools(r)
 	RegisterCharacterTools(r)
 	RegisterReaderPerspectiveTools(r)
 	RegisterLocationTools(r)

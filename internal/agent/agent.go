@@ -97,8 +97,12 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	msgs := []map[string]any{
 		{"role": "system", "content": sysPrompt},
 	}
-	if novelState, err := agentcfg.NovelState(a.db, req.NovelID); err == nil && novelState != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": novelState})
+	// subagent 不需要 always/catalog（只读上下文），只注入 Profile + State
+	if profile, err := agentcfg.NovelProfile(ctx, a.db, req.NovelID); err == nil && profile != "" {
+		msgs = append(msgs, map[string]any{"role": "system", "content": profile})
+	}
+	if state, err := agentcfg.NovelState(ctx, a.db, req.NovelID); err == nil && state != "" {
+		msgs = append(msgs, map[string]any{"role": "system", "content": state})
 	}
 	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
 

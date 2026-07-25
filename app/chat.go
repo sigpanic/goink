@@ -97,6 +97,15 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	}
 
 	// 7. 持久化本轮消息（事务：System 消息 + slash inject + 用户消息原子写入）
+	// system 消息在事务外构建（compress 模式），避免事务内读 DB 导致 SQLite 单连接死锁
+	var sysMsgs *agentcfg.SystemMessages
+	if isNew {
+		var buildErr error
+		sysMsgs, buildErr = agentcfg.BuildSystemMessages(ctx, a.db, input.NovelID, a.skill)
+		if buildErr != nil {
+			a.logger.Warn("构建 system 消息部分失败", "novel_id", input.NovelID, "err", buildErr)
+		}
+	}
 	userMsg := &session.Message{
 		SessionID:  sess.SessionID,
 		TurnID:     turnID,
@@ -108,8 +117,8 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		AgentType:  "main",
 	}
 	if err := a.session.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if isNew {
-			if err := a.writeSystemMessages(tx, sess.SessionID, input.NovelID, turnID); err != nil {
+		if isNew && sysMsgs != nil {
+			if err := writeSystemMessages(tx, sess.SessionID, turnID, sysMsgs); err != nil {
 				return err
 			}
 		}
@@ -225,8 +234,9 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 	return sess, true, nil
 }
 
-// writeSystemMessages 在新 session 的事务内写入 AgentIdentity、AlwaysSkills、SkillCatalog、NovelState 到 messages 表。
-func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, turnID int) error {
+// writeSystemMessages 在新 session 的事务内写入预构建的 system 消息到 messages 表。
+// sysMsgs 应在事务外通过 BuildSystemMessages 构建完成（compress 模式，避免死锁）。
+func writeSystemMessages(tx *gorm.DB, sessionID string, turnID int, msgs *agentcfg.SystemMessages) error {
 	sysMsg := func(content string) *session.Message {
 		return &session.Message{
 			SessionID: sessionID, TurnID: turnID, Role: "system", Content: content,
@@ -234,23 +244,7 @@ func (a *App) writeSystemMessages(tx *gorm.DB, sessionID string, novelID int64, 
 		}
 	}
 
-	identity := agentcfg.AgentIdentity(agentcfg.MainAgent)
-
-	var always string
-	var catalog string
-	if a.skill != nil {
-		all := a.skill.ListMeta(novelID)
-		catalog = agentcfg.BuildSkillCatalog(a.skill.ListMetaForCatalog(all))
-		always = agentcfg.BuildAlwaysSkillsContent(all, a.skill, novelID)
-	}
-
-	novelState, err := agentcfg.NovelState(tx, novelID)
-	if err != nil {
-		a.logger.Warn("NovelState 构建失败，写入空消息", "novel_id", novelID, "err", err)
-		novelState = ""
-	}
-
-	for _, c := range []string{identity, always, catalog, novelState} {
+	for _, c := range []string{msgs.Identity, msgs.Always, msgs.Catalog, msgs.Profile, msgs.State} {
 		if c != "" {
 			if err := tx.Create(sysMsg(c)).Error; err != nil {
 				return err

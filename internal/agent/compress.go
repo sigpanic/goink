@@ -80,23 +80,14 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 		return err
 	}
 
-	// 重建系统消息（顺序与 writeSystemMessages 一致）
-	identity := agentcfg.AgentIdentity(agentcfg.MainAgent)
-	var always string
-	var catalog string
-	if a.skillStore != nil {
-		all := a.skillStore.ListMeta(opts.NovelID)
-		catalog = agentcfg.BuildSkillCatalog(a.skillStore.ListMetaForCatalog(all))
-		always = agentcfg.BuildAlwaysSkillsContent(all, a.skillStore, opts.NovelID)
-	}
-	novelState, err := agentcfg.NovelState(a.db, opts.NovelID)
-	if err != nil {
-		a.logger.Warn("压缩时 NovelState 构建失败", "novel_id", opts.NovelID, "err", err)
-		novelState = ""
+	// 重建系统消息（与 chat 走同一条路径 BuildSystemMessages，事务外构建）
+	sysMsgs, buildErr := agentcfg.BuildSystemMessages(ctx, a.db, opts.NovelID, a.skillStore)
+	if buildErr != nil {
+		a.logger.Warn("压缩时 system 消息构建部分失败", "novel_id", opts.NovelID, "err", buildErr)
 	}
 
 	// 在事务中完成版本递增 + 全部 DB 写入
-	newVersion, err := a.persistCompression(ctx, opts, identity, always, catalog, novelState, summary, retained)
+	newVersion, err := a.persistCompression(ctx, opts, sysMsgs, summary, retained)
 	if err != nil {
 		return fmt.Errorf("compress: persist failed: %w", err)
 	}
@@ -202,7 +193,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 }
 
 // persistCompression 在事务中递增 active_version 并写入所有压缩消息。
-func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identity, always, catalog, novelState, summary string, retained []map[string]any) (int, error) {
+func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *agentcfg.SystemMessages, summary string, retained []map[string]any) (int, error) {
 	var newVersion int
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -230,26 +221,23 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, identi
 			}).Error
 		}
 
-		// AgentIdentity
-		if err := msg("system", identity, true, false, ""); err != nil {
-			return fmt.Errorf("write AgentIdentity: %w", err)
+		// system 消息按 Identity/Always/Catalog/Profile/State 顺序写入
+		sysContents := []struct {
+			name    string
+			content string
+		}{
+			{"AgentIdentity", msgs.Identity},
+			{"AlwaysSkills", msgs.Always},
+			{"SkillCatalog", msgs.Catalog},
+			{"NovelProfile", msgs.Profile},
+			{"NovelState", msgs.State},
 		}
-		// AlwaysSkills
-		if always != "" {
-			if err := msg("system", always, true, false, ""); err != nil {
-				return fmt.Errorf("write AlwaysSkills: %w", err)
+		for _, sc := range sysContents {
+			if sc.content == "" {
+				continue
 			}
-		}
-		// SkillCatalog
-		if catalog != "" {
-			if err := msg("system", catalog, true, false, ""); err != nil {
-				return fmt.Errorf("write SkillCatalog: %w", err)
-			}
-		}
-		// NovelState
-		if novelState != "" {
-			if err := msg("system", novelState, true, false, ""); err != nil {
-				return fmt.Errorf("write NovelState: %w", err)
+			if err := msg("system", sc.content, true, false, ""); err != nil {
+				return fmt.Errorf("write %s: %w", sc.name, err)
 			}
 		}
 		// 提醒语

@@ -28,7 +28,7 @@ table 可选值与对应工具映射：
   story_arc                 — create_story_arc / get_story_arcs / update_story_arc
   arc_node                  — create_arc_node
   reader_perspective_entry  — create_reader_perspective_entry
-  preference                — create_preference / get_preferences / update_preference`
+  preference                — upsert_preference`
 
 // DeleteRecordArgs 是 delete_record 的参数。
 type DeleteRecordArgs struct {
