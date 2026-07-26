@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
 )
@@ -128,6 +129,10 @@ func (a *App) DeleteNovel(novelID int64) error {
 		// 仅删小说专属偏好，保留全局偏好
 		if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&preference.PreferenceItem{}).Error; err != nil {
 			return fmt.Errorf("preferences: %w", err)
+		}
+		// 仅删小说专属设定，保留全局设定
+		if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&setting.SettingItem{}).Error; err != nil {
+			return fmt.Errorf("settings: %w", err)
 		}
 		for _, op := range []struct {
 			label string
