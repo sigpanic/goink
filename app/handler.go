@@ -25,6 +25,7 @@ import (
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/search"
 	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/skill"
 	"github.com/sigpanic/goink/internal/skill/remote"
 	"github.com/sigpanic/goink/internal/storage"
@@ -55,6 +56,7 @@ type App struct {
 
 	novel      *novel.Store
 	preference *preference.Store
+	setting    *setting.Store
 	chapter    *chapter.Store
 	character  *character.Store
 	session    *session.Store
@@ -178,6 +180,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	// 6. 创建所有领域 store
 	a.novel = novel.NewStore(db, a.logger)
 	a.preference = preference.NewStore(db, a.logger)
+	a.setting = setting.NewStore(db, a.logger)
 	a.chapter = chapter.NewStore(db, a.logger)
 	a.character = character.NewStore(db, a.logger)
 	a.session = session.NewStore(db, a.logger)

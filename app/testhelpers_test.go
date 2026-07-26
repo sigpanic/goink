@@ -25,6 +25,7 @@ import (
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/skill"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
@@ -75,6 +76,7 @@ func setupTestApp(t *testing.T) *App {
 	// Domain stores.
 	novelStore := novel.NewStore(db, logger)
 	preferenceStore := preference.NewStore(db, logger)
+	settingStore := setting.NewStore(db, logger)
 	chapterStore := chapter.NewStore(db, logger)
 	characterStore := character.NewStore(db, logger)
 	sessionStore := session.NewStore(db, logger)
@@ -124,6 +126,7 @@ func setupTestApp(t *testing.T) *App {
 
 		novel:      novelStore,
 		preference: preferenceStore,
+		setting:    settingStore,
 		chapter:    chapterStore,
 		character:  characterStore,
 		session:    sessionStore,
