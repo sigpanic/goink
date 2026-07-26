@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/storage"
@@ -37,7 +36,7 @@ func (t *GetChapterListTool) Execute(ctx context.Context, args any, tc ToolConte
 	a := args.(*GetChapterListArgs)
 	a.NormalizePage()
 
-	chStore := chapter.NewStore(tc.DB, slog.Default())
+	chStore := chapter.NewStore(tc.DB, tc.LoggerOrDefault())
 	result, err := chStore.ListByNovel(ctx, tc.NovelID, chapter.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		Order:      "desc",

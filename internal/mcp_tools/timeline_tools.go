@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"gorm.io/gorm"
@@ -42,7 +41,7 @@ func (t *GetTimelineTool) Execute(ctx context.Context, args any, tc ToolContext)
 	a := args.(*GetTimelineArgs)
 	a.NormalizePage()
 
-	store := timeline.NewStore(tc.DB, slog.Default())
+	store := timeline.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	if a.CurrentChapter > 0 {
 		plans, err := store.GetPlans(ctx, tc.NovelID)
@@ -291,7 +290,7 @@ func (t *UpdateChapterPlanTool) Execute(ctx context.Context, args any, tc ToolCo
 		Content: a.Content,
 	}
 
-	if err := timeline.NewStore(tc.DB, slog.Default()).SavePlan(ctx, &plan); err != nil {
+	if err := timeline.NewStore(tc.DB, tc.LoggerOrDefault()).SavePlan(ctx, &plan); err != nil {
 		return nil, fmt.Errorf("save plan: %w", err)
 	}
 

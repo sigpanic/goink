@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"gorm.io/gorm"
@@ -40,7 +39,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 	a := args.(*GetCharactersArgs)
 	a.NormalizePage()
 
-	store := character.NewStore(tc.DB, slog.Default())
+	store := character.NewStore(tc.DB, tc.LoggerOrDefault())
 	result, err := store.ListByNovel(ctx, tc.NovelID, character.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		Search:     a.Search,
@@ -92,7 +91,7 @@ func (t *GetCharacterRelationsTool) NewArgs() any      { return &GetCharacterRel
 func (t *GetCharacterRelationsTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*GetCharacterRelationsArgs)
 
-	store := character.NewStore(tc.DB, slog.Default())
+	store := character.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	rels, err := store.ListBetweenCharacters(ctx, a.CharacterIDs)
 	if err != nil {
@@ -361,7 +360,7 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 	}
 
 	// 校验两个角色存在且属于当前小说
-	store := character.NewStore(tc.DB, slog.Default())
+	store := character.NewStore(tc.DB, tc.LoggerOrDefault())
 	chars, err := store.GetByIDs(ctx, []int64{a.SourceCharacterID, a.TargetCharacterID})
 	if err != nil {
 		return nil, fmt.Errorf("query characters: %w", err)

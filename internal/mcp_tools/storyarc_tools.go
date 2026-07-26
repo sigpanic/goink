@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"gorm.io/gorm"
@@ -42,7 +41,7 @@ func (t *GetStoryArcsTool) Execute(ctx context.Context, args any, tc ToolContext
 	a := args.(*GetStoryArcsArgs)
 	a.NormalizePage()
 
-	store := storyarc.NewStore(tc.DB, slog.Default())
+	store := storyarc.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	if a.CurrentChapter > 0 {
 		return t.executeContext(ctx, a, tc, store)

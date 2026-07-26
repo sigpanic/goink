@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"gorm.io/gorm"
@@ -37,7 +36,7 @@ func (t *GetReaderPerspectiveTool) ExposeToLLM() bool { return true }
 func (t *GetReaderPerspectiveTool) NewArgs() any      { return &GetReaderPerspectiveArgs{} }
 
 func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
-	rs := reader.NewStore(tc.DB, slog.Default())
+	rs := reader.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	// known：取最近 60 条，直接查 DB 保证 DESC 顺序
 	var knownItems []reader.ReaderPerspective

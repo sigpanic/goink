@@ -59,6 +59,17 @@ type ToolContext struct {
 	SkillStore    *skill.Store                                                          // 技能存储，read 工具用于读取内置 skill
 	SearchService *search.Service                                                       // 搜索服务，write 工具用于更新正文缓存
 	WebSearch     func(ctx context.Context, query string) (*llm.WebSearchResult, error) // 网络搜索，由 agent 注入 DeepSeek 闭包；nil 表示未配置
+	Logger        *slog.Logger                                                          // 项目 logger，由 agent 注入；nil 时走 slog.Default()
+}
+
+// LoggerOrDefault 返回 ToolContext 的 Logger，nil 时兜底到 slog.Default()。
+// 兜底用于测试场景（ToolContext{} 零值），生产路径 agent.go 会注入非 nil logger。
+// 配合 main.go 的 slog.SetDefault(log)，即使 nil 兜底也走项目 logger 配置。
+func (tc ToolContext) LoggerOrDefault() *slog.Logger {
+	if tc.Logger != nil {
+		return tc.Logger
+	}
+	return slog.Default()
 }
 
 // ── 结果 ──────────────────────────────────────────────

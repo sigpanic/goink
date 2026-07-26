@@ -27,6 +27,11 @@ var assets embed.FS
 
 func main() {
 	log := logger.Default()
+	// 将项目 logger 注册为 slog 全局默认：让未注入 logger 的代码（agentcfg 包级 slog.Warn、
+	// git/skill/update 包的 nil-fallback 等）也走项目 logger 配置（写 goink.log + stderr、
+	// AddSource=true、Debug 级）。生产路径仍以依赖注入为主（App/Agent/MCP 工具显式拿 logger），
+	// SetDefault 作为漏注入代码的兜底。紧接 logger.Default() 后调用，时序最干净。
+	slog.SetDefault(log)
 
 	if lib, err := platform.ResolveOnnxLib(); err == nil {
 		ort.SetSharedLibraryPath(lib)
@@ -75,7 +80,7 @@ func main() {
 		},
 	})
 	if err != nil {
-		slog.Error("应用退出", "err", err)
+		log.Error("应用退出", "err", err)
 		os.Exit(1)
 	}
 }

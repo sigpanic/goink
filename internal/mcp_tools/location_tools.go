@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"strings"
 
 	"gorm.io/gorm"
@@ -44,7 +43,7 @@ func (t *GetLocationsTool) Execute(ctx context.Context, args any, tc ToolContext
 	a := args.(*GetLocationsArgs)
 	a.NormalizePage()
 
-	store := location.NewStore(tc.DB, slog.Default())
+	store := location.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	switch a.Mode {
 	case "detail":
