@@ -3,6 +3,7 @@ package agentcfg
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"gorm.io/gorm"
 
@@ -16,14 +17,26 @@ import (
 //
 // 调用方负责事务外构建（compress 模式）：传入的 db 应为带 ctx 的非事务句柄，
 // 避免在事务内调用导致 SQLite 单连接池死锁。
+//
+// 偏好软上限 4k token（novel.PreferencesTokenBudget）：超预算时按 created_at DESC
+// 保留最新，丢弃最旧的。这里用 slog.Default() 记 warn，best-effort 不阻塞流程。
 func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, error) {
 	var items []novel.PreferenceItem
 	if err := db.WithContext(ctx).
 		Where("is_global = ? OR novel_id = ?", true, novelID).
-		Order("is_global DESC, created_at ASC").
+		Order("is_global DESC, created_at DESC").
 		Find(&items).Error; err != nil {
 		return "", fmt.Errorf("agentcfg: load preferences: %w", err)
 	}
 
-	return novel.FormatPreferences(items), nil
+	text, truncated := novel.FormatPreferences(items)
+	if truncated > 0 {
+		slog.Warn("novel profile: preferences truncated due to budget exceeded",
+			"novel_id", novelID,
+			"total", len(items),
+			"truncated", truncated,
+			"budget", novel.PreferencesTokenBudget,
+		)
+	}
+	return text, nil
 }

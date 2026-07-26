@@ -179,11 +179,16 @@ func (a *App) DeleteNovel(novelID int64) error {
 
 // PreferenceResult 是 GetPreferences 的返回结构。
 type PreferenceResult struct {
-	Global []novel.PreferenceItem `json:"global"`
-	Novel  []novel.PreferenceItem `json:"novel"`
+	Global     []novel.PreferenceItem `json:"global"`
+	Novel      []novel.PreferenceItem `json:"novel"`
+	TokenCount int                    `json:"token_count"` // 全量偏好 token 数（不截断），前端可显示是否超预算
+	OverBudget bool                   `json:"over_budget"` // token_count > PreferencesTokenBudget
 }
 
-// GetPreferences 返回全局偏好和当前小说的专属偏好。
+// GetPreferences 返回全局偏好和当前小说的专属偏好，附带全量 token 数与超预算标记。
+// token_count 用于前端显示是否超 4k 软上限，不阻塞、不强制精简（用户自行决定）。
+// 注入给 agent 的 NovelProfile 会按 created_at DESC 截断到 4k 内，与此处 token_count 是两套口径：
+// 这里是"全量实际多少"，agent 注入是"截断后剩多少"。
 func (a *App) GetPreferences(novelID int64) (*PreferenceResult, error) {
 	global, err := a.novel.ListGlobalPreferences(a.ctx)
 	if err != nil {
@@ -193,7 +198,16 @@ func (a *App) GetPreferences(novelID int64) (*PreferenceResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &PreferenceResult{Global: global, Novel: novelPrefs}, nil
+	all := make([]novel.PreferenceItem, 0, len(global)+len(novelPrefs))
+	all = append(all, global...)
+	all = append(all, novelPrefs...)
+	tokenCount, _ := novel.CountPreferencesTokens(all)
+	return &PreferenceResult{
+		Global:     global,
+		Novel:      novelPrefs,
+		TokenCount: tokenCount,
+		OverBudget: tokenCount > novel.PreferencesTokenBudget,
+	}, nil
 }
 
 // CreatePreferenceInput 是创建偏好的入参。
