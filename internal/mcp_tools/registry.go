@@ -5,6 +5,7 @@ package mcp_tools
 func RegisterAllTools(r *Registry) {
 	RegisterNovelTools(r)
 	RegisterPreferenceTools(r)
+	RegisterSettingTools(r)
 	RegisterCharacterTools(r)
 	RegisterReaderPerspectiveTools(r)
 	RegisterLocationTools(r)

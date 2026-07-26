@@ -14,6 +14,7 @@ import (
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
@@ -83,6 +84,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&config.AppSettings{},
 		&novel.Novel{},
 		&novel.PreferenceItem{},
+		&setting.SettingItem{},
 		&chapter.Chapter{},
 		&character.Character{},
 		&character.CharacterRelation{},

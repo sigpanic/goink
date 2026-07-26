@@ -78,3 +78,15 @@ jobs:
 
       - name: gofmt
         run: test -z "$(gofmt -l .)" || { echo "Files not gofmt'd:"; gofmt -l .; exit 1; }
+
+  check-mcp-args:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.25"
+
+      - name: Check MCP args use <entity>_id
+        run: go run ./scripts/check_mcp_args ./internal/mcp_tools/

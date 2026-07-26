@@ -57,7 +57,7 @@ func FormatPreferences(items []PreferenceItem) (string, int) {
 		used += headerTokens
 		written := 0
 		for _, item := range group.items {
-			line := fmt.Sprintf("- [#%d | %s] %s\n", item.ID, item.Category, item.Content)
+			line := fmt.Sprintf("- [preference_id:%d | %s] %s\n", item.ID, item.Category, item.Content)
 			lineTokens, _ := llm.CountTokens(line)
 			if used+lineTokens > PreferencesTokenBudget {
 				budgetExceeded = true
@@ -92,13 +92,13 @@ func CountPreferencesTokens(items []PreferenceItem) (int, error) {
 	if len(global) > 0 {
 		b.WriteString("\n#### 全局偏好（所有小说生效）\n")
 		for _, item := range global {
-			fmt.Fprintf(&b, "- [#%d | %s] %s\n", item.ID, item.Category, item.Content)
+			fmt.Fprintf(&b, "- [preference_id:%d | %s] %s\n", item.ID, item.Category, item.Content)
 		}
 	}
 	if len(novelPrefs) > 0 {
 		b.WriteString("\n#### 本小说专属偏好\n")
 		for _, item := range novelPrefs {
-			fmt.Fprintf(&b, "- [#%d | %s] %s\n", item.ID, item.Category, item.Content)
+			fmt.Fprintf(&b, "- [preference_id:%d | %s] %s\n", item.ID, item.Category, item.Content)
 		}
 	}
 	n, err := llm.CountTokens(b.String())

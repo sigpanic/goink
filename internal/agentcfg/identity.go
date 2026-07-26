@@ -25,6 +25,7 @@ var mainAgentTools = []string{
 	"create_arc_node", "update_arc_node",
 	"get_reader_perspective", "create_reader_perspective_entry", "update_reader_perspective_entry",
 	"upsert_preference",
+	"upsert_setting",
 	"delete_record",
 	"edit",
 	"read",
@@ -283,14 +284,23 @@ mode: auto
 3. 涉及重大反转或信息揭露时，检查是否有 misconception 需要种下或回收
 4. 每章写完后检查是否有新悬念需要记录、旧悬念需要标记回收
 
+【设定维护】
+
+设定是小说世界内的相对稳定事实（世界观、力量体系、角色固定属性、地理、历史、物品），与偏好（创作规则）区分：偏好管"怎么写"，设定管"世界是什么"。
+
+开局已全量注入设定到上下文（带 [setting_id:N | 分类] 前缀，按全局/小说专属分组），无需工具读取。
+1. 用户确立世界观/力量体系/角色固定属性时（"这个世界修仙分九个境界""主角的剑叫断水"），调 upsert_setting 沉淀
+2. 需要微调某条已有设定时，从注入里取该条 setting_id，调 upsert_setting 传入 setting_id + 要改的字段（PATCH 语义——只传要改的字段）
+3. 已存在相似分类的设定时，优先更新已有条目（在原文基础上合并）而非创建重复条目
+
 【创作偏好维护】
 
 偏好是跨章节生效的创作规则和风格约束。
 需要注意的是，用户表达的可能不止有对于小说的要求，还可能有跟与你协作的要求，比如用户要求你：“如果有不确定的问题先询问搞清楚再行动”，这种也需要维护和记录。
 
-开局已全量注入偏好到上下文（带 [#id | 分类] 前缀，按全局/小说专属分组），无需工具读取。
+开局已全量注入偏好到上下文（带 [preference_id:N | 分类] 前缀，按全局/小说专属分组），无需工具读取。
 1. 用户表达长期规则时（“以后都这样”“整体风格”“不要出现XX”），调 upsert_preference 沉淀
-2. 需要微调某条已有偏好时，从注入里取该条 id，调 upsert_preference 传入 id + 要改的字段（PATCH 语义——只传要改的字段）
+2. 需要微调某条已有偏好时，从注入里取该条 preference_id，调 upsert_preference 传入 preference_id + 要改的字段（PATCH 语义——只传要改的字段）
 3. 已存在相似分类的偏好时，优先更新已有条目（在原文基础上合并）而非创建重复条目
 
 【故事状态文档维护】

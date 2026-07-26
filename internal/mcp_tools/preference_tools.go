@@ -14,15 +14,15 @@ import (
 
 // UpsertPreferenceItem 是 upsert_preference 的单条参数。
 type UpsertPreferenceItem struct {
-	ID       *int64 `json:"id,omitempty" jsonschema:"description=已存在偏好ID；不传=新建"`
-	Category string `json:"category" jsonschema:"required,description=偏好分类(自由文本标签)" validate:"required"`
-	Content  string `json:"content" jsonschema:"required,description=偏好内容" validate:"required"`
-	IsGlobal *bool  `json:"is_global,omitempty" jsonschema:"description=是否全局偏好(对所有小说生效)；不传=新建默认false，更新保持原值"`
+	PreferenceID *int64 `json:"preference_id,omitempty" jsonschema:"description=已存在偏好ID；不传=新建"`
+	Category     string `json:"category" jsonschema:"required,description=偏好分类(自由文本标签)" validate:"required"`
+	Content      string `json:"content" jsonschema:"required,description=偏好内容" validate:"required"`
+	IsGlobal     *bool  `json:"is_global,omitempty" jsonschema:"description=是否全局偏好(对所有小说生效)；不传=新建默认false，更新保持原值"`
 }
 
 // UpsertPreferenceArgs 是 upsert_preference 的参数。
 type UpsertPreferenceArgs struct {
-	Preferences []UpsertPreferenceItem `json:"preferences" jsonschema:"required,description=要upsert的偏好列表(1-5个，传id=更新，不传=创建)" validate:"required,min=1,max=5,dive"`
+	Preferences []UpsertPreferenceItem `json:"preferences" jsonschema:"required,description=要upsert的偏好列表(1-5个，传preference_id=更新，不传=创建)" validate:"required,min=1,max=5,dive"`
 }
 
 // UpsertPreferenceTool 批量 upsert 创作偏好（创建或更新，单事务原子性）。
@@ -31,15 +31,15 @@ type UpsertPreferenceTool struct{}
 func (t *UpsertPreferenceTool) Name() string { return "upsert_preference" }
 func (t *UpsertPreferenceTool) Description() string {
 	return "批量创建或更新创作偏好（1-5个，单事务原子性，失败全部回滚）。" +
-		"传 id=更新该条（PATCH 语义，只覆盖传入字段），不传 id=新建。" +
-		"开局已全量注入偏好到上下文(带 [#id | 分类] 前缀)，更新时从注入里取 id 传入。" +
+		"传 preference_id=更新该条（PATCH 语义，只覆盖传入字段），不传=新建。" +
+		"开局已全量注入偏好到上下文(带 [preference_id:N | 分类] 前缀)，更新时从注入里取 preference_id 传入。" +
 		"新增相似分类的偏好前，应优先更新已有条目(在原文基础上合并)而非创建重复条目。"
 }
 func (t *UpsertPreferenceTool) Category() ToolCategory { return CategoryWritingAssistant }
 
 func (t *UpsertPreferenceTool) JSONSchema() json.RawMessage { return SchemaOf(UpsertPreferenceArgs{}) }
-func (t *UpsertPreferenceTool) ExposeToLLM() bool           { return true }
-func (t *UpsertPreferenceTool) NewArgs() any                { return &UpsertPreferenceArgs{} }
+func (t *UpsertPreferenceTool) ExposeToLLM() bool            { return true }
+func (t *UpsertPreferenceTool) NewArgs() any                 { return &UpsertPreferenceArgs{} }
 
 func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpsertPreferenceArgs)
@@ -83,19 +83,19 @@ func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 // upsertOnePreference 在事务内 upsert 单条偏好，返回偏好 ID。
 func upsertOnePreference(tx *gorm.DB, novelID int64, item UpsertPreferenceItem) (int64, error) {
 	// 更新分支
-	if item.ID != nil {
+	if item.PreferenceID != nil {
 		var existing novel.PreferenceItem
-		if err := tx.First(&existing, *item.ID).Error; err != nil {
+		if err := tx.First(&existing, *item.PreferenceID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
-				return 0, fmt.Errorf("偏好条目 %d 不存在", *item.ID)
+				return 0, fmt.Errorf("偏好条目 %d 不存在", *item.PreferenceID)
 			}
 			return 0, fmt.Errorf("query preference: %w", err)
 		}
 		// 归属校验：只能改全局偏好或当前小说的偏好
 		if !existing.IsGlobal && existing.NovelID != novelID {
-			return 0, fmt.Errorf("偏好条目 %d 不属于当前小说", *item.ID)
+			return 0, fmt.Errorf("偏好条目 %d 不属于当前小说", *item.PreferenceID)
 		}
-		// PATCH 覆盖
+		// PATCH 覆盖（指针字段判断"传没传"，值字段 required 总传值）
 		if item.Category != "" {
 			existing.Category = item.Category
 		}
@@ -104,7 +104,7 @@ func upsertOnePreference(tx *gorm.DB, novelID int64, item UpsertPreferenceItem) 
 		}
 		if item.IsGlobal != nil {
 			existing.IsGlobal = *item.IsGlobal
-			// is_global 切换时 NovelID 相应调整
+			// is_global 切换时 NovelID 联动调整（rawArgs patch 表达不了的联动，手动补）
 			if *item.IsGlobal {
 				existing.NovelID = 0
 			} else {

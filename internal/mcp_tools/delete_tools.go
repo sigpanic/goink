@@ -12,6 +12,7 @@ import (
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
 )
@@ -28,11 +29,13 @@ table 可选值与对应工具映射：
   story_arc                 — create_story_arc / get_story_arcs / update_story_arc
   arc_node                  — create_arc_node
   reader_perspective_entry  — create_reader_perspective_entry
-  preference                — upsert_preference`
+  preference                — upsert_preference
+  setting                   — upsert_setting`
 
 // DeleteRecordArgs 是 delete_record 的参数。
+//nolint:raw_id — 通用删除工具，多表共用一个 id 字段，裸 id 合理
 type DeleteRecordArgs struct {
-	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference"`
+	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference,enum=setting" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference setting"`
 	ID    int64  `json:"id"    jsonschema:"required,description=主键ID"                                                                validate:"required,min=1"`
 }
 
@@ -73,6 +76,8 @@ func (t *DeleteRecordTool) Execute(ctx context.Context, args any, tc ToolContext
 		return t.deleteReaderPerspectiveEntry(ctx, a, tc)
 	case "preference":
 		return t.deletePreference(ctx, a, tc)
+	case "setting":
+		return t.deleteSetting(ctx, a, tc)
 	default:
 		return &ToolResult{Success: false, Error: fmt.Sprintf("不支持的表：%s", a.Table)}, nil
 	}
@@ -435,6 +440,30 @@ func (t *DeleteRecordTool) deletePreference(ctx context.Context, a *DeleteRecord
 
 	if err := tc.DB.WithContext(ctx).Delete(&rec).Error; err != nil {
 		return nil, fmt.Errorf("delete preference: %w", err)
+	}
+
+	return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
+}
+
+func (t *DeleteRecordTool) deleteSetting(ctx context.Context, a *DeleteRecordArgs, tc ToolContext) (*ToolResult, error) {
+	var rec setting.SettingItem
+	if err := tc.DB.WithContext(ctx).Where("id = ? AND ((novel_id = ? AND is_global = false) OR is_global = true)", a.ID, tc.NovelID).First(&rec).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("设定项 %d 不存在", a.ID)}, nil
+		}
+		return nil, fmt.Errorf("query setting: %w", err)
+	}
+
+	meta := map[string]any{"id": rec.ID, "category": rec.Category, "type": "setting"}
+	injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{
+		"table": a.Table, "id": a.ID, "deleted": meta,
+	})
+	if err != nil || result != nil {
+		return result, err
+	}
+
+	if err := tc.DB.WithContext(ctx).Delete(&rec).Error; err != nil {
+		return nil, fmt.Errorf("delete setting: %w", err)
 	}
 
 	return &ToolResult{Success: true, Data: map[string]any{"deleted": meta}, Inject: injects}, nil
