@@ -9,17 +9,19 @@ import (
 
 // SettingsTokenBudget 是注入 system 消息时设定的软上限（token）。
 // 设计依据：8k 占 200k 上下文窗口 4%，中文 8k 约等于 4-6k 字，能装较完整的世界观/力量体系。
-// 超预算时按 created_at DESC 保留最新，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
+// 超预算时按 updated_at DESC 保留最近活跃的，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
 const SettingsTokenBudget = 8000
 
 // FormatSettings 格式化设定列表为可读文本，每条带 id 前缀。
 // 用于 NovelState 注入 system 消息，agent 看到后可通过 id 调 upsert_setting 更新。
 // 空 items 返回空字符串。
 //
-// 排序：调用方（NovelState）SQL 已按 created_at DESC 排序——最新在前。
+// 排序：调用方（NovelState）SQL 已按 updated_at DESC 排序——最近活跃在前。
 // FormatSettings 信任调用方顺序，不重复排序。
 // 超预算处理：逐条累加 token，超 SettingsTokenBudget 时停止拼接并丢弃剩余条目，
 // 末尾追加截断提示。返回 (text, truncatedCount)。
+//
+// v2 取消 is_global 后不再分组，单列表平铺。
 func FormatSettings(items []SettingItem) (string, int) {
 	if len(items) == 0 {
 		return "", 0

@@ -11,6 +11,7 @@ type PreferenceItem struct {
 	Category  string    `gorm:"column:category"                   json:"category"`  // LLM 自行归类，自由文本
 	Content   string    `gorm:"column:content;not null"           json:"content"`   // 偏好内容
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"  json:"created_at"`
+	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"  json:"updated_at"` // 最近活动时间，用于排序（注入截断保留活跃）
 }
 
 // TableName 指定 GORM 表名。

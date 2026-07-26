@@ -9,16 +9,16 @@ import (
 
 // PreferencesTokenBudget 是注入 system 消息时偏好的软上限（token）。
 // 设计依据：4k 占 200k 上下文窗口 2%，中文 4k 约等于 2-3k 字，能装 30-80 条偏好。
-// 超预算时按 created_at DESC 保留最新，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
+// 超预算时按 updated_at DESC 保留最近活跃的，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
 const PreferencesTokenBudget = 4000
 
 // FormatPreferences 格式化偏好列表为可读文本，按全局/小说专属分组，每条带 id 前缀。
 // 用于 NovelProfile 注入 system 消息，agent 看到后可通过 id 调 upsert_preference 更新。
 // 空 items 返回空字符串。
 //
-// 排序：调用方（NovelProfile）SQL 已按 is_global DESC, created_at DESC 排序——
-// 全局组在前、组内最新在前。FormatPreferences 信任调用方顺序，不重复排序。
-// 超预算时丢弃"最旧"=列表末尾的条目，保留用户最近创建/更新的。
+// 排序：调用方（NovelProfile）SQL 已按 is_global DESC, updated_at DESC 排序——
+// 全局组在前、组内最近活跃在前。FormatPreferences 信任调用方顺序，不重复排序。
+// 超预算时丢弃"最久未活动"=列表末尾的条目，保留用户最近创建/更新的。
 //
 // 超预算处理：逐条累加 token，超 PreferencesTokenBudget 时停止拼接并丢弃剩余条目，
 // 末尾追加截断提示。返回 (text, truncatedCount)。
