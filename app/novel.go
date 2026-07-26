@@ -127,13 +127,13 @@ func (a *App) DeleteNovel(novelID int64) error {
 	// 在事务中先删子表再删主表
 	err = a.novel.DB.WithContext(a.ctx).Transaction(func(tx *gorm.DB) error {
 		// 仅删小说专属偏好，保留全局偏好
-			if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&preference.PreferenceItem{}).Error; err != nil {
-				return fmt.Errorf("preferences: %w", err)
-			}
-			// v2 取消全局设定概念，设定全部归属当前小说，直接按 novel_id 删
-			if err := tx.Where("novel_id = ?", novelID).Delete(&setting.SettingItem{}).Error; err != nil {
-				return fmt.Errorf("settings: %w", err)
-			}
+		if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&preference.PreferenceItem{}).Error; err != nil {
+			return fmt.Errorf("preferences: %w", err)
+		}
+		// v2 取消全局设定概念，设定全部归属当前小说，直接按 novel_id 删
+		if err := tx.Where("novel_id = ?", novelID).Delete(&setting.SettingItem{}).Error; err != nil {
+			return fmt.Errorf("settings: %w", err)
+		}
 		for _, op := range []struct {
 			label string
 			fn    func(*gorm.DB) error
