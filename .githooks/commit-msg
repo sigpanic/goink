@@ -28,9 +28,9 @@ types="feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert"
 
 # Conventional Commits pattern:
 #   type(scope): description   OR   type: description
-# Scope is optional, alphanumeric + hyphens.
+# Scope is optional, any non-parenthesis characters (allows app/setting, mcp/preference, etc).
 # Description must be non-empty (at least one non-whitespace character after the colon).
-pattern="^(${types})(\([a-zA-Z0-9_-]+\))?: .+"
+pattern="^(${types})(\([^)]+\))?: .+"
 
 if ! echo "$first_line" | grep -qE "$pattern"; then
     cat >&2 <<'EOF'
