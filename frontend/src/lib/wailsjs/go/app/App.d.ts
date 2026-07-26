@@ -8,6 +8,8 @@ import {chapter} from '../models';
 import {character} from '../models';
 import {location} from '../models';
 import {novel} from '../models';
+import {setting} from '../models';
+import {preference} from '../models';
 import {reader} from '../models';
 import {timeline} from '../models';
 import {llm} from '../models';
@@ -48,7 +50,9 @@ export function CreateLocation(arg1:number,arg2:app.CreateLocationInput):Promise
 
 export function CreateNovel(arg1:app.CreateNovelInput):Promise<novel.Novel>;
 
-export function CreatePreference(arg1:number,arg2:app.CreatePreferenceInput):Promise<novel.PreferenceItem>;
+export function CreateNovelSetting(arg1:number,arg2:app.CreateNovelSettingInput):Promise<setting.SettingItem>;
+
+export function CreatePreference(arg1:number,arg2:app.CreatePreferenceInput):Promise<preference.PreferenceItem>;
 
 export function CreateReaderPerspective(arg1:number,arg2:app.CreateReaderPerspectiveInput):Promise<reader.ReaderPerspective>;
 
@@ -67,6 +71,8 @@ export function DeleteCover(arg1:number):Promise<void>;
 export function DeleteLocation(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteNovel(arg1:number):Promise<void>;
+
+export function DeleteNovelSetting(arg1:number):Promise<void>;
 
 export function DeletePreference(arg1:number):Promise<void>;
 
@@ -119,6 +125,8 @@ export function GetLocations(arg1:number):Promise<Array<location.Location>>;
 export function GetMaxChapterNumber(arg1:number):Promise<number>;
 
 export function GetModels():Promise<Array<llm.AvailableModel>>;
+
+export function GetNovelSettings(arg1:number):Promise<app.SettingResult>;
 
 export function GetNovels():Promise<Array<novel.Novel>>;
 
@@ -214,7 +222,9 @@ export function UpdateLocation(arg1:number,arg2:number,arg3:app.UpdateLocationIn
 
 export function UpdateNovel(arg1:number,arg2:app.UpdateNovelInput):Promise<novel.Novel>;
 
-export function UpdatePreference(arg1:number,arg2:number,arg3:app.UpdatePreferenceInput):Promise<novel.PreferenceItem>;
+export function UpdateNovelSetting(arg1:number,arg2:number,arg3:app.UpdateNovelSettingInput):Promise<setting.SettingItem>;
+
+export function UpdatePreference(arg1:number,arg2:number,arg3:app.UpdatePreferenceInput):Promise<preference.PreferenceItem>;
 
 export function UpdateReaderPerspective(arg1:number,arg2:number,arg3:app.UpdateReaderPerspectiveInput):Promise<void>;
 

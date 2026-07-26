@@ -58,6 +58,10 @@ import {
   CreatePreference,
   UpdatePreference,
   DeletePreference,
+  GetNovelSettings,
+  CreateNovelSetting,
+  UpdateNovelSetting,
+  DeleteNovelSetting,
   DeleteNovel,
   UpdateNovel,
   ExportNovel,
@@ -111,6 +115,8 @@ import type {
   apperr,
   storage,
   remote,
+  setting,
+  preference,
 } from "@/lib/wailsjs/go/models";
 
 export function useApp() {
@@ -174,6 +180,10 @@ export function useApp() {
       CreatePreference,
       UpdatePreference,
       DeletePreference,
+      GetNovelSettings,
+      CreateNovelSetting,
+      UpdateNovelSetting,
+      DeleteNovelSetting,
       DeleteNovel,
       UpdateNovel,
       ExportNovel,
@@ -231,4 +241,6 @@ export type {
   apperr,
   storage,
   remote,
+  setting,
+  preference,
 };

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
-import type { novel } from "@/hooks/useApp";
+import type { preference } from "@/hooks/useApp";
 
 interface Props {
   novelId: number;
@@ -12,7 +12,7 @@ export default function SidebarPreferenceList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
 
-  const [items, setItems] = useState<novel.PreferenceItem[]>([]);
+  const [items, setItems] = useState<preference.PreferenceItem[]>([]);
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {

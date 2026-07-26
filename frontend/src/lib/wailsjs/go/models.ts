@@ -198,6 +198,20 @@ export namespace app {
 	        this.genre = source["genre"];
 	    }
 	}
+	export class CreateNovelSettingInput {
+	    category: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CreateNovelSettingInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.category = source["category"];
+	        this.content = source["content"];
+	    }
+	}
 	export class CreatePreferenceInput {
 	    is_global: boolean;
 	    category: string;
@@ -467,8 +481,10 @@ export namespace app {
 	    }
 	}
 	export class PreferenceResult {
-	    global: novel.PreferenceItem[];
-	    novel: novel.PreferenceItem[];
+	    global: preference.PreferenceItem[];
+	    novel: preference.PreferenceItem[];
+	    token_count: number;
+	    over_budget: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new PreferenceResult(source);
@@ -476,8 +492,10 @@ export namespace app {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.global = this.convertValues(source["global"], novel.PreferenceItem);
-	        this.novel = this.convertValues(source["novel"], novel.PreferenceItem);
+	        this.global = this.convertValues(source["global"], preference.PreferenceItem);
+	        this.novel = this.convertValues(source["novel"], preference.PreferenceItem);
+	        this.token_count = source["token_count"];
+	        this.over_budget = source["over_budget"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -583,6 +601,40 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.novel_id = source["novel_id"];
 	    }
+	}
+	export class SettingResult {
+	    items: setting.SettingItem[];
+	    token_count: number;
+	    over_budget: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], setting.SettingItem);
+	        this.token_count = source["token_count"];
+	        this.over_budget = source["over_budget"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SlashCommand {
 	    name: string;
@@ -708,6 +760,20 @@ export namespace app {
 	        this.title = source["title"];
 	        this.description = source["description"];
 	        this.genre = source["genre"];
+	    }
+	}
+	export class UpdateNovelSettingInput {
+	    category: string;
+	    content: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateNovelSettingInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.category = source["category"];
+	        this.content = source["content"];
 	    }
 	}
 	export class UpdatePreferenceInput {
@@ -1517,47 +1583,6 @@ export namespace novel {
 		    return a;
 		}
 	}
-	export class PreferenceItem {
-	    id: number;
-	    novel_id: number;
-	    is_global: boolean;
-	    category: string;
-	    content: string;
-	    // Go type: time
-	    created_at: any;
-	
-	    static createFrom(source: any = {}) {
-	        return new PreferenceItem(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.novel_id = source["novel_id"];
-	        this.is_global = source["is_global"];
-	        this.category = source["category"];
-	        this.content = source["content"];
-	        this.created_at = this.convertValues(source["created_at"], null);
-	    }
-	
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
 
 }
 
@@ -1780,6 +1805,55 @@ export namespace pattern {
 
 }
 
+export namespace preference {
+	
+	export class PreferenceItem {
+	    id: number;
+	    novel_id: number;
+	    is_global: boolean;
+	    category: string;
+	    content: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new PreferenceItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.novel_id = source["novel_id"];
+	        this.is_global = source["is_global"];
+	        this.category = source["category"];
+	        this.content = source["content"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
 export namespace reader {
 	
 	export class ReaderPerspective {
@@ -1941,6 +2015,53 @@ export namespace session {
 	        this.agent_type = source["agent_type"];
 	        this.sub_task_id = source["sub_task_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+
+}
+
+export namespace setting {
+	
+	export class SettingItem {
+	    id: number;
+	    novel_id: number;
+	    category: string;
+	    content: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new SettingItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.novel_id = source["novel_id"];
+	        this.category = source["category"];
+	        this.content = source["content"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

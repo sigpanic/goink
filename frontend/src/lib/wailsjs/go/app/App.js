@@ -54,6 +54,10 @@ export function CreateNovel(arg1) {
   return window['go']['app']['App']['CreateNovel'](arg1);
 }
 
+export function CreateNovelSetting(arg1, arg2) {
+  return window['go']['app']['App']['CreateNovelSetting'](arg1, arg2);
+}
+
 export function CreatePreference(arg1, arg2) {
   return window['go']['app']['App']['CreatePreference'](arg1, arg2);
 }
@@ -92,6 +96,10 @@ export function DeleteLocation(arg1, arg2) {
 
 export function DeleteNovel(arg1) {
   return window['go']['app']['App']['DeleteNovel'](arg1);
+}
+
+export function DeleteNovelSetting(arg1) {
+  return window['go']['app']['App']['DeleteNovelSetting'](arg1);
 }
 
 export function DeletePreference(arg1) {
@@ -196,6 +204,10 @@ export function GetMaxChapterNumber(arg1) {
 
 export function GetModels() {
   return window['go']['app']['App']['GetModels']();
+}
+
+export function GetNovelSettings(arg1) {
+  return window['go']['app']['App']['GetNovelSettings'](arg1);
 }
 
 export function GetNovels() {
@@ -384,6 +396,10 @@ export function UpdateLocation(arg1, arg2, arg3) {
 
 export function UpdateNovel(arg1, arg2) {
   return window['go']['app']['App']['UpdateNovel'](arg1, arg2);
+}
+
+export function UpdateNovelSetting(arg1, arg2, arg3) {
+  return window['go']['app']['App']['UpdateNovelSetting'](arg1, arg2, arg3);
 }
 
 export function UpdatePreference(arg1, arg2, arg3) {

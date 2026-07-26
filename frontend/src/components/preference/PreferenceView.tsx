@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Settings, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
-import type { novel } from "@/hooks/useApp";
+import type { preference } from "@/hooks/useApp";
 
 interface Props {
   novelId: number;
@@ -11,7 +11,7 @@ interface Props {
 
 type EditMode =
   | { type: "create"; isGlobal: boolean }
-  | { type: "edit"; item: novel.PreferenceItem }
+  | { type: "edit"; item: preference.PreferenceItem }
   | null;
 
 type EditForm = {
@@ -26,8 +26,8 @@ export default function PreferenceView({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
 
-  const [global, setGlobal] = useState<novel.PreferenceItem[]>([]);
-  const [novelPrefs, setNovelPrefs] = useState<novel.PreferenceItem[]>([]);
+  const [global, setGlobal] = useState<preference.PreferenceItem[]>([]);
+  const [novelPrefs, setNovelPrefs] = useState<preference.PreferenceItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [editMode, setEditMode] = useState<EditMode>(null);
@@ -65,7 +65,7 @@ export default function PreferenceView({ novelId }: Props) {
     setEditMode({ type: "create", isGlobal });
   }
 
-  function openEdit(item: novel.PreferenceItem) {
+  function openEdit(item: preference.PreferenceItem) {
     setError(null);
     setForm({
       category: item.category,
@@ -131,7 +131,7 @@ export default function PreferenceView({ novelId }: Props) {
 
   function renderSection(
     title: string,
-    items: novel.PreferenceItem[],
+    items: preference.PreferenceItem[],
     isGlobal: boolean,
   ) {
     const isCreating =
