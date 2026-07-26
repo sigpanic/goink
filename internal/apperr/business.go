@@ -20,7 +20,7 @@ const (
 // 警示：勿用 BusinessError 包装实现了 Coder 的领域 error——errors.As 会先匹配外层
 // BusinessError，底层领域 Code 被遮蔽。想保留领域分类用 fmt.Errorf("...: %w", err) 包装。
 type BusinessError struct {
-	CodeVal Code   // apperr.CodeInvalid / apperr.CodeNotFound / ...
+	CodeVal Code // apperr.CodeInvalid / apperr.CodeNotFound / ...
 	Msg     string
 	Cause   error
 }

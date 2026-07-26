@@ -7,7 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 )
 
 // ── upsert_preference ─────────────────────────────────
@@ -38,8 +38,8 @@ func (t *UpsertPreferenceTool) Description() string {
 func (t *UpsertPreferenceTool) Category() ToolCategory { return CategoryWritingAssistant }
 
 func (t *UpsertPreferenceTool) JSONSchema() json.RawMessage { return SchemaOf(UpsertPreferenceArgs{}) }
-func (t *UpsertPreferenceTool) ExposeToLLM() bool            { return true }
-func (t *UpsertPreferenceTool) NewArgs() any                 { return &UpsertPreferenceArgs{} }
+func (t *UpsertPreferenceTool) ExposeToLLM() bool           { return true }
+func (t *UpsertPreferenceTool) NewArgs() any                { return &UpsertPreferenceArgs{} }
 
 func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpsertPreferenceArgs)
@@ -84,7 +84,7 @@ func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 func upsertOnePreference(tx *gorm.DB, novelID int64, item UpsertPreferenceItem) (int64, error) {
 	// 更新分支
 	if item.PreferenceID != nil {
-		var existing novel.PreferenceItem
+		var existing preference.PreferenceItem
 		if err := tx.First(&existing, *item.PreferenceID).Error; err != nil {
 			if err == gorm.ErrRecordNotFound {
 				return 0, fmt.Errorf("偏好条目 %d 不存在", *item.PreferenceID)
@@ -118,7 +118,7 @@ func upsertOnePreference(tx *gorm.DB, novelID int64, item UpsertPreferenceItem) 
 	}
 
 	// 创建分支
-	pref := novel.PreferenceItem{
+	pref := preference.PreferenceItem{
 		Category: item.Category,
 		Content:  item.Content,
 		NovelID:  novelID,

@@ -8,7 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/setting"
 )
 
@@ -19,7 +19,7 @@ import (
 // 调用方负责事务外构建（compress 模式）：传入的 db 应为带 ctx 的非事务句柄，
 // 避免在事务内调用导致 SQLite 单连接池死锁。
 //
-// 设定软上限 8k token（setting.SettingsTokenBudget）、偏好软上限 4k token（novel.PreferencesTokenBudget）：
+// 设定软上限 8k token（setting.SettingsTokenBudget）、偏好软上限 4k token（preference.PreferencesTokenBudget）：
 // 超预算时按 created_at DESC 保留最新，丢弃最旧的。这里用 slog.Default() 记 warn，best-effort 不阻塞流程。
 // 拼接顺序：设定在前、偏好在后（与 system 消息注入顺序一致）。
 func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, error) {
@@ -33,7 +33,7 @@ func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, erro
 	}
 
 	// 加载偏好（同排序策略）
-	var prefItems []novel.PreferenceItem
+	var prefItems []preference.PreferenceItem
 	if err := db.WithContext(ctx).
 		Where("is_global = ? OR novel_id = ?", true, novelID).
 		Order("is_global DESC, created_at DESC").
@@ -42,7 +42,7 @@ func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, erro
 	}
 
 	setText, setTruncated := setting.FormatSettings(setItems)
-	prefText, prefTruncated := novel.FormatPreferences(prefItems)
+	prefText, prefTruncated := preference.FormatPreferences(prefItems)
 
 	if setTruncated > 0 {
 		slog.Warn("novel profile: settings truncated due to budget exceeded",
@@ -57,7 +57,7 @@ func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, erro
 			"novel_id", novelID,
 			"total", len(prefItems),
 			"truncated", prefTruncated,
-			"budget", novel.PreferencesTokenBudget,
+			"budget", preference.PreferencesTokenBudget,
 		)
 	}
 

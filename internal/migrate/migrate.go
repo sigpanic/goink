@@ -11,6 +11,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
@@ -83,7 +84,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	models := []any{
 		&config.AppSettings{},
 		&novel.Novel{},
-		&novel.PreferenceItem{},
+		&preference.PreferenceItem{},
 		&setting.SettingItem{},
 		&chapter.Chapter{},
 		&character.Character{},

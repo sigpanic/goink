@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
@@ -52,11 +53,12 @@ type App struct {
 	vectorStore   *rag.VectorStore
 	searchService atomic.Pointer[search.Service]
 
-	novel     *novel.Store
-	chapter   *chapter.Store
-	character *character.Store
-	session   *session.Store
-	skill     *skill.Store
+	novel      *novel.Store
+	preference *preference.Store
+	chapter    *chapter.Store
+	character  *character.Store
+	session    *session.Store
+	skill      *skill.Store
 	// remote 持有远程 skill 市场服务，用于 ListRemoteSkills / GetRemoteSkillContent / InstallRemoteSkill。
 	remote     *remote.Service
 	style      *style.Store
@@ -175,6 +177,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 
 	// 6. 创建所有领域 store
 	a.novel = novel.NewStore(db, a.logger)
+	a.preference = preference.NewStore(db, a.logger)
 	a.chapter = chapter.NewStore(db, a.logger)
 	a.character = character.NewStore(db, a.logger)
 	a.session = session.NewStore(db, a.logger)

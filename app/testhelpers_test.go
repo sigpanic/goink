@@ -21,6 +21,7 @@ import (
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
@@ -73,6 +74,7 @@ func setupTestApp(t *testing.T) *App {
 
 	// Domain stores.
 	novelStore := novel.NewStore(db, logger)
+	preferenceStore := preference.NewStore(db, logger)
 	chapterStore := chapter.NewStore(db, logger)
 	characterStore := character.NewStore(db, logger)
 	sessionStore := session.NewStore(db, logger)
@@ -121,6 +123,7 @@ func setupTestApp(t *testing.T) *App {
 		approvals: approvals,
 
 		novel:      novelStore,
+		preference: preferenceStore,
 		chapter:    chapterStore,
 		character:  characterStore,
 		session:    sessionStore,

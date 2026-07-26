@@ -38,8 +38,8 @@ func (t *UpsertSettingTool) Description() string {
 func (t *UpsertSettingTool) Category() ToolCategory { return CategoryWritingAssistant }
 
 func (t *UpsertSettingTool) JSONSchema() json.RawMessage { return SchemaOf(UpsertSettingArgs{}) }
-func (t *UpsertSettingTool) ExposeToLLM() bool            { return true }
-func (t *UpsertSettingTool) NewArgs() any                 { return &UpsertSettingArgs{} }
+func (t *UpsertSettingTool) ExposeToLLM() bool           { return true }
+func (t *UpsertSettingTool) NewArgs() any                { return &UpsertSettingArgs{} }
 
 func (t *UpsertSettingTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpsertSettingArgs)

@@ -10,7 +10,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/location"
-	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
@@ -33,6 +33,7 @@ table 可选值与对应工具映射：
   setting                   — upsert_setting`
 
 // DeleteRecordArgs 是 delete_record 的参数。
+//
 //nolint:raw_id — 通用删除工具，多表共用一个 id 字段，裸 id 合理
 type DeleteRecordArgs struct {
 	Table string `json:"table" jsonschema:"required,description=要删除的表名,enum=character,enum=character_relation,enum=location,enum=location_relation,enum=timeline_entry,enum=story_arc,enum=arc_node,enum=reader_perspective_entry,enum=preference,enum=setting" validate:"required,oneof=character character_relation location location_relation timeline_entry story_arc arc_node reader_perspective_entry preference setting"`
@@ -422,7 +423,7 @@ func (t *DeleteRecordTool) deleteReaderPerspectiveEntry(ctx context.Context, a *
 }
 
 func (t *DeleteRecordTool) deletePreference(ctx context.Context, a *DeleteRecordArgs, tc ToolContext) (*ToolResult, error) {
-	var rec novel.PreferenceItem
+	var rec preference.PreferenceItem
 	if err := tc.DB.WithContext(ctx).Where("id = ? AND ((novel_id = ? AND is_global = false) OR is_global = true)", a.ID, tc.NovelID).First(&rec).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return &ToolResult{Success: false, Error: fmt.Sprintf("偏好项 %d 不存在", a.ID)}, nil

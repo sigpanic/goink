@@ -1,4 +1,4 @@
-package novel
+package preference
 
 import (
 	"fmt"

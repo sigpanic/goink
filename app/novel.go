@@ -16,6 +16,7 @@ import (
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/session"
 	"github.com/sigpanic/goink/internal/storyarc"
@@ -125,7 +126,7 @@ func (a *App) DeleteNovel(novelID int64) error {
 	// 在事务中先删子表再删主表
 	err = a.novel.DB.WithContext(a.ctx).Transaction(func(tx *gorm.DB) error {
 		// 仅删小说专属偏好，保留全局偏好
-		if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&novel.PreferenceItem{}).Error; err != nil {
+		if err := tx.Where("is_global = ? AND novel_id = ?", false, novelID).Delete(&preference.PreferenceItem{}).Error; err != nil {
 			return fmt.Errorf("preferences: %w", err)
 		}
 		for _, op := range []struct {
@@ -179,10 +180,10 @@ func (a *App) DeleteNovel(novelID int64) error {
 
 // PreferenceResult 是 GetPreferences 的返回结构。
 type PreferenceResult struct {
-	Global     []novel.PreferenceItem `json:"global"`
-	Novel      []novel.PreferenceItem `json:"novel"`
-	TokenCount int                    `json:"token_count"` // 全量偏好 token 数（不截断），前端可显示是否超预算
-	OverBudget bool                   `json:"over_budget"` // token_count > PreferencesTokenBudget
+	Global     []preference.PreferenceItem `json:"global"`
+	Novel      []preference.PreferenceItem `json:"novel"`
+	TokenCount int                         `json:"token_count"` // 全量偏好 token 数（不截断），前端可显示是否超预算
+	OverBudget bool                        `json:"over_budget"` // token_count > PreferencesTokenBudget
 }
 
 // GetPreferences 返回全局偏好和当前小说的专属偏好，附带全量 token 数与超预算标记。
@@ -190,23 +191,23 @@ type PreferenceResult struct {
 // 注入给 agent 的 NovelProfile 会按 created_at DESC 截断到 4k 内，与此处 token_count 是两套口径：
 // 这里是"全量实际多少"，agent 注入是"截断后剩多少"。
 func (a *App) GetPreferences(novelID int64) (*PreferenceResult, error) {
-	global, err := a.novel.ListGlobalPreferences(a.ctx)
+	global, err := a.preference.ListGlobalPreferences(a.ctx)
 	if err != nil {
 		return nil, err
 	}
-	novelPrefs, err := a.novel.ListNovelPreferences(a.ctx, novelID)
+	novelPrefs, err := a.preference.ListNovelPreferences(a.ctx, novelID)
 	if err != nil {
 		return nil, err
 	}
-	all := make([]novel.PreferenceItem, 0, len(global)+len(novelPrefs))
+	all := make([]preference.PreferenceItem, 0, len(global)+len(novelPrefs))
 	all = append(all, global...)
 	all = append(all, novelPrefs...)
-	tokenCount, _ := novel.CountPreferencesTokens(all)
+	tokenCount, _ := preference.CountPreferencesTokens(all)
 	return &PreferenceResult{
 		Global:     global,
 		Novel:      novelPrefs,
 		TokenCount: tokenCount,
-		OverBudget: tokenCount > novel.PreferencesTokenBudget,
+		OverBudget: tokenCount > preference.PreferencesTokenBudget,
 	}, nil
 }
 
@@ -218,8 +219,8 @@ type CreatePreferenceInput struct {
 }
 
 // CreatePreference 创建一条创作偏好。
-func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*novel.PreferenceItem, error) {
-	item := novel.PreferenceItem{
+func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*preference.PreferenceItem, error) {
+	item := preference.PreferenceItem{
 		IsGlobal: input.IsGlobal,
 		Category: input.Category,
 		Content:  input.Content,
@@ -230,7 +231,7 @@ func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*nov
 	} else {
 		item.NovelID = novelID
 	}
-	if err := a.novel.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
+	if err := a.preference.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create preference: %w", err)
 	}
 	return &item, nil
@@ -248,9 +249,9 @@ type UpdatePreferenceInput struct {
 // UpdatePreference 更新一条创作偏好。
 // novelID 由前端显式传入（当前工作区小说），用于 is_global 切换时填 NovelID。
 // PUT 语义：前端全量传 category/content/is_global，后端全量覆盖 + db.Save（走 GORM 回调）。
-func (a *App) UpdatePreference(novelID int64, id int64, input UpdatePreferenceInput) (*novel.PreferenceItem, error) {
-	var item novel.PreferenceItem
-	if err := a.novel.DB.WithContext(a.ctx).First(&item, id).Error; err != nil {
+func (a *App) UpdatePreference(novelID int64, id int64, input UpdatePreferenceInput) (*preference.PreferenceItem, error) {
+	var item preference.PreferenceItem
+	if err := a.preference.DB.WithContext(a.ctx).First(&item, id).Error; err != nil {
 		return nil, fmt.Errorf("update preference: %w", err)
 	}
 	// 归属校验：只能改全局偏好或当前小说的偏好
@@ -266,7 +267,7 @@ func (a *App) UpdatePreference(novelID int64, id int64, input UpdatePreferenceIn
 	} else {
 		item.NovelID = novelID
 	}
-	if err := a.novel.DB.WithContext(a.ctx).Save(&item).Error; err != nil {
+	if err := a.preference.DB.WithContext(a.ctx).Save(&item).Error; err != nil {
 		return nil, fmt.Errorf("update preference: %w", err)
 	}
 	return &item, nil
@@ -274,7 +275,7 @@ func (a *App) UpdatePreference(novelID int64, id int64, input UpdatePreferenceIn
 
 // DeletePreference 删除一条创作偏好。
 func (a *App) DeletePreference(id int64) error {
-	if err := a.novel.DB.WithContext(a.ctx).Delete(&novel.PreferenceItem{}, id).Error; err != nil {
+	if err := a.preference.DB.WithContext(a.ctx).Delete(&preference.PreferenceItem{}, id).Error; err != nil {
 		return fmt.Errorf("delete preference: %w", err)
 	}
 	return nil
