@@ -10,12 +10,20 @@ make build     # production build (wails build)
 make dev       # dev mode with hot reload (wails dev)
 ```
 
-**Working directory discipline:**
+**Working directory discipline (dual-worktree aware):**
 
-- **Git commands** — always run from project root (`/home/nianhe/projects/todo`). Before any git operation, ensure CWD is the root.
-- **Frontend commands** — always `cd frontend/` first. Build with `npm run build`, never raw `npx vite build` or `npm build`. Install deps with `npm install <pkg> --save` from within `frontend/`. NEVER run `npm install` from project root.
-- **Go commands** — run from project root. Use `go build ./...` or `go test ./...`.
-- **Know where you are** — before running any command, confirm which directory it will execute in and what side effects it has.
+This repo uses `git worktree` — see `.trae/rules/worktree协作流程.md` for the full layout. Two worktrees share one `.git`; one agent per worktree, never two agents in the same worktree.
+
+| worktree | dir | branch | role |
+|---|---|---|---|
+| main | `/home/nianhe/projects/todo` | `master` | agent 1 works directly on master |
+| secondary | `/home/nianhe/projects/goink` | `feat/goink-wt` (cut from master) | agent 2 works on this feature branch |
+
+- **Stay in your own worktree** — read, edit, and run commands only inside the worktree you were invoked in (the *Primary working directory* shown in your environment). Never `cd` into the other worktree to read or edit files: the other worktree may be on a different branch with stale or divergent code, and cross-worktree edits risk clobbering the other agent's in-flight work. If you were invoked in `goink`, treat `goink/` as your root; if in `todo`, treat `todo/` as your root.
+- **Git commands** — run from the *current worktree's* root (the dir you were invoked in), not a hardcoded path. `log`/`status`/`diff`/`build`/`test` all reflect the current worktree's HEAD; redirecting them to the other worktree reads the wrong branch. Before any git operation, confirm CWD is the current worktree root.
+- **Frontend commands** — always `cd frontend/` first (relative to current worktree root). Build with `npm run build`, never raw `npx vite build` or `npm build`. Install deps with `npm install <pkg> --save` from within `frontend/`. NEVER run `npm install` from project root.
+- **Go commands** — run from current worktree root. Use `go build ./...` or `go test ./...`.
+- **Know where you are** — before running any command, confirm which directory it will execute in, which worktree that belongs to, and what side effects it has. When two rules conflict, the more specific / more recent one wins (worktree rules override legacy single-worktree paths).
 
 System deps (Ubuntu/Debian): `libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc`
 
