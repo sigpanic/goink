@@ -19,39 +19,18 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 	return &Store{DB: db, logger: logger}
 }
 
-// ListSettings 返回该小说的专属设定 + 全部全局设定。
-// 排序 is_global DESC, created_at DESC：全局在前、组内最新在前，用于 NovelProfile 注入（截断保留最新）。
+// ListSettings 返回该小说的全部设定。
+// 唯一查询入口：注入 NovelState 和前端展示都用此方法（v2 砍 is_global 后两者 SQL 等价，
+// 不再需要 ListNovelSettings 这种"前端专用"副本，减少冗余 API surface）。
+// 排序 created_at DESC：最新在前。
+// 注：注入用和前端展示用的排序口径一致——下一轮若改 updated_at DESC 也是一起改。
 func (s *Store) ListSettings(ctx context.Context, novelID int64) ([]SettingItem, error) {
 	var items []SettingItem
 	if err := s.DB.WithContext(ctx).
-		Where("is_global = ? OR novel_id = ?", true, novelID).
-		Order("is_global DESC, created_at DESC").
+		Where("novel_id = ?", novelID).
+		Order("created_at DESC").
 		Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("setting store: list settings: %w", err)
-	}
-	return items, nil
-}
-
-// ListNovelSettings 只返回某小说的专属设定（不含全局），前端编辑用。
-func (s *Store) ListNovelSettings(ctx context.Context, novelID int64) ([]SettingItem, error) {
-	var items []SettingItem
-	if err := s.DB.WithContext(ctx).
-		Where("is_global = ? AND novel_id = ?", false, novelID).
-		Order("created_at ASC").
-		Find(&items).Error; err != nil {
-		return nil, fmt.Errorf("setting store: list novel settings: %w", err)
-	}
-	return items, nil
-}
-
-// ListGlobalSettings 只返回全局设定（所有小说共享）。
-func (s *Store) ListGlobalSettings(ctx context.Context) ([]SettingItem, error) {
-	var items []SettingItem
-	if err := s.DB.WithContext(ctx).
-		Where("is_global = ?", true).
-		Order("created_at ASC").
-		Find(&items).Error; err != nil {
-		return nil, fmt.Errorf("setting store: list global settings: %w", err)
 	}
 	return items, nil
 }

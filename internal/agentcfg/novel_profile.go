@@ -22,12 +22,15 @@ import (
 // 设定软上限 8k token（setting.SettingsTokenBudget）、偏好软上限 4k token（preference.PreferencesTokenBudget）：
 // 超预算时按 created_at DESC 保留最新，丢弃最旧的。这里用 slog.Default() 记 warn，best-effort 不阻塞流程。
 // 拼接顺序：设定在前、偏好在后（与 system 消息注入顺序一致）。
+//
+// v2：设定取消 is_global，全部归属当前小说（只查 novel_id = ?）；
+// 偏好保留 is_global（用户级容器，含全局+小说级，仍查 is_global OR novel_id）。
 func NovelProfile(ctx context.Context, db *gorm.DB, novelID int64) (string, error) {
-	// 加载设定（is_global DESC, created_at DESC，全局在前、组内最新在前，截断保留最新）
+	// 加载设定（v2 取消 is_global，只查 novel_id，created_at DESC 最新在前）
 	var setItems []setting.SettingItem
 	if err := db.WithContext(ctx).
-		Where("is_global = ? OR novel_id = ?", true, novelID).
-		Order("is_global DESC, created_at DESC").
+		Where("novel_id = ?", novelID).
+		Order("created_at DESC").
 		Find(&setItems).Error; err != nil {
 		return "", fmt.Errorf("agentcfg: load settings: %w", err)
 	}

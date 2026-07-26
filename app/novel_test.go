@@ -111,16 +111,12 @@ func TestDeleteNovel(t *testing.T) {
 	})
 	require.NoError(t, err)
 	_, err = a.CreateNovelSetting(created.ID, CreateNovelSettingInput{
-		IsGlobal: false, Category: "worldview", Content: "magic system",
+		Category: "worldview", Content: "magic system",
 	})
 	require.NoError(t, err)
-	// 同时加全局偏好 + 设定（删除 Novel 后应保留）
+	// 同时加全局偏好（删除 Novel 后应保留）；v2 取消全局设定概念，不再创建 global setting
 	_, err = a.CreatePreference(created.ID, CreatePreferenceInput{
 		IsGlobal: true, Category: "global-style", Content: "concise",
-	})
-	require.NoError(t, err)
-	_, err = a.CreateNovelSetting(created.ID, CreateNovelSettingInput{
-		IsGlobal: true, Category: "global-worldview", Content: "universal laws",
 	})
 	require.NoError(t, err)
 
@@ -131,16 +127,16 @@ func TestDeleteNovel(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, novels, "novel list should be empty after deletion")
 
-	// 全局 preference + setting 保留（删 Novel 不影响全局数据）
+	// 全局 preference 保留（删 Novel 不影响全局数据）；小说专属偏好已级联删除
 	prefs, err := a.GetPreferences(created.ID)
 	require.NoError(t, err)
 	assert.Empty(t, prefs.Novel, "novel-specific preference should be cascade-deleted")
 	assert.Len(t, prefs.Global, 1, "global preference should survive novel deletion")
 
+	// v2 设定全部归属小说，删 Novel 后应全部级联删除（无全局保留概念）
 	settings, err := a.GetNovelSettings(created.ID)
 	require.NoError(t, err)
-	assert.Empty(t, settings.Novel, "novel-specific setting should be cascade-deleted")
-	assert.Len(t, settings.Global, 1, "global setting should survive novel deletion")
+	assert.Empty(t, settings.Items, "all settings should be cascade-deleted with novel")
 
 	// On-disk novel directory cleanup is best-effort (Windows git lock files).
 	// Just verify the DB record is gone — filesystem cleanup is platform-specific.

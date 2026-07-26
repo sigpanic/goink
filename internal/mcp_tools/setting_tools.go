@@ -17,7 +17,6 @@ type UpsertSettingItem struct {
 	SettingID *int64 `json:"setting_id,omitempty" jsonschema:"description=已存在设定ID；不传=新建"`
 	Category  string `json:"category" jsonschema:"required,description=设定分类(自由文本，如世界观/力量体系/角色/地理/历史/物品)" validate:"required"`
 	Content   string `json:"content" jsonschema:"required,description=设定内容" validate:"required"`
-	IsGlobal  *bool  `json:"is_global,omitempty" jsonschema:"description=是否全局设定(对所有小说生效)；不传=新建默认false，更新保持原值"`
 }
 
 // UpsertSettingArgs 是 upsert_setting 的参数。
@@ -91,25 +90,16 @@ func upsertOneSetting(tx *gorm.DB, novelID int64, item UpsertSettingItem) (int64
 			}
 			return 0, fmt.Errorf("query setting: %w", err)
 		}
-		// 归属校验：只能改全局设定或当前小说的设定
-		if !existing.IsGlobal && existing.NovelID != novelID {
+		// 归属校验：只能改当前小说的设定
+		if existing.NovelID != novelID {
 			return 0, fmt.Errorf("设定条目 %d 不属于当前小说", *item.SettingID)
 		}
-		// PATCH 覆盖（指针字段判断"传没传"，值字段 required 总传值）
+		// PATCH 覆盖（值字段 required 总传值，这里仍保留 if 判断以兼容"前端只传部分字段"的旧调用方）
 		if item.Category != "" {
 			existing.Category = item.Category
 		}
 		if item.Content != "" {
 			existing.Content = item.Content
-		}
-		if item.IsGlobal != nil {
-			existing.IsGlobal = *item.IsGlobal
-			// is_global 切换时 NovelID 联动调整（rawArgs patch 表达不了的联动，手动补）
-			if *item.IsGlobal {
-				existing.NovelID = 0
-			} else {
-				existing.NovelID = novelID
-			}
 		}
 		if err := tx.Save(&existing).Error; err != nil {
 			return 0, fmt.Errorf("save setting: %w", err)
@@ -122,10 +112,6 @@ func upsertOneSetting(tx *gorm.DB, novelID int64, item UpsertSettingItem) (int64
 		Category: item.Category,
 		Content:  item.Content,
 		NovelID:  novelID,
-	}
-	if item.IsGlobal != nil && *item.IsGlobal {
-		rec.IsGlobal = true
-		rec.NovelID = 0
 	}
 	if err := tx.Create(&rec).Error; err != nil {
 		return 0, fmt.Errorf("create setting: %w", err)

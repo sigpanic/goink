@@ -448,9 +448,10 @@ func (t *DeleteRecordTool) deletePreference(ctx context.Context, a *DeleteRecord
 
 func (t *DeleteRecordTool) deleteSetting(ctx context.Context, a *DeleteRecordArgs, tc ToolContext) (*ToolResult, error) {
 	var rec setting.SettingItem
-	if err := tc.DB.WithContext(ctx).Where("id = ? AND ((novel_id = ? AND is_global = false) OR is_global = true)", a.ID, tc.NovelID).First(&rec).Error; err != nil {
+	// v2 取消 is_global 后，设定全部归属当前小说，只校验 id + novel_id
+	if err := tc.DB.WithContext(ctx).Where("id = ? AND novel_id = ?", a.ID, tc.NovelID).First(&rec).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
-			return &ToolResult{Success: false, Error: fmt.Sprintf("设定项 %d 不存在", a.ID)}, nil
+			return &ToolResult{Success: false, Error: fmt.Sprintf("设定项 %d 不存在或不属于当前小说", a.ID)}, nil
 		}
 		return nil, fmt.Errorf("query setting: %w", err)
 	}
