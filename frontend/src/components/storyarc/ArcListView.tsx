@@ -6,6 +6,8 @@ import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import type { storyarc } from "@/hooks/useApp";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -85,7 +87,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
   const [allNodes, setAllNodes] = useState<storyarc.ArcNode[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [windowCenter, setWindowCenter] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
@@ -103,7 +105,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [arcList, nodeList, maxCh] = await Promise.all([
         app.GetStoryArcs(novelId),
@@ -114,7 +116,13 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setAllNodes(nodeList ?? []);
       setWindowCenter(Math.max(1, maxCh));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("storyarc.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("storyarc.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -198,13 +206,11 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   // ── Arc CRUD ─────────────────────────────────────────
 
   function openCreateArc() {
-    setError(null);
     setArcForm(EMPTY_ARC);
     setEditMode({ type: "create_arc" });
   }
 
   function openEditArc(arc: storyarc.StoryArc) {
-    setError(null);
     setArcForm({
       name: arc.name,
       arc_type: arc.arc_type,
@@ -216,11 +222,11 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
 
   async function handleCreateArc() {
     if (!arcForm.name.trim()) {
-      setError(t("storyarc.pleaseEnterArcName"));
+      toastError(t("storyarc.pleaseEnterArcName"));
       return;
     }
     if (!arcForm.arc_type) {
-      setError(t("storyarc.pleaseSelectArcType"));
+      toastError(t("storyarc.pleaseSelectArcType"));
       return;
     }
     setSaving(true);
@@ -229,9 +235,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.createArcFailed"),
+      toastError(
+        t("storyarc.createArcFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -245,9 +254,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.updateArcFailed"),
+      toastError(
+        t("storyarc.updateArcFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -261,9 +273,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setExpandedId(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.deleteArcFailed"),
+      toastError(
+        t("storyarc.deleteArcFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -272,7 +287,6 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   // ── Node CRUD ────────────────────────────────────────
 
   function openCreateNode(arcId?: number) {
-    setError(null);
     setNodeForm({
       ...EMPTY_NODE,
       story_arc_id: arcId ?? arcs[0]?.id ?? 0,
@@ -282,7 +296,6 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   }
 
   function openEditNode(node: storyarc.ArcNode) {
-    setError(null);
     setNodeForm({
       story_arc_id: node.story_arc_id,
       title: node.title,
@@ -294,15 +307,15 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
 
   async function handleCreateNode() {
     if (!nodeForm.title.trim()) {
-      setError(t("storyarc.pleaseEnterNodeTitle"));
+      toastError(t("storyarc.pleaseEnterNodeTitle"));
       return;
     }
     if (!nodeForm.story_arc_id) {
-      setError(t("storyarc.pleaseSelectParentArc"));
+      toastError(t("storyarc.pleaseSelectParentArc"));
       return;
     }
     if (!nodeForm.target_chapter) {
-      setError(t("storyarc.pleaseEnterTargetChapter"));
+      toastError(t("storyarc.pleaseEnterTargetChapter"));
       return;
     }
     setSaving(true);
@@ -312,9 +325,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await load();
       setExpandedId(created.id);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.createNodeFailed"),
+      toastError(
+        t("storyarc.createNodeFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -323,7 +339,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   async function handleUpdateNode() {
     if (!editMode || editMode.type !== "edit_node") return;
     if (!nodeForm.title.trim()) {
-      setError(t("storyarc.pleaseEnterNodeTitle"));
+      toastError(t("storyarc.pleaseEnterNodeTitle"));
       return;
     }
     const nodeId = editMode.node.id;
@@ -334,9 +350,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await load();
       setExpandedId(nodeId);
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.updateNodeFailed"),
+      toastError(
+        t("storyarc.updateNodeFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -350,9 +369,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setExpandedId(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("storyarc.deleteNodeFailed"),
+      toastError(
+        t("storyarc.deleteNodeFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -367,11 +389,12 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await app.UpdateArcNode(novelId, node.id, { status: newStatus });
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : t("storyarc.updateNodeStatusFailed"),
+      toastError(
+        t("storyarc.updateNodeStatusFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -475,13 +498,14 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("storyarc.description")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={arcForm.description}
             onChange={(e) =>
               setArcForm((f) => ({ ...f, description: e.target.value }))
             }
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={40}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("storyarc.arcDescription")}
           />
         </div>
@@ -553,13 +577,14 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("storyarc.description")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={nodeForm.description}
             onChange={(e) =>
               setNodeForm((f) => ({ ...f, description: e.target.value }))
             }
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={40}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("storyarc.nodeDetails")}
           />
         </div>
@@ -670,10 +695,6 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       ) : loading ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("storyarc.loading")}
-        </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto overscroll-contain">
@@ -880,7 +901,11 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
             )}
 
             {/* Node list */}
-            {grouped.length === 0 ? (
+            {loadFailed ? (
+              <p className="text-xs text-destructive py-4">
+                {t("storyarc.loadFailed")}
+              </p>
+            ) : grouped.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-tag-purple text-tag-purple-foreground">
                   <GitBranch className="h-5 w-5" />

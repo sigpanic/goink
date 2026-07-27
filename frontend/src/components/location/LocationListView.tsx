@@ -5,6 +5,8 @@ import { useApp } from "@/hooks/useApp";
 import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -45,7 +47,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
 
   const [locations, setLocations] = useState<location.Location[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
@@ -54,15 +56,22 @@ export default function LocationListView({ novelId, focusId }: Props) {
   const load = useCallback(async () => {
     if (!novelId) {
       setLocations([]);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const list = await app.GetLocations(novelId);
       setLocations(list ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("location.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("location.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -152,13 +161,11 @@ export default function LocationListView({ novelId, focusId }: Props) {
   // ── CRUD handlers ─────────────────────────────────────
 
   function openCreate(parentId?: number) {
-    setError(null);
     setForm({ ...EMPTY_FORM, parent_location_id: parentId });
     setEditMode({ type: "create" });
   }
 
   function openEdit(loc: location.Location) {
-    setError(null);
     setForm({
       name: loc.name,
       location_type: loc.location_type || "",
@@ -192,7 +199,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
 
   async function handleCreate() {
     if (!form.name.trim()) {
-      setError(t("location.pleaseEnterName"));
+      toastError(t("location.pleaseEnterName"));
       return;
     }
     setSaving(true);
@@ -201,7 +208,12 @@ export default function LocationListView({ novelId, focusId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("location.createFailed"));
+      toastError(
+        t("location.createFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -210,7 +222,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
   async function handleUpdate() {
     if (!editMode || editMode.type !== "edit") return;
     if (!form.name.trim()) {
-      setError(t("location.pleaseEnterName"));
+      toastError(t("location.pleaseEnterName"));
       return;
     }
     setSaving(true);
@@ -219,7 +231,12 @@ export default function LocationListView({ novelId, focusId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("location.updateFailed"));
+      toastError(
+        t("location.updateFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -232,7 +249,12 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await app.DeleteLocation(novelId, locId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("location.deleteFailed"));
+      toastError(
+        t("location.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -302,13 +324,14 @@ export default function LocationListView({ novelId, focusId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("location.description")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.description}
             onChange={(e) =>
               setForm((f) => ({ ...f, description: e.target.value }))
             }
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={40}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("location.locationDesc")}
           />
         </div>
@@ -391,10 +414,6 @@ export default function LocationListView({ novelId, focusId }: Props) {
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("location.loading")}
         </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
-        </div>
       ) : (
         <div className="flex-1 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-5 py-6 space-y-6">
@@ -446,7 +465,11 @@ export default function LocationListView({ novelId, focusId }: Props) {
             )}
 
             {/* Location list */}
-            {locations.length === 0 ? (
+            {loadFailed ? (
+              <p className="text-xs text-destructive py-4">
+                {t("location.loadFailed")}
+              </p>
+            ) : locations.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-tag-green">
                   <MapPin className="h-5 w-5 text-tag-green-foreground" />

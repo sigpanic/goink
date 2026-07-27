@@ -13,6 +13,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { timeline } from "@/hooks/useApp";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -88,7 +90,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   const [plans, setPlans] = useState<timeline.ChapterPlan[]>([]);
   const [entries, setEntries] = useState<timeline.TimelineEntry[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [planTab, setPlanTab] = useState<Tab>("next");
   const [filter, setFilter] = useState<Filter>("all");
   const [windowCenter, setWindowCenter] = useState(0);
@@ -101,10 +103,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
     if (!novelId) {
       setPlans([]);
       setEntries([]);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [planList, entryList, maxCh] = await Promise.all([
         app.GetChapterPlans(novelId),
@@ -115,7 +118,13 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       setEntries(entryList ?? []);
       setWindowCenter(Math.max(1, maxCh));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("timeline.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("timeline.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -238,14 +247,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   // ── CRUD handlers ────────────────────────────────────
 
   function openCreate() {
-    setError(null);
     setForm({ ...EDIT_FORM_EMPTY, target_chapter: Math.max(1, windowCenter) });
     setCreateCat("foreshadowing");
     setEditMode({ type: "create" });
   }
 
   function openEdit(entry: timeline.TimelineEntry) {
-    setError(null);
     setForm({
       title: entry.title,
       content: entry.content || "",
@@ -259,7 +266,6 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   }
 
   function openPlanEdit(scope: string, content: string) {
-    setError(null);
     setForm({ ...EDIT_FORM_EMPTY, content });
     setEditMode({ type: "plan", scope, content });
   }
@@ -275,9 +281,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("timeline.savePlanFailed"),
+      toastError(
+        t("timeline.savePlanFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -285,11 +294,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
 
   async function handleCreate() {
     if (!form.title.trim()) {
-      setError(t("timeline.pleaseEnterTitle"));
+      toastError(t("timeline.pleaseEnterTitle"));
       return;
     }
     if (!form.target_chapter) {
-      setError(t("timeline.pleaseEnterTargetChapter"));
+      toastError(t("timeline.pleaseEnterTargetChapter"));
       return;
     }
     setSaving(true);
@@ -307,7 +316,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("timeline.createFailed"));
+      toastError(
+        t("timeline.createFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -316,7 +330,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   async function handleUpdate() {
     if (!editMode || editMode.type !== "edit") return;
     if (!form.title.trim()) {
-      setError(t("timeline.pleaseEnterTitle"));
+      toastError(t("timeline.pleaseEnterTitle"));
       return;
     }
     setSaving(true);
@@ -337,7 +351,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("timeline.updateFailed"));
+      toastError(
+        t("timeline.updateFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -350,7 +369,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await app.DeleteTimelineEntry(novelId, entryId);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("timeline.deleteFailed"));
+      toastError(
+        t("timeline.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -373,9 +397,12 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       });
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("timeline.updateStatusFailed"),
+      toastError(
+        t("timeline.updateStatusFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -420,13 +447,14 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("timeline.content")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.content}
             onChange={(e) =>
               setForm((f) => ({ ...f, content: e.target.value }))
             }
-            rows={3}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={60}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("timeline.detailedDescription")}
           />
         </div>
@@ -497,10 +525,6 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("timeline.loading")}
         </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
-        </div>
       ) : (
         <div className="max-w-3xl mx-auto px-5 py-6 space-y-6">
           {/* Chapter Plans */}
@@ -532,13 +556,14 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
             <div className="rounded-lg border border-border bg-card p-4 min-h-[80px] relative group">
               {editMode?.type === "plan" && editMode.scope === planTab ? (
                 <div className="space-y-3">
-                  <textarea
+                  <AutoGrowTextarea
                     value={form.content}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, content: e.target.value }))
                     }
-                    rows={4}
-                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+                    minHeight={80}
+                    maxHeight={200}
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     placeholder={t("timeline.planContent", {
                       type: t(PLAN_LABELS[planTab]),
                     })}
@@ -685,7 +710,11 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
               </div>
             )}
 
-            {grouped.length === 0 ? (
+            {loadFailed ? (
+              <p className="text-xs text-destructive py-4">
+                {t("timeline.loadFailed")}
+              </p>
+            ) : grouped.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-secondary text-muted-foreground">
                   <Target className="h-5 w-5" />

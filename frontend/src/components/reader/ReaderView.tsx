@@ -12,6 +12,8 @@ import {
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { reader } from "@/hooks/useApp";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -125,7 +127,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
 
   const [entries, setEntries] = useState<reader.ReaderPerspective[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -137,10 +139,11 @@ export default function ReaderView({ novelId, focusId }: Props) {
   const load = useCallback(async () => {
     if (!novelId) {
       setEntries([]);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const items = await app.GetReaderPerspectives(novelId);
       setEntries(items ?? []);
@@ -149,7 +152,13 @@ export default function ReaderView({ novelId, focusId }: Props) {
         setWindowCenter((prev) => prev || maxCh);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("reader.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("reader.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -210,13 +219,11 @@ export default function ReaderView({ novelId, focusId }: Props) {
   // ── CRUD handlers ────────────────────────────────────
 
   function openCreate() {
-    setError(null);
     setForm({ ...EMPTY_FORM, planted_chapter: Math.max(1, windowCenter) });
     setEditMode({ type: "create" });
   }
 
   function openEdit(item: reader.ReaderPerspective) {
-    setError(null);
     setForm({
       type: item.type,
       content: item.content,
@@ -229,11 +236,11 @@ export default function ReaderView({ novelId, focusId }: Props) {
 
   async function handleCreate() {
     if (!form.content.trim()) {
-      setError(t("reader.pleaseEnterContent"));
+      toastError(t("reader.pleaseEnterContent"));
       return;
     }
     if (!form.type) {
-      setError(t("reader.pleaseSelectType"));
+      toastError(t("reader.pleaseSelectType"));
       return;
     }
     setSaving(true);
@@ -250,7 +257,12 @@ export default function ReaderView({ novelId, focusId }: Props) {
       await load();
       setExpandedId(created.id);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("reader.createFailed"));
+      toastError(
+        t("reader.createFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -259,7 +271,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
   async function handleUpdate() {
     if (!editMode || editMode.type !== "edit") return;
     if (!form.content.trim()) {
-      setError(t("reader.pleaseEnterContent"));
+      toastError(t("reader.pleaseEnterContent"));
       return;
     }
     const entryId = editMode.item.id;
@@ -277,7 +289,12 @@ export default function ReaderView({ novelId, focusId }: Props) {
       await load();
       setExpandedId(entryId);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("reader.updateFailed"));
+      toastError(
+        t("reader.updateFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -291,7 +308,12 @@ export default function ReaderView({ novelId, focusId }: Props) {
       if (expandedId === id) setExpandedId(null);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("reader.deleteFailed"));
+      toastError(
+        t("reader.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -309,7 +331,12 @@ export default function ReaderView({ novelId, focusId }: Props) {
       });
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("reader.updateFailed"));
+      toastError(
+        t("reader.updateFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -340,13 +367,14 @@ export default function ReaderView({ novelId, focusId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("reader.contentLabel")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.content}
             onChange={(e) =>
               setForm((f) => ({ ...f, content: e.target.value }))
             }
-            rows={3}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={60}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("reader.contentPlaceholder")}
           />
         </div>
@@ -354,13 +382,14 @@ export default function ReaderView({ novelId, focusId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("reader.authorTruth")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.related_truth}
             onChange={(e) =>
               setForm((f) => ({ ...f, related_truth: e.target.value }))
             }
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={40}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("reader.authorTruthPlaceholder")}
           />
         </div>
@@ -409,10 +438,6 @@ export default function ReaderView({ novelId, focusId }: Props) {
       {loading ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("reader.loading")}
-        </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
         </div>
       ) : (
         <div className="max-w-3xl mx-auto px-5 py-6 space-y-5">
@@ -546,7 +571,11 @@ export default function ReaderView({ novelId, focusId }: Props) {
           )}
 
           {/* Entries */}
-          {groupedDesc.length === 0 ? (
+          {loadFailed ? (
+            <p className="text-xs text-destructive py-4">
+              {t("reader.loadFailed")}
+            </p>
+          ) : groupedDesc.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-sm text-muted-foreground">
                 {entries.length === 0

@@ -5,6 +5,8 @@ import { useApp } from "@/hooks/useApp";
 import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -38,7 +40,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
 
   const [characters, setCharacters] = useState<character.Character[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
@@ -47,15 +49,22 @@ export default function CharacterListView({ novelId, focusId }: Props) {
   const load = useCallback(async () => {
     if (!novelId) {
       setCharacters([]);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const list = await app.GetCharacters(novelId);
       setCharacters(list ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("character.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("character.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -68,13 +77,11 @@ export default function CharacterListView({ novelId, focusId }: Props) {
   // ── CRUD handlers ─────────────────────────────────────
 
   function openCreate() {
-    setError(null);
     setForm(EMPTY_FORM);
     setEditMode({ type: "create" });
   }
 
   function openEdit(c: character.Character) {
-    setError(null);
     setForm({
       name: c.name,
       description: c.description || "",
@@ -97,7 +104,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
 
   async function handleCreate() {
     if (!form.name.trim()) {
-      setError(t("character.pleaseEnterName"));
+      toastError(t("character.pleaseEnterName"));
       return;
     }
     setSaving(true);
@@ -106,9 +113,12 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("character.createFailed"),
+      toastError(
+        t("character.createFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -117,7 +127,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
   async function handleUpdate() {
     if (!editMode || editMode.type !== "edit") return;
     if (!form.name.trim()) {
-      setError(t("character.pleaseEnterName"));
+      toastError(t("character.pleaseEnterName"));
       return;
     }
     setSaving(true);
@@ -126,9 +136,12 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       setEditMode(null);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("character.updateFailed"),
+      toastError(
+        t("character.updateFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -141,9 +154,12 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await app.DeleteCharacter(novelId, charId);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("character.deleteFailed"),
+      toastError(
+        t("character.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -170,13 +186,14 @@ export default function CharacterListView({ novelId, focusId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("character.description")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.description}
             onChange={(e) =>
               setForm((f) => ({ ...f, description: e.target.value }))
             }
-            rows={2}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={40}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             placeholder={t("character.characterDesc")}
           />
         </div>
@@ -259,10 +276,6 @@ export default function CharacterListView({ novelId, focusId }: Props) {
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("character.loading")}
         </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
-        </div>
       ) : (
         <div className="flex-1 overflow-y-auto overscroll-contain">
           <div className="max-w-3xl mx-auto px-5 py-6 space-y-6">
@@ -314,7 +327,11 @@ export default function CharacterListView({ novelId, focusId }: Props) {
             )}
 
             {/* Character list */}
-            {characters.length === 0 ? (
+            {loadFailed ? (
+              <p className="text-xs text-destructive py-4">
+                {t("character.loadFailed")}
+              </p>
+            ) : characters.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-tag-blue">
                   <UsersRound className="h-5 w-5 text-tag-blue-foreground" />
