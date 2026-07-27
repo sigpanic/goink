@@ -1,11 +1,14 @@
 package llm
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -43,6 +46,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 			{"role": "user", "content": "hi"},
 		},
 		"max_tokens": 1,
+		"stream":     true,
 	}
 	if buildRequest != nil {
 		payload = buildRequest(payload)
@@ -60,6 +64,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 
 	headers := buildHeaders(map[string]string{
 		"Content-Type":  "application/json",
+		"Accept":        "text/event-stream",
 		"Authorization": "Bearer " + input.APIKey,
 	})
 	for k, v := range headers {
@@ -77,6 +82,41 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 		errBody := make([]byte, 1024)
 		n, _ := resp.Body.Read(errBody)
 		return fmt.Errorf("[%d] %s", resp.StatusCode, string(errBody[:n]))
+	}
+
+	// 检查 Content-Type 是 SSE 流。中转站 SPA 对不存在的路径可能返回 200 + HTML 首页，
+	// 仅靠状态码会误判通过；这里强制要求 text/event-stream，HTML 错误页会被拦下。
+	ct := resp.Header.Get("Content-Type")
+	if !strings.HasPrefix(ct, "text/event-stream") {
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("响应不是 SSE 流 (Content-Type: %s), body: %s", ct, string(errBody))
+	}
+
+	// 扫描 SSE 流，验证至少有一个 data: 行且 JSON 含 choices 字段。
+	// 防止中转站返回空 SSE 流或非标格式（如 GPT-5 Responses API 的 event: 类型）。
+	// 读到第一个有效 chunk 就 break，不等流结束，负担小。
+	scanner := bufio.NewScanner(resp.Body)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	foundValid := false
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		data := line[len("data: "):]
+		if data == "[DONE]" {
+			break
+		}
+		var chunk map[string]any
+		if err := json.Unmarshal([]byte(data), &chunk); err == nil {
+			if _, ok := chunk["choices"]; ok {
+				foundValid = true
+				break
+			}
+		}
+	}
+	if !foundValid {
+		return fmt.Errorf("SSE 流中未找到有效 chunk（可能模型不可用或返回非标准格式）")
 	}
 
 	return nil

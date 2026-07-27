@@ -6,6 +6,11 @@ import (
 )
 
 // normalizeURL 补全 https:// 协议头，并确保路径以 /chat/completions 结尾。
+// 修复两个 bug：
+//   - Bug A：末尾斜杠导致 /chat/completions 重复拼接（如 https://x.com/v1/chat/completions/
+//     会被旧逻辑拼成 https://x.com/v1/chat/completions/chat/completions，触发中转站 404）
+//   - Bug B：裸域名（如 https://x.com）不补 /v1，导致请求落到 https://x.com/chat/completions
+//     被中转站返回 404 HTML，parseSSE 找不到 data 行，最终触发 empty sse response
 func normalizeURL(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
@@ -14,10 +19,25 @@ func normalizeURL(raw string) string {
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 		raw = "https://" + raw
 	}
-	if !strings.HasSuffix(raw, "/chat/completions") {
-		raw = strings.TrimRight(raw, "/") + "/chat/completions"
+	// 先去末尾斜杠，避免 HasSuffix 误判（修复 Bug A）
+	raw = strings.TrimRight(raw, "/")
+
+	// 已以 /chat/completions 结尾，不再追加
+	if strings.HasSuffix(raw, "/chat/completions") {
+		return raw
 	}
-	return raw
+
+	// 拆解 scheme://host/path，仅在 path 为空（裸域名）时补 /v1
+	// 修复 Bug B：用户填 https://x.com（裸域名）时补成 https://x.com/v1/chat/completions
+	// 用户填 https://x.com/v1 或 https://x.com/api/openai 等带路径的，不擅自补 /v1（避免误伤自定义路径）
+	if idx := strings.Index(raw, "://"); idx >= 0 {
+		hostPart := raw[idx+3:]
+		if !strings.Contains(hostPart, "/") {
+			return raw + "/v1/chat/completions"
+		}
+	}
+
+	return raw + "/chat/completions"
 }
 
 // UserLLMConfig 是用户 LLM 配置的持久化格式（加密 JSON）。
@@ -145,7 +165,7 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 			view.Providers = append(view.Providers, ProviderView{
 				Key:           up.Name,
 				Name:          up.Name,
-				ChatURL:       normalizeURL(up.ChatURL),
+				ChatURL:       up.ChatURL,
 				APIKey:        up.APIKey,
 				Temperature:   derefOrZero(up.Temperature),
 				Source:        "custom",

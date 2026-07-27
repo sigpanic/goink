@@ -4,6 +4,44 @@ import (
 	"testing"
 )
 
+func TestNormalizeURL(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		// 基础场景
+		{"empty", "", ""},
+		{"with surrounding space", "  https://x.com/v1  ", "https://x.com/v1/chat/completions"},
+		{"no scheme with path", "1024token.club/v1", "https://1024token.club/v1/chat/completions"},
+
+		// Bug A：末尾斜杠导致 /chat/completions 重复拼接
+		{"trailing slash on full url", "https://x.com/v1/chat/completions/", "https://x.com/v1/chat/completions"},
+		{"double trailing slash on full url", "https://x.com/v1/chat/completions//", "https://x.com/v1/chat/completions"},
+		{"trailing slash on /v1", "https://x.com/v1/", "https://x.com/v1/chat/completions"},
+
+		// Bug B：裸域名不补 /v1
+		{"bare domain with scheme", "https://1024token.club", "https://1024token.club/v1/chat/completions"},
+		{"bare domain no scheme", "1024token.club", "https://1024token.club/v1/chat/completions"},
+
+		// 已正确路径（不应改动）
+		{"full url no trailing slash", "https://x.com/v1/chat/completions", "https://x.com/v1/chat/completions"},
+		{"with /v1 only", "https://x.com/v1", "https://x.com/v1/chat/completions"},
+
+		// 自定义路径：不擅自补 /v1（避免误伤非标中转站的自定义路径）
+		{"custom path without /v1", "https://x.com/api/openai", "https://x.com/api/openai/chat/completions"},
+		{"custom path with /v1 in middle", "https://x.com/api/v1", "https://x.com/api/v1/chat/completions"},
+		{"custom path ending with /v1/chat/completions", "https://x.com/api/v1/chat/completions", "https://x.com/api/v1/chat/completions"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := normalizeURL(tt.input); got != tt.want {
+				t.Errorf("normalizeURL(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDerefOrZero_Nil(t *testing.T) {
 	if v := derefOrZero(nil); v != 0 {
 		t.Errorf("expected 0, got %f", v)
