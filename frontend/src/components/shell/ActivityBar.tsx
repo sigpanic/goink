@@ -4,6 +4,7 @@ import {
   List,
   Search,
   Settings,
+  Globe,
   Users,
   MapPin,
   GitBranch,
@@ -27,6 +28,7 @@ const activities: Activity[] = [
   { id: "novels", icon: Library, labelKey: "shell.bookshelf" },
   { id: "chapters", icon: List, labelKey: "shell.chapters" },
   { id: "preferences", icon: Settings, labelKey: "shell.preference" },
+  { id: "novel-settings", icon: Globe, labelKey: "shell.novelSetting" },
   { id: "characters", icon: Users, labelKey: "shell.characters" },
   { id: "locations", icon: MapPin, labelKey: "shell.locations" },
   { id: "storyarcs", icon: GitBranch, labelKey: "shell.arcs" },
@@ -52,7 +54,7 @@ export default function ActivityBar({ activeId, onSelect }: Props) {
         return (
           <div key={a.id}>
             {i === 0 && <div className="w-6 h-px bg-border my-1 mx-auto" />}
-            {i === 3 && <div className="w-6 h-px bg-border my-1 mx-auto" />}
+            {i === 4 && <div className="w-6 h-px bg-border my-1 mx-auto" />}
             <button
               disabled={a.disabled}
               onClick={() => onSelect(a.id)}

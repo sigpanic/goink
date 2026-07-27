@@ -11,6 +11,7 @@ import TimelineList from "@/components/timeline/TimelineList";
 import ArcList from "@/components/storyarc/ArcList";
 import ReaderList from "@/components/reader/ReaderList";
 import PreferenceList from "@/components/preference/PreferenceList";
+import NovelSettingList from "@/components/novel-setting/NovelSettingList";
 import StyleSampleList from "@/components/style/StyleSampleList";
 import type { SearchResult } from "@/components/search/SearchPanel";
 import GitHistoryList from "@/components/git/GitHistoryList";
@@ -171,6 +172,8 @@ export default function SidePanel({
         <ReaderList novelId={novelId} />
       ) : activePanel === "preferences" ? (
         <PreferenceList novelId={novelId} />
+      ) : activePanel === "novel-settings" ? (
+        <NovelSettingList novelId={novelId} />
       ) : activePanel === "git" ? (
         <GitHistoryList novelId={novelId} onSelectFile={onSelectGitFile} />
       ) : activePanel === "style-samples" ? (

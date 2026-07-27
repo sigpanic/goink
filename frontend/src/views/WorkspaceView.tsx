@@ -16,6 +16,7 @@ import ArcListView from "@/components/storyarc/ArcListView";
 import TimelineView from "@/components/timeline/TimelineView";
 import ReaderView from "@/components/reader/ReaderView";
 import PreferenceView from "@/components/preference/PreferenceView";
+import NovelSettingView from "@/components/novel-setting/NovelSettingView";
 import BookshelfView from "@/components/novel/BookshelfView";
 import NovelEditDialog from "@/components/novel/NovelEditDialog";
 import NovelDeleteDialog from "@/components/novel/NovelDeleteDialog";
@@ -81,6 +82,7 @@ export default function WorkspaceView({
   const [arcFocusId, setArcFocusId] = useState<number>(0);
   const [readerFocusId, setReaderFocusId] = useState<number>(0);
   const [preferenceFocusId, setPreferenceFocusId] = useState<number>(0);
+  const [settingFocusId, setSettingFocusId] = useState<number>(0);
   const [styleSampleFocusId, setStyleSampleFocusId] = useState<number | null>(
     null,
   );
@@ -279,6 +281,9 @@ export default function WorkspaceView({
         break;
       case "preferences":
         setPreferenceFocusId(entityId);
+        break;
+      case "novel-settings":
+        setSettingFocusId(entityId);
         break;
     }
     setActivePanel(panelId);
@@ -624,6 +629,7 @@ export default function WorkspaceView({
           activePanel !== "timeline" &&
           activePanel !== "reader" &&
           activePanel !== "preferences" &&
+          activePanel !== "novel-settings" &&
           activePanel !== "profile" &&
           activePanel !== "git" &&
           activePanel !== "style-samples" && (
@@ -686,6 +692,13 @@ export default function WorkspaceView({
             <PreferenceView
               novelId={activeNovelId}
               focusId={preferenceFocusId}
+            />
+          </ErrorBoundary>
+        ) : activePanel === "novel-settings" ? (
+          <ErrorBoundary>
+            <NovelSettingView
+              novelId={activeNovelId}
+              focusId={settingFocusId}
             />
           </ErrorBoundary>
         ) : activePanel === "git" ? (
