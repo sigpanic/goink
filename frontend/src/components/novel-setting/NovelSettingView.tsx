@@ -12,9 +12,7 @@ interface Props {
 }
 
 type EditMode =
-  | { type: "create" }
-  | { type: "edit"; item: setting.SettingItem }
-  | null;
+  { type: "create" } | { type: "edit"; item: setting.SettingItem } | null;
 
 type EditForm = {
   category: string;
