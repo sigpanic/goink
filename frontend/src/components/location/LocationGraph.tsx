@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import type { location } from "@/hooks/useApp";
+import { toastError } from "@/lib/utils";
 
 interface Props {
   novelId: number;
@@ -57,7 +58,7 @@ export default function LocationGraph({ novelId, focusId }: Props) {
   const [locations, setLocations] = useState<location.Location[]>([]);
   const [relations, setRelations] = useState<location.LocationRelation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedLocation, setSelectedLocation] =
     useState<location.Location | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -69,7 +70,7 @@ export default function LocationGraph({ novelId, focusId }: Props) {
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [locList, relList] = await Promise.all([
         app.GetLocations(novelId),
@@ -78,7 +79,13 @@ export default function LocationGraph({ novelId, focusId }: Props) {
       setLocations(locList ?? []);
       setRelations(relList ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("location.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("location.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -407,13 +414,15 @@ export default function LocationGraph({ novelId, focusId }: Props) {
           );
         })()}
 
-      {error ? (
-        <div className="relative z-10 flex h-full items-center justify-center text-sm text-rose-500">
-          {error}
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("location.loading")}
+        </div>
+      ) : loadFailed ? (
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <p className="text-xs text-destructive py-4">
+            {t("location.loadFailed")}
+          </p>
         </div>
       ) : locations.length === 0 ? (
         <div className="relative z-10 flex h-full items-center justify-center">

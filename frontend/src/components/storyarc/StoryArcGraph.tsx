@@ -13,6 +13,7 @@ import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
+import { toastError } from "@/lib/utils";
 import type { storyarc } from "@/hooks/useApp";
 
 interface Props {
@@ -63,7 +64,7 @@ export default function StoryArcGraph({ novelId }: Props) {
   const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
   const [allNodes, setAllNodes] = useState<storyarc.ArcNode[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedNode, setSelectedNode] = useState<storyarc.ArcNode | null>(
     null,
   );
@@ -105,7 +106,7 @@ export default function StoryArcGraph({ novelId }: Props) {
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [arcList, nodeList, maxCh] = await Promise.all([
         app.GetStoryArcs(novelId),
@@ -118,7 +119,13 @@ export default function StoryArcGraph({ novelId }: Props) {
 
       setWindowCenter(Math.max(1, maxCh));
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("storyarc.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("storyarc.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -778,13 +785,15 @@ export default function StoryArcGraph({ novelId }: Props) {
       )}
 
       {/* G6 container */}
-      {error ? (
-        <div className="relative z-10 flex h-full items-center justify-center text-sm text-rose-500">
-          {error}
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("storyarc.loading")}
+        </div>
+      ) : loadFailed ? (
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <p className="text-xs text-destructive py-4">
+            {t("storyarc.loadFailed")}
+          </p>
         </div>
       ) : arcs.length === 0 ? (
         <div className="relative z-10 flex h-full items-center justify-center">

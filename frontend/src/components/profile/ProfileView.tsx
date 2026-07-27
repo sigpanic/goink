@@ -4,6 +4,7 @@ import { useApp } from "@/hooks/useApp";
 import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
 import type { config } from "@/lib/wailsjs/go/models";
+import { toastError } from "@/lib/utils";
 
 interface WritingStats {
   total_words: number;
@@ -18,7 +19,7 @@ export default function ProfileView() {
   const app = useApp();
   const { t } = useTranslation();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [activity, setActivity] = useState<Record<string, number>>({});
   const [stats, setStats] = useState<WritingStats | null>(null);
   const [settings, setSettings] = useState<config.AppSettings | null>(null);
@@ -33,7 +34,7 @@ export default function ProfileView() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [act, st, cfg] = await Promise.all([
         app.GetWritingActivity(12),
@@ -50,7 +51,13 @@ export default function ProfileView() {
       setStats(st as WritingStats);
       setSettings(cfg as config.AppSettings);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("profile.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("profile.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -109,16 +116,6 @@ export default function ProfileView() {
     );
   }
 
-  if (error) {
-    return (
-      <main className="flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
-        <div className="flex h-full items-center justify-center text-sm text-rose-500">
-          {error}
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
       <input
@@ -129,6 +126,11 @@ export default function ProfileView() {
         onChange={handleFileChange}
       />
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+        {loadFailed && (
+          <p className="text-xs text-destructive py-4">
+            {t("profile.loadFailed")}
+          </p>
+        )}
         {/* 头像 + 问候 */}
         <div className="flex items-center gap-4">
           <div

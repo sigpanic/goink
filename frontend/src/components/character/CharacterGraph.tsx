@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import type { character } from "@/hooks/useApp";
+import { toastError } from "@/lib/utils";
 
 interface Props {
   novelId: number;
@@ -109,7 +110,7 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
   const [characters, setCharacters] = useState<character.Character[]>([]);
   const [relations, setRelations] = useState<character.CharacterRelation[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [selectedCharacter, setSelectedCharacter] =
     useState<character.Character | null>(null);
   const [expanded, setExpanded] = useState(false);
@@ -121,7 +122,7 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const [charList, relList] = await Promise.all([
         app.GetCharacters(novelId),
@@ -130,7 +131,13 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
       setCharacters(charList ?? []);
       setRelations(relList ?? []);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("character.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("character.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -463,13 +470,15 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
         </span>
       </div>
 
-      {error ? (
-        <div className="relative z-10 flex h-full items-center justify-center text-sm text-rose-500">
-          {error}
-        </div>
-      ) : loading ? (
+      {loading ? (
         <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("character.loading")}
+        </div>
+      ) : loadFailed ? (
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <p className="text-xs text-destructive py-4">
+            {t("character.loadFailed")}
+          </p>
         </div>
       ) : characters.length === 0 ? (
         <div className="relative z-10 flex h-full items-center justify-center">

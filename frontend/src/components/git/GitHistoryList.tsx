@@ -16,6 +16,7 @@ import {
 } from "@/lib/wailsjs/go/app/App";
 import type { git } from "@/lib/wailsjs/go/models";
 import GitCommitTooltip from "./GitCommitTooltip";
+import { toastError } from "@/lib/utils";
 
 interface Props {
   novelId: number;
@@ -42,7 +43,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [hoveredHash, setHoveredHash] = useState<string | null>(null);
   const [tooltipRect, setTooltipRect] = useState<{
     top: number;
@@ -109,7 +110,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
     }
     let cancelled = false;
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     setHasMore(true);
     setExpandedHash(null);
     expandedHashRef.current = null;
@@ -123,8 +124,15 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
         setCommits(list);
         setHasMore(list.length >= PAGE_SIZE);
       })
-      .catch((e: Error) => {
-        if (!cancelled) setError(e.message || t("git.loadFailed"));
+      .catch((err: Error) => {
+        if (cancelled) return;
+        setLoadFailed(true);
+        toastError(
+          t("git.loadFailed") +
+            ": " +
+            (err instanceof Error ? err.message : String(err)),
+        );
+        console.error(err);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -333,19 +341,29 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-5 h-5 text-muted-foreground animate-spin" />
           </div>
-        ) : error ? (
+        ) : loadFailed ? (
           <div className="flex flex-col items-center justify-center h-full px-4 text-center">
-            <p className="text-xs text-muted-foreground mb-2">{error}</p>
+            <p className="text-xs text-destructive mb-2">
+              {t("git.loadFailed")}
+            </p>
             <button
               onClick={() => {
-                setError(null);
+                setLoadFailed(false);
                 setLoading(true);
                 load(PAGE_SIZE)
                   .then((list) => {
                     setCommits(list);
                     setHasMore(list.length >= PAGE_SIZE);
                   })
-                  .catch((e: Error) => setError(e.message))
+                  .catch((err: Error) => {
+                    setLoadFailed(true);
+                    toastError(
+                      t("git.loadFailed") +
+                        ": " +
+                        (err instanceof Error ? err.message : String(err)),
+                    );
+                    console.error(err);
+                  })
                   .finally(() => setLoading(false));
               }}
               className="text-xs text-primary hover:underline"
