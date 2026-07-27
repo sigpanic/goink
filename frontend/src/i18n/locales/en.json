@@ -736,7 +736,8 @@
     "noPreference": "No preferences yet",
     "scope": "Scope",
     "global": "Global",
-    "book": "Book"
+    "book": "Book",
+    "tokenOverBudget": "Preferences exceed 4k soft budget ({{count}} tokens), consider trimming"
   },
   "search": {
     "textMatch": "Text Match",

@@ -3,6 +3,8 @@ import { Pencil, Plus, Settings, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { preference } from "@/hooks/useApp";
+import { toastError } from "@/lib/utils";
+import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 
 interface Props {
   novelId: number;
@@ -28,8 +30,10 @@ export default function PreferenceView({ novelId }: Props) {
 
   const [global, setGlobal] = useState<preference.PreferenceItem[]>([]);
   const [novelPrefs, setNovelPrefs] = useState<preference.PreferenceItem[]>([]);
+  const [tokenCount, setTokenCount] = useState(0);
+  const [overBudget, setOverBudget] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -38,16 +42,27 @@ export default function PreferenceView({ novelId }: Props) {
     if (!novelId) {
       setGlobal([]);
       setNovelPrefs([]);
+      setTokenCount(0);
+      setOverBudget(false);
+      setLoadFailed(false);
       return;
     }
     setLoading(true);
-    setError(null);
+    setLoadFailed(false);
     try {
       const result = await app.GetPreferences(novelId);
       setGlobal(result.global ?? []);
       setNovelPrefs(result.novel ?? []);
+      setTokenCount(result.token_count ?? 0);
+      setOverBudget(result.over_budget ?? false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("preference.loadFailed"));
+      setLoadFailed(true);
+      toastError(
+        t("preference.loadFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -60,13 +75,11 @@ export default function PreferenceView({ novelId }: Props) {
   // ── CRUD handlers ────────────────────────────────────
 
   function openCreate(isGlobal: boolean) {
-    setError(null);
     setForm({ ...EMPTY_FORM, isGlobal });
     setEditMode({ type: "create", isGlobal });
   }
 
   function openEdit(item: preference.PreferenceItem) {
-    setError(null);
     setForm({
       category: item.category,
       content: item.content,
@@ -83,7 +96,7 @@ export default function PreferenceView({ novelId }: Props) {
   async function handleSave() {
     if (!editMode) return;
     if (!form.content.trim()) {
-      setError(t("preference.pleaseEnterContent"));
+      toastError(t("preference.pleaseEnterContent"));
       return;
     }
 
@@ -106,7 +119,12 @@ export default function PreferenceView({ novelId }: Props) {
       setForm(EMPTY_FORM);
       await load();
     } catch (err) {
-      setError(err instanceof Error ? err.message : t("preference.saveFailed"));
+      toastError(
+        t("preference.saveFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -119,9 +137,12 @@ export default function PreferenceView({ novelId }: Props) {
       await app.DeletePreference(id);
       await load();
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : t("preference.deleteFailed"),
+      toastError(
+        t("preference.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
       );
+      console.error(err);
     } finally {
       setSaving(false);
     }
@@ -153,7 +174,11 @@ export default function PreferenceView({ novelId }: Props) {
           )}
         </div>
 
-        {items.length === 0 && !isCreating ? (
+        {loadFailed ? (
+          <p className="text-xs text-destructive py-4">
+            {t("preference.loadFailed")}
+          </p>
+        ) : items.length === 0 && !isCreating ? (
           <p className="text-xs text-muted-foreground py-4">
             {isGlobal
               ? t("preference.noGlobalPreference")
@@ -161,6 +186,37 @@ export default function PreferenceView({ novelId }: Props) {
           </p>
         ) : (
           <div className="space-y-2">
+            {isCreating && (
+              <div className="rounded-lg border border-dashed border-border bg-card/60 p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-xs font-semibold text-foreground">
+                    {t("preference.newPreference")}
+                  </span>
+                  <button
+                    onClick={closeForm}
+                    className="p-0.5 rounded text-muted-foreground hover:text-foreground"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {renderFormFields()}
+                <div className="flex items-center gap-2 justify-end mt-3">
+                  <button
+                    onClick={closeForm}
+                    className="px-3 py-1 rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {t("common.cancel")}
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={saving || !form.content.trim()}
+                    className="px-3 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
+                  >
+                    {saving ? t("preference.creating") : t("preference.create")}
+                  </button>
+                </div>
+              </div>
+            )}
             {items.map((item) => {
               const isEditing =
                 editMode?.type === "edit" && editMode.item.id === item.id;
@@ -238,38 +294,6 @@ export default function PreferenceView({ novelId }: Props) {
                 </div>
               );
             })}
-
-            {isCreating && (
-              <div className="rounded-lg border border-dashed border-border bg-card/60 p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-xs font-semibold text-foreground">
-                    {t("preference.newPreference")}
-                  </span>
-                  <button
-                    onClick={closeForm}
-                    className="p-0.5 rounded text-muted-foreground hover:text-foreground"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {renderFormFields()}
-                <div className="flex items-center gap-2 justify-end mt-3">
-                  <button
-                    onClick={closeForm}
-                    className="px-3 py-1 rounded text-xs text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {t("common.cancel")}
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={saving || !form.content.trim()}
-                    className="px-3 py-1 rounded text-xs font-medium bg-primary text-primary-foreground hover:opacity-90 transition-opacity disabled:opacity-50"
-                  >
-                    {saving ? t("preference.creating") : t("preference.create")}
-                  </button>
-                </div>
-              </div>
-            )}
           </div>
         )}
       </section>
@@ -319,14 +343,15 @@ export default function PreferenceView({ novelId }: Props) {
           <label className="text-xs font-medium text-muted-foreground mb-1 block">
             {t("preference.content")}
           </label>
-          <textarea
+          <AutoGrowTextarea
             value={form.content}
             onChange={(e) =>
               setForm((f) => ({ ...f, content: e.target.value }))
             }
             placeholder={t("preference.contentPlaceholder")}
-            rows={3}
-            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-y"
+            minHeight={60}
+            maxHeight={160}
+            className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
       </div>
@@ -339,10 +364,6 @@ export default function PreferenceView({ novelId }: Props) {
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("preference.loading")}
         </div>
-      ) : error ? (
-        <div className="flex h-full items-center justify-center text-sm text-destructive">
-          {error}
-        </div>
       ) : (
         <div className="max-w-3xl mx-auto px-5 py-6 space-y-8">
           <div className="flex items-center gap-2">
@@ -353,6 +374,11 @@ export default function PreferenceView({ novelId }: Props) {
                 {global.length + novelPrefs.length} {t("preference.countUnit")}
               </span>
             </h2>
+            {overBudget && (
+              <span className="ml-auto text-xs text-amber-600 dark:text-amber-500">
+                {t("preference.tokenOverBudget", { count: tokenCount })}
+              </span>
+            )}
           </div>
 
           {renderSection(t("preference.globalPreference"), global, true)}

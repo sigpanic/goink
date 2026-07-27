@@ -713,7 +713,8 @@
     "noPreference": "暂无偏好",
     "scope": "归属",
     "global": "全局",
-    "book": "本书"
+    "book": "本书",
+    "tokenOverBudget": "偏好已超 4k 软上限（{{count}} tokens），建议精简"
   },
   "search": {
     "textMatch": "正文匹配",
