@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
@@ -26,8 +27,13 @@ func TestTestConnection_SSEValid(t *testing.T) {
 		ModelID:      "test-model",
 	}
 
-	if err := TestConnection(context.Background(), Builtin, input); err != nil {
-		t.Errorf("expected pass, got error: %v", err)
+	url, err := TestConnection(context.Background(), Builtin, input)
+	if err != nil {
+		t.Fatalf("expected pass, got error: %v", err)
+	}
+	// 第一个候选是原样（完整端点），应原样返回
+	if url != input.ChatURL {
+		t.Errorf("expected url %s, got %s", input.ChatURL, url)
 	}
 }
 
@@ -48,7 +54,7 @@ func TestTestConnection_HTMLPage(t *testing.T) {
 		ModelID:      "test-model",
 	}
 
-	err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), Builtin, input)
 	if err == nil {
 		t.Fatal("expected error for HTML response, got nil")
 	}
@@ -75,7 +81,7 @@ func TestTestConnection_EmptySSE(t *testing.T) {
 		ModelID:      "test-model",
 	}
 
-	err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), Builtin, input)
 	if err == nil {
 		t.Fatal("expected error for empty SSE stream, got nil")
 	}
@@ -99,7 +105,7 @@ func TestTestConnection_NonChoicesChunk(t *testing.T) {
 		ModelID:      "test-model",
 	}
 
-	err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), Builtin, input)
 	if err == nil {
 		t.Fatal("expected error for non-choices SSE chunk, got nil")
 	}
@@ -121,8 +127,223 @@ func TestTestConnection_HTTPError(t *testing.T) {
 		ModelID:      "test-model",
 	}
 
-	err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), Builtin, input)
 	if err == nil {
 		t.Fatal("expected error for 401, got nil")
+	}
+}
+
+// TestTestConnection_FallbackBareDomain 验证裸域名多层 fallback 到 /v1/chat/completions。
+// mock server 只对 /v1/chat/completions 路径返回有效 SSE，其他路径 404。
+// 用户填裸域名（无路径），应 fallback 探测到 /v1/chat/completions。
+func TestTestConnection_FallbackBareDomain(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(http.StatusNotFound)
+			fmt.Fprint(w, `{"error":"not found"}`)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"id\":\"x\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n")
+	}))
+	defer server.Close()
+
+	input := TestConnectionInput{
+		ProviderName: "custom",
+		ChatURL:      server.URL, // 裸域名，无路径
+		APIKey:       "sk-test",
+		ModelID:      "test-model",
+	}
+
+	url, err := TestConnection(context.Background(), Builtin, input)
+	if err != nil {
+		t.Fatalf("expected pass via fallback, got error: %v", err)
+	}
+	expected := server.URL + "/v1/chat/completions"
+	if url != expected {
+		t.Errorf("expected fallback url %s, got %s", expected, url)
+	}
+}
+
+// TestTestConnection_FallbackBaseURL 验证 base URL（/v1）fallback 到 /v1/chat/completions。
+// 用户填 https://x.com/v1，应探测到 /v1/chat/completions。
+func TestTestConnection_FallbackBaseURL(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/v1/chat/completions" {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprint(w, "data: {\"id\":\"x\",\"choices\":[{\"index\":0,\"delta\":{\"content\":\"hi\"}}]}\n\n")
+	}))
+	defer server.Close()
+
+	input := TestConnectionInput{
+		ProviderName: "custom",
+		ChatURL:      server.URL + "/v1", // base URL
+		APIKey:       "sk-test",
+		ModelID:      "test-model",
+	}
+
+	url, err := TestConnection(context.Background(), Builtin, input)
+	if err != nil {
+		t.Fatalf("expected pass via fallback, got error: %v", err)
+	}
+	expected := server.URL + "/v1/chat/completions"
+	if url != expected {
+		t.Errorf("expected fallback url %s, got %s", expected, url)
+	}
+}
+
+// TestTestConnection_AllCandidatesFail 验证所有候选 URL 均失败时返回 error。
+func TestTestConnection_AllCandidatesFail(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		fmt.Fprint(w, `{"error":"not found"}`)
+	}))
+	defer server.Close()
+
+	input := TestConnectionInput{
+		ProviderName: "custom",
+		ChatURL:      server.URL,
+		APIKey:       "sk-test",
+		ModelID:      "test-model",
+	}
+
+	_, err := TestConnection(context.Background(), Builtin, input)
+	if err == nil {
+		t.Fatal("expected error when all candidates fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "均验证失败") {
+		t.Errorf("error should mention all candidates failed, got: %v", err)
+	}
+}
+
+// TestExpandChatURLCandidates 验证候选 URL 生成逻辑。
+func TestExpandChatURLCandidates(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  string
+		want []string
+	}{
+		{
+			name: "bare domain",
+			raw:  "https://1024token.club",
+			want: []string{
+				"https://1024token.club",
+				"https://1024token.club/chat/completions",
+				"https://1024token.club/v1/chat/completions",
+			},
+		},
+		{
+			name: "base url with /v1",
+			raw:  "https://api.deepseek.com/v1",
+			want: []string{
+				"https://api.deepseek.com/v1",
+				"https://api.deepseek.com/v1/chat/completions",
+			},
+		},
+		{
+			name: "full endpoint",
+			raw:  "https://x.com/v1/chat/completions",
+			want: []string{
+				"https://x.com/v1/chat/completions",
+				"https://x.com/chat/completions",
+			},
+		},
+		{
+			name: "trailing slash trimmed",
+			raw:  "https://x.com/v1/",
+			want: []string{
+				"https://x.com/v1",
+				"https://x.com/v1/chat/completions",
+			},
+		},
+		{
+			name: "no scheme gets https",
+			raw:  "1024token.club",
+			want: []string{
+				"https://1024token.club",
+				"https://1024token.club/chat/completions",
+				"https://1024token.club/v1/chat/completions",
+			},
+		},
+		{
+			name: "empty",
+			raw:  "",
+			want: nil,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := expandChatURLCandidates(tt.raw)
+			if len(got) != len(tt.want) {
+				t.Errorf("expandChatURLCandidates(%q) = %v, want %v", tt.raw, got, tt.want)
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("expandChatURLCandidates(%q)[%d] = %q, want %q", tt.raw, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+// TestSummarizeErrorBody 验证 HTTP 错误响应体的格式化逻辑。
+// 覆盖三种路径：OpenAI 兼容 JSON、HTML 错误页、其他格式。
+func TestSummarizeErrorBody(t *testing.T) {
+	tests := []struct {
+		name       string
+		statusCode int
+		body       string
+		want       string
+	}{
+		{
+			name:       "openai compatible error with type",
+			statusCode: 401,
+			body:       `{"error":{"message":"Invalid API Key","type":"invalid_key"}}`,
+			want:       "[401] Invalid API Key (invalid_key)",
+		},
+		{
+			name:       "openai compatible error without type",
+			statusCode: 402,
+			body:       `{"error":{"message":"余额不足"}}`,
+			want:       "[402] 余额不足",
+		},
+		{
+			name:       "html error page",
+			statusCode: 404,
+			body:       `<html><head><title>404 Not Found</title></head><body>openresty</body></html>`,
+			want:       "[404] [HTML 错误页，可能 URL 错误或被防火墙拦]",
+		},
+		{
+			name:       "plain text error",
+			statusCode: 500,
+			body:       `Internal Server Error`,
+			want:       "[500] Internal Server Error",
+		},
+		{
+			name:       "long plain text truncated",
+			statusCode: 500,
+			body:       strings.Repeat("a", 300),
+			want:       "[500] " + strings.Repeat("a", 200) + "...",
+		},
+		{
+			name:       "json without error message falls through",
+			statusCode: 400,
+			body:       `{"foo":"bar"}`,
+			want:       `[400] {"foo":"bar"}`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := summarizeErrorBody(tt.statusCode, []byte(tt.body))
+			if got != tt.want {
+				t.Errorf("summarizeErrorBody(%d, %q) = %q, want %q", tt.statusCode, tt.body, got, tt.want)
+			}
+		})
 	}
 }

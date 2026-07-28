@@ -264,6 +264,8 @@
     "enterApiKey": "Enter API Key",
     "test": "Test",
     "chatUrl": "Chat URL",
+    "urlAutoDetectHint": "The correct endpoint is auto-detected during testing; the URL may be auto-completed.",
+    "urlAutoCompleted": "URL auto-completed to {{url}}",
     "register": "Register",
     "registerGuide": "Register Guide",
     "connectionSuccess": "✓ Connection successful",
@@ -302,7 +304,19 @@
     "alreadyAdded": "Already Added",
     "temperatureDesc": "Controls the randomness of model output. Higher values are more creative, lower values are more deterministic. Range 0 ~ 2.",
     "language": "Language",
-    "modelNumber": "Model #{{n}}"
+    "modelNumber": "Model #{{n}}",
+    "errorHints": {
+      "invalidKey": "API Key invalid or incorrect. Check if the key is correct, not expired, and has the proper prefix (e.g., sk-)",
+      "insufficientBalance": "Insufficient balance. Please top up at the provider's console",
+      "forbidden": "Access denied. The key may lack permissions, be blocked by firewall, or IP restricted",
+      "notFound": "URL or model not found. Check the Chat URL (common format: https://api.xxx.com/v1/chat/completions) and whether the model ID is available on this provider",
+      "rateLimit": "Rate limited. Please retry later or check RPM/TPM limits",
+      "serverError": "Server error. Provider may be temporarily down, retry later",
+      "nonStandardSSE": "Non-standard response. Model may be unavailable or provider incompatible with OpenAI SSE",
+      "timeout": "Request timeout. Network issue or slow provider response",
+      "emptyUrl": "Chat URL is empty, please fill it in",
+      "generic": "Test failed. Check URL, API Key, and Model ID"
+    }
   },
   "novel": {
     "totalWorks_one": "{{count}} work",

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import { Toaster } from "sonner";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import InitView from "@/views/InitView";
 import WorkspaceView from "@/views/WorkspaceView";
 
@@ -41,7 +42,8 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <TooltipProvider>
+      <div className="min-h-screen bg-background text-foreground">
       <Toaster
         position="top-center"
         richColors
@@ -72,6 +74,7 @@ export default function App() {
           initialShowHelp={fromInit}
         />
       )}
-    </div>
+      </div>
+    </TooltipProvider>
   );
 }

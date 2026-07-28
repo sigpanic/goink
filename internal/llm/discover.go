@@ -15,8 +15,7 @@ import (
 // 从 chatURL 推导 modelsURL（去掉 /chat/completions，拼接 /models），
 // 解析标准 OpenAI 格式及 Kimi 等扩展字段。返回的 ModelInfo 中未获取到的字段留零值。
 func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, error) {
-	chatURL = normalizeURL(chatURL)
-	baseURL := strings.TrimSuffix(chatURL, "/chat/completions")
+	baseURL := extractBaseURL(chatURL)
 	modelsURL := baseURL + "/models"
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, modelsURL, nil)
@@ -121,4 +120,41 @@ func modelIDToName(id string) string {
 		return s
 	}
 	return strings.ToUpper(s[:1]) + s[1:]
+}
+
+// extractBaseURL 从用户填的 chat URL 提取 base URL（用于推导 /models 等端点）。
+// 补 https:// 协议头 + TrimRight 末尾斜杠 + 去掉末尾 /chat/completions + 裸域名补 /v1。
+//
+// /models 是标准 REST 端点（base + /models），路径固定，只需提取 base，
+// 不需要像 TestConnection 那样多层 fallback 探测。
+//
+// 裸域名补 /v1：用户填 https://x.com 或 1024token.club 时，
+// 主流 OpenAI 兼容服务的 /models 端点在 /v1/models，因此补 /v1。
+// 用户填带路径的（/v1、/api/openai 等）不擅自补 /v1，避免误伤自定义路径。
+//
+// 示例：
+//   - https://x.com/v1/chat/completions → https://x.com/v1
+//   - https://x.com/v1                  → https://x.com/v1
+//   - https://x.com                      → https://x.com/v1
+//   - 1024token.club                     → https://1024token.club/v1
+//   - https://x.com/api/openai          → https://x.com/api/openai
+func extractBaseURL(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+	raw = strings.TrimRight(raw, "/")
+	if base, ok := strings.CutSuffix(raw, "/chat/completions"); ok {
+		return base
+	}
+	// 裸域名（host 后无路径）补 /v1
+	if _, hostPart, ok := strings.Cut(raw, "://"); ok {
+		if !strings.Contains(hostPart, "/") {
+			return raw + "/v1"
+		}
+	}
+	return raw
 }

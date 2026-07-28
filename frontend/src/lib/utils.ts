@@ -23,3 +23,8 @@ export function toastError(msg: string) {
     },
   });
 }
+
+/** 显示成功 toast，用于非错误的正向反馈（如 URL 自动补全）。 */
+export function toastSuccess(msg: string) {
+  return toast.success(msg);
+}

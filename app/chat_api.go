@@ -151,8 +151,11 @@ type TestConnectionInput struct {
 	ModelID      string `json:"model_id"`
 }
 
-// TestConnection 发送最小化请求验证 provider 连通性，返回 nil 表示成功。
-func (a *App) TestConnection(input TestConnectionInput) error {
+// TestConnection 发送最小化请求验证 provider 连通性。
+// 多层 fallback 真测，返回验证通过的实际 URL（可能和入参不同，是探测到的正确端点）。
+// 成功返回 (url, nil)，前端应将 url 回写到 provider.chat_url 再保存，确保保存的 URL 和测试时一致。
+// 失败返回 ("", error)。
+func (a *App) TestConnection(input TestConnectionInput) (string, error) {
 	return llm.TestConnection(a.ctx, llm.Builtin, llm.TestConnectionInput{
 		ProviderName: input.ProviderName,
 		ChatURL:      input.ChatURL,

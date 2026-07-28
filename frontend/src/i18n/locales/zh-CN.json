@@ -255,6 +255,8 @@
     "enterApiKey": "输入 API Key",
     "test": "测试",
     "chatUrl": "Chat URL",
+    "urlAutoDetectHint": "测试时会自动探测正确的 API 端点，URL 可能被自动补全",
+    "urlAutoCompleted": "URL 已自动补全为 {{url}}",
     "register": "注册",
     "registerGuide": "注册指引",
     "connectionSuccess": "✓ 连通成功",
@@ -292,7 +294,19 @@
     "alreadyAdded": "已添加",
     "temperatureDesc": "控制模型输出的随机性。值越高越有创意，越低越确定保守。范围 0 ~ 2。",
     "language": "语言",
-    "modelNumber": "模型 #{{n}}"
+    "modelNumber": "模型 #{{n}}",
+    "errorHints": {
+      "invalidKey": "API Key 无效或填错。请检查 Key 是否正确、是否过期、是否带前缀（如 sk-）",
+      "insufficientBalance": "账户余额不足。请到服务商控制台充值",
+      "forbidden": "无权访问。可能 Key 无权限、被防火墙拦、或 IP 被限制",
+      "notFound": "URL 或模型不存在。请检查 Chat URL 是否正确（常见格式：https://api.xxx.com/v1/chat/completions），以及模型 ID 是否在该服务商可用",
+      "rateLimit": "请求过于频繁被限流。请稍后重试，或检查是否触发了服务商的 RPM/TPM 限制",
+      "serverError": "服务端内部错误。可能是服务商临时故障，稍后重试",
+      "nonStandardSSE": "返回格式非标准。可能模型不可用、或服务商不兼容 OpenAI SSE 协议",
+      "timeout": "请求超时。可能网络问题或服务商响应慢",
+      "emptyUrl": "Chat URL 为空，请填写",
+      "generic": "测试失败。请检查 URL、API Key、模型 ID 是否正确"
+    }
   },
   "novel": {
     "totalWorks": "共 {{count}} 部作品",

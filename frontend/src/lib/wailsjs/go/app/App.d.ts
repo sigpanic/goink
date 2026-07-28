@@ -206,7 +206,7 @@ export function SetReasoningEffort(arg1:string):Promise<void>;
 
 export function SetSelectedModel(arg1:string,arg2:string):Promise<void>;
 
-export function TestConnection(arg1:app.TestConnectionInput):Promise<void>;
+export function TestConnection(arg1:app.TestConnectionInput):Promise<string>;
 
 export function UpdateArcNode(arg1:number,arg2:number,arg3:app.UpdateArcNodeInput):Promise<void>;
 

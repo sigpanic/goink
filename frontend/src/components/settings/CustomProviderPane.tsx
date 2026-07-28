@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { llm } from "@/hooks/useApp";
 import TemperatureInfo from "./TemperatureInfo";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
+import TestResultWithHint from "./TestResultWithHint";
 
 interface Props {
   providers: llm.ProviderView[];
@@ -12,7 +13,7 @@ interface Props {
   onRemove: (key: string) => void;
   onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
-  onTest: (providerKey: string) => Promise<string | null>;
+  onTest: (providerKey: string) => Promise<{ resolvedUrl?: string; error?: string }>;
   testResults: Record<string, { ok: boolean; msg?: string } | undefined>;
   testing: Record<string, boolean>;
 }
@@ -189,6 +190,9 @@ export default function CustomProviderPane({
               className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
           </div>
+          <p className="text-xs text-muted-foreground pl-[5rem]">
+            {t("settings.urlAutoDetectHint")}
+          </p>
 
           <div className="flex items-center gap-2">
             <label className="text-xs text-muted-foreground w-16 shrink-0">
@@ -217,15 +221,7 @@ export default function CustomProviderPane({
           </div>
 
           {/* 测试结果 */}
-          {testResult && (
-            <div
-              className={`text-xs pl-[4.5rem] ${testResult.ok ? "text-success-foreground" : "text-red-500"}`}
-            >
-              {testResult.ok
-                ? t("settings.connectionSuccess")
-                : `✗ ${testResult.msg || t("settings.connectionFailed")}`}
-            </div>
-          )}
+      <TestResultWithHint testResult={testResult} />
 
           <div className="flex items-center gap-3">
             <label className="text-xs text-muted-foreground w-16 shrink-0 flex items-center gap-1">

@@ -2,43 +2,7 @@ package llm
 
 import (
 	"sort"
-	"strings"
 )
-
-// normalizeURL 补全 https:// 协议头，并确保路径以 /chat/completions 结尾。
-// 修复两个 bug：
-//   - Bug A：末尾斜杠导致 /chat/completions 重复拼接（如 https://x.com/v1/chat/completions/
-//     会被旧逻辑拼成 https://x.com/v1/chat/completions/chat/completions，触发中转站 404）
-//   - Bug B：裸域名（如 https://x.com）不补 /v1，导致请求落到 https://x.com/chat/completions
-//     被中转站返回 404 HTML，parseSSE 找不到 data 行，最终触发 empty sse response
-func normalizeURL(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return raw
-	}
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		raw = "https://" + raw
-	}
-	// 先去末尾斜杠，避免 HasSuffix 误判（修复 Bug A）
-	raw = strings.TrimRight(raw, "/")
-
-	// 已以 /chat/completions 结尾，不再追加
-	if strings.HasSuffix(raw, "/chat/completions") {
-		return raw
-	}
-
-	// 拆解 scheme://host/path，仅在 path 为空（裸域名）时补 /v1
-	// 修复 Bug B：用户填 https://x.com（裸域名）时补成 https://x.com/v1/chat/completions
-	// 用户填 https://x.com/v1 或 https://x.com/api/openai 等带路径的，不擅自补 /v1（避免误伤自定义路径）
-	if idx := strings.Index(raw, "://"); idx >= 0 {
-		hostPart := raw[idx+3:]
-		if !strings.Contains(hostPart, "/") {
-			return raw + "/v1/chat/completions"
-		}
-	}
-
-	return raw + "/chat/completions"
-}
 
 // UserLLMConfig 是用户 LLM 配置的持久化格式（加密 JSON）。
 // 一个 provider 一个 key，内置模型随代码自动更新，自定义模型需完整填写信息。
@@ -183,8 +147,12 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 }
 
 // ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
-// ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
 // 只保留有 APIKey 的 provider，无 key 的不写入（内置模板由 Merge 自动提供）。
+//
+// 保存用户填的 URL 原值，不再 normalizeURL：
+//   - 保存前前端已通过 TestConnection 验证 URL，并把探测到的正确 URL 回写到 pv.ChatURL
+//   - 二次 normalizeURL 会破坏已验证的 URL（测试和保存不一致）
+//   - 内置 provider 用户未改 URL 时留空，由 Merge 用 bp.ChatURL 兜底
 func (v *LLMConfigView) ToUserConfig() *UserLLMConfig {
 	providers := make([]Provider, 0, len(v.Providers))
 	for _, pv := range v.Providers {
@@ -197,9 +165,9 @@ func (v *LLMConfigView) ToUserConfig() *UserLLMConfig {
 			Models: append([]ModelInfo{}, pv.CustomModels...),
 		}
 		if pv.Source != "builtin" {
-			p.ChatURL = normalizeURL(pv.ChatURL)
+			p.ChatURL = pv.ChatURL
 		} else if bp, ok := Builtin[pv.Key]; ok && pv.ChatURL != bp.ChatURL {
-			p.ChatURL = normalizeURL(pv.ChatURL)
+			p.ChatURL = pv.ChatURL
 		}
 		p.Temperature = floatPtr(pv.Temperature)
 		providers = append(providers, p)

@@ -3,6 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { llm } from "@/hooks/useApp";
+import { toastSuccess } from "@/lib/utils";
 import BuiltinProviderPane from "./BuiltinProviderPane";
 import CustomProviderPane from "./CustomProviderPane";
 
@@ -110,9 +111,13 @@ export default function ModelConfigTab({ onSaved }: Props) {
     [],
   );
 
-  // 测试连通性，返回错误消息或 null
+  // 测试连通性，返回 { resolvedUrl?, error? }。
+  // 后端多层 fallback 真测，返回验证通过的实际 URL（可能和入参不同）。
+  // 成功时把 resolvedUrl 回写到 provider.chat_url，确保保存的 URL 和测试时一致。
   const handleTest = useCallback(
-    async (providerKey: string): Promise<string | null> => {
+    async (
+      providerKey: string,
+    ): Promise<{ resolvedUrl?: string; error?: string }> => {
       const provider = providers.find((p) => p.key === providerKey);
       if (!provider || !provider.api_key) {
         const msg = t("settings.apiKeyNotConfigured");
@@ -120,22 +125,7 @@ export default function ModelConfigTab({ onSaved }: Props) {
           ...prev,
           [providerKey]: { ok: false, msg, keySnapshot: "" },
         }));
-        return msg;
-      }
-
-      let chatURL = provider.chat_url || "";
-      if (/^https?:\/\//.test(chatURL)) {
-        // 已有协议头，直接用
-      } else if (chatURL.includes(".")) {
-        // www.example.com 之类，补 https://
-        chatURL = "https://" + chatURL;
-      } else {
-        const msg = t("settings.invalidUrl");
-        setTestResults((prev) => ({
-          ...prev,
-          [providerKey]: { ok: false, msg, keySnapshot: provider.api_key },
-        }));
-        return msg;
+        return { error: msg };
       }
 
       const models = provider.builtin_models?.length
@@ -148,29 +138,43 @@ export default function ModelConfigTab({ onSaved }: Props) {
           ...prev,
           [providerKey]: { ok: false, msg, keySnapshot: provider.api_key },
         }));
-        return msg;
+        return { error: msg };
       }
 
       setTesting((prev) => ({ ...prev, [providerKey]: true }));
       try {
-        await app.TestConnection({
+        // 后端 expandChatURLCandidates 会补 https:// 和多层 fallback，
+        // 前端直接传原值，不再自己 norl。
+        const resolvedUrl = await app.TestConnection({
           provider_name: providerKey,
-          chat_url: chatURL,
+          chat_url: provider.chat_url || "",
           api_key: provider.api_key,
           model_id: modelId,
         });
+        // 回写探测到的正确 URL（多层 fallback 可能和原值不同）
+        if (resolvedUrl && resolvedUrl !== provider.chat_url) {
+          setProviders((prev) =>
+            prev.map((p) =>
+              p.key === providerKey
+                ? ({ ...p, chat_url: resolvedUrl } as unknown as llm.ProviderView)
+                : p,
+            ),
+          );
+          // 提示用户 URL 已被自动补全（避免对输入框变化感到意外）
+          toastSuccess(t("settings.urlAutoCompleted", { url: resolvedUrl }));
+        }
         setTestResults((prev) => ({
           ...prev,
           [providerKey]: { ok: true, keySnapshot: provider.api_key },
         }));
-        return null;
+        return { resolvedUrl };
       } catch (err: any) {
         const msg = String(err).replace(/^app: test connection: /, "");
         setTestResults((prev) => ({
           ...prev,
           [providerKey]: { ok: false, msg, keySnapshot: provider.api_key },
         }));
-        return msg;
+        return { error: msg };
       } finally {
         setTesting((prev) => ({ ...prev, [providerKey]: false }));
       }
@@ -182,8 +186,8 @@ export default function ModelConfigTab({ onSaved }: Props) {
     // 收集有 key 的 provider
     const withKey = providers.filter((p) => p.api_key);
     if (withKey.length === 0) {
+      // 错误消息不清空（保留到下次成功保存或新错误覆盖），让用户看清错误内容
       setSaveMsg(t("settings.pleaseConfigureApiKey"));
-      setTimeout(() => setSaveMsg(""), 3000);
       return;
     }
 
@@ -195,14 +199,21 @@ export default function ModelConfigTab({ onSaved }: Props) {
       return false;
     });
 
+    // 测试时探测到的正确 URL，用于覆盖保存数据（闭包 providers 是旧的，用 resolvedUrls 兜底）
+    const resolvedUrls: Record<string, string> = {};
     if (needTest.length > 0) {
       setSaveMsg(t("settings.testingConnection"));
       for (const p of needTest) {
-        const err = await handleTest(p.key);
-        if (err) {
-          setSaveMsg(`${p.name} ${t("settings.connectionTestFailed")}: ${err}`);
-          setTimeout(() => setSaveMsg(""), 5000);
+        const result = await handleTest(p.key);
+        if (result.error) {
+          // 错误消息不清空（保留到下次成功保存或新错误覆盖），让用户看清错误内容
+          setSaveMsg(
+            `${p.name} ${t("settings.connectionTestFailed")}: ${result.error}`,
+          );
           return;
+        }
+        if (result.resolvedUrl) {
+          resolvedUrls[p.key] = result.resolvedUrl;
         }
       }
     }
@@ -210,7 +221,17 @@ export default function ModelConfigTab({ onSaved }: Props) {
     setIsSaving(true);
     setSaveMsg("");
     try {
-      await app.SaveLLMConfig({ providers } as unknown as llm.LLMConfigView);
+      // 用 resolvedUrls 覆盖 chat_url，构造保存数据
+      // （handleTest 内部已 setProviders 回写 UI，这里同步保存数据）
+      const providersToSave = providers.map((p) => {
+        const resolved = resolvedUrls[p.key];
+        return resolved && resolved !== p.chat_url
+          ? ({ ...p, chat_url: resolved } as unknown as llm.ProviderView)
+          : p;
+      });
+      await app.SaveLLMConfig({
+        providers: providersToSave,
+      } as unknown as llm.LLMConfigView);
       const keys: Record<string, string> = {};
       for (const p of providers) {
         if (p.api_key) keys[p.key] = p.api_key;

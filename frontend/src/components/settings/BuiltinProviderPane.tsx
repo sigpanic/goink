@@ -13,13 +13,14 @@ import type { llm } from "@/hooks/useApp";
 import TemperatureInfo from "./TemperatureInfo";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderIcon from "./ProviderIcon";
+import TestResultWithHint from "./TestResultWithHint";
 
 interface Props {
   providers: llm.ProviderView[];
   onUpdate: (key: string, patch: Partial<llm.ProviderView>) => void;
   onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
-  onTest: (providerKey: string) => Promise<string | null>;
+  onTest: (providerKey: string) => Promise<{ resolvedUrl?: string; error?: string }>;
   testResults: Record<string, { ok: boolean; msg?: string } | undefined>;
   testing: Record<string, boolean>;
 }
@@ -170,17 +171,12 @@ export default function BuiltinProviderPane({
           className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         />
       </div>
+      <p className="text-xs text-muted-foreground pl-[4.5rem]">
+        {t("settings.urlAutoDetectHint")}
+      </p>
 
       {/* 测试结果 */}
-      {testResult && (
-        <div
-          className={`text-xs pl-[4.5rem] ${testResult.ok ? "text-success-foreground" : "text-red-500"}`}
-        >
-          {testResult.ok
-            ? t("settings.connectionSuccess")
-            : `✗ ${testResult.msg || t("settings.connectionFailed")}`}
-        </div>
-      )}
+      <TestResultWithHint testResult={testResult} />
 
       {/* 注册链接 */}
       {provider.platform_url && (
