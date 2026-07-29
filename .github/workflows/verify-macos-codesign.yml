@@ -1,0 +1,196 @@
+name: Verify macOS Codesign
+
+# 手动触发，用于诊断 macOS arm64 dmg "已损坏" 问题
+# 在 macos-latest 上跑完整构建 + 打包，然后对 .app / dmg 做签名状态诊断
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（用于 dmg 文件名，默认 dev）'
+        required: false
+        default: 'dev'
+
+jobs:
+  verify-codesign:
+    if: github.repository == 'sigpanic/goink-private'
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.25' }
+
+      - uses: actions/setup-node@v4
+        with: { node-version: '24', cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
+
+      - name: Cache runtime deps
+        id: cache-runtime
+        uses: actions/cache@v4
+        with:
+          path: build/runtime
+          key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}
+
+      - name: Install Wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0
+
+      - name: Download runtime deps
+        if: steps.cache-runtime.outputs.cache-hit != 'true'
+        run: |
+          bash scripts/download-git.sh
+          bash scripts/download-onnx.sh
+
+      - name: Build app bundle
+        run: |
+          cd frontend && npm ci && npm run build && cd ..
+          VERSION="${{ inputs.version }}"
+          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
+
+      - name: Package DMG
+        run: |
+          VERSION="${{ inputs.version }}"
+          bash build/package/macos/build-dmg.sh "$VERSION"
+
+      - name: Diagnose build/bin/goink.app
+        run: |
+          set +e
+          APP="build/bin/goink.app"
+          LOG="$RUNNER_TEMP/codesign-diagnose.log"
+          : > "$LOG"
+
+          echo "=========================================="
+          echo "== build/bin/goink.app 完整文件结构"
+          echo "=========================================="
+          find "$APP" -maxdepth 5 -type f -o -type l 2>/dev/null | sort | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 1. codesign --verify --deep --strict --verbose=4 (seal 一致性)"
+          echo "=========================================="
+          codesign --verify --deep --strict --verbose=4 "$APP" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 2. spctl -a -vvv -t exec (Gatekeeper 评估)"
+          echo "=========================================="
+          spctl -a -vvv -t exec "$APP" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 3. codesign -dv --verbose=4 (.app 签名详情)"
+          echo "=========================================="
+          codesign -dv --verbose=4 "$APP" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 4. 主可执行文件架构"
+          echo "=========================================="
+          file "$APP/Contents/MacOS/goink" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 5. 嵌套二进制架构 (git + libonnxruntime)"
+          echo "=========================================="
+          GIT_BIN="$APP/Contents/Resources/runtime/git/git"
+          if [ -e "$GIT_BIN" ]; then
+            echo "--- $GIT_BIN ---"
+            file "$GIT_BIN" 2>&1 | tee -a "$LOG"
+          else
+            echo "!!! git 二进制不存在: $GIT_BIN" | tee -a "$LOG"
+          fi
+          for f in "$APP/Contents/Resources/runtime"/libonnxruntime*.dylib "$APP/Contents/Resources/runtime"/libonnxruntime*.so*; do
+            [ -e "$f" ] || continue
+            echo "--- $f ---"
+            file "$f" 2>&1 | tee -a "$LOG"
+            if [ -L "$f" ]; then
+              target=$(readlink -f "$f" 2>/dev/null)
+              echo "  symlink → $target"
+              [ -n "$target" ] && file "$target" 2>&1 | tee -a "$LOG"
+            fi
+          done
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 6. 嵌套二进制签名状态"
+          echo "=========================================="
+          if [ -e "$GIT_BIN" ]; then
+            echo "--- $GIT_BIN ---"
+            codesign -dv --verbose=4 "$GIT_BIN" 2>&1 | tee -a "$LOG"
+          fi
+          for f in "$APP/Contents/Resources/runtime"/libonnxruntime*.dylib; do
+            [ -e "$f" ] || [ -L "$f" ] || continue
+            echo "--- $f ---"
+            codesign -dv --verbose=4 "$f" 2>&1 | tee -a "$LOG"
+          done
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 7. otool -L 依赖检查"
+          echo "=========================================="
+          echo "--- 主可执行 ---"
+          otool -L "$APP/Contents/MacOS/goink" 2>&1 | head -20 | tee -a "$LOG"
+          if [ -e "$GIT_BIN" ]; then
+            echo "--- git ---"
+            otool -L "$GIT_BIN" 2>&1 | head -20 | tee -a "$LOG"
+          fi
+          echo "" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== 8. xattr (quarantine 扩展属性)"
+          echo "=========================================="
+          xattr -lr "$APP" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+      - name: Mount DMG and diagnose volume app
+        run: |
+          set +e
+          LOG="$RUNNER_TEMP/dmg-diagnose.log"
+          : > "$LOG"
+
+          DMG=$(ls build/dist/*.dmg 2>/dev/null | head -1)
+          if [ -z "$DMG" ]; then
+            echo "!!! 未找到 dmg 文件" | tee -a "$LOG"
+            exit 0
+          fi
+          echo "Found DMG: $DMG" | tee -a "$LOG"
+
+          echo "=========================================="
+          echo "== hdiutil attach"
+          echo "=========================================="
+          ATTACH_OUTPUT=$(hdiutil attach "$DMG" -nobrowse -noautoopen 2>&1 | tee -a "$LOG")
+          MOUNT_POINT=$(echo "$ATTACH_OUTPUT" | grep -E "/Volumes/" | awk '{print $NF}')
+          echo "Mount point: $MOUNT_POINT" | tee -a "$LOG"
+          ls -la "$MOUNT_POINT" 2>&1 | tee -a "$LOG"
+          echo "" | tee -a "$LOG"
+
+          VOL_APP=$(find "$MOUNT_POINT" -maxdepth 2 -name "*.app" 2>/dev/null | head -1)
+          echo "App in volume: $VOL_APP" | tee -a "$LOG"
+
+          if [ -n "$VOL_APP" ]; then
+            echo "=========================================="
+            echo "== dmg 内 .app 的 codesign --verify"
+            echo "=========================================="
+            codesign --verify --deep --strict --verbose=4 "$VOL_APP" 2>&1 | tee -a "$LOG"
+            echo "" | tee -a "$LOG"
+
+            echo "=========================================="
+            echo "== dmg 内 .app 的 spctl"
+            echo "=========================================="
+            spctl -a -vvv -t exec "$VOL_APP" 2>&1 | tee -a "$LOG"
+            echo "" | tee -a "$LOG"
+
+            echo "=========================================="
+            echo "== dmg 内 .app 的 xattr"
+            echo "=========================================="
+            xattr -l "$VOL_APP" 2>&1 | tee -a "$LOG"
+          fi
+
+          hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos-codesign-diagnose
+          path: |
+            build/dist/*.dmg
+            ${{ runner.temp }}/codesign-diagnose.log
+            ${{ runner.temp }}/dmg-diagnose.log
+          if-no-files-found: warn
