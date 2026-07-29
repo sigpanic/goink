@@ -473,7 +473,7 @@ func (e *Extractor) finalSkill(ctx context.Context, input ExtractPatternInput, c
 	onStatus := func(s LLMStatus) {
 		e.emit(input, Progress{Stage: StageFinalizing, LLMStatus: s})
 	}
-	raw, err := e.callTool(ctx, input, "output_skill", SkillOutput{}, finalSkillMessages(chunks), 2, 32000, onStatus)
+	raw, err := e.callTool(ctx, input, "output_skill", SkillOutput{}, finalSkillMessages(chunks), 2, 64000, onStatus)
 	if err != nil {
 		return "", err
 	}

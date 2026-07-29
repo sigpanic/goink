@@ -221,7 +221,9 @@ func (c *Client) buildPayload(
 	if p.Temperature != nil {
 		temperature = *p.Temperature
 	}
-	maxTokens := 4096
+	// 自定义模型未配 MaxOutputTokens 时的安全默认值：64K。
+	// 足够 thinking 模型的推理 + 输出，又不至于超出多数模型限制触发 400。
+	maxTokens := 64000
 	if opts != nil && opts.Temperature != nil {
 		temperature = *opts.Temperature
 	}

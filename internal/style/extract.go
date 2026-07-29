@@ -2,10 +2,12 @@ package style
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/skill"
 )
 
@@ -23,46 +25,67 @@ func Extract(ctx context.Context, llmClient *llm.Client,
 		combined.WriteString(sample.Content)
 	}
 
-	// 调用 LLM
-	opts := &llm.CallOptions{}
+	// 组装工具：output_style_skill 返回结构化的风格仿写技能
+	tools := []map[string]any{{
+		"type": "function",
+		"function": map[string]any{
+			"name":        "output_style_skill",
+			"description": "返回风格仿写技能的结构化输出。",
+			"parameters":  mcp_tools.SchemaOf(StyleSkillOutput{}),
+		},
+	}}
+
+	opts := &llm.CallToolOptions{
+		Attempts:  2,
+		MaxTokens: 64000,
+	}
 	if reasoningEffort != "" {
-		opts.ReasoningEffort = &reasoningEffort
+		opts.ReasoningEffort = reasoningEffort
 	}
 
-	events := llmClient.ChatStream(ctx, providerName, buildExtractMessages(combined.String()), nil, modelID, opts)
-	var fullText strings.Builder
-	for evt := range events {
-		if evt.Type == llm.EventError {
-			return nil, fmt.Errorf("LLM 调用失败: %w", evt.Error)
-		}
-		if evt.Type == llm.EventContent {
-			fullText.WriteString(evt.Data)
-		}
-	}
-
-	raw := fullText.String()
-	if raw == "" {
-		return nil, fmt.Errorf("LLM 返回为空")
-	}
-
-	sk, err := skill.ParseBytes([]byte(raw), "ai")
+	raw, err := llmClient.CallTool(ctx, providerName, modelID,
+		buildExtractMessages(combined.String()), tools, "output_style_skill", opts)
 	if err != nil {
-		return nil, fmt.Errorf("解析 skill 格式失败: %w", err)
+		return nil, fmt.Errorf("LLM 调用失败: %w", err)
 	}
 
-	safeName := skill.SanitizeFileName(sk.Name)
+	var out StyleSkillOutput
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("解析风格技能失败: %w", err)
+	}
+	if strings.TrimSpace(out.Name) == "" || strings.TrimSpace(out.Content) == "" {
+		return nil, fmt.Errorf("LLM 返回的风格技能内容不完整")
+	}
+
+	safeName := skill.SanitizeFileName(out.Name)
 	return &ExtractResult{
-		Name:        sk.Name,
-		Description: sk.Description,
-		RawContent:  sk.RawContent,
+		Name:        out.Name,
+		Description: out.Description,
+		RawContent:  buildStyleSkillMarkdown(out.Name, out.Description, out.Content),
 		FilePath:    fmt.Sprintf("~/.goink/skills/%s.md", safeName),
 	}, nil
+}
+
+// buildStyleSkillMarkdown 组装完整的风格仿写 skill markdown：固定 frontmatter + 正文。
+func buildStyleSkillMarkdown(name, description, content string) string {
+	var b strings.Builder
+	b.WriteString("---\n")
+	fmt.Fprintf(&b, "name: %s\n", name)
+	fmt.Fprintf(&b, "description: %s\n", description)
+	b.WriteString("category: 风格仿写\n")
+	b.WriteString("mode: auto\n")
+	b.WriteString("author: ai\n")
+	b.WriteString("version: 1\n")
+	b.WriteString("---\n\n")
+	b.WriteString(strings.TrimSpace(content))
+	b.WriteString("\n")
+	return b.String()
 }
 
 func buildExtractMessages(sample string) []map[string]any {
 	return []map[string]any{
 		{"role": "system", "content": extractSystemPrompt},
-		{"role": "user", "content": fmt.Sprintf("文本开头为【文本统计信息】（确定性测量数据），之后为原文样本。请基于统计数据分析风格，并按要求输出：\n\n%s", sample)},
+		{"role": "user", "content": fmt.Sprintf("文本开头为【文本统计信息】（确定性测量数据），之后为原文样本。请基于统计数据分析风格，并调用 output_style_skill 工具提交结果：\n\n%s", sample)},
 	}
 }
 
@@ -93,17 +116,10 @@ const extractSystemPrompt = `你是一位专业的写作风格分析师。文本
 5. **叙事视角与距离**：人称选择、叙事者与内容的距离感
 6. **氛围与语调**：情绪基调、语言温度
 
-请根据分析结果为这个风格起一个贴切的中文名称，并严格按以下格式输出：
-
----
-name: {风格名称}
-description: {一句话描述，说明适合什么写作场景，什么时候调用}
-category: 风格仿写
-mode: auto
-author: ai
-version: 1
----
-
+请调用 output_style_skill 工具提交分析结果，各字段要求：
+- name：为这个风格起一个贴切的中文名称
+- description：一句话描述适合什么写作场景，什么时候调用
+- content：风格仿写技能正文 markdown（不含 frontmatter），包含以下章节：
 # {风格名称}
 
 ## 风格概述
