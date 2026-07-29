@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Target, Lightbulb } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { timeline } from "@/hooks/useApp";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 export default function SidebarTimelineList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { refreshNonce } = useRefresh();
 
   const [entries, setEntries] = useState<timeline.TimelineEntry[]>([]);
   const [search, setSearch] = useState("");
@@ -26,7 +28,7 @@ export default function SidebarTimelineList({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return entries;

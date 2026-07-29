@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Settings, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { preference } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
@@ -27,6 +28,7 @@ const EMPTY_FORM: EditForm = { category: "", content: "", isGlobal: false };
 export default function PreferenceView({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [global, setGlobal] = useState<preference.PreferenceItem[]>([]);
   const [novelPrefs, setNovelPrefs] = useState<preference.PreferenceItem[]>([]);
@@ -70,7 +72,7 @@ export default function PreferenceView({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   // ── CRUD handlers ────────────────────────────────────
 
@@ -118,6 +120,7 @@ export default function PreferenceView({ novelId }: Props) {
       setEditMode(null);
       setForm(EMPTY_FORM);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("preference.saveFailed") +
@@ -136,6 +139,7 @@ export default function PreferenceView({ novelId }: Props) {
     try {
       await app.DeletePreference(id);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("preference.deleteFailed") +

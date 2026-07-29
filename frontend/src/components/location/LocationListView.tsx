@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -44,6 +45,7 @@ function safeJson<T>(json: string, fallback: T): T {
 export default function LocationListView({ novelId, focusId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [locations, setLocations] = useState<location.Location[]>([]);
   const [loading, setLoading] = useState(false);
@@ -79,7 +81,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   const nameMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -207,6 +209,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await app.CreateLocation(novelId, buildPayload());
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("location.createFailed") +
@@ -230,6 +233,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await app.UpdateLocation(novelId, editMode.item.id, buildPayload());
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("location.updateFailed") +
@@ -248,6 +252,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
     try {
       await app.DeleteLocation(novelId, locId);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("location.deleteFailed") +

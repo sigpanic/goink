@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -37,6 +38,7 @@ function safeJson<T>(json: string, fallback: T): T {
 export default function CharacterListView({ novelId, focusId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [characters, setCharacters] = useState<character.Character[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,7 +74,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   // ── CRUD handlers ─────────────────────────────────────
 
@@ -112,6 +114,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await app.CreateCharacter(novelId, buildPayload());
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("character.createFailed") +
@@ -135,6 +138,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await app.UpdateCharacter(novelId, editMode.item.id, buildPayload());
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("character.updateFailed") +
@@ -153,6 +157,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
     try {
       await app.DeleteCharacter(novelId, charId);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("character.deleteFailed") +

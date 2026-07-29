@@ -3,6 +3,7 @@ import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/lib/utils";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
 
 interface Props {
@@ -12,6 +13,7 @@ interface Props {
 export default function CharacterList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { refreshNonce, bumpRefresh } = useRefresh();
 
   const [characters, setCharacters] = useState<character.Character[]>([]);
   const [search, setSearch] = useState("");
@@ -32,7 +34,7 @@ export default function CharacterList({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return characters;
@@ -45,6 +47,7 @@ export default function CharacterList({ novelId }: Props) {
     try {
       await app.DeleteCharacter(novelId, charId);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("character.deleteFailed") +

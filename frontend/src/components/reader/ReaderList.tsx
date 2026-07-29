@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
 
 interface Props {
@@ -11,6 +12,7 @@ interface Props {
 export default function SidebarReaderList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { refreshNonce } = useRefresh();
 
   const [items, setItems] = useState<reader.ReaderPerspective[]>([]);
   const [search, setSearch] = useState("");
@@ -26,7 +28,7 @@ export default function SidebarReaderList({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return items;

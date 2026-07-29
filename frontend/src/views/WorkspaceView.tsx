@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
@@ -45,6 +45,7 @@ import { useTheme, type Theme } from "@/hooks/useTheme";
 import { useLayoutState } from "@/hooks/useLayoutState";
 import { useWindowState } from "@/hooks/useWindowState";
 import { useImportNovel } from "@/hooks/useImportNovel";
+import { RefreshContext } from "@/hooks/useRefresh";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -112,6 +113,15 @@ export default function WorkspaceView({
     setChatPanelWidth,
   } = useLayoutState();
   const [sidebarClosed, setSidebarClosed] = useState(false);
+
+  // 侧边栏 List 与主区 View 的刷新信号：View 保存/删除后 bumpRefresh，
+  // List 的 useEffect 依赖 refreshNonce，变化即重载。Provider 包裹下方 SidePanel + 各 View。
+  const [refreshNonce, setRefreshNonce] = useState(0);
+  const bumpRefresh = useCallback(() => setRefreshNonce((n) => n + 1), []);
+  const refreshValue = useMemo(
+    () => ({ refreshNonce, bumpRefresh }),
+    [refreshNonce, bumpRefresh],
+  );
 
   // ── 更新检查 ────────────────────────────────────────────
   const [showUpdate, setShowUpdate] = useState(false);
@@ -425,6 +435,7 @@ export default function WorkspaceView({
     "w-12 h-full flex items-center justify-center cursor-pointer text-foreground/80 hover:text-destructive-foreground hover:bg-destructive transition-colors";
 
   return (
+    <RefreshContext.Provider value={refreshValue}>
     <div className="h-screen flex flex-col overflow-hidden">
       <header
         className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default"
@@ -772,5 +783,6 @@ export default function WorkspaceView({
         onClose={() => setShowUpdate(false)}
       />
     </div>
+    </RefreshContext.Provider>
   );
 }

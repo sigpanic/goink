@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { GitBranch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import type { storyarc } from "@/hooks/useApp";
@@ -82,6 +83,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
   const { theme } = useTheme();
+  const { bumpRefresh, refreshNonce } = useRefresh();
   const PALETTE = arcPalette(theme);
 
   const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
@@ -130,7 +132,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   useEffect(() => {
     if (focusArcId && focusArcId > 0 && allNodes.length > 0) {
@@ -234,6 +236,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await app.CreateStoryArc(novelId, arcForm);
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.createArcFailed") +
@@ -253,6 +256,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await app.UpdateStoryArc(novelId, editMode.arc.id, arcForm);
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.updateArcFailed") +
@@ -272,6 +276,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await app.DeleteStoryArc(novelId, arcId);
       setExpandedId(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.deleteArcFailed") +
@@ -324,6 +329,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setEditMode(null);
       await load();
       setExpandedId(created.id);
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.createNodeFailed") +
@@ -349,6 +355,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       setEditMode(null);
       await load();
       setExpandedId(nodeId);
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.updateNodeFailed") +
@@ -368,6 +375,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       await app.DeleteArcNode(novelId, nodeId);
       setExpandedId(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.deleteNodeFailed") +
@@ -388,6 +396,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
     try {
       await app.UpdateArcNode(novelId, node.id, { status: newStatus });
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("storyarc.updateNodeStatusFailed") +

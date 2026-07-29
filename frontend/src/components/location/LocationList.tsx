@@ -3,6 +3,7 @@ import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/lib/utils";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { location } from "@/hooks/useApp";
 
 interface TreeNode {
@@ -36,6 +37,7 @@ function buildTree(locations: location.Location[]): TreeNode[] {
 export default function LocationList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { refreshNonce, bumpRefresh } = useRefresh();
 
   const [locations, setLocations] = useState<location.Location[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
@@ -51,13 +53,14 @@ export default function LocationList({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   async function handleDelete(locId: number) {
     if (!confirm(t("location.confirmDeleteWithChildren"))) return;
     try {
       await app.DeleteLocation(novelId, locId);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("location.deleteFailed") +

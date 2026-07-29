@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
@@ -124,6 +125,7 @@ function typeMeta(type: string, t: (key: string) => string) {
 export default function ReaderView({ novelId, focusId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [entries, setEntries] = useState<reader.ReaderPerspective[]>([]);
   const [loading, setLoading] = useState(false);
@@ -166,7 +168,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   useEffect(() => {
     if (focusId && focusId > 0 && entries.length > 0) {
@@ -256,6 +258,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       setForm(EMPTY_FORM);
       await load();
       setExpandedId(created.id);
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("reader.createFailed") +
@@ -288,6 +291,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       setForm(EMPTY_FORM);
       await load();
       setExpandedId(entryId);
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("reader.updateFailed") +
@@ -307,6 +311,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       await app.DeleteReaderPerspective(id, novelId);
       if (expandedId === id) setExpandedId(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("reader.deleteFailed") +
@@ -330,6 +335,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
         revealed_chapter: item.planted_chapter,
       });
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("reader.updateFailed") +

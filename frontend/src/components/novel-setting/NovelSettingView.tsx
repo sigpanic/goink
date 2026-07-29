@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Pencil, Plus, Globe, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { setting } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
@@ -24,6 +25,7 @@ const EMPTY_FORM: EditForm = { category: "", content: "" };
 export default function NovelSettingView({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [items, setItems] = useState<setting.SettingItem[]>([]);
   const [tokenCount, setTokenCount] = useState(0);
@@ -64,7 +66,7 @@ export default function NovelSettingView({ novelId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   // ── CRUD handlers ────────────────────────────────────
 
@@ -106,6 +108,7 @@ export default function NovelSettingView({ novelId }: Props) {
       setEditMode(null);
       setForm(EMPTY_FORM);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("novelSetting.saveFailed") +
@@ -124,6 +127,7 @@ export default function NovelSettingView({ novelId }: Props) {
     try {
       await app.DeleteNovelSetting(id);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("novelSetting.deleteFailed") +

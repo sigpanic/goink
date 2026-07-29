@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
+import { useRefresh } from "@/hooks/useRefresh";
 import type { timeline } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
@@ -86,6 +87,7 @@ const EDIT_FORM_EMPTY: EditForm = {
 export default function TimelineView({ novelId, focusEntryId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const { bumpRefresh, refreshNonce } = useRefresh();
 
   const [plans, setPlans] = useState<timeline.ChapterPlan[]>([]);
   const [entries, setEntries] = useState<timeline.TimelineEntry[]>([]);
@@ -132,7 +134,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
 
   useEffect(() => {
     load();
-  }, [load]);
+  }, [load, refreshNonce]);
 
   useEffect(() => {
     if (focusEntryId && focusEntryId > 0 && entries.length > 0) {
@@ -280,6 +282,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       });
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("timeline.savePlanFailed") +
@@ -315,6 +318,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       });
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("timeline.createFailed") +
@@ -350,6 +354,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await app.UpdateTimelineEntry(novelId, editMode.entry.id, payload);
       setEditMode(null);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("timeline.updateFailed") +
@@ -368,6 +373,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
     try {
       await app.DeleteTimelineEntry(novelId, entryId);
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("timeline.deleteFailed") +
@@ -396,6 +402,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
         resolved_chapter: newStatus === "resolved" ? entry.target_chapter : 0,
       });
       await load();
+      bumpRefresh();
     } catch (err) {
       toastError(
         t("timeline.updateStatusFailed") +
