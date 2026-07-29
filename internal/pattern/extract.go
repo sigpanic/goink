@@ -504,8 +504,7 @@ func buildSkillMarkdown(name, description, content string) string {
 }
 
 // callTool 请求 LLM 调用指定工具，返回结构化 JSON。
-// 部分供应商的 thinking mode 不兼容 tool_choice，因此只提供 tools，由提示词约束模型调用目标工具。
-// onStatus 回调在 LLM 流事件时被调用，用于推送 thinking/generating 状态。
+// 薄封装：组装单工具 tools 数组 + 适配 llm.CallToolOptions，核心流式接收/重试/错误聚合在 llm.CallTool。
 func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, toolName string, schema any, messages []map[string]any, attempts int, maxTokens int, onStatus func(LLMStatus)) (json.RawMessage, error) {
 	tools := []map[string]any{{
 		"type": "function",
@@ -515,62 +514,21 @@ func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, too
 			"parameters":  mcp_tools.SchemaOf(schema),
 		},
 	}}
-	opts := callOptions(input)
+	opts := &llm.CallToolOptions{
+		Attempts: attempts,
+		OnStatus: func(s llm.CallToolStatus) {
+			if onStatus != nil {
+				onStatus(s)
+			}
+		},
+	}
 	if maxTokens > 0 {
-		opts.MaxTokens = &maxTokens
+		opts.MaxTokens = maxTokens
 	}
-	var allErrs []error
-	for i := range attempts {
-		if i > 0 {
-			select {
-			case <-time.After(30 * time.Second):
-				// continue retry
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			}
-		}
-		var lastErr error
-		sentThinking := false
-		events := e.LLMClient.ChatStream(ctx, input.ProviderName, messages, tools, input.ModelID, opts)
-		for evt := range events {
-			switch evt.Type {
-			case llm.EventError:
-				lastErr = evt.Error
-			case llm.EventThinking:
-				if onStatus != nil && !sentThinking {
-					sentThinking = true
-					onStatus(LLMThinking)
-				}
-			case llm.EventToolCallStart:
-				if onStatus != nil {
-					onStatus(LLMGenerating)
-				}
-			case llm.EventToolCallEnd:
-				if evt.Delta != nil && evt.Delta.ToolName == toolName && len(evt.Delta.ArgumentsJSON) > 0 {
-					return evt.Delta.ArgumentsJSON, nil
-				}
-			}
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-		}
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if lastErr == nil {
-			lastErr = fmt.Errorf("LLM 未调用工具 %s", toolName)
-		}
-		allErrs = append(allErrs, lastErr)
-	}
-	return nil, errors.Join(allErrs...)
-}
-
-func callOptions(input ExtractPatternInput) *llm.CallOptions {
-	opts := &llm.CallOptions{}
 	if input.ReasoningEffort != "" {
-		opts.ReasoningEffort = &input.ReasoningEffort
+		opts.ReasoningEffort = input.ReasoningEffort
 	}
-	return opts
+	return e.LLMClient.CallTool(ctx, input.ProviderName, input.ModelID, messages, tools, toolName, opts)
 }
 
 // batchBudget 根据模型上下文窗口计算每批 token 预算：≥200K 用 100K，否则取 70%

@@ -1,5 +1,7 @@
 package pattern
 
+import "github.com/sigpanic/goink/internal/llm"
+
 type ExtractPatternInput struct {
 	TaskID          string  `json:"task_id,omitempty"`
 	NovelID         int64   `json:"novel_id"`
@@ -29,12 +31,12 @@ const (
 	StageDone           = "done"
 )
 
-// LLMStatus describes the current state of an in-flight LLM call.
-type LLMStatus string
+// LLMStatus 是 llm.CallToolStatus 的别名，保持 pattern 包对外类型兼容。
+type LLMStatus = llm.CallToolStatus
 
 const (
-	LLMThinking   LLMStatus = "thinking"   // 模型正在推理/思考
-	LLMGenerating LLMStatus = "generating" // 模型正在输出结果
+	LLMThinking   = llm.CallToolThinking   // 模型正在推理/思考
+	LLMGenerating = llm.CallToolGenerating // 模型正在输出结果
 )
 
 type Progress struct {

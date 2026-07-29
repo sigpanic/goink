@@ -59,7 +59,7 @@ score = importance * recency_factor(last_accessed)
 
 | 时机 | 路径 | 提取方式 | cache 约束 |
 |---|---|---|---|
-| 压缩时（入口 1） | 路径 A | **文本 JSON 块**（不动 tools） | 前缀必须完全不变，保 cache 命中 |
+| 压缩时（入口 1） | 路径 A | **response_format: json_object**（不动 tools） | 前缀必须完全不变，保 cache 命中 |
 | session 结束（入口 2） | 路径 B | **toolcall**（清洗 messages + submit_memories 工具） | 独立调用，无 cache 可复用，可清洗 |
 
 ### 为什么两条路径提取方式不同
@@ -70,7 +70,7 @@ score = importance * recency_factor(last_accessed)
 
 **tools 参数是 cacheable 的稳定前缀**（业界调查确认：OpenAI / Anthropic / Google 均把 tools 算入 cache 前缀，顺序/内容/名字任何变化导致 miss）。因此：
 
-- **路径 A（压缩时）**：绝对不能在 tools 里加 `submit_memories`——一动 tools 整个前缀 miss。只能用**文本 JSON 块**，在追加的 compressionPrompt 里要求 LLM 输出 summary + memory JSON，tools 参数保持与 chat 调用完全一致。
+- **路径 A（压缩时）**：绝对不能在 tools 里加 `submit_memories`——一动 tools 整个前缀 miss。只能用 **response_format: json_object**（独立于 tools 的生成参数，不影响 cache 前缀），在追加的 compressionPrompt 里要求 LLM 以 JSON 输出 summary + memory，tools 参数保持与 chat 调用完全一致。
 - **路径 B（session 结束）**：是独立调用，无 cache 可复用，清洗 messages 后走 toolcall 反而更可靠（schema 约束，解析稳定）。
 
 ### 复盘流程（两路径共用）
@@ -87,35 +87,44 @@ score = importance * recency_factor(last_accessed)
    - 激活=1 的记忆：`LastAccessed = now`
    - 激活=0 的记忆：不动（让时间衰减函数自然拉低它的 score）
 
-### 路径 A：文本 JSON 块模式（压缩时）
+### 路径 A：response_format: json_object 模式（压缩时）
 
 **前缀保命中原则**：
 - tools 参数：与 chat 调用完全一致，**不动**（加/删/改顺序/改名字都会破坏 cache）
+- response_format：设为 `{"type": "json_object"}`，独立于 tools 的生成参数，**不影响 cache 前缀**（cache 前缀 = system + messages + tools，response_format 是解码参数不在缓存范围）
 - system 消息：**历史快照，不变，能命中**（压缩调用用 `opts.Messages`，是数据库查出的历史快照；`BuildSystemMessages` 重建发生在 summary 生成之后的 `persistCompression` 阶段，不在压缩调用时）
 - 历史 messages：顺序内容不变，能命中
 - compressionPrompt：作为 user 消息追加到末尾，只有这一段是未命中（不可避免）
 
-**compressionPrompt 改造**：在现有压缩提示词基础上，增加 memory 输出要求。LLM 一次输出三件事：
-1. summary（原有压缩摘要，按现有格式）
-2. 旧 memory 评估：`reactivated` id 列表（判定有用的注入记忆）
-3. 新 memory：`new` 数组（每条含 content / importance / type）
+**compressionPrompt 改造**：在现有压缩提示词基础上，增加 memory 输出要求，并要求 LLM 以 JSON 对象输出。schema 在 compressionPrompt 文本中描述（`json_object` 只保证 JSON 语法合法，不约束 schema；`json_schema` 能约束 schema 但国产模型/中转站兼容性差，故不用）。
 
-输出格式（在 summary 之后追加 `<memories>` 块）：
+LLM 一次输出一个 JSON 对象，含三件事：
+1. `summary`：原有压缩摘要正文
+2. `memories.reactivated`：id 列表（判定有用的注入记忆）
+3. `memories.new`：新 memory 数组（每条含 content / importance / type）
 
-```
-<memories>
+输出格式：
+
+```json
 {
-  "new": [
-    {"content": "...", "importance": 4, "type": "collaboration_event"}
-  ],
-  "reactivated": [12, 45]
+  "summary": "压缩摘要正文...",
+  "memories": {
+    "new": [
+      {"content": "...", "importance": 4, "type": "collaboration_event"}
+    ],
+    "reactivated": [12, 45]
+  }
 }
-</memories>
 ```
 
-后端解析：先分离 summary 和 `<memories>` 块，`json.Unmarshal` 解析 memory 部分。**降级容错**：若 LLM 未输出 `<memories>` 块，跳过 memory 提取，只做压缩（不阻塞压缩主流程）。
+后端解析：`json.Unmarshal` 整个输出，分别取 `summary` 和 `memories`。**降级容错**：若 LLM 未输出 `memories` 字段或解析失败，跳过 memory 提取，只取 `summary` 做压缩（不阻塞压缩主流程）。
 
-**为什么不用 toolcall**：toolcall 要求在 tools 参数里定义 `submit_memories`，这会改变 tools 前缀，破坏 cache 命中（见上节"为什么两条路径提取方式不同"）。文本 JSON 块虽不如 toolcall 可靠，但通过降级容错可接受——压缩主流程（summary）优先级高于 memory 提取。
+**为什么用 response_format: json_object 而非纯文本 JSON 块**：
+- `json_object` 强制 LLM 输出合法 JSON 语法，避免 `<memories>` 标签包裹方式下标签缺失/多余文本导致解析失败
+- 独立于 tools 参数，不影响 cache 前缀命中
+- 比 `json_schema` 兼容性好（部分国产模型/中转站不支持 `json_schema` 的 strict 模式）
+
+**为什么不用 toolcall**：toolcall 要求在 tools 参数里定义 `submit_memories`，这会改变 tools 前缀，破坏 cache 命中（见上节"为什么两条路径提取方式不同"）。
 
 ### 路径 B：清洗 + toolcall 模式（session 结束）
 
@@ -250,7 +259,7 @@ type AgentMemory struct {
 
 | 原步骤 | 本方案细化 |
 |---|---|
-| 步骤 16（compressionPrompt 扩展） | **路径 A（压缩时）**：compressionPrompt 追加 memory 输出要求，用文本 JSON 块（`<memories>` 块），不动 tools 保 cache；后端解析 summary + memory，降级容错（无 `<memories>` 块则只做压缩）。**路径 B（session 结束）**：清洗 messages（策略1：清空 args + 占位 tool 结果 + 保留 NovelProfile sys），带 `submit_memories` 工具走 toolcall，调 `llm.CallTool`，从 `EventToolCallEnd.ArgumentsJSON` 解析 `new` + `reactivated` |
+| 步骤 16（compressionPrompt 扩展） | **路径 A（压缩时）**：compressionPrompt 追加 memory 输出要求 + JSON 输出指令，设 `response_format: json_object`，不动 tools 保 cache；后端 `json.Unmarshal` 整个输出，取 `summary` + `memories`，降级容错（无 `memories` 字段则只做压缩）。**路径 B（session 结束）**：清洗 messages（策略1：清空 args + 占位 tool 结果 + 保留 NovelProfile sys），带 `submit_memories` 工具走 toolcall，调 `llm.CallTool`，从 `EventToolCallEnd.ArgumentsJSON` 解析 `new` + `reactivated` |
 | 步骤 17（NovelProfile 注入） | 排序改 `score = importance * recency_factor(last_accessed) DESC`；注入时**不更新** LastAccessed；memory 注入放入 NovelProfile 段（路径 B 清洗时保留这 1 条 sys 供 LLM 评估旧 memory） |
 | 步骤 18（memory 模块） | store 加 `ReactivateMemories(ids []int64)` 方法，批量更新 LastAccessed = now |
 | 步骤 21（超时 goroutine） | session 结束补提取走路径 B：清洗 messages + toolcall，输出 `new` + `reactivated` |

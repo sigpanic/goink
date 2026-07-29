@@ -525,25 +525,9 @@ func TestFinalSkillMessages_Format(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// callOptions
-// ---------------------------------------------------------------------------
-
-func TestCallOptions_WithReasoningEffort(t *testing.T) {
-	input := ExtractPatternInput{ReasoningEffort: "low"}
-	opts := callOptions(input)
-	if opts.ReasoningEffort == nil || *opts.ReasoningEffort != "low" {
-		t.Error("ReasoningEffort should be 'low'")
-	}
-}
-
-func TestCallOptions_WithoutReasoningEffort(t *testing.T) {
-	input := ExtractPatternInput{}
-	opts := callOptions(input)
-	if opts.ReasoningEffort != nil {
-		t.Errorf("ReasoningEffort should be nil, got %v", opts.ReasoningEffort)
-	}
-}
+// callOptions tests removed: callOptions was inlined into llm.CallTool
+// (see internal/llm/calltool.go). ReasoningEffort handling now lives in the
+// llm package, so these unit tests are no longer applicable here.
 
 // ---------------------------------------------------------------------------
 // Extract validation — these tests only cover the early-exit checks before
