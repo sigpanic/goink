@@ -29,10 +29,6 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
-// Mock confirm
-const mockConfirm = vi.fn();
-vi.stubGlobal("confirm", mockConfirm);
-
 describe("SkillList", () => {
   const defaultProps = {
     novelId: 1,
@@ -45,7 +41,6 @@ describe("SkillList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockListSkills.mockResolvedValue([]);
-    mockConfirm.mockReturnValue(false);
   });
 
   it("renders empty state when no skills", async () => {
@@ -73,7 +68,6 @@ describe("SkillList", () => {
     mockListSkills.mockResolvedValue([
       { name: "Writer", source: "novel", description: "" },
     ]);
-    mockConfirm.mockReturnValue(true);
     mockDeleteSkill.mockResolvedValue(undefined);
 
     render(<SkillList {...defaultProps} />);
@@ -82,7 +76,10 @@ describe("SkillList", () => {
     const deleteBtn = screen.getByTitle("skill.deleteSkill");
     fireEvent.click(deleteBtn);
 
-    expect(mockConfirm).toHaveBeenCalled();
+    // 删除按钮现在弹出 ConfirmDialog，需点确认才执行删除
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
+
     await vi.waitFor(() => {
       expect(mockDeleteSkill).toHaveBeenCalledWith({
         novel_id: 1,
@@ -96,7 +93,6 @@ describe("SkillList", () => {
     mockListSkills.mockResolvedValue([
       { name: "Writer", source: "novel", description: "" },
     ]);
-    mockConfirm.mockReturnValue(true);
     mockDeleteSkill.mockRejectedValue(new Error("permission denied"));
 
     render(<SkillList {...defaultProps} />);
@@ -104,6 +100,9 @@ describe("SkillList", () => {
 
     const deleteBtn = screen.getByTitle("skill.deleteSkill");
     fireEvent.click(deleteBtn);
+
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
 
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(

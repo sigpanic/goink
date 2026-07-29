@@ -6,6 +6,7 @@ import { useRefresh } from "@/hooks/useRefresh";
 import type { preference } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -39,6 +40,8 @@ export default function PreferenceView({ novelId }: Props) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!novelId) {
@@ -133,11 +136,16 @@ export default function PreferenceView({ novelId }: Props) {
     }
   }
 
-  async function handleDelete(id: number) {
-    if (!confirm(t("preference.confirmDeletePreference"))) return;
-    setSaving(true);
+  function handleDelete(id: number) {
+    setDeleteTarget(id);
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget === null) return;
+    setDeleting(true);
     try {
-      await app.DeletePreference(id);
+      await app.DeletePreference(deleteTarget);
+      setDeleteTarget(null);
       await load();
       bumpRefresh();
     } catch (err) {
@@ -148,7 +156,7 @@ export default function PreferenceView({ novelId }: Props) {
       );
       console.error(err);
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -392,6 +400,17 @@ export default function PreferenceView({ novelId }: Props) {
           {renderSection(t("preference.bookPreference"), novelPrefs, false)}
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={t("preference.confirmDeletePreference")}
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </main>
   );
 }

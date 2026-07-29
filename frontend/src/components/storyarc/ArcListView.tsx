@@ -9,6 +9,7 @@ import type { storyarc } from "@/hooks/useApp";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -99,6 +100,10 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   const [arcForm, setArcForm] = useState<ArcForm>(EMPTY_ARC);
   const [nodeForm, setNodeForm] = useState<NodeForm>(EMPTY_NODE);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<
+    { kind: "arc" | "node"; id: number } | null
+  >(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!novelId) {
@@ -269,24 +274,8 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
     }
   }
 
-  async function handleDeleteArc(arcId: number) {
-    if (!confirm(t("storyarc.confirmDeleteArc"))) return;
-    setSaving(true);
-    try {
-      await app.DeleteStoryArc(novelId, arcId);
-      setExpandedId(null);
-      await load();
-      bumpRefresh();
-    } catch (err) {
-      toastError(
-        t("storyarc.deleteArcFailed") +
-          ": " +
-          (err instanceof Error ? err.message : String(err)),
-      );
-      console.error(err);
-    } finally {
-      setSaving(false);
-    }
+  function handleDeleteArc(arcId: number) {
+    setDeleteTarget({ kind: "arc", id: arcId });
   }
 
   // ── Node CRUD ────────────────────────────────────────
@@ -368,23 +357,35 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
     }
   }
 
-  async function handleDeleteNode(nodeId: number) {
-    if (!confirm(t("storyarc.confirmDeleteNode"))) return;
-    setSaving(true);
+  function handleDeleteNode(nodeId: number) {
+    setDeleteTarget({ kind: "node", id: nodeId });
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
-      await app.DeleteArcNode(novelId, nodeId);
-      setExpandedId(null);
+      if (deleteTarget.kind === "arc") {
+        await app.DeleteStoryArc(novelId, deleteTarget.id);
+        setExpandedId(null);
+      } else {
+        await app.DeleteArcNode(novelId, deleteTarget.id);
+        setExpandedId(null);
+      }
+      setDeleteTarget(null);
       await load();
       bumpRefresh();
     } catch (err) {
+      const key =
+        deleteTarget.kind === "arc"
+          ? "storyarc.deleteArcFailed"
+          : "storyarc.deleteNodeFailed";
       toastError(
-        t("storyarc.deleteNodeFailed") +
-          ": " +
-          (err instanceof Error ? err.message : String(err)),
+        t(key) + ": " + (err instanceof Error ? err.message : String(err)),
       );
       console.error(err);
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -1128,6 +1129,23 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={
+          deleteTarget?.kind === "arc"
+            ? t("storyarc.confirmDeleteArc")
+            : deleteTarget?.kind === "node"
+              ? t("storyarc.confirmDeleteNode")
+              : ""
+        }
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </main>
   );
 }

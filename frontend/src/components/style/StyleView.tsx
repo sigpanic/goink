@@ -17,6 +17,7 @@ import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import PopSelect from "@/components/chat/PopSelect";
 import TagInput from "@/components/shared/TagInput";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 const PAGE_SIZE = 15;
 
@@ -46,6 +47,11 @@ export default function StyleView({
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [phase, setPhase] = useState<Phase>("browse");
   const [loading, setLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   // add form
   const [newName, setNewName] = useState("");
@@ -233,29 +239,33 @@ export default function StyleView({
     }
   }, [newName, newContent, newNovelId, newTags, app, load, t]);
 
-  const handleDelete = useCallback(
-    async (id: number, name: string) => {
-      if (!confirm(t("styleSample.confirmDeleteSample") + `「${name}」？`))
-        return;
-      try {
-        await app.DeleteStyleSample({ id });
-        setSelected((prev) => {
-          const n = new Set(prev);
-          n.delete(id);
-          return n;
-        });
-        await load(page);
-      } catch (err) {
-        toastError(
-          t("styleSample.deleteFailed") +
-            ": " +
-            (err instanceof Error ? err.message : String(err)),
-        );
-        console.error(err);
-      }
-    },
-    [app, load, page, t],
-  );
+  const handleDelete = useCallback((id: number, name: string) => {
+    setDeleteTarget({ id, name });
+  }, []);
+
+  const confirmDelete = useCallback(async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
+    try {
+      await app.DeleteStyleSample({ id: deleteTarget.id });
+      setSelected((prev) => {
+        const n = new Set(prev);
+        n.delete(deleteTarget.id);
+        return n;
+      });
+      setDeleteTarget(null);
+      await load(page);
+    } catch (err) {
+      toastError(
+        t("styleSample.deleteFailed") +
+          ": " +
+          (err instanceof Error ? err.message : String(err)),
+      );
+      console.error(err);
+    } finally {
+      setDeleting(false);
+    }
+  }, [deleteTarget, app, load, page, t]);
 
   const handleExtract = useCallback(async () => {
     if (selected.size === 0 || !modelKey) return;
@@ -723,6 +733,21 @@ export default function StyleView({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={
+          deleteTarget
+            ? `${t("styleSample.confirmDeleteSample")}「${deleteTarget.name}」？`
+            : ""
+        }
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </div>
   );
 }

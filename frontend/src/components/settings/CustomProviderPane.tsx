@@ -5,6 +5,7 @@ import type { llm } from "@/hooks/useApp";
 import TemperatureInfo from "./TemperatureInfo";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import TestResultWithHint from "./TestResultWithHint";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   providers: llm.ProviderView[];
@@ -31,7 +32,16 @@ export default function CustomProviderPane({
 }: Props) {
   const { t } = useTranslation();
   const [selectedKey, setSelectedKey] = useState(providers[0]?.key || "");
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
+
+  // 删除自定义 provider：点按钮只记录目标弹确认框，确认后在 confirmDeleteProvider 里执行
+  const confirmDeleteProvider = () => {
+    if (!deleteTarget) return;
+    onRemove(deleteTarget);
+    setSelectedKey(providers.filter((p) => p.key !== deleteTarget)[0]?.key || "");
+    setDeleteTarget(null);
+  };
   const [newName, setNewName] = useState("");
   const [newChatURL, setNewChatURL] = useState("");
   const [newApiKey, setNewApiKey] = useState("");
@@ -314,19 +324,7 @@ export default function CustomProviderPane({
           {/* 删除 */}
           <div className="flex pt-1">
             <button
-              onClick={() => {
-                const name = provider?.name || selectedKey;
-                if (
-                  !window.confirm(
-                    `${t("settings.confirmDeleteProvider")} "${name}"？${t("common.irreversible")}`,
-                  )
-                )
-                  return;
-                onRemove(selectedKey);
-                setSelectedKey(
-                  providers.filter((p) => p.key !== selectedKey)[0]?.key || "",
-                );
-              }}
+              onClick={() => setDeleteTarget(selectedKey)}
               className="h-8 px-3 rounded-md border border-danger-border text-destructive text-xs hover:bg-danger-bg transition-colors"
             >
               {t("settings.deleteProvider")}
@@ -334,6 +332,19 @@ export default function CustomProviderPane({
           </div>
         </>
       )}
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("settings.confirmDeleteProvider")}
+        message={
+          deleteTarget
+            ? `"${providers.find((p) => p.key === deleteTarget)?.name || deleteTarget}"？${t("common.irreversible")}`
+            : ""
+        }
+        danger
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDeleteProvider}
+      />
     </div>
   );
 }

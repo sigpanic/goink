@@ -16,6 +16,7 @@ import { useRefresh } from "@/hooks/useRefresh";
 import type { timeline } from "@/hooks/useApp";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -100,6 +101,8 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
   const [form, setForm] = useState<EditForm>(EDIT_FORM_EMPTY);
   const [createCat, setCreateCat] = useState("foreshadowing");
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!novelId) {
@@ -367,11 +370,16 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
     }
   }
 
-  async function handleDelete(entryId: number) {
-    if (!confirm(t("timeline.confirmDelete"))) return;
-    setSaving(true);
+  function handleDelete(entryId: number) {
+    setDeleteTarget(entryId);
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget === null) return;
+    setDeleting(true);
     try {
-      await app.DeleteTimelineEntry(novelId, entryId);
+      await app.DeleteTimelineEntry(novelId, deleteTarget);
+      setDeleteTarget(null);
       await load();
       bumpRefresh();
     } catch (err) {
@@ -382,7 +390,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       );
       console.error(err);
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -933,6 +941,17 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
           </section>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={t("timeline.confirmDelete")}
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </main>
   );
 }

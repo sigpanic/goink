@@ -1,8 +1,8 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { Globe, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import Markdown from "@/components/Markdown";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import "./WebFetchCard.css";
 
 interface Props {
@@ -10,15 +10,16 @@ interface Props {
   displayText: string;
 }
 
-function openExternal(url: string, t: TFunction) {
-  if (window.confirm(`${t("chat.openInBrowser")}\n${url}`)) {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-}
-
 export default memo(function WebFetchCard({ result, displayText }: Props) {
   const { t } = useTranslation();
   const [contentOpen, setContentOpen] = useState(false);
+  // 打开外部浏览器前弹确认框，避免误点外链
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const confirmOpenExternal = () => {
+    if (!pendingUrl) return;
+    window.open(pendingUrl, "_blank", "noopener,noreferrer");
+    setPendingUrl(null);
+  };
 
   const url = (result.url as string) || "";
   const title = (result.title as string) || "";
@@ -42,7 +43,7 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
           <span className="fetch-card-title">{title || url}</span>
           <button
             className="fetch-card-ext-btn"
-            onClick={() => openExternal(url, t)}
+            onClick={() => setPendingUrl(url)}
             title={url}
           >
             <ExternalLink size={12} />
@@ -71,6 +72,13 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingUrl !== null}
+        title={t("chat.openInBrowser")}
+        message={pendingUrl ?? ""}
+        onClose={() => setPendingUrl(null)}
+        onConfirm={confirmOpenExternal}
+      />
     </div>
   );
 });

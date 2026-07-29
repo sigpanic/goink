@@ -24,15 +24,10 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
-// Mock confirm
-const mockConfirm = vi.fn();
-vi.stubGlobal("confirm", mockConfirm);
-
 describe("CharacterList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetCharacters.mockResolvedValue([]);
-    mockConfirm.mockReturnValue(false);
   });
 
   it("renders empty state when no characters", async () => {
@@ -73,7 +68,6 @@ describe("CharacterList", () => {
 
   it("calls DeleteCharacter on confirm and reloads", async () => {
     mockGetCharacters.mockResolvedValue([{ id: 1, name: "Alice" }]);
-    mockConfirm.mockReturnValue(true);
     mockDeleteCharacter.mockResolvedValue(undefined);
 
     render(<CharacterList novelId={1} />);
@@ -82,9 +76,10 @@ describe("CharacterList", () => {
     const deleteBtn = screen.getByTitle("character.delete");
     fireEvent.click(deleteBtn);
 
-    expect(mockConfirm).toHaveBeenCalledWith(
-      "character.confirmDeleteWithRelation",
-    );
+    // 删除按钮现在弹出 ConfirmDialog，需点确认才执行删除
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
+
     await vi.waitFor(() => {
       expect(mockDeleteCharacter).toHaveBeenCalledWith(1, 1);
     });
@@ -92,7 +87,6 @@ describe("CharacterList", () => {
 
   it("shows toastError when delete fails", async () => {
     mockGetCharacters.mockResolvedValue([{ id: 1, name: "Alice" }]);
-    mockConfirm.mockReturnValue(true);
     mockDeleteCharacter.mockRejectedValue(new Error("network error"));
 
     render(<CharacterList novelId={1} />);
@@ -100,6 +94,9 @@ describe("CharacterList", () => {
 
     const deleteBtn = screen.getByTitle("character.delete");
     fireEvent.click(deleteBtn);
+
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
 
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(

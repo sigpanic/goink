@@ -23,15 +23,10 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
-// Mock confirm
-const mockConfirm = vi.fn();
-vi.stubGlobal("confirm", mockConfirm);
-
 describe("LocationList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetLocations.mockResolvedValue([]);
-    mockConfirm.mockReturnValue(false);
   });
 
   it("renders empty state when no locations", async () => {
@@ -63,7 +58,6 @@ describe("LocationList", () => {
     mockGetLocations.mockResolvedValue([
       { id: 1, name: "Castle", parent_location_id: null, location_type: "" },
     ]);
-    mockConfirm.mockReturnValue(true);
     mockDeleteLocation.mockRejectedValue(new Error("has children"));
 
     render(<LocationList novelId={1} />);
@@ -72,9 +66,10 @@ describe("LocationList", () => {
     const deleteBtn = screen.getByTitle("location.delete");
     fireEvent.click(deleteBtn);
 
-    expect(mockConfirm).toHaveBeenCalledWith(
-      "location.confirmDeleteWithChildren",
-    );
+    // 删除按钮现在弹出 ConfirmDialog，需点确认才执行删除
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
+
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
         "location.deleteFailed: has children",
@@ -86,7 +81,6 @@ describe("LocationList", () => {
     mockGetLocations.mockResolvedValue([
       { id: 1, name: "Castle", parent_location_id: null, location_type: "" },
     ]);
-    mockConfirm.mockReturnValue(false);
 
     render(<LocationList novelId={1} />);
     expect(await screen.findByText("Castle")).toBeInTheDocument();
@@ -94,7 +88,10 @@ describe("LocationList", () => {
     const deleteBtn = screen.getByTitle("location.delete");
     fireEvent.click(deleteBtn);
 
-    expect(mockConfirm).toHaveBeenCalled();
+    // ConfirmDialog 弹出后点取消（common.cancel），不应执行删除
+    const cancelBtn = await screen.findByText("common.cancel");
+    fireEvent.click(cancelBtn);
+
     expect(mockDeleteLocation).not.toHaveBeenCalled();
   });
 });

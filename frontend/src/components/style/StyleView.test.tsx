@@ -69,10 +69,6 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
-// Mock confirm
-const mockConfirm = vi.fn();
-vi.stubGlobal("confirm", mockConfirm);
-
 describe("StyleView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -84,7 +80,6 @@ describe("StyleView", () => {
     mockGetNovels.mockResolvedValue([]);
     mockGetModels.mockResolvedValue([]);
     mockGetSettings.mockResolvedValue({ selected_model_key: "" });
-    mockConfirm.mockReturnValue(false);
   });
 
   it("renders empty state when no samples", async () => {
@@ -147,7 +142,6 @@ describe("StyleView", () => {
       total: 1,
       total_pages: 1,
     });
-    mockConfirm.mockReturnValue(true);
     mockDeleteStyleSample.mockRejectedValue(new Error("db error"));
 
     render(<StyleView />);
@@ -155,6 +149,10 @@ describe("StyleView", () => {
 
     const deleteBtn = screen.getByText("delete");
     fireEvent.click(deleteBtn);
+
+    // 删除按钮现在弹出 ConfirmDialog，需点确认才执行删除
+    const confirmBtn = await screen.findByText("common.delete");
+    fireEvent.click(confirmBtn);
 
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(

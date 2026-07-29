@@ -6,6 +6,7 @@ import { useApp } from "@/hooks/useApp";
 import type { skill } from "@/hooks/useApp";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -82,21 +83,26 @@ export default function SkillList({
   const userSkills = filtered.filter((s) => s.source === "user");
   const builtinSkills = filtered.filter((s) => s.source === "builtin");
 
-  const handleDelete = async (s: skill.SkillMeta) => {
-    if (
-      !confirm(
-        t("skill.confirmDeleteSkill") +
-          `「${s.name}」？` +
-          t("skill.irreversible"),
-      )
-    )
-      return;
+  const [deleteTarget, setDeleteTarget] = useState<skill.SkillMeta | null>(
+    null,
+  );
+  const [deleting, setDeleting] = useState(false);
+
+  // 点击删除按钮只记录目标并弹出确认框，真正的删除在 confirmDelete 里执行
+  const handleDelete = (s: skill.SkillMeta) => {
+    setDeleteTarget(s);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteTarget) return;
+    setDeleting(true);
     try {
       await app.DeleteSkill({
         novel_id: novelId,
-        name: s.name,
-        source: s.source,
+        name: deleteTarget.name,
+        source: deleteTarget.source,
       });
+      setDeleteTarget(null);
       await load();
     } catch (err) {
       toastError(
@@ -105,6 +111,8 @@ export default function SkillList({
           (err instanceof Error ? err.message : String(err)),
       );
       console.error(err);
+    } finally {
+      setDeleting(false);
     }
   };
 
@@ -244,6 +252,20 @@ export default function SkillList({
         onOpenChange={setMarketplaceOpen}
         novelId={novelId}
         onInstalled={handleMarketplaceInstalled}
+      />
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("skill.confirmDeleteSkill")}
+        message={
+          deleteTarget
+            ? `「${deleteTarget.name}」？${t("skill.irreversible")}`
+            : ""
+        }
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
       />
     </>
   );

@@ -5,6 +5,7 @@ import { toastError } from "@/lib/utils";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -17,6 +18,8 @@ export default function CharacterList({ novelId }: Props) {
 
   const [characters, setCharacters] = useState<character.Character[]>([]);
   const [search, setSearch] = useState("");
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!novelId) {
@@ -42,10 +45,16 @@ export default function CharacterList({ novelId }: Props) {
     return characters.filter((c) => c.name.toLowerCase().includes(q));
   }, [characters, search]);
 
-  async function handleDelete(charId: number) {
-    if (!confirm(t("character.confirmDeleteWithRelation"))) return;
+  function handleDelete(charId: number) {
+    setDeleteTarget(charId);
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget === null) return;
+    setDeleting(true);
     try {
-      await app.DeleteCharacter(novelId, charId);
+      await app.DeleteCharacter(novelId, deleteTarget);
+      setDeleteTarget(null);
       await load();
       bumpRefresh();
     } catch (err) {
@@ -55,6 +64,8 @@ export default function CharacterList({ novelId }: Props) {
           (err instanceof Error ? err.message : String(err)),
       );
       console.error(err);
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -112,6 +123,17 @@ export default function CharacterList({ novelId }: Props) {
           ))
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={t("character.confirmDeleteWithRelation")}
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </>
   );
 }

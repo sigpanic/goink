@@ -8,6 +8,7 @@ import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
 import { toastError } from "@/lib/utils";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
@@ -54,6 +55,8 @@ export default function LocationListView({ novelId, focusId }: Props) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!novelId) {
@@ -246,11 +249,16 @@ export default function LocationListView({ novelId, focusId }: Props) {
     }
   }
 
-  async function handleDelete(locId: number) {
-    if (!confirm(t("location.confirmDeleteIrreversible"))) return;
-    setSaving(true);
+  function handleDelete(locId: number) {
+    setDeleteTarget(locId);
+  }
+
+  async function confirmDelete() {
+    if (deleteTarget === null) return;
+    setDeleting(true);
     try {
-      await app.DeleteLocation(novelId, locId);
+      await app.DeleteLocation(novelId, deleteTarget);
+      setDeleteTarget(null);
       await load();
       bumpRefresh();
     } catch (err) {
@@ -261,7 +269,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       );
       console.error(err);
     } finally {
-      setSaving(false);
+      setDeleting(false);
     }
   }
 
@@ -605,6 +613,17 @@ export default function LocationListView({ novelId, focusId }: Props) {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={deleteTarget !== null}
+        title={t("common.confirmDelete")}
+        message={t("location.confirmDeleteIrreversible")}
+        danger
+        loading={deleting}
+        confirmText={t("common.delete")}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={confirmDelete}
+      />
     </main>
   );
 }

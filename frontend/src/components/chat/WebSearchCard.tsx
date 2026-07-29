@@ -1,8 +1,8 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { TFunction } from "i18next";
 import { Search, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
 import Markdown from "@/components/Markdown";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import "./WebSearchCard.css";
 
 interface SourceItem {
@@ -14,15 +14,16 @@ interface Props {
   result: Record<string, unknown>;
 }
 
-function openExternal(url: string, t: TFunction) {
-  if (window.confirm(`${t("chat.openInBrowser")}\n${url}`)) {
-    window.open(url, "_blank", "noopener,noreferrer");
-  }
-}
-
 export default memo(function WebSearchCard({ result }: Props) {
   const { t } = useTranslation();
   const [summaryOpen, setSummaryOpen] = useState(false);
+  // 打开外部浏览器前弹确认框，避免误点外链
+  const [pendingUrl, setPendingUrl] = useState<string | null>(null);
+  const confirmOpenExternal = () => {
+    if (!pendingUrl) return;
+    window.open(pendingUrl, "_blank", "noopener,noreferrer");
+    setPendingUrl(null);
+  };
 
   const queries = (result.queries as string[]) || [];
   const summary = (result.summary as string) || "";
@@ -59,7 +60,7 @@ export default memo(function WebSearchCard({ result }: Props) {
             <div
               key={i}
               className="web-card-source"
-              onClick={() => openExternal(s.url, t)}
+              onClick={() => setPendingUrl(s.url)}
               title={s.url}
             >
               <span className="web-card-source-index">{i + 1}</span>
@@ -95,6 +96,13 @@ export default memo(function WebSearchCard({ result }: Props) {
           )}
         </div>
       )}
+      <ConfirmDialog
+        open={pendingUrl !== null}
+        title={t("chat.openInBrowser")}
+        message={pendingUrl ?? ""}
+        onClose={() => setPendingUrl(null)}
+        onConfirm={confirmOpenExternal}
+      />
     </div>
   );
 });
