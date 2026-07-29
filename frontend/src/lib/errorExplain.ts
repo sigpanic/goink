@@ -14,10 +14,18 @@ export function explainErrorKey(msg: string): string {
 
   const lower = msg.toLowerCase();
 
-  if (/401|invalid.*key|invalid_key|authentication.*error|api[_-]?key.*invalid/.test(lower)) {
+  if (
+    /401|invalid.*key|invalid_key|authentication.*error|api[_-]?key.*invalid/.test(
+      lower,
+    )
+  ) {
     return "settings.errorHints.invalidKey";
   }
-  if (/402|余额不足|quota|insufficient.*balance|insufficient_quota|credit/.test(lower)) {
+  if (
+    /402|余额不足|quota|insufficient.*balance|insufficient_quota|credit/.test(
+      lower,
+    )
+  ) {
     return "settings.errorHints.insufficientBalance";
   }
   if (/403|forbidden|权限|access.*denied/.test(lower)) {
@@ -29,7 +37,9 @@ export function explainErrorKey(msg: string): string {
   if (/429|rate.*limit|too.*many|限流/.test(lower)) {
     return "settings.errorHints.rateLimit";
   }
-  if (/50[023]|internal.*server|bad.*gateway|service.*unavailable/.test(lower)) {
+  if (
+    /50[023]|internal.*server|bad.*gateway|service.*unavailable/.test(lower)
+  ) {
     return "settings.errorHints.serverError";
   }
   if (/sse|流.*未找到|chunk|非标准|choices/.test(lower)) {

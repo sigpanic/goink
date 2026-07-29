@@ -44,36 +44,36 @@ export default function App() {
   return (
     <TooltipProvider>
       <div className="min-h-screen bg-background text-foreground">
-      <Toaster
-        position="top-center"
-        richColors
-        toastOptions={{
-          actionButtonStyle: {
-            backgroundColor: "var(--primary)",
-            color: "var(--primary-foreground)",
-            border: "none",
-            padding: "2px 10px",
-            borderRadius: "4px",
-            fontSize: "12px",
-          },
-        }}
-      />
-      {view === "init" && (
-        <InitView
-          onInitialized={async () => {
-            const settings = await app.GetSettings();
-            setInitialNovelId(settings?.last_novel_id ?? 0);
-            setFromInit(true);
-            setView("workspace");
+        <Toaster
+          position="top-center"
+          richColors
+          toastOptions={{
+            actionButtonStyle: {
+              backgroundColor: "var(--primary)",
+              color: "var(--primary-foreground)",
+              border: "none",
+              padding: "2px 10px",
+              borderRadius: "4px",
+              fontSize: "12px",
+            },
           }}
         />
-      )}
-      {view === "workspace" && (
-        <WorkspaceView
-          initialNovelId={initialNovelId}
-          initialShowHelp={fromInit}
-        />
-      )}
+        {view === "init" && (
+          <InitView
+            onInitialized={async () => {
+              const settings = await app.GetSettings();
+              setInitialNovelId(settings?.last_novel_id ?? 0);
+              setFromInit(true);
+              setView("workspace");
+            }}
+          />
+        )}
+        {view === "workspace" && (
+          <WorkspaceView
+            initialNovelId={initialNovelId}
+            initialShowHelp={fromInit}
+          />
+        )}
       </div>
     </TooltipProvider>
   );

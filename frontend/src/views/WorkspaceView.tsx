@@ -436,353 +436,355 @@ export default function WorkspaceView({
 
   return (
     <RefreshContext.Provider value={refreshValue}>
-    <div className="h-screen flex flex-col overflow-hidden">
-      <header
-        className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default"
-        style={{ "--wails-draggable": "drag" } as React.CSSProperties}
-        onDoubleClick={() => {
-          WindowToggleMaximise();
-          setIsMaximised((prev) => !prev);
-        }}
-      >
-        <Logo className="h-7 w-7 ml-3" />
-        <span className="text-sm font-medium pl-2 flex-1">
-          {activeNovel?.title ?? "Goink"}
-        </span>
-        <div
-          className="flex items-center h-full"
-          style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
+      <div className="h-screen flex flex-col overflow-hidden">
+        <header
+          className="h-11 flex items-center border-b bg-sidebar shrink-0 select-none cursor-default"
+          style={{ "--wails-draggable": "drag" } as React.CSSProperties}
+          onDoubleClick={() => {
+            WindowToggleMaximise();
+            setIsMaximised((prev) => !prev);
+          }}
         >
-          <GitHubLink />
-          <button
-            onClick={() => setActivePanel("profile")}
-            className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === "profile" ? "text-foreground" : ""}`}
-            title={t("workspace.profile")}
+          <Logo className="h-7 w-7 ml-3" />
+          <span className="text-sm font-medium pl-2 flex-1">
+            {activeNovel?.title ?? "Goink"}
+          </span>
+          <div
+            className="flex items-center h-full"
+            style={{ "--wails-draggable": "no-drag" } as React.CSSProperties}
           >
-            <User className="w-5 h-5" />
-          </button>
-          <button
-            onClick={() => setShowHelp(true)}
-            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"
-            title={t("workspace.help")}
-          >
-            <HelpCircle className="w-5 h-5" />
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"
-            title={THEME_LABEL[theme]}
-          >
-            {THEME_ICON[theme]}
-          </button>
-          <button
-            onClick={() => setShowSettings(true)}
-            className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center mr-1"
-            title={t("workspace.settings")}
-          >
-            <Settings className="w-5 h-5" />
-          </button>
-          {platformOS !== "darwin" && (
-            <>
-              <button
-                onClick={WindowMinimise}
-                className={winBtn}
-                title={t("workspace.minimize")}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <path
-                    d="M2.5 6h7"
-                    stroke="currentColor"
-                    strokeWidth="1.1"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-              <button
-                onClick={() => {
-                  WindowToggleMaximise();
-                  setIsMaximised((prev) => !prev);
-                }}
-                className={winBtn}
-                title={
-                  isMaximised ? t("workspace.restore") : t("workspace.maximize")
-                }
-              >
-                {isMaximised ? (
+            <GitHubLink />
+            <button
+              onClick={() => setActivePanel("profile")}
+              className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === "profile" ? "text-foreground" : ""}`}
+              title={t("workspace.profile")}
+            >
+              <User className="w-5 h-5" />
+            </button>
+            <button
+              onClick={() => setShowHelp(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"
+              title={t("workspace.help")}
+            >
+              <HelpCircle className="w-5 h-5" />
+            </button>
+            <button
+              onClick={toggleTheme}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center"
+              title={THEME_LABEL[theme]}
+            >
+              {THEME_ICON[theme]}
+            </button>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center mr-1"
+              title={t("workspace.settings")}
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            {platformOS !== "darwin" && (
+              <>
+                <button
+                  onClick={WindowMinimise}
+                  className={winBtn}
+                  title={t("workspace.minimize")}
+                >
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <rect
-                      x="4"
-                      y="1.5"
-                      width="6.5"
-                      height="6.5"
-                      rx="1"
-                      fill="none"
+                    <path
+                      d="M2.5 6h7"
                       stroke="currentColor"
-                      strokeWidth=".9"
-                    />
-                    <rect
-                      x="1.5"
-                      y="2.5"
-                      width="6.5"
-                      height="6.5"
-                      rx="1"
-                      fill="var(--color-sidebar)"
-                      stroke="currentColor"
-                      strokeWidth=".9"
+                      strokeWidth="1.1"
+                      strokeLinecap="round"
                     />
                   </svg>
-                ) : (
+                </button>
+                <button
+                  onClick={() => {
+                    WindowToggleMaximise();
+                    setIsMaximised((prev) => !prev);
+                  }}
+                  className={winBtn}
+                  title={
+                    isMaximised
+                      ? t("workspace.restore")
+                      : t("workspace.maximize")
+                  }
+                >
+                  {isMaximised ? (
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <rect
+                        x="4"
+                        y="1.5"
+                        width="6.5"
+                        height="6.5"
+                        rx="1"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth=".9"
+                      />
+                      <rect
+                        x="1.5"
+                        y="2.5"
+                        width="6.5"
+                        height="6.5"
+                        rx="1"
+                        fill="var(--color-sidebar)"
+                        stroke="currentColor"
+                        strokeWidth=".9"
+                      />
+                    </svg>
+                  ) : (
+                    <svg width="12" height="12" viewBox="0 0 12 12">
+                      <rect
+                        x="1.5"
+                        y="1.5"
+                        width="9"
+                        height="9"
+                        stroke="currentColor"
+                        strokeWidth=".9"
+                        rx=".5"
+                        fill="none"
+                      />
+                    </svg>
+                  )}
+                </button>
+                <button
+                  onClick={Quit}
+                  className={closeBtn}
+                  title={t("workspace.close")}
+                >
                   <svg width="12" height="12" viewBox="0 0 12 12">
-                    <rect
-                      x="1.5"
-                      y="1.5"
-                      width="9"
-                      height="9"
+                    <path
+                      d="M2.5 2.5l7 7M9.5 2.5l-7 7"
                       stroke="currentColor"
-                      strokeWidth=".9"
-                      rx=".5"
-                      fill="none"
+                      strokeWidth="1"
+                      strokeLinecap="round"
                     />
                   </svg>
-                )}
-              </button>
-              <button
-                onClick={Quit}
-                className={closeBtn}
-                title={t("workspace.close")}
-              >
-                <svg width="12" height="12" viewBox="0 0 12 12">
-                  <path
-                    d="M2.5 2.5l7 7M9.5 2.5l-7 7"
-                    stroke="currentColor"
-                    strokeWidth="1"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </button>
-            </>
+                </button>
+              </>
+            )}
+          </div>
+        </header>
+
+        <div className="flex-1 flex min-h-0 overflow-hidden">
+          <ActivityBar
+            activeId={sidebarPanel ?? activePanel}
+            onSelect={handleActivitySelect}
+          />
+
+          {!sidebarClosed && (
+            <SidePanel
+              activePanel={sidebarPanel ?? activePanel}
+              novels={novels}
+              novelId={activeNovelId}
+              onSelectNovel={handleSelectNovel}
+              onSelectChapter={handleSelectChapter}
+              onSelectGoink={handleSelectGoink}
+              onExportNovel={(id) => setExportNovelId(id)}
+              target={tabTarget}
+              showCreate={showCreate}
+              setShowCreate={setShowCreate}
+              title={title}
+              setTitle={setTitle}
+              description={description}
+              setDescription={setDescription}
+              onCreateNovel={handleCreateNovel}
+              activeSkillName={activeSkillName}
+              onSelectSkill={(path, title, readOnly) => {
+                setActiveSkillName(title);
+                contentRef.current?.openFile(path, title, readOnly);
+              }}
+              onEditSkill={(path, title, readOnly) => {
+                setActiveSkillName(title);
+                contentRef.current?.openFile(path, title, readOnly, "edit");
+              }}
+              onNewSkill={(name) => {
+                setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
+                contentRef.current?.openFile(
+                  `skills/${name}.md`,
+                  `${t("workspace.skillLabel")}${name}`,
+                  false,
+                  "edit",
+                );
+              }}
+              onSearchNavigateEntity={handleSearchNavigateEntity}
+              onSearchNavigateChapter={handleSearchNavigateChapter}
+              searchQuery={searchQuery}
+              searchResults={searchResults}
+              onSearchChange={(q, r) => {
+                setSearchQuery(q);
+                setSearchResults(r);
+              }}
+              onSelectGitFile={handleSelectGitFile}
+              onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
+              sidePanelWidth={sidePanelWidth}
+              onSidePanelResize={setSidePanelWidth}
+            />
+          )}
+
+          {activePanel === "novels" ? (
+            <BookshelfView
+              novels={novels}
+              activeNovelId={activeNovelId}
+              onSelectNovel={handleSelectNovel}
+              onEditNovel={setEditingNovel}
+              onDeleteNovel={setDeletingNovel}
+              onCreateNovel={() => setShowCreateDialog(true)}
+              onSaveCover={handleSaveCover}
+              onExportNovel={(n) => setExportNovelId(n.id)}
+              onImportNovel={() => importNovel.startImport()}
+            />
+          ) : (
+            activePanel !== "characters" &&
+            activePanel !== "locations" &&
+            activePanel !== "storyarcs" &&
+            activePanel !== "timeline" &&
+            activePanel !== "reader" &&
+            activePanel !== "preferences" &&
+            activePanel !== "novel-settings" &&
+            activePanel !== "profile" &&
+            activePanel !== "git" &&
+            activePanel !== "style-samples" && (
+              <ContentPanel
+                ref={contentRef}
+                novelId={activeNovelId}
+                onContentChange={setActiveContent}
+                onDirtyChange={setIsDirty}
+              />
+            )
+          )}
+
+          {/* Always mounted: pattern extraction is a long-running task, unmounting would interrupt progress listeners */}
+          <div
+            className={
+              activePanel === "style-samples"
+                ? "flex-1 flex flex-col min-h-0"
+                : "hidden"
+            }
+          >
+            <ErrorBoundary>
+              <ExtractWorkspaceView
+                novelId={activeNovelId}
+                focusSampleId={styleSampleFocusId}
+                onFocusSampleHandled={() => setStyleSampleFocusId(null)}
+              />
+            </ErrorBoundary>
+          </div>
+          {activePanel === "characters" ? (
+            <ErrorBoundary>
+              <CharacterListView
+                novelId={activeNovelId}
+                focusId={characterFocusId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "locations" ? (
+            <ErrorBoundary>
+              <LocationListView
+                novelId={activeNovelId}
+                focusId={locationFocusId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "storyarcs" ? (
+            <ErrorBoundary>
+              <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
+            </ErrorBoundary>
+          ) : activePanel === "timeline" ? (
+            <ErrorBoundary>
+              <TimelineView
+                novelId={activeNovelId}
+                focusEntryId={timelineFocusId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "reader" ? (
+            <ErrorBoundary>
+              <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
+            </ErrorBoundary>
+          ) : activePanel === "preferences" ? (
+            <ErrorBoundary>
+              <PreferenceView
+                novelId={activeNovelId}
+                focusId={preferenceFocusId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "novel-settings" ? (
+            <ErrorBoundary>
+              <NovelSettingView
+                novelId={activeNovelId}
+                focusId={settingFocusId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "git" ? (
+            <ErrorBoundary>
+              <GitCommitView file={selectedGitFile} />
+            </ErrorBoundary>
+          ) : activePanel === "profile" ? (
+            <ErrorBoundary>
+              <ProfileView />
+            </ErrorBoundary>
+          ) : null}
+
+          {activePanel !== "profile" && (
+            <ChatPanel
+              novelId={activeNovelId}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              onApprovalFileEdit={handleApprovalFileEdit}
+              chatPanelWidth={chatPanelWidth}
+              onChatPanelResize={setChatPanelWidth}
+            />
           )}
         </div>
-      </header>
 
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        <ActivityBar
-          activeId={sidebarPanel ?? activePanel}
-          onSelect={handleActivitySelect}
+        <StatusBar content={activeContent} isDirty={isDirty} />
+
+        <SettingsDialog
+          open={showSettings}
+          onClose={() => setShowSettings(false)}
+          initialTab="general"
         />
 
-        {!sidebarClosed && (
-          <SidePanel
-            activePanel={sidebarPanel ?? activePanel}
-            novels={novels}
-            novelId={activeNovelId}
-            onSelectNovel={handleSelectNovel}
-            onSelectChapter={handleSelectChapter}
-            onSelectGoink={handleSelectGoink}
-            onExportNovel={(id) => setExportNovelId(id)}
-            target={tabTarget}
-            showCreate={showCreate}
-            setShowCreate={setShowCreate}
-            title={title}
-            setTitle={setTitle}
-            description={description}
-            setDescription={setDescription}
-            onCreateNovel={handleCreateNovel}
-            activeSkillName={activeSkillName}
-            onSelectSkill={(path, title, readOnly) => {
-              setActiveSkillName(title);
-              contentRef.current?.openFile(path, title, readOnly);
-            }}
-            onEditSkill={(path, title, readOnly) => {
-              setActiveSkillName(title);
-              contentRef.current?.openFile(path, title, readOnly, "edit");
-            }}
-            onNewSkill={(name) => {
-              setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
-              contentRef.current?.openFile(
-                `skills/${name}.md`,
-                `${t("workspace.skillLabel")}${name}`,
-                false,
-                "edit",
-              );
-            }}
-            onSearchNavigateEntity={handleSearchNavigateEntity}
-            onSearchNavigateChapter={handleSearchNavigateChapter}
-            searchQuery={searchQuery}
-            searchResults={searchResults}
-            onSearchChange={(q, r) => {
-              setSearchQuery(q);
-              setSearchResults(r);
-            }}
-            onSelectGitFile={handleSelectGitFile}
-            onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
-            sidePanelWidth={sidePanelWidth}
-            onSidePanelResize={setSidePanelWidth}
-          />
-        )}
+        <HelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
 
-        {activePanel === "novels" ? (
-          <BookshelfView
-            novels={novels}
-            activeNovelId={activeNovelId}
-            onSelectNovel={handleSelectNovel}
-            onEditNovel={setEditingNovel}
-            onDeleteNovel={setDeletingNovel}
-            onCreateNovel={() => setShowCreateDialog(true)}
-            onSaveCover={handleSaveCover}
-            onExportNovel={(n) => setExportNovelId(n.id)}
-            onImportNovel={() => importNovel.startImport()}
-          />
-        ) : (
-          activePanel !== "characters" &&
-          activePanel !== "locations" &&
-          activePanel !== "storyarcs" &&
-          activePanel !== "timeline" &&
-          activePanel !== "reader" &&
-          activePanel !== "preferences" &&
-          activePanel !== "novel-settings" &&
-          activePanel !== "profile" &&
-          activePanel !== "git" &&
-          activePanel !== "style-samples" && (
-            <ContentPanel
-              ref={contentRef}
-              novelId={activeNovelId}
-              onContentChange={setActiveContent}
-              onDirtyChange={setIsDirty}
-            />
-          )
-        )}
+        <NovelEditDialog
+          open={showCreateDialog}
+          onClose={() => setShowCreateDialog(false)}
+          onSave={handleCreateNovelFromDialog}
+        />
+        <NovelEditDialog
+          open={!!editingNovel}
+          novel={editingNovel}
+          onClose={() => setEditingNovel(null)}
+          onSave={handleUpdateNovel}
+        />
+        <NovelDeleteDialog
+          open={!!deletingNovel}
+          novelTitle={deletingNovel?.title ?? ""}
+          onClose={() => setDeletingNovel(null)}
+          onConfirm={handleDeleteNovel}
+        />
 
-        {/* Always mounted: pattern extraction is a long-running task, unmounting would interrupt progress listeners */}
-        <div
-          className={
-            activePanel === "style-samples"
-              ? "flex-1 flex flex-col min-h-0"
-              : "hidden"
-          }
-        >
-          <ErrorBoundary>
-            <ExtractWorkspaceView
-              novelId={activeNovelId}
-              focusSampleId={styleSampleFocusId}
-              onFocusSampleHandled={() => setStyleSampleFocusId(null)}
-            />
-          </ErrorBoundary>
-        </div>
-        {activePanel === "characters" ? (
-          <ErrorBoundary>
-            <CharacterListView
-              novelId={activeNovelId}
-              focusId={characterFocusId}
-            />
-          </ErrorBoundary>
-        ) : activePanel === "locations" ? (
-          <ErrorBoundary>
-            <LocationListView
-              novelId={activeNovelId}
-              focusId={locationFocusId}
-            />
-          </ErrorBoundary>
-        ) : activePanel === "storyarcs" ? (
-          <ErrorBoundary>
-            <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === "timeline" ? (
-          <ErrorBoundary>
-            <TimelineView
-              novelId={activeNovelId}
-              focusEntryId={timelineFocusId}
-            />
-          </ErrorBoundary>
-        ) : activePanel === "reader" ? (
-          <ErrorBoundary>
-            <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
-          </ErrorBoundary>
-        ) : activePanel === "preferences" ? (
-          <ErrorBoundary>
-            <PreferenceView
-              novelId={activeNovelId}
-              focusId={preferenceFocusId}
-            />
-          </ErrorBoundary>
-        ) : activePanel === "novel-settings" ? (
-          <ErrorBoundary>
-            <NovelSettingView
-              novelId={activeNovelId}
-              focusId={settingFocusId}
-            />
-          </ErrorBoundary>
-        ) : activePanel === "git" ? (
-          <ErrorBoundary>
-            <GitCommitView file={selectedGitFile} />
-          </ErrorBoundary>
-        ) : activePanel === "profile" ? (
-          <ErrorBoundary>
-            <ProfileView />
-          </ErrorBoundary>
-        ) : null}
+        <ExportDialog
+          open={exportNovelId !== null}
+          novelTitle={novels.find((n) => n.id === exportNovelId)?.title ?? ""}
+          onClose={() => setExportNovelId(null)}
+          onExport={handleExportNovel}
+        />
 
-        {activePanel !== "profile" && (
-          <ChatPanel
-            novelId={activeNovelId}
-            onApprove={handleApprove}
-            onReject={handleReject}
-            onApprovalFileEdit={handleApprovalFileEdit}
-            chatPanelWidth={chatPanelWidth}
-            onChatPanelResize={setChatPanelWidth}
-          />
-        )}
+        <ImportProgressDialog
+          {...importNovel.dialogProps}
+          modelKey={importNovel.modelKey}
+          setModelKey={importNovel.setModelKey}
+          modelOptions={importNovel.modelOptions}
+          onStartLLM={importNovel.startLLMImport}
+        />
+
+        <UpdateDialog
+          open={showUpdate}
+          result={updateResult}
+          onClose={() => setShowUpdate(false)}
+        />
       </div>
-
-      <StatusBar content={activeContent} isDirty={isDirty} />
-
-      <SettingsDialog
-        open={showSettings}
-        onClose={() => setShowSettings(false)}
-        initialTab="general"
-      />
-
-      <HelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
-
-      <NovelEditDialog
-        open={showCreateDialog}
-        onClose={() => setShowCreateDialog(false)}
-        onSave={handleCreateNovelFromDialog}
-      />
-      <NovelEditDialog
-        open={!!editingNovel}
-        novel={editingNovel}
-        onClose={() => setEditingNovel(null)}
-        onSave={handleUpdateNovel}
-      />
-      <NovelDeleteDialog
-        open={!!deletingNovel}
-        novelTitle={deletingNovel?.title ?? ""}
-        onClose={() => setDeletingNovel(null)}
-        onConfirm={handleDeleteNovel}
-      />
-
-      <ExportDialog
-        open={exportNovelId !== null}
-        novelTitle={novels.find((n) => n.id === exportNovelId)?.title ?? ""}
-        onClose={() => setExportNovelId(null)}
-        onExport={handleExportNovel}
-      />
-
-      <ImportProgressDialog
-        {...importNovel.dialogProps}
-        modelKey={importNovel.modelKey}
-        setModelKey={importNovel.setModelKey}
-        modelOptions={importNovel.modelOptions}
-        onStartLLM={importNovel.startLLMImport}
-      />
-
-      <UpdateDialog
-        open={showUpdate}
-        result={updateResult}
-        onClose={() => setShowUpdate(false)}
-      />
-    </div>
     </RefreshContext.Provider>
   );
 }

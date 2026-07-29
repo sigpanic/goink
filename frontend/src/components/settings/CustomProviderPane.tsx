@@ -14,7 +14,9 @@ interface Props {
   onRemove: (key: string) => void;
   onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
-  onTest: (providerKey: string) => Promise<{ resolvedUrl?: string; error?: string }>;
+  onTest: (
+    providerKey: string,
+  ) => Promise<{ resolvedUrl?: string; error?: string }>;
   testResults: Record<string, { ok: boolean; msg?: string } | undefined>;
   testing: Record<string, boolean>;
 }
@@ -39,7 +41,9 @@ export default function CustomProviderPane({
   const confirmDeleteProvider = () => {
     if (!deleteTarget) return;
     onRemove(deleteTarget);
-    setSelectedKey(providers.filter((p) => p.key !== deleteTarget)[0]?.key || "");
+    setSelectedKey(
+      providers.filter((p) => p.key !== deleteTarget)[0]?.key || "",
+    );
     setDeleteTarget(null);
   };
   const [newName, setNewName] = useState("");
@@ -231,7 +235,7 @@ export default function CustomProviderPane({
           </div>
 
           {/* 测试结果 */}
-      <TestResultWithHint testResult={testResult} />
+          <TestResultWithHint testResult={testResult} />
 
           <div className="flex items-center gap-3">
             <label className="text-xs text-muted-foreground w-16 shrink-0 flex items-center gap-1">

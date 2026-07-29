@@ -100,9 +100,10 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
   const [arcForm, setArcForm] = useState<ArcForm>(EMPTY_ARC);
   const [nodeForm, setNodeForm] = useState<NodeForm>(EMPTY_NODE);
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<
-    { kind: "arc" | "node"; id: number } | null
-  >(null);
+  const [deleteTarget, setDeleteTarget] = useState<{
+    kind: "arc" | "node";
+    id: number;
+  } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {

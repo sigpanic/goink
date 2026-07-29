@@ -20,7 +20,9 @@ interface Props {
   onUpdate: (key: string, patch: Partial<llm.ProviderView>) => void;
   onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
-  onTest: (providerKey: string) => Promise<{ resolvedUrl?: string; error?: string }>;
+  onTest: (
+    providerKey: string,
+  ) => Promise<{ resolvedUrl?: string; error?: string }>;
   testResults: Record<string, { ok: boolean; msg?: string } | undefined>;
   testing: Record<string, boolean>;
 }

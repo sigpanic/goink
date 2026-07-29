@@ -156,7 +156,10 @@ export default function ModelConfigTab({ onSaved }: Props) {
           setProviders((prev) =>
             prev.map((p) =>
               p.key === providerKey
-                ? ({ ...p, chat_url: resolvedUrl } as unknown as llm.ProviderView)
+                ? ({
+                    ...p,
+                    chat_url: resolvedUrl,
+                  } as unknown as llm.ProviderView)
                 : p,
             ),
           );
