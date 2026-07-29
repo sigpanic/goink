@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Loader2, History } from "lucide-react";
+import { MessageSquare, Loader2, History, Trash2 } from "lucide-react";
 import type { app } from "@/hooks/useApp";
 import { useApp } from "@/hooks/useApp";
+import { useDeleteSession } from "@/hooks/useDeleteSession";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   open: boolean;
   novelId: number;
   onClose: () => void;
   onSelectSession: (sessionId: string) => void;
+  onSessionDeleted: (sessionId: string) => void;
 }
 
 export default function SessionHistory({
@@ -16,6 +19,7 @@ export default function SessionHistory({
   novelId,
   onClose,
   onSelectSession,
+  onSessionDeleted,
 }: Props) {
   const { t } = useTranslation();
   const app = useApp();
@@ -129,9 +133,20 @@ export default function SessionHistory({
     }
   }, [hasMore, isLoading, page]);
 
+  // 删除会话：复用 useDeleteSession hook（统一 deleteTarget/deleting/错误提示）。
+  // 删除成功后既更新本地分页 state（SessionHistory 自管列表），又通过 onSessionDeleted
+  // 通知父组件 ChatPanel 更新最近会话列表 / 清空当前活跃 session 视图。
+  const { deleteTarget, deleting, setDeleteTarget, handleDeleteSession } =
+    useDeleteSession((sid) => {
+      setSessions((prev) => prev.filter((s) => s.session_id !== sid));
+      setTotal((prev) => Math.max(0, prev - 1));
+      onSessionDeleted(sid);
+    });
+
   if (!mounted) return null;
 
   return (
+    <>
     <div className="absolute inset-0 pointer-events-none">
       <div
         className="absolute inset-0 z-30 pointer-events-auto"
@@ -185,13 +200,13 @@ export default function SessionHistory({
           ) : (
             <div className="space-y-0.5">
               {sessions.map((s) => (
-                <button
+                <div
                   key={s.session_id}
                   onClick={() => {
                     onSelectSession(s.session_id);
                     onClose();
                   }}
-                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer select-none"
+                  className="w-full flex items-center gap-2.5 px-2.5 py-2.5 rounded-lg text-left hover:bg-muted/50 transition-colors cursor-pointer select-none group"
                 >
                   <MessageSquare className="w-4 h-4 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
@@ -202,7 +217,17 @@ export default function SessionHistory({
                       {timeAgo(s.updated_at)}
                     </div>
                   </div>
-                </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget(s);
+                    }}
+                    className="shrink-0 p-1 rounded text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    title={t("common.delete")}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
               ))}
               {isLoading && (
                 <div className="flex justify-center py-3">
@@ -219,5 +244,22 @@ export default function SessionHistory({
         </div>
       </div>
     </div>
+    <ConfirmDialog
+      open={deleteTarget !== null}
+      title={t("chat.confirmDeleteSession")}
+      message={
+        deleteTarget
+          ? t("chat.confirmDeleteSessionMessage", {
+              title: deleteTarget.title || t("chat.newChat"),
+            })
+          : ""
+      }
+      danger
+      loading={deleting}
+      confirmText={t("common.delete")}
+      onClose={() => setDeleteTarget(null)}
+      onConfirm={handleDeleteSession}
+    />
+    </>
   );
 }

@@ -153,6 +153,36 @@ func (s *Store) BumpActiveVersion(ctx context.Context, sessionID string) (int, e
 	return newV, nil
 }
 
+// ========== Session 删除 ==========
+
+// Delete 删除一个 session 及其全部关联数据：messages、operation_log。
+// 单事务内执行，保证原子性。
+//
+// sessions 与 messages 表本身在 skipOperLog 名单内，不走 operation_log；
+// operation_log 的清理用裸 DELETE（Table 模式无 Schema，不经 callback），
+// 因此整个删除过程不产生新的日志记录，符合"session 删除不可回滚"的语义。
+// 清理 operation_log 的原因：该 session 产生的领域元数据操作日志强绑定 session_id，
+// session 删除后成为孤儿（回滚第一步即查 sessions.last_turn_id），无保留意义。
+func (s *Store) Delete(ctx context.Context, sessionID string) error {
+	err := s.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("session_id = ?", sessionID).Delete(&Message{}).Error; err != nil {
+			return fmt.Errorf("delete messages: %w", err)
+		}
+		if err := tx.Where("session_id = ?", sessionID).Delete(&Session{}).Error; err != nil {
+			return fmt.Errorf("delete session: %w", err)
+		}
+		if err := tx.Table("operation_log").Where("session_id = ?", sessionID).Delete(nil).Error; err != nil {
+			return fmt.Errorf("delete operation_log: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return fmt.Errorf("session store: delete: %w", err)
+	}
+	s.logger.Debug("session store: deleted session", "session_id", sessionID)
+	return nil
+}
+
 // ========== Message 查询 ==========
 
 // NextTurn 原子递增 last_turn_id 并返回新值。

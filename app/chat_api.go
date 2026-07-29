@@ -95,6 +95,22 @@ func (a *App) GetSession(sessionID string) (*SessionDetail, error) {
 	}, nil
 }
 
+// DeleteSession 删除指定会话及其全部消息、关联的操作日志。不可恢复。
+func (a *App) DeleteSession(sessionID string) error {
+	if a.session == nil {
+		return fmt.Errorf("app: session store not initialized")
+	}
+	if a.agent.IsRunning(sessionID) {
+		return fmt.Errorf("对话进行中，无法删除该会话，请等待对话完成或先停止")
+	}
+	if err := a.session.Delete(a.ctx, sessionID); err != nil {
+		a.logger.Error("failed to delete session", "session_id", sessionID, "err", err)
+		return fmt.Errorf("app: delete session: %w", err)
+	}
+	a.logger.Info("deleted session", "session_id", sessionID)
+	return nil
+}
+
 // GetSessionMessages 加载指定 session 的全部前端可见消息。
 func (a *App) GetSessionMessages(sessionID string) ([]session.Message, error) {
 	if a.session == nil {

@@ -290,6 +290,21 @@ export default function ChatPanel({
       });
   }, [novelId, app]);
 
+  // 会话删除后同步视图：从最近会话列表移除并更新总数；
+  // 若删除的正是当前正在查看的 session，清空活跃会话/消息，避免界面仍停留在已删除内容上。
+  const handleSessionDeleted = useCallback(
+    (sessionId: string) => {
+      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
+      setSessionsTotal((prev) => Math.max(0, prev - 1));
+      if (activeSessionId === sessionId) {
+        setActiveSessionId(null);
+        setTurns([]);
+        setSessionId("");
+      }
+    },
+    [activeSessionId],
+  );
+
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true);
   }, []);
@@ -1226,6 +1241,7 @@ export default function ChatPanel({
           novelId={novelId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
+          onSessionDeleted={handleSessionDeleted}
         />
       </div>
 
@@ -1249,6 +1265,7 @@ export default function ChatPanel({
             total={sessionsTotal}
             onSelectSession={handleSelectSession}
             onViewAll={handleOpenHistory}
+            onDeleteSession={handleSessionDeleted}
           />
         ) : isLoadingHistory ? (
           <div className="flex items-center justify-center h-full">
