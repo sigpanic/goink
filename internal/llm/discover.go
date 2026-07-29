@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -33,14 +32,14 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 
 	if resp.StatusCode >= 400 {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return nil, httpError(resp.StatusCode, errBody)
+		return nil, fmt.Errorf("自动发现模型失败: %s", summarizeErrorBody(resp.StatusCode, errBody))
 	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
-	if looksLikeHTML(body) {
+	if isHTMLPage(body) {
 		return nil, fmt.Errorf("该端点不支持自动发现（服务端返回了网页而非 JSON）")
 	}
 
@@ -81,36 +80,6 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 	}
 
 	return models, nil
-}
-
-func looksLikeHTML(body []byte) bool {
-	trimmed := bytes.TrimSpace(body)
-	if len(trimmed) == 0 {
-		return false
-	}
-	return trimmed[0] != '{' && trimmed[0] != '['
-}
-
-func httpError(code int, body []byte) error {
-	switch code {
-	case 401:
-		return fmt.Errorf("API Key 无效或未配置 (401)")
-	case 403:
-		if looksLikeHTML(body) {
-			return fmt.Errorf("服务端拒绝访问，可能被防火墙拦截，该端点不支持自动发现 (403)")
-		}
-		return fmt.Errorf("无权访问该端点 (403)")
-	case 404:
-		return fmt.Errorf("该端点不支持 /models 自动发现 (404)")
-	case 429:
-		return fmt.Errorf("请求过于频繁，请稍后重试 (429)")
-	default:
-		msg := string(body)
-		if looksLikeHTML(body) {
-			msg = "服务端返回了网页，该端点可能不支持自动发现"
-		}
-		return fmt.Errorf("[%d] %s", code, msg)
-	}
 }
 
 // modelIDToName 将模型 ID 转为显示名称：首字母大写，- 替换为空格。

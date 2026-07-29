@@ -6,22 +6,29 @@ import {
   TooltipContent,
 } from "@/components/ui/tooltip";
 import { explainErrorKey } from "@/lib/errorExplain";
+import { cn } from "@/lib/utils";
 
 interface Props {
   testResult?: { ok: boolean; msg?: string } | undefined;
+  className?: string;
 }
 
 /**
  * 测试结果显示组件：错误/成功消息 + 错误时的 ? 图标 Tooltip 提示。
- * BuiltinProviderPane 和 CustomProviderPane 共用，避免重复代码。
+ * BuiltinProviderPane、CustomProviderPane、ModelDiscoveryPanel 共用，避免重复代码。
+ * className 可覆盖默认的 pl-[4rem] 左 padding（如 ModelDiscoveryPanel 不需要对齐 label）。
  */
-export default function TestResultWithHint({ testResult }: Props) {
+export default function TestResultWithHint({ testResult, className }: Props) {
   const { t } = useTranslation();
   if (!testResult) return null;
 
   return (
     <div
-      className={`text-xs pl-[4rem] flex items-start gap-1.5 ${testResult.ok ? "text-success-foreground" : "text-red-500"}`}
+      className={cn(
+        "text-xs pl-[4rem] flex items-start gap-1.5",
+        testResult.ok ? "text-success-foreground" : "text-red-500",
+        className,
+      )}
     >
       {!testResult.ok && testResult.msg && (
         <Tooltip>

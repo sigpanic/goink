@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import type { llm } from "@/hooks/useApp";
 import { DiscoverModels } from "@/lib/wailsjs/go/app/App";
 import ModelEditForm from "./ModelEditForm";
+import TestResultWithHint from "./TestResultWithHint";
 
 interface Props {
   chatUrl: string;
@@ -165,7 +166,10 @@ export default function ModelDiscoveryPanel({
 
       {/* 发现错误（无结果时） */}
       {discoverError && !discovering && discoveredModels.length === 0 && (
-        <div className="text-xs text-red-500 mb-2">{discoverError}</div>
+        <TestResultWithHint
+          testResult={{ ok: false, msg: discoverError }}
+          className="mb-2 pl-0"
+        />
       )}
 
       {/* 发现结果面板 */}

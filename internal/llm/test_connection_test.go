@@ -337,6 +337,18 @@ func TestSummarizeErrorBody(t *testing.T) {
 			body:       `{"foo":"bar"}`,
 			want:       `[400] {"foo":"bar"}`,
 		},
+		{
+			name:       "empty body",
+			statusCode: 404,
+			body:       ``,
+			want:       "[404] [空响应，可能 URL 错误或端点不存在]",
+		},
+		{
+			name:       "whitespace only body",
+			statusCode: 500,
+			body:       `   `,
+			want:       "[500] [空响应，可能 URL 错误或端点不存在]",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

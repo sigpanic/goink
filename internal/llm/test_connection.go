@@ -246,6 +246,9 @@ func summarizeErrorBody(statusCode int, body []byte) string {
 	}
 	// 3. 其他格式 → 原文截断到 200 字符
 	s := strings.TrimSpace(string(body))
+	if s == "" {
+		return fmt.Sprintf("[%d] [空响应，可能 URL 错误或端点不存在]", statusCode)
+	}
 	if len(s) > 200 {
 		s = s[:200] + "..."
 	}
