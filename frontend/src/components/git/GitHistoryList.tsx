@@ -9,6 +9,7 @@ import {
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
+import { useTimeAgo } from "@/hooks/useTimeAgo";
 import {
   GetCommitLog,
   GetCommitFileList,
@@ -25,20 +26,10 @@ interface Props {
 
 const PAGE_SIZE = 50;
 
-function timeAgo(iso: string, t: (key: string, opts?: any) => string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const min = Math.floor(diff / 60000);
-  if (min < 1) return t("git.justNow");
-  if (min < 60) return t("git.minutesAgo", { count: min });
-  const hour = Math.floor(min / 60);
-  if (hour < 24) return t("git.hoursAgo", { count: hour });
-  const day = Math.floor(hour / 24);
-  if (day < 30) return t("git.daysAgo", { count: day });
-  return t("git.monthsAgo", { count: Math.floor(day / 30) });
-}
-
 export default function GitHistoryList({ novelId, onSelectFile }: Props) {
   const { t, i18n } = useTranslation();
+  // 相对时间：每分钟自动刷新
+  const timeAgo = useTimeAgo();
   const [commits, setCommits] = useState<git.CommitInfo[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -244,7 +235,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
   }
 
   function renderTime(commit: git.CommitInfo) {
-    const relative = timeAgo(commit.time, t);
+    const relative = timeAgo(commit.time);
     const d = new Date(commit.time);
     const dateStr = new Intl.DateTimeFormat(i18n.language, {
       year: "numeric",

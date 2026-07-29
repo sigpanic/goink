@@ -1,8 +1,8 @@
-import { useState } from "react";
 import { MessageSquare, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { app } from "@/hooks/useApp";
 import { useDeleteSession } from "@/hooks/useDeleteSession";
+import { useTimeAgo } from "@/hooks/useTimeAgo";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -21,24 +21,13 @@ export default function RecentSessions({
   onDeleteSession,
 }: Props) {
   const { t } = useTranslation();
-  const [now] = useState(() => Date.now());
+  // 相对时间：组件挂载即可见，每分钟自动刷新
+  const timeAgo = useTimeAgo();
 
   // 删除会话：复用 useDeleteSession hook。RecentSessions 的列表数据由父组件 ChatPanel
   // 传入，删除成功后只需通过 onDeleteSession 通知父组件更新，自身无需维护列表 state。
   const { deleteTarget, deleting, setDeleteTarget, handleDeleteSession } =
     useDeleteSession(onDeleteSession);
-
-  function timeAgo(iso: string): string {
-    const diff = now - new Date(iso).getTime();
-    const min = Math.floor(diff / 60000);
-    if (min < 1) return t("chat.justNow");
-    if (min < 60) return t("chat.minutesAgo", { count: min });
-    const hour = Math.floor(min / 60);
-    if (hour < 24) return t("chat.hoursAgo", { count: hour });
-    const day = Math.floor(hour / 24);
-    if (day < 30) return t("chat.daysAgo", { count: day });
-    return t("chat.monthsAgo", { count: Math.floor(day / 30) });
-  }
 
   return (
     <div className="flex flex-col h-full">

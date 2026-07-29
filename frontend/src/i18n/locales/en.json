@@ -35,6 +35,17 @@
     "done": "Done",
     "failed": "Failed"
   },
+  "time": {
+    "justNow": "Just now",
+    "minutesAgo_one": "{{count}} min ago",
+    "minutesAgo_other": "{{count}} mins ago",
+    "hoursAgo_one": "{{count}} hr ago",
+    "hoursAgo_other": "{{count}} hrs ago",
+    "daysAgo_one": "{{count}} day ago",
+    "daysAgo_other": "{{count}} days ago",
+    "monthsAgo_one": "{{count}} month ago",
+    "monthsAgo_other": "{{count}} months ago"
+  },
   "app": {
     "loading": "Loading..."
   },
@@ -211,15 +222,6 @@
     "command": "Command",
     "permanent": "Permanent",
     "noMatchingCommand": "No matching commands",
-    "justNow": "Just now",
-    "minutesAgo_one": "{{count}} min ago",
-    "minutesAgo_other": "{{count}} mins ago",
-    "hoursAgo_one": "{{count}} hr ago",
-    "hoursAgo_other": "{{count}} hrs ago",
-    "daysAgo_one": "{{count}} day ago",
-    "daysAgo_other": "{{count}} days ago",
-    "monthsAgo_one": "{{count}} month ago",
-    "monthsAgo_other": "{{count}} months ago",
     "historySessions": "History",
     "totalSessions": "{{count}} total",
     "searchSessions": "Search sessions...",
@@ -782,15 +784,6 @@
     "done": "Done"
   },
   "git": {
-    "justNow": "Just now",
-    "minutesAgo_one": "{{count}} min ago",
-    "minutesAgo_other": "{{count}} mins ago",
-    "hoursAgo_one": "{{count}} hr ago",
-    "hoursAgo_other": "{{count}} hrs ago",
-    "daysAgo_one": "{{count}} day ago",
-    "daysAgo_other": "{{count}} days ago",
-    "monthsAgo_one": "{{count}} month ago",
-    "monthsAgo_other": "{{count}} months ago",
     "creationHistory": "Creation History",
     "noCommits": "No commits yet",
     "retry": "Retry",

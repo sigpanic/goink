@@ -4,6 +4,7 @@ import { MessageSquare, Loader2, History, Trash2 } from "lucide-react";
 import type { app } from "@/hooks/useApp";
 import { useApp } from "@/hooks/useApp";
 import { useDeleteSession } from "@/hooks/useDeleteSession";
+import { useTimeAgo } from "@/hooks/useTimeAgo";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -24,26 +25,8 @@ export default function SessionHistory({
   const { t } = useTranslation();
   const app = useApp();
   const [mounted, setMounted] = useState(false);
-  const [now, setNow] = useState(() => Date.now());
-
-  // 面板打开时每分钟刷新时间，保证 timeAgo 相对时间准确
-  useEffect(() => {
-    if (!open) return;
-    const timer = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(timer);
-  }, [open]);
-
-  function timeAgo(iso: string): string {
-    const diff = now - new Date(iso).getTime();
-    const min = Math.floor(diff / 60000);
-    if (min < 1) return t("chat.justNow");
-    if (min < 60) return t("chat.minutesAgo", { count: min });
-    const hour = Math.floor(min / 60);
-    if (hour < 24) return t("chat.hoursAgo", { count: hour });
-    const day = Math.floor(hour / 24);
-    if (day < 30) return t("chat.daysAgo", { count: day });
-    return t("chat.monthsAgo", { count: Math.floor(day / 30) });
-  }
+  // 相对时间：面板打开时每分钟自动刷新，关闭时停掉定时器
+  const timeAgo = useTimeAgo(open);
   const [visible, setVisible] = useState(false);
   const [sessions, setSessions] = useState<app.SessionMeta[]>([]);
   const [total, setTotal] = useState(0);

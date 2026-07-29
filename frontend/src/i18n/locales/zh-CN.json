@@ -35,6 +35,13 @@
     "done": "完成",
     "failed": "失败"
   },
+  "time": {
+    "justNow": "刚刚",
+    "minutesAgo": "{{count}} 分钟前",
+    "hoursAgo": "{{count}} 小时前",
+    "daysAgo": "{{count}} 天前",
+    "monthsAgo": "{{count}} 个月前"
+  },
   "app": {
     "loading": "加载中..."
   },
@@ -206,11 +213,6 @@
     "command": "指令",
     "permanent": "常驻",
     "noMatchingCommand": "无匹配命令",
-    "justNow": "刚刚",
-    "minutesAgo": "{{count}} 分钟前",
-    "hoursAgo": "{{count}} 小时前",
-    "daysAgo": "{{count}} 天前",
-    "monthsAgo": "{{count}} 个月前",
     "historySessions": "历史会话",
     "totalSessions": "共 {{count}} 个",
     "searchSessions": "搜索会话...",
@@ -759,11 +761,6 @@
     "done": "完成"
   },
   "git": {
-    "justNow": "刚刚",
-    "minutesAgo": "{{count}} 分钟前",
-    "hoursAgo": "{{count}} 小时前",
-    "daysAgo": "{{count}} 天前",
-    "monthsAgo": "{{count}} 个月前",
     "creationHistory": "创作历史",
     "noCommits": "暂无提交记录",
     "retry": "重试",
