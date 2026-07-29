@@ -314,6 +314,35 @@ func TestSummarizeErrorBody(t *testing.T) {
 			want:       "[402] 余额不足",
 		},
 		{
+			// 扁平格式：message 在顶层，error 是字符串而非对象（非标准中转站通用格式）
+			name:       "flat error format with message and error string",
+			statusCode: 404,
+			body:       `{"code":5,"error":"url.not_found","message":"没找到对象","method":"GET","scode":"0x5","status":false,"ua":"Go-http-client/2.0","url":"/v1/chat/completi/models"}`,
+			want:       "[404] 没找到对象 (url.not_found)",
+		},
+		{
+			// 扁平格式：只有 message，无 error 字符串
+			name:       "flat error format with message only",
+			statusCode: 400,
+			body:       `{"message":"参数错误"}`,
+			want:       "[400] 参数错误",
+		},
+		{
+			// Spring Boot 默认错误格式：error 是 HTTP 描述字符串 + path，无 message
+			// path 让用户看出 URL 拼接错误（/v4/chat/completion ← chat URL 填错）
+			name:       "spring boot error format with path",
+			statusCode: 404,
+			body:       `{"timestamp":"2026-07-29T01:47:18.779+00:00","status":404,"error":"Not Found","path":"/v4/chat/completion/models"}`,
+			want:       "[404] Not Found (path: /v4/chat/completion/models)",
+		},
+		{
+			// 扁平 error 字符串无 path（最简 Spring Boot 格式缺 path）
+			name:       "flat error string without path",
+			statusCode: 500,
+			body:       `{"error":"Internal Server Error"}`,
+			want:       "[500] Internal Server Error",
+		},
+		{
 			name:       "html error page",
 			statusCode: 404,
 			body:       `<html><head><title>404 Not Found</title></head><body>openresty</body></html>`,

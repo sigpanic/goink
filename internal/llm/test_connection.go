@@ -218,10 +218,16 @@ func probeCandidate(ctx context.Context, client *http.Client, url string, body [
 
 // summarizeErrorBody 把 HTTP 错误响应体格式化为简洁的错误消息。
 // 优先解析 OpenAI 兼容错误格式 {error: {message, type}}，提取 message（覆盖 OpenAI/Anthropic/Gemini/中转站）；
+// 其次解析扁平格式（非标准中转站通用格式 + Spring Boot 默认错误格式）：
+//   - {message, error (字符串)}：error 是错误码字符串
+//   - {error (字符串), path}：Spring Boot 默认错误格式，带 path 让用户看出 URL 拼接错误
+//
 // HTML 错误页简化为 [HTML 错误页]（HTML 内容对诊断无价值）；其他格式原文截断到 200 字符。
 //
 // 示例：
-//   - {"error":{"message":"Invalid API Key","type":"invalid_key"}} → [401] Invalid API Key (invalid_key)
+//   - {"error":{"message":"Invalid API Key","type":"invalid_key"}}  → [401] Invalid API Key (invalid_key)
+//   - {"message":"没找到对象","error":"url.not_found"}               → [404] 没找到对象 (url.not_found)
+//   - {"error":"Not Found","path":"/v4/chat/completion/models"}     → [404] Not Found (path: /v4/chat/completion/models)
 //   - <html><body>404 Not Found</body></html>                        → [404] [HTML 错误页，可能 URL 错误或被防火墙拦]
 //   - 纯文本错误                                                    → [500] <原文截断到 200 字符>
 func summarizeErrorBody(statusCode int, body []byte) string {
@@ -239,12 +245,39 @@ func summarizeErrorBody(statusCode int, body []byte) string {
 		}
 		return fmt.Sprintf("[%d] %s", statusCode, errResp.Error.Message)
 	}
-	// 2. HTML 错误页 → 简短标识（HTML 全文对诊断无价值）
+	// 2. 尝试扁平格式（非标准中转站 + Spring Boot 默认错误格式）
+	// 情况 A: {message, error (字符串)} — message 在顶层，error 是错误码字符串
+	//   如 {"code":5,"error":"url.not_found","message":"没找到对象",...}
+	// 情况 B: {error (字符串), path, ...} — Spring Boot 默认错误格式，无 message
+	//   如 {"timestamp":"...","status":404,"error":"Not Found","path":"/v1/models"}
+	//   path 让用户看出 URL 拼接错误（如 /v4/chat/completion/models ← chat URL 填错）
+	// error 为对象时 json.Unmarshal 到 string 会失败，整个分支跳过，不会误伤 OpenAI 格式
+	var flatResp struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+		Path    string `json:"path"`
+	}
+	if err := json.Unmarshal(body, &flatResp); err == nil {
+		switch {
+		case flatResp.Message != "" && flatResp.Error != "":
+			// 情况 A: message + error 错误码
+			return fmt.Sprintf("[%d] %s (%s)", statusCode, flatResp.Message, flatResp.Error)
+		case flatResp.Message != "":
+			return fmt.Sprintf("[%d] %s", statusCode, flatResp.Message)
+		case flatResp.Error != "":
+			// 情况 B: Spring Boot 格式，error 是 HTTP 描述，带 path 才有诊断价值
+			if flatResp.Path != "" {
+				return fmt.Sprintf("[%d] %s (path: %s)", statusCode, flatResp.Error, flatResp.Path)
+			}
+			return fmt.Sprintf("[%d] %s", statusCode, flatResp.Error)
+		}
+	}
+	// 3. HTML 错误页 → 简短标识（HTML 全文对诊断无价值）
 	// 用精确检测：含 <html/<head/<body 标签才算 HTML 错误页，避免把纯文本误判为 HTML
 	if isHTMLPage(body) {
 		return fmt.Sprintf("[%d] [HTML 错误页，可能 URL 错误或被防火墙拦]", statusCode)
 	}
-	// 3. 其他格式 → 原文截断到 200 字符
+	// 4. 其他格式 → 原文截断到 200 字符
 	s := strings.TrimSpace(string(body))
 	if s == "" {
 		return fmt.Sprintf("[%d] [空响应，可能 URL 错误或端点不存在]", statusCode)
