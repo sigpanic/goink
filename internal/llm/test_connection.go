@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 )
@@ -27,7 +28,9 @@ type TestConnectionInput struct {
 //  3. + /v1/chat/completions（裸域名，如 https://1024token.club）
 //  4. 去掉末尾 /chat/completions 再补 /v1/chat/completions（用户填 /v1/chat/completions 但实际端点是 /v1 的变体）
 //  5. 去掉末尾 /v1/chat/completions 再补 /chat/completions（反向情况）
+//  6. host + /v1/chat/completions（兜底：用户填错路径时自愈，如填 /v4/chat/completion → 探测 host/v1/chat/completions）
 //
+// 第 3、6 档用 net/url 提取 host，正确处理端口/IPv6/用户信息。
 // 去重并清理（补 https://、TrimRight 末尾斜杠）。
 func expandChatURLCandidates(raw string) []string {
 	raw = strings.TrimSpace(raw)
@@ -55,10 +58,9 @@ func expandChatURLCandidates(raw string) []string {
 		add(raw + "/chat/completions")
 	}
 	// 3. + /v1/chat/completions（仅在裸域名时，避免对带版本号的路径误补 /v1）
-	if _, hostPart, ok := strings.Cut(raw, "://"); ok {
-		if !strings.Contains(hostPart, "/") {
-			add(raw + "/v1/chat/completions")
-		}
+	//    用 net/url 判断 u.Path == ""，比 strings.Contains 更语义化
+	if u, err := url.Parse(raw); err == nil && u.Path == "" {
+		add(raw + "/v1/chat/completions")
 	}
 	// 4. 去掉末尾 /chat/completions 再补 /v1/chat/completions
 	//    若 base 已以 /v1 结尾则跳过（避免 /v1/v1/chat/completions 重复）
@@ -70,6 +72,13 @@ func expandChatURLCandidates(raw string) []string {
 	// 5. 去掉末尾 /v1/chat/completions 再补 /chat/completions
 	if base, ok := strings.CutSuffix(raw, "/v1/chat/completions"); ok {
 		add(base + "/chat/completions")
+	}
+	// 6. host + /v1/chat/completions（兜底：用户填错路径时自愈）
+	//    无视用户填的路径，直接用 host 拼 /v1/chat/completions
+	//    仅在前面所有候选都失败时才试，不会误伤填对的情况
+	//    裸域名时与第 3 档重复，add 会去重
+	if u, err := url.Parse(raw); err == nil && u.Host != "" {
+		add(u.Scheme + "://" + u.Host + "/v1/chat/completions")
 	}
 
 	return candidates

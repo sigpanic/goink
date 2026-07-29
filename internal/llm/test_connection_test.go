@@ -271,6 +271,26 @@ func TestExpandChatURLCandidates(t *testing.T) {
 			},
 		},
 		{
+			// 用户填错路径（少 s）→ 第 6 档兜底生成 host + /v1/chat/completions
+			name: "wrong path typo fallback to host+/v1",
+			raw:  "https://x.com/v4/chat/completion",
+			want: []string{
+				"https://x.com/v4/chat/completion",
+				"https://x.com/v4/chat/completion/chat/completions",
+				"https://x.com/v1/chat/completions",
+			},
+		},
+		{
+			// 带端口：第 6 档用 net/url 提取 host，端口正确保留
+			name: "port preserved in fallback",
+			raw:  "https://x.com:8080/v4/chat/completion",
+			want: []string{
+				"https://x.com:8080/v4/chat/completion",
+				"https://x.com:8080/v4/chat/completion/chat/completions",
+				"https://x.com:8080/v1/chat/completions",
+			},
+		},
+		{
 			name: "empty",
 			raw:  "",
 			want: nil,
