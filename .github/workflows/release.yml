@@ -66,6 +66,27 @@ jobs:
           export VERSION
           iscc build/package/windows/setup.iss
 
+      - name: Smoke test (Windows)
+        shell: bash
+        run: |
+          set -e
+          echo "=== 1. wails build 产物架构检查 ==="
+          file goink.exe
+          file goink.exe | grep -q "PE32+" || { echo "::error::goink.exe 不是 PE32+ 格式"; exit 1; }
+
+          echo "=== 2. 安装包存在性检查 ==="
+          ls -la build/dist/*.exe | head -3
+          [ -n "$(ls build/dist/*.exe 2>/dev/null)" ] || { echo "::error::build/dist/ 下未找到 .exe 安装包"; exit 1; }
+
+          echo "=== 3. MinGit 完整性检查 ==="
+          GIT_DIR="build/runtime/git"
+          [ -f "$GIT_DIR/mingw64/bin/git.exe" ] || [ -f "$GIT_DIR/bin/git.exe" ] || { echo "::error::MinGit 二进制缺失"; exit 1; }
+
+          echo "=== 4. ONNX runtime 存在性检查 ==="
+          ls build/runtime/onnxruntime.dll 2>/dev/null || { echo "::error::onnxruntime.dll 缺失"; exit 1; }
+
+          echo "All Windows smoke tests passed"
+
       - uses: actions/upload-artifact@v4
         with:
           name: windows
@@ -115,6 +136,29 @@ jobs:
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
           bash build/package/linux/build-appimage.sh "$VERSION"
 
+      - name: Smoke test (Linux)
+        run: |
+          set -e
+          echo "=== 1. wails build 产物架构检查 ==="
+          file goink
+          file goink | grep -q "x86-64" || { echo "::error::goink 不是 x86-64"; exit 1; }
+
+          echo "=== 2. 依赖检查（关键库可解析）==="
+          ldd goink | head -10
+          ldd goink | grep -q "not found" && { echo "::error::ldd 报 not found"; exit 1; } || true
+
+          echo "=== 3. AppImage 存在性 + 可执行性 ==="
+          APPIMAGE=$(ls build/dist/*.AppImage 2>/dev/null | head -1)
+          [ -n "$APPIMAGE" ] || { echo "::error::build/dist/ 下未找到 .AppImage"; exit 1; }
+          chmod +x "$APPIMAGE"
+          file "$APPIMAGE"
+          echo "AppImage: $APPIMAGE"
+
+          echo "=== 4. AppImage 可解压性（不真启动，避开 X11 依赖）==="
+          "$APPIMAGE" --appimage-extract >/dev/null 2>&1 && echo "AppImage 可解压 OK" || echo "::warning::AppImage 解压测试跳过（非致命）"
+
+          echo "All Linux smoke tests passed"
+
       - uses: actions/upload-artifact@v4
         with:
           name: linux
@@ -160,6 +204,53 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
           bash build/package/macos/build-dmg.sh "$VERSION"
+
+      - name: Smoke test (macOS)
+        run: |
+          set -e
+          APP="build/bin/goink.app"
+
+          echo "=== 1. codesign --verify --deep --strict（seal 一致性，关键）==="
+          codesign --verify --deep --strict --verbose=4 "$APP"
+          echo "$APP: codesign --verify 通过"
+
+          echo "=== 2. spctl（允许 rejected 未公证，但不允许 invalid）==="
+          SPCTL_OUT=$(spctl -a -vvv -t exec "$APP" 2>&1 || true)
+          echo "$SPCTL_OUT"
+          if echo "$SPCTL_OUT" | grep -q "invalid"; then
+            echo "::error::spctl 报 invalid，签名 seal 破坏，禁止发布"
+            exit 1
+          fi
+
+          echo "=== 3. 主可执行文件架构 ==="
+          file "$APP/Contents/MacOS/goink"
+          file "$APP/Contents/MacOS/goink" | grep -q "arm64" || { echo "::error::主二进制不是 arm64"; exit 1; }
+
+          echo "=== 4. 嵌套二进制架构 + 签名 ==="
+          GIT_BIN="$APP/Contents/Resources/runtime/git/git"
+          [ -f "$GIT_BIN" ] || { echo "::error::嵌套 git 二进制缺失"; exit 1; }
+          file "$GIT_BIN"
+          codesign -dv --verbose=4 "$GIT_BIN" 2>&1 | grep -q "Identifier" || { echo "::error::嵌套 git 签名异常"; exit 1; }
+
+          DYLIB=$(ls "$APP/Contents/Resources/runtime"/libonnxruntime*.dylib 2>/dev/null | grep -v "\.dylib\." | head -1)
+          [ -n "$DYLIB" ] || DYLIB="$APP/Contents/Resources/runtime/libonnxruntime.dylib"
+          [ -e "$DYLIB" ] || { echo "::error::libonnxruntime.dylib 缺失"; exit 1; }
+          file "$DYLIB"
+          file "$DYLIB" | grep -q "arm64" || { echo "::error::libonnxruntime 不是 arm64"; exit 1; }
+          codesign -dv --verbose=4 "$DYLIB" 2>&1 | grep -q "Identifier" || { echo "::error::libonnxruntime 签名异常"; exit 1; }
+
+          echo "=== 5. 挂载 dmg 验证最终交付物 ==="
+          DMG=$(ls build/dist/*.dmg 2>/dev/null | head -1)
+          [ -n "$DMG" ] || { echo "::error::build/dist/ 下未找到 .dmg"; exit 1; }
+          MOUNT_POINT=$(hdiutil attach "$DMG" -nobrowse -noautoopen | grep -E "/Volumes/" | awk '{print $NF}')
+          VOL_APP=$(find "$MOUNT_POINT" -maxdepth 2 -name "*.app" 2>/dev/null | head -1)
+          [ -n "$VOL_APP" ] || { echo "::error::dmg 内未找到 .app"; hdiutil detach "$MOUNT_POINT" 2>/dev/null; exit 1; }
+          echo "VOL_APP: $VOL_APP"
+          codesign --verify --deep --strict --verbose=4 "$VOL_APP"
+          echo "$VOL_APP: codesign --verify 通过"
+          hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
+
+          echo "All macOS smoke tests passed"
 
       - uses: actions/upload-artifact@v4
         with:
