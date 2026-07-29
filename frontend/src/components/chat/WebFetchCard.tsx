@@ -1,6 +1,7 @@
 import { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Globe, ExternalLink, ChevronDown, ChevronRight } from "lucide-react";
+import { BrowserOpenURL } from "@/lib/wailsjs/runtime";
 import Markdown from "@/components/Markdown";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import "./WebFetchCard.css";
@@ -17,7 +18,7 @@ export default memo(function WebFetchCard({ result, displayText }: Props) {
   const [pendingUrl, setPendingUrl] = useState<string | null>(null);
   const confirmOpenExternal = () => {
     if (!pendingUrl) return;
-    window.open(pendingUrl, "_blank", "noopener,noreferrer");
+    BrowserOpenURL(pendingUrl);
     setPendingUrl(null);
   };
 
