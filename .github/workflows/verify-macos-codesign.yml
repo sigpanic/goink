@@ -1,8 +1,14 @@
 name: Verify macOS Codesign
 
-# 手动触发，用于诊断 macOS arm64 dmg "已损坏" 问题
+# 触发：push 到 feat/goink-wt 分支且本文件变更时（秒级检测）
+#       或 workflow_dispatch 手动触发（备选，需 workflow 在默认分支上注册过）
 # 在 macos-latest 上跑完整构建 + 打包，然后对 .app / dmg 做签名状态诊断
 on:
+  push:
+    branches:
+      - feat/goink-wt
+    paths:
+      - '.github/workflows/verify-macos-codesign.yml'
   workflow_dispatch:
     inputs:
       version:
@@ -43,11 +49,14 @@ jobs:
         run: |
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${{ inputs.version }}"
+          [ -z "$VERSION" ] && VERSION="dev"
+          echo "VERSION=$VERSION"
           wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
 
       - name: Package DMG
         run: |
           VERSION="${{ inputs.version }}"
+          [ -z "$VERSION" ] && VERSION="dev"
           bash build/package/macos/build-dmg.sh "$VERSION"
 
       - name: Diagnose build/bin/goink.app
