@@ -50,6 +50,11 @@ cat > "$APP_BUNDLE/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
+# build-dmg.sh 重写了 Info.plist，破坏了 Wails 在 build 阶段做的 ad-hoc 签名 seal
+# 按 Apple 推荐做法（不用 deprecated 的 --deep），只重签 .app bundle 自身
+# 嵌套的 git（Apple 系统签名）和 libonnxruntime.dylib（微软签名）保留各自原签名
+codesign --force --sign - "$APP_BUNDLE"
+
 # 图标占位
 [ -f build/package/macos/goink.icns ] && cp build/package/macos/goink.icns "$APP_BUNDLE/Contents/Resources/"
 
