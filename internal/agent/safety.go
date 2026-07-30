@@ -17,7 +17,6 @@ var readOnlyTools = map[string]bool{
 	"get_locations":           true,
 	"get_story_arcs":          true,
 	"get_reader_perspective":  true,
-	"get_preferences":         true,
 	"get_character_relations": true,
 	"read":                    true,
 }

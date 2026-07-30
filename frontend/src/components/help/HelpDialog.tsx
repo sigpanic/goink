@@ -51,7 +51,6 @@ const toolGroups: { label: string; tools: ToolEntry[] }[] = [
   {
     label: "help.toolGroupMemory",
     tools: [
-      { name: "get_preferences", desc: "help.toolRef_get_preferences" },
       {
         name: "get_character_relations",
         desc: "help.toolRef_get_character_relations",
@@ -68,8 +67,8 @@ const toolGroups: { label: string; tools: ToolEntry[] }[] = [
   {
     label: "help.toolGroupWriting",
     tools: [
-      { name: "create_preference", desc: "help.toolRef_create_preference" },
-      { name: "update_preference", desc: "help.toolRef_update_preference" },
+      { name: "upsert_preference", desc: "help.toolRef_upsert_preference" },
+      { name: "upsert_setting", desc: "help.toolRef_upsert_setting" },
       {
         name: "update_character_relationship",
         desc: "help.toolRef_update_character_relationship",
