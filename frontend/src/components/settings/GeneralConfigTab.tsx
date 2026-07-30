@@ -18,6 +18,8 @@ import {
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
 import { useApp, type novel } from "@/hooks/useApp";
 import UpdateDialog from "@/components/update/UpdateDialog";
+import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 export default function GeneralConfigTab() {
   const app = useApp();
@@ -73,9 +75,7 @@ export default function GeneralConfigTab() {
       setGitSaved(true);
       setTimeout(() => setGitSaved(false), 2000);
     } catch (err) {
-      setGitError(
-        err instanceof Error ? err.message : t("settings.saveFailed"),
-      );
+      setGitError(toErrorMessage(err, t("settings.saveFailed")));
     } finally {
       setGitSaving(false);
     }
@@ -88,6 +88,7 @@ export default function GeneralConfigTab() {
       await app.RebuildNovelIndex(selectedID);
     } catch (err) {
       console.error("Rebuild failed:", err);
+      toastError(toErrorMessage(err, t("settings.rebuildFailed")));
     } finally {
       setRebuilding(false);
     }
@@ -104,9 +105,7 @@ export default function GeneralConfigTab() {
         setShowUpdateDialog(true);
       }
     } catch (err) {
-      setUpdateError(
-        err instanceof Error ? err.message : t("update.checkFailed"),
-      );
+      setUpdateError(toErrorMessage(err, t("update.checkFailed")));
     } finally {
       setChecking(false);
     }

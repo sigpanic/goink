@@ -18,6 +18,7 @@ import {
 import type { git } from "@/lib/wailsjs/go/models";
 import GitCommitTooltip from "./GitCommitTooltip";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   novelId: number;
@@ -47,6 +48,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
   const [selectedFilePath, setSelectedFilePath] = useState<string | null>(null);
   const selectedFilePathRef = useRef<string | null>(null);
   const [loadingDiff, setLoadingDiff] = useState(false);
+  const [expandedError, setExpandedError] = useState<string | null>(null);
   const [showHelp, setShowHelp] = useState(false);
   const [helpPos, setHelpPos] = useState({ top: 0, left: 0 });
   const helpIconRef = useRef<HTMLButtonElement>(null);
@@ -179,6 +181,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
       setExpandedFiles([]);
       setSelectedFilePath(null);
       selectedFilePathRef.current = null;
+      setExpandedError(null);
       return;
     }
     setExpandedHash(hash);
@@ -187,6 +190,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
     setExpandedFiles([]);
     setSelectedFilePath(null);
     selectedFilePathRef.current = null;
+    setExpandedError(null);
     setHoveredHash(null);
     try {
       const result = await GetCommitFileList(novelId, hash);
@@ -200,8 +204,8 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
         selectedFilePathRef.current = files[0].path;
         loadFileDiff(hash, files[0].path);
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      setExpandedError(toErrorMessage(err, t("git.expandCommitFailed")));
     }
     if (expandedHashRef.current === hash) setLoadingFiles(false);
   }
@@ -218,8 +222,8 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
       ) {
         onSelectFile(diff);
       }
-    } catch {
-      /* ignore */
+    } catch (err) {
+      toastError(toErrorMessage(err, t("git.loadDiffFailed")));
     }
     if (expandedHashRef.current === hash) setLoadingDiff(false);
   }
@@ -425,8 +429,22 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
                     </code>
                   </button>
 
+                  {/* 展开错误占位 */}
+                  {isExpanded && expandedError && (
+                    <div className="border-l-2 border-primary/20 ml-5 mb-1">
+                      <div className="text-xs text-destructive flex items-center gap-2 px-7 py-1.5">
+                        <span>{expandedError}</span>
+                        <button
+                          onClick={() => toggleExpand(commit.hash)}
+                          className="text-primary hover:underline"
+                        >
+                          {t("common.retry")}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {/* 展开的文件列表 */}
-                  {isExpanded && expandedFiles.length > 0 && (
+                  {isExpanded && !expandedError && expandedFiles.length > 0 && (
                     <div className="border-l-2 border-primary/20 ml-5 mb-1">
                       {expandedFiles.map((file) => {
                         const isActive = selectedFilePath === file.path;

@@ -417,12 +417,8 @@ export default function WorkspaceView({
   }
 
   async function handleSaveCover(novelID: number, file: File) {
-    try {
-      const buf = await file.arrayBuffer();
-      await app.SaveCover(novelID, Array.from(new Uint8Array(buf)));
-    } catch (err) {
-      console.error(err);
-    }
+    const buf = await file.arrayBuffer();
+    await app.SaveCover(novelID, Array.from(new Uint8Array(buf)));
   }
 
   const activeNovel = novels.find((n) => n.id === activeNovelId);

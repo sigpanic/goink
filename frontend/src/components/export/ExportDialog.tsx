@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { BookOpen, FileText, AlignLeft } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   open: boolean;
@@ -52,8 +53,8 @@ export default function ExportDialog({
     try {
       await onExport(format);
       setSuccess(true);
-    } catch (e: any) {
-      setError(e?.message ?? t("export.exportFailed"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("export.exportFailed")));
     } finally {
       setExporting(false);
     }

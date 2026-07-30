@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import type { novel } from "@/lib/wailsjs/go/models";
 import type { style } from "@/lib/wailsjs/go/models";
@@ -232,8 +233,8 @@ export default function StyleView({
       setNewTags([]);
       setPhase("browse");
       await load(1);
-    } catch (e: any) {
-      setError(e?.message ?? t("styleSample.addFailed"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("styleSample.addFailed")));
     } finally {
       setLoading(false);
     }
@@ -305,10 +306,10 @@ export default function StyleView({
         rawContent: res.raw_content,
       });
       setPhase("preview");
-    } catch (e: any) {
+    } catch (e) {
       if (runningTaskIdRef.current !== taskId) return;
-      const msg = e?.message ?? "";
-      if (!msg.includes("canceled") && !msg.includes("取消")) {
+      const msg = toErrorMessage(e, "");
+      if (!msg.toLowerCase().includes("cancel") && !msg.includes("取消")) {
         setError(msg || t("styleSample.extractFailed"));
       }
       setPhase("browse");
@@ -331,8 +332,8 @@ export default function StyleView({
       setPhase("browse");
       setResult(null);
       setSelected(new Set());
-    } catch (e: any) {
-      setError(e?.message ?? t("styleSample.saveFailed"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("styleSample.saveFailed")));
     } finally {
       setLoading(false);
     }
@@ -353,8 +354,8 @@ export default function StyleView({
       });
       setDetailId(null);
       await load(page);
-    } catch (e: any) {
-      setError(e?.message ?? t("styleSample.saveFailed"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("styleSample.saveFailed")));
     } finally {
       setEditSaving(false);
     }

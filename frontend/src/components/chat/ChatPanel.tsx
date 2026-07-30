@@ -24,6 +24,8 @@ import type { UsageInfo } from "./ContextRing";
 import SettingsDialog from "@/components/settings/SettingsDialog";
 import RecentSessions from "./RecentSessions";
 import SessionHistory from "./SessionHistory";
+import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   novelId: number;
@@ -1034,14 +1036,15 @@ export default function ChatPanel({
           return t;
         }),
       );
-    } catch {
+    } catch (err) {
       // 压缩失败，移除 compressing turn
       setTurns((prev) => prev.filter((t) => t.id !== compTurnId));
+      toastError(toErrorMessage(err, t("chat.compressFailed")));
     } finally {
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, selectedKey, app]);
+  }, [sessionId, selectedKey, app, t]);
 
   const handleSend = useCallback(
     async (content: string) => {

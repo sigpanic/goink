@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import BookCover from "@/components/sidebar/BookCover";
 import type { novel } from "@/hooks/useApp";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   novels: novel.Novel[];
@@ -37,13 +38,23 @@ export default function BookshelfView({
 }: Props) {
   const { t } = useTranslation();
   const [coverKeys, setCoverKeys] = useState<Record<number, number>>({});
+  const [coverError, setCoverError] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadingRef = useRef<number | null>(null);
 
+  function triggerCoverUpload(novelID: number) {
+    uploadingRef.current = novelID;
+    setCoverError((prev) => {
+      const next = { ...prev };
+      delete next[novelID];
+      return next;
+    });
+    fileInputRef.current?.click();
+  }
+
   function handleCoverClick(novelID: number, e: React.MouseEvent) {
     e.stopPropagation();
-    uploadingRef.current = novelID;
-    fileInputRef.current?.click();
+    triggerCoverUpload(novelID);
   }
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
@@ -53,8 +64,23 @@ export default function BookshelfView({
     uploadingRef.current = null;
     // 清空 input 以便重复选同一文件
     e.target.value = "";
-    await onSaveCover(novelID, file);
-    setCoverKeys((prev) => ({ ...prev, [novelID]: (prev[novelID] ?? 0) + 1 }));
+    try {
+      await onSaveCover(novelID, file);
+      setCoverError((prev) => {
+        const next = { ...prev };
+        delete next[novelID];
+        return next;
+      });
+      setCoverKeys((prev) => ({
+        ...prev,
+        [novelID]: (prev[novelID] ?? 0) + 1,
+      }));
+    } catch (err) {
+      setCoverError((prev) => ({
+        ...prev,
+        [novelID]: toErrorMessage(err, t("novel.coverSaveFailed")),
+      }));
+    }
   }
 
   return (
@@ -123,6 +149,20 @@ export default function BookshelfView({
                       <Camera className="w-5 h-5 text-white" />
                     </button>
                   </div>
+                  {coverError[n.id] && (
+                    <div className="text-xs text-destructive flex items-center gap-2 mb-1">
+                      <span className="truncate">{coverError[n.id]}</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          triggerCoverUpload(n.id);
+                        }}
+                        className="text-primary hover:underline shrink-0"
+                      >
+                        {t("common.retry")}
+                      </button>
+                    </div>
+                  )}
                   <h3 className="text-sm font-medium truncate mb-1">
                     {n.title}
                   </h3>

@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { imp, llm, config } from "@/lib/wailsjs/go/models";
 import type { app } from "@/lib/wailsjs/go/models";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { toErrorMessage } from "@/utils/error";
 
 export type ImportProgressStage =
   | "idle"
@@ -43,10 +44,6 @@ interface UseImportNovelOptions {
     [key: string]: unknown;
   };
   onImported: (result: imp.ImportResult) => Promise<void>;
-}
-
-function errorMessage(err: unknown, fallback: string) {
-  return err instanceof Error ? err.message : fallback;
 }
 
 export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
@@ -144,7 +141,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
           message: t("novel.importRollbackDone"),
           percent: 100,
         }));
-        setError(errorMessage(err, t("novel.importFailedRetry")));
+        setError(toErrorMessage(err, t("novel.importFailedRetry")));
         return;
       }
 
@@ -174,7 +171,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
       try {
         await onImported(result);
       } catch (err: unknown) {
-        setError(errorMessage(err, t("novel.importFailedRetry")));
+        setError(toErrorMessage(err, t("novel.importFailedRetry")));
       }
     },
     [app, onImported, reset, t],
@@ -214,7 +211,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
         message: t("novel.importRollbackDone"),
         percent: 100,
       }));
-      setError(errorMessage(err, t("novel.importFailedRetry")));
+      setError(toErrorMessage(err, t("novel.importFailedRetry")));
     }
   }, [app, filePath, modelKey, onImported, t]);
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   open: boolean;
@@ -37,8 +38,8 @@ export default function NovelDeleteDialog({
     setError("");
     try {
       await onConfirm();
-    } catch (e: any) {
-      setError(e?.message ?? t("novel.deleteFailedRetry"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("novel.deleteFailedRetry")));
     } finally {
       setDeleting(false);
     }

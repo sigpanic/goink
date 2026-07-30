@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { novel } from "@/hooks/useApp";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   open: boolean;
@@ -62,8 +63,8 @@ export default function NovelEditDialog({
         description: description.trim(),
         genre: genre.trim(),
       });
-    } catch (e: any) {
-      setError(e?.message ?? t("novel.saveFailedRetry"));
+    } catch (e) {
+      setError(toErrorMessage(e, t("novel.saveFailedRetry")));
     } finally {
       setSaving(false);
     }

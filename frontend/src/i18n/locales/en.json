@@ -144,6 +144,7 @@
     "loadMessagesFailed": "Failed to load messages",
     "startConversation": "Type a message to start a conversation",
     "chatError": "Chat error, please retry",
+    "compressFailed": "Failed to compress context",
     "highReasoning": "High",
     "maxReasoning": "Max",
     "configureModel": "Configure Model...",
@@ -251,6 +252,7 @@
     "rebuildIndexDesc": "If search is abnormal, rebuild the vector index for a specific novel.",
     "rebuilding": "Rebuilding...",
     "rebuildIndex": "Rebuild Vector Index",
+    "rebuildFailed": "Failed to rebuild index",
     "builtinProviders": "Built-in Providers",
     "customProviders": "Custom Providers",
     "testingConnection": "Testing connection...",
@@ -357,6 +359,7 @@
     "editWork": "Edit Work",
     "newWork2": "New Work",
     "saveFailedRetry": "Save failed, please retry",
+    "coverSaveFailed": "Failed to save cover",
     "bookTitle": "Title",
     "enterBookTitle": "Enter title",
     "genre": "Genre",
@@ -796,7 +799,9 @@
     "helpText2": "Here you can browse the complete creation history in chronological order and see what changed in each version.",
     "noCommitMessage": "(no message)",
     "filesChanged_one": "{{count}} file changed",
-    "filesChanged_other": "{{count}} files changed"
+    "filesChanged_other": "{{count}} files changed",
+    "expandCommitFailed": "Failed to expand commit details",
+    "loadDiffFailed": "Failed to load diff"
   },
   "skill": {
     "skills": "Skills",
