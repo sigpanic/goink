@@ -10,6 +10,7 @@ import { type OnMount, DiffEditor } from "@monaco-editor/react";
 import { FileText, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useTheme, type Theme } from "@/hooks/useTheme";
@@ -221,7 +222,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           toastError(
             t("common.saveFailed") +
               ": " +
-              (err instanceof Error ? err.message : String(err)),
+              toErrorMessage(err),
           );
           console.error(err);
         }

@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
@@ -61,7 +62,7 @@ export default function CharacterList({ novelId }: Props) {
       toastError(
         t("character.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

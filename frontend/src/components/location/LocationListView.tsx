@@ -7,6 +7,7 @@ import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -74,7 +75,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       toastError(
         t("location.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -217,7 +218,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       toastError(
         t("location.createFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -241,7 +242,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       toastError(
         t("location.updateFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -265,7 +266,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       toastError(
         t("location.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

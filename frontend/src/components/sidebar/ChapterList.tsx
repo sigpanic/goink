@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/hooks/useApp";
 import type { chapter } from "@/hooks/useApp";
@@ -46,7 +47,7 @@ export default function ChapterList({
       setChapters(list ?? []);
       setLoadError("");
     } catch (err) {
-      setLoadError(err instanceof Error ? err.message : String(err));
+      setLoadError(toErrorMessage(err));
     }
   }, [novelId, app]);
 
@@ -116,7 +117,7 @@ export default function ChapterList({
       setCreateError("");
       loadChapters();
     } catch (err) {
-      setCreateError(err instanceof Error ? err.message : String(err));
+      setCreateError(toErrorMessage(err));
     }
   }
 
@@ -138,7 +139,7 @@ export default function ChapterList({
         toastError(
           t("common.saveFailed") +
             ": " +
-            (err instanceof Error ? err.message : String(err)),
+            toErrorMessage(err),
         );
         console.error(err);
       }

@@ -6,6 +6,7 @@ import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import type { character } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   novelId: number;
@@ -135,7 +136,7 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
       toastError(
         t("character.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

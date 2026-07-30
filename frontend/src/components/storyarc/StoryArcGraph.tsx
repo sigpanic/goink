@@ -14,6 +14,7 @@ import { useGraphColors } from "@/components/graphColors";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import type { storyarc } from "@/hooks/useApp";
 
 interface Props {
@@ -123,7 +124,7 @@ export default function StoryArcGraph({ novelId }: Props) {
       toastError(
         t("storyarc.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

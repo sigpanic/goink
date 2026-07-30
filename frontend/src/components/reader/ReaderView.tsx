@@ -14,6 +14,7 @@ import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -161,7 +162,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       toastError(
         t("reader.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -266,7 +267,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       toastError(
         t("reader.createFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -299,7 +300,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       toastError(
         t("reader.updateFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -324,7 +325,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       toastError(
         t("reader.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -348,7 +349,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       toastError(
         t("reader.updateFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

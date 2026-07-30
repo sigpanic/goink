@@ -115,7 +115,7 @@ export default function StyleView({
       toastError(
         t("styleSample.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     }
@@ -160,7 +160,7 @@ export default function StyleView({
         toastError(
           t("styleSample.loadFailed") +
             ": " +
-            (err instanceof Error ? err.message : String(err)),
+            toErrorMessage(err),
         );
         console.error(err);
       }
@@ -260,7 +260,7 @@ export default function StyleView({
       toastError(
         t("styleSample.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

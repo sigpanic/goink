@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { location } from "@/hooks/useApp";
@@ -74,7 +75,7 @@ export default function LocationList({ novelId }: Props) {
       toastError(
         t("location.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

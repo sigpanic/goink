@@ -5,6 +5,7 @@ import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { preference } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -65,7 +66,7 @@ export default function PreferenceView({ novelId }: Props) {
       toastError(
         t("preference.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -128,7 +129,7 @@ export default function PreferenceView({ novelId }: Props) {
       toastError(
         t("preference.saveFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -152,7 +153,7 @@ export default function PreferenceView({ novelId }: Props) {
       toastError(
         t("preference.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

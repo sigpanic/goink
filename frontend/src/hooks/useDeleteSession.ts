@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import type { app } from "@/hooks/useApp";
 import { useApp } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 // useDeleteSession 封装会话删除的通用逻辑：删除目标、loading 状态、调用 DeleteSession、
 // 错误提示（toastError + console.error）。删除成功后调用 onDeleted 回调，由调用方负责
@@ -29,7 +30,7 @@ export function useDeleteSession(onDeleted: (sessionId: string) => void) {
       toastError(
         t("chat.deleteSessionFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

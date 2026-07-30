@@ -7,6 +7,7 @@ import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -67,7 +68,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       toastError(
         t("character.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -122,7 +123,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       toastError(
         t("character.createFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -146,7 +147,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       toastError(
         t("character.updateFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -170,7 +171,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       toastError(
         t("character.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

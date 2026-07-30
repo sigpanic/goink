@@ -8,6 +8,7 @@ import { arcPalette } from "./arcColors";
 import type { storyarc } from "@/hooks/useApp";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -128,7 +129,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -247,7 +248,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.createArcFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -267,7 +268,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.updateArcFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -324,7 +325,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.createNodeFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -350,7 +351,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.updateNodeFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -382,7 +383,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
           ? "storyarc.deleteArcFailed"
           : "storyarc.deleteNodeFailed";
       toastError(
-        t(key) + ": " + (err instanceof Error ? err.message : String(err)),
+        t(key) + ": " + toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -403,7 +404,7 @@ export default function ArcListView({ novelId, focusArcId }: Props) {
       toastError(
         t("storyarc.updateNodeStatusFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {

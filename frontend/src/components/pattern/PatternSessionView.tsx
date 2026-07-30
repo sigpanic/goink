@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import { usePatternProgress } from "@/hooks/usePatternProgress";
 import Markdown from "@/components/Markdown";
@@ -26,12 +27,6 @@ interface ExtractResult {
   description: string;
   filePath: string;
   rawContent: string;
-}
-
-function errorMessage(error: unknown, fallback: string): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === "string") return error;
-  return fallback;
 }
 
 export default function PatternSessionView({
@@ -84,7 +79,7 @@ export default function PatternSessionView({
       });
       setStatus("done");
     } catch (e: unknown) {
-      const msg = errorMessage(e, "");
+      const msg = toErrorMessage(e, "");
       if (!msg.includes("canceled") && !msg.includes("取消")) {
         setError(msg || t("extract.extractFailed"));
         setStatus("failed");
@@ -120,7 +115,7 @@ export default function PatternSessionView({
       });
       onExit();
     } catch (e: unknown) {
-      setError(errorMessage(e, t("extract.saveFailed")));
+      setError(toErrorMessage(e, t("extract.saveFailed")));
     } finally {
       setLoading(false);
     }

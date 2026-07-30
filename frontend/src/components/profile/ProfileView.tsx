@@ -5,6 +5,7 @@ import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
 import type { config } from "@/lib/wailsjs/go/models";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 interface WritingStats {
   total_words: number;
@@ -55,7 +56,7 @@ export default function ProfileView() {
       toastError(
         t("profile.loadFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
@@ -82,7 +83,7 @@ export default function ProfileView() {
       setAvatarKey((prev) => prev + 1);
       setAvatarError("");
     } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : String(err));
+      setAvatarError(toErrorMessage(err));
     }
   }
 
@@ -94,7 +95,7 @@ export default function ProfileView() {
         setSettings((prev) => (prev ? { ...prev, user_name: name } : null));
         setNameError("");
       } catch (err) {
-        setNameError(err instanceof Error ? err.message : String(err));
+        setNameError(toErrorMessage(err));
         return;
       }
     }

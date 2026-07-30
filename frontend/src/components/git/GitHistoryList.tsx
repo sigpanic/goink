@@ -123,7 +123,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
         toastError(
           t("git.loadFailed") +
             ": " +
-            (err instanceof Error ? err.message : String(err)),
+            toErrorMessage(err),
         );
         console.error(err);
       })
@@ -355,7 +355,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
                     toastError(
                       t("git.loadFailed") +
                         ": " +
-                        (err instanceof Error ? err.message : String(err)),
+                        toErrorMessage(err),
                     );
                     console.error(err);
                   })

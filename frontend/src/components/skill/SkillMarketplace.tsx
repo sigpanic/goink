@@ -16,6 +16,7 @@ import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 interface Props {
   open: boolean;
@@ -198,7 +199,7 @@ export default function SkillMarketplace({
         setTotalPages(data?.total_pages ?? 0);
       }
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = toErrorMessage(e);
       setError({
         code: "other",
         message: t("skill.marketplace.errorOther", { message: msg }),
@@ -245,7 +246,7 @@ export default function SkillMarketplace({
         setRemoteContent(content);
         return content;
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = toErrorMessage(e);
         setContentError(t("skill.marketplace.errorOther", { message: msg }));
         return "";
       } finally {
@@ -310,7 +311,7 @@ export default function SkillMarketplace({
         setLocalContent("");
         setRemoteContentForConfirm("");
       } catch (e: unknown) {
-        const msg = e instanceof Error ? e.message : String(e);
+        const msg = toErrorMessage(e);
         toastError(t("skill.marketplace.installFailed") + ": " + msg);
       } finally {
         setInstalling(false);

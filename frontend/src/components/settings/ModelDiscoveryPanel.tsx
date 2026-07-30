@@ -3,6 +3,7 @@ import { Plus, X, Search, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { llm } from "@/hooks/useApp";
 import { DiscoverModels } from "@/lib/wailsjs/go/app/App";
+import { toErrorMessage } from "@/utils/error";
 import ModelEditForm from "./ModelEditForm";
 import TestResultWithHint from "./TestResultWithHint";
 
@@ -70,7 +71,7 @@ export default function ModelDiscoveryPanel({
         setSelectedForImport(new Set(models.map((m) => m.id)));
       }
     } catch (e: unknown) {
-      setDiscoverError(e instanceof Error ? e.message : String(e));
+      setDiscoverError(toErrorMessage(e));
     } finally {
       setDiscovering(false);
     }

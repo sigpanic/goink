@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, Pencil, Trash2, Heart, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import type { skill } from "@/hooks/useApp";
 import SkillContributeDialog from "./SkillContributeDialog";
@@ -108,7 +109,7 @@ export default function SkillList({
       toastError(
         t("skill.deleteFailed") +
           ": " +
-          (err instanceof Error ? err.message : String(err)),
+          toErrorMessage(err),
       );
       console.error(err);
     } finally {
