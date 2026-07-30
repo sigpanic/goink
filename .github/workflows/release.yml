@@ -71,8 +71,8 @@ jobs:
         run: |
           set -e
           echo "=== 1. wails build 产物架构检查 ==="
-          file goink.exe
-          file goink.exe | grep -q "PE32+" || { echo "::error::goink.exe 不是 PE32+ 格式"; exit 1; }
+          file build/bin/goink.exe
+          file build/bin/goink.exe | grep -q "PE32+" || { echo "::error::goink.exe 不是 PE32+ 格式"; exit 1; }
 
           echo "=== 2. 安装包存在性检查 ==="
           ls -la build/dist/*.exe | head -3
@@ -140,12 +140,12 @@ jobs:
         run: |
           set -e
           echo "=== 1. wails build 产物架构检查 ==="
-          file goink
-          file goink | grep -q "x86-64" || { echo "::error::goink 不是 x86-64"; exit 1; }
+          file build/bin/goink
+          file build/bin/goink | grep -q "x86-64" || { echo "::error::goink 不是 x86-64"; exit 1; }
 
           echo "=== 2. 依赖检查（关键库可解析）==="
-          ldd goink | head -10
-          ldd goink | grep -q "not found" && { echo "::error::ldd 报 not found"; exit 1; } || true
+          ldd build/bin/goink | head -10
+          ldd build/bin/goink | grep -q "not found" && { echo "::error::ldd 报 not found"; exit 1; } || true
 
           echo "=== 3. AppImage 存在性 + 可执行性 ==="
           APPIMAGE=$(ls build/dist/*.AppImage 2>/dev/null | head -1)
