@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";

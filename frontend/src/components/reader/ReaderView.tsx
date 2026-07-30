@@ -13,7 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 

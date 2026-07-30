@@ -5,8 +5,8 @@ import {
   TooltipTrigger,
   TooltipContent,
 } from "@/components/ui/tooltip";
-import { explainErrorKey } from "@/lib/errorExplain";
-import { cn } from "@/lib/utils";
+import { explainErrorKey } from "@/utils/errorExplain";
+import { cn } from "@/utils/cn";
 
 interface Props {
   testResult?: { ok: boolean; msg?: string } | undefined;

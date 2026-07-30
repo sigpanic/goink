@@ -8,7 +8,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import { useApp } from "@/hooks/useApp";
 import type { novel } from "@/lib/wailsjs/go/models";
 import type { style } from "@/lib/wailsjs/go/models";

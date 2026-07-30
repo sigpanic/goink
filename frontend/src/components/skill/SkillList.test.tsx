@@ -2,11 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import SkillList from "./SkillList";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 // Mock toastError
-vi.mock("@/lib/utils", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/lib/utils")>();
+vi.mock("@/utils/toast", async (importOriginal) => {
+  const mod = await importOriginal<typeof import("@/utils/toast")>();
   return {
     ...mod,
     toastError: vi.fn(),

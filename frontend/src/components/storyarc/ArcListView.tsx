@@ -7,7 +7,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import type { storyarc } from "@/hooks/useApp";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 

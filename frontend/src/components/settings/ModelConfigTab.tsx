@@ -3,7 +3,7 @@ import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { llm } from "@/hooks/useApp";
-import { toastSuccess } from "@/lib/utils";
+import { toastSuccess } from "@/utils/toast";
 import BuiltinProviderPane from "./BuiltinProviderPane";
 import CustomProviderPane from "./CustomProviderPane";
 

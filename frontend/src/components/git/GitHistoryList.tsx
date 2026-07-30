@@ -17,7 +17,7 @@ import {
 } from "@/lib/wailsjs/go/app/App";
 import type { git } from "@/lib/wailsjs/go/models";
 import GitCommitTooltip from "./GitCommitTooltip";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 interface Props {
   novelId: number;

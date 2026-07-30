@@ -4,7 +4,7 @@ import { useApp } from "@/hooks/useApp";
 import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
 import type { config } from "@/lib/wailsjs/go/models";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 interface WritingStats {
   total_words: number;

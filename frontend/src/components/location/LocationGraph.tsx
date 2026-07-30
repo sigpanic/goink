@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import type { location } from "@/hooks/useApp";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 interface Props {
   novelId: number;

@@ -9,7 +9,7 @@ import {
 import { type OnMount, DiffEditor } from "@monaco-editor/react";
 import { FileText, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import { useApp } from "@/hooks/useApp";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useTheme, type Theme } from "@/hooks/useTheme";

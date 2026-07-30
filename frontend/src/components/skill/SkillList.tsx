@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Search, Plus, Pencil, Trash2, Heart, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import { useApp } from "@/hooks/useApp";
 import type { skill } from "@/hooks/useApp";
 import SkillContributeDialog from "./SkillContributeDialog";

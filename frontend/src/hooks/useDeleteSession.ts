@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { app } from "@/hooks/useApp";
 import { useApp } from "@/hooks/useApp";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 // useDeleteSession 封装会话删除的通用逻辑：删除目标、loading 状态、调用 DeleteSession、
 // 错误提示（toastError + console.error）。删除成功后调用 onDeleted 回调，由调用方负责

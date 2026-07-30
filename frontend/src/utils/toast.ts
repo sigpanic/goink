@@ -1,10 +1,4 @@
-import { clsx, type ClassValue } from "clsx";
 import { toast } from "sonner";
-import { twMerge } from "tailwind-merge";
-
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
 
 /** 显示错误 toast，带复制按钮，方便用户报告具体错误信息。 */
 export function toastError(msg: string) {

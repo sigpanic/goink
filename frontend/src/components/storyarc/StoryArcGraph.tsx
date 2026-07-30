@@ -13,7 +13,7 @@ import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import type { storyarc } from "@/hooks/useApp";
 
 interface Props {

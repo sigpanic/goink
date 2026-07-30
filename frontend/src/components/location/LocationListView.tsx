@@ -6,7 +6,7 @@ import { useRefresh } from "@/hooks/useRefresh";
 import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 

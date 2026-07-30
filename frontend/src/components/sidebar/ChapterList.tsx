@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import { Button } from "@/components/ui/button";
 import { useApp } from "@/hooks/useApp";
 import type { chapter } from "@/hooks/useApp";

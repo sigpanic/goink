@@ -6,7 +6,7 @@ import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 

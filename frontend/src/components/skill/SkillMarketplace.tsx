@@ -15,7 +15,7 @@ import type { remote } from "@/hooks/useApp";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
-import { toastError } from "@/lib/utils";
+import { toastError } from "@/utils/toast";
 
 interface Props {
   open: boolean;
