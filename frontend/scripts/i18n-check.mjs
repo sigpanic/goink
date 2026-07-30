@@ -248,6 +248,8 @@ function findSourceFiles(dir, exts = ['.tsx', '.ts']) {
       if (entry.name === 'node_modules' || entry.name === '.git') continue
       results.push(...findSourceFiles(fullPath, exts))
     } else if (exts.some(ext => entry.name.endsWith(ext))) {
+      // 跳过测试文件：测试夹具中的中文是后端错误消息测例，非 UI 文案
+      if (/\.(test|spec)\.(ts|tsx)$/.test(entry.name)) continue
       results.push(fullPath)
     }
   }
