@@ -387,7 +387,7 @@ export default function PreferenceView({ novelId }: Props) {
               </span>
             </h2>
             {overBudget && (
-              <span className="ml-auto text-xs text-amber-600 dark:text-amber-500">
+              <span className="ml-auto text-xs text-warning-foreground">
                 {t("preference.tokenOverBudget", { count: tokenCount })}
               </span>
             )}

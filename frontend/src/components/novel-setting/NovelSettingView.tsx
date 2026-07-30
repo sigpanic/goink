@@ -202,7 +202,7 @@ export default function NovelSettingView({ novelId }: Props) {
               </span>
             </h2>
             {overBudget && (
-              <span className="ml-auto text-xs text-amber-600 dark:text-amber-500">
+              <span className="ml-auto text-xs text-warning-foreground">
                 {t("novelSetting.tokenOverBudget", { count: tokenCount })}
               </span>
             )}
