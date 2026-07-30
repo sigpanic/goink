@@ -219,11 +219,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           });
           updateTab(tabId, { isDirty: false });
         } catch (err) {
-          toastError(
-            t("common.saveFailed") +
-              ": " +
-              toErrorMessage(err),
-          );
+          toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
           console.error(err);
         }
       },

@@ -53,11 +53,7 @@ export default function ProfileView() {
       setSettings(cfg as config.AppSettings);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("profile.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("profile.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);

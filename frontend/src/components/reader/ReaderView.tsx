@@ -159,11 +159,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       }
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("reader.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("reader.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -264,11 +260,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       setExpandedId(created.id);
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("reader.createFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("reader.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -297,11 +289,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       setExpandedId(entryId);
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("reader.updateFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("reader.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -322,11 +310,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("reader.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("reader.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);
@@ -346,11 +330,7 @@ export default function ReaderView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("reader.updateFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("reader.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);

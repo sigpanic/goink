@@ -136,11 +136,7 @@ export default function ChapterList({
         await app.UpdateChapterTitle(novelId, ch.chapter_number, newTitle);
         loadChapters();
       } catch (err) {
-        toastError(
-          t("common.saveFailed") +
-            ": " +
-            toErrorMessage(err),
-        );
+        toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
         console.error(err);
       }
     }

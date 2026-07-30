@@ -81,11 +81,7 @@ export default function LocationGraph({ novelId, focusId }: Props) {
       setRelations(relList ?? []);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("location.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);

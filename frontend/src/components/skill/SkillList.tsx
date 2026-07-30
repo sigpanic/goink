@@ -106,11 +106,7 @@ export default function SkillList({
       setDeleteTarget(null);
       await load();
     } catch (err) {
-      toastError(
-        t("skill.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("skill.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

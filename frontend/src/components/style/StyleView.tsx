@@ -112,11 +112,7 @@ export default function StyleView({
       setTotalPages(res?.total_pages ?? 0);
       setPage(p);
     } catch (err) {
-      toastError(
-        t("styleSample.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("styleSample.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     }
   };
@@ -157,11 +153,7 @@ export default function StyleView({
           setEditNovelId(s.is_global ? 0 : s.novel_id);
         }
       } catch (err) {
-        toastError(
-          t("styleSample.loadFailed") +
-            ": " +
-            toErrorMessage(err),
-        );
+        toastError(t("styleSample.loadFailed") + ": " + toErrorMessage(err));
         console.error(err);
       }
     },
@@ -257,11 +249,7 @@ export default function StyleView({
       setDeleteTarget(null);
       await load(page);
     } catch (err) {
-      toastError(
-        t("styleSample.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("styleSample.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

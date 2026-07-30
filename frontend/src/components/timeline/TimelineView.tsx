@@ -125,11 +125,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       setWindowCenter(Math.max(1, maxCh));
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("timeline.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -288,11 +284,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("timeline.savePlanFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.savePlanFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -324,11 +316,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("timeline.createFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -360,11 +348,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("timeline.updateFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -384,11 +368,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("timeline.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);
@@ -413,11 +393,7 @@ export default function TimelineView({ novelId, focusEntryId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("timeline.updateStatusFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("timeline.updateStatusFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);

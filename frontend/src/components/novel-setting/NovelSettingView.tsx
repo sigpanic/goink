@@ -57,11 +57,7 @@ export default function NovelSettingView({ novelId }: Props) {
       setOverBudget(result.over_budget ?? false);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("novelSetting.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("novelSetting.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -114,11 +110,7 @@ export default function NovelSettingView({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("novelSetting.saveFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("novelSetting.saveFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -138,11 +130,7 @@ export default function NovelSettingView({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("novelSetting.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("novelSetting.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

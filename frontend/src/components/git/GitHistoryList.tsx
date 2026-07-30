@@ -120,11 +120,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
       .catch((err: Error) => {
         if (cancelled) return;
         setLoadFailed(true);
-        toastError(
-          t("git.loadFailed") +
-            ": " +
-            toErrorMessage(err),
-        );
+        toastError(t("git.loadFailed") + ": " + toErrorMessage(err));
         console.error(err);
       })
       .finally(() => {
@@ -353,9 +349,7 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
                   .catch((err: Error) => {
                     setLoadFailed(true);
                     toastError(
-                      t("git.loadFailed") +
-                        ": " +
-                        toErrorMessage(err),
+                      t("git.loadFailed") + ": " + toErrorMessage(err),
                     );
                     console.error(err);
                   })

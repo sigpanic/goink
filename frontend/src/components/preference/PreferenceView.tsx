@@ -63,11 +63,7 @@ export default function PreferenceView({ novelId }: Props) {
       setOverBudget(result.over_budget ?? false);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("preference.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("preference.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -126,11 +122,7 @@ export default function PreferenceView({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("preference.saveFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("preference.saveFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -150,11 +142,7 @@ export default function PreferenceView({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("preference.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("preference.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

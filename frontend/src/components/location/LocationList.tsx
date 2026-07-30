@@ -72,11 +72,7 @@ export default function LocationList({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("location.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

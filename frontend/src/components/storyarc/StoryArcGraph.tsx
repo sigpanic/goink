@@ -121,11 +121,7 @@ export default function StoryArcGraph({ novelId }: Props) {
       setWindowCenter(Math.max(1, maxCh));
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("storyarc.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("storyarc.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);

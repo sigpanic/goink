@@ -59,11 +59,7 @@ export default function CharacterList({ novelId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("character.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

@@ -72,11 +72,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       setLocations(list ?? []);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("location.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -215,11 +211,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("location.createFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -239,11 +231,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("location.updateFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -263,11 +251,7 @@ export default function LocationListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("location.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

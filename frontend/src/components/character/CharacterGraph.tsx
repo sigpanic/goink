@@ -133,11 +133,7 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
       setRelations(relList ?? []);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("character.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);

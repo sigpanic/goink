@@ -27,11 +27,7 @@ export function useDeleteSession(onDeleted: (sessionId: string) => void) {
       onDeleted(deleteTarget.session_id);
       setDeleteTarget(null);
     } catch (err) {
-      toastError(
-        t("chat.deleteSessionFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("chat.deleteSessionFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);

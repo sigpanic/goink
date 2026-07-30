@@ -65,11 +65,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       setCharacters(list ?? []);
     } catch (err) {
       setLoadFailed(true);
-      toastError(
-        t("character.loadFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.loadFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setLoading(false);
@@ -120,11 +116,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("character.createFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -144,11 +136,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("character.updateFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setSaving(false);
@@ -168,11 +156,7 @@ export default function CharacterListView({ novelId, focusId }: Props) {
       await load();
       bumpRefresh();
     } catch (err) {
-      toastError(
-        t("character.deleteFailed") +
-          ": " +
-          toErrorMessage(err),
-      );
+      toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);
