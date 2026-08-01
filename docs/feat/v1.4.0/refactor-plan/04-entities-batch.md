@@ -25,7 +25,7 @@
 
 1. **useXxxList query** + 在 List 组件试用，替换手 fetch 三件套（state + load + useEffect）。queryKey 用 1.3 常量。
 2. **useXxxStore**（activeId + 对话框开关 + 必要的协调 action）。
-3. **useCreateXxx / useUpdateXxx / useDeleteXxx mutation**，onSuccess 失效对应 queryKey。替换组件内的 try/catch + bumpRefresh。
+3. **useCreateXxx / useUpdateXxx / useDeleteXxx mutation**，onSuccess 失效对应 queryKey。替换组件内的 try/catch + bumpRefresh。useUpdateXxx 的 payload 全量回传 input 所有字段（见 [00-conventions.md §6](./00-conventions.md)）。
 4. **<XxxDialogs> 抽出**，消费 store；原组件删 dialog state。
 
 每个领域完成后手测：List 计数与 View 数据同步（mutation 后 invalidateQueries 自动刷新，不再靠 bumpRefresh）。

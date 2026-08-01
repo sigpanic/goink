@@ -110,7 +110,16 @@ EventsOn 订阅在测试里要 mock，避免真实事件监听泄漏：mock `@/l
 - 阶段 5 结束后：所有消费方迁完，删 useApp.ts。
 - **顺序纪律**：先改 EventsOn 用 invalidateQueries → 再删 loadXxx → 最后删 useApp。不能跳序，否则重现丢事件 bug。
 
-## 6. 验证清单（每步通用）
+## 6. update mutation 规范
+
+> 所有 useUpdateXxx mutation 的 payload 必须全量回传 input 定义的所有字段，不只发编辑过的字段。
+
+- **payload 来源**：从 query data / editMode.item 取完整实体的所有 input 字段，不做 diff 判断哪些字段变了。
+- **等价 PUT**：后端 `First + Save` 覆盖 input 字段，未传字段保留 DB 原值；前端全量回传 = 覆盖全部 input 字段 = 等价 PUT。不会丢字段。
+- **AI 字段处理**：当前 AI 写入字段（如 personality/detail_json）仍在 input 里，前端全量回传透传 query 缓存的最新值（LLM 操作触发 query invalidation → 前端重新 fetch），不会丢。后端后续重构会从 input 移除这些前端不可编辑字段，前端 TS 类型自然适配，本规范不变。
+- **适用范围**：所有领域的 useUpdateXxx（novel/character/location/storyarc/timeline/reader/preference/novel-setting/style-sample 等）。
+
+## 7. 验证清单（每步通用）
 
 每个步骤完成后跑：
 

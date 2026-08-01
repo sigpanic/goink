@@ -89,7 +89,7 @@
 
 **改动文件**：新建 `frontend/src/components/novel/useUpdateNovel.ts`；改 `handleUpdateNovel`（L381-395）
 
-**怎么做**：mutationFn 接收 `{ id, input }` 调 `UpdateNovel(id, input)`；`onSuccess` 失效 `novelKeys.all`。`handleUpdateNovel` 改用 mutation，删 `loadNovels`。
+**怎么做**：mutationFn 接收 `{ id, input }` 调 `UpdateNovel(id, input)`，payload 全量回传 input 所有字段（见 [00-conventions.md §6](./00-conventions.md)）；`onSuccess` 失效 `novelKeys.all`。`handleUpdateNovel` 改用 mutation，删 `loadNovels`。
 
 **验证**：build + lint + test。手测编辑小说标题，列表同步更新。
 

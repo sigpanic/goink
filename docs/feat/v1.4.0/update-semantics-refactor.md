@@ -360,8 +360,18 @@ db.Save(&item)                 // 3. 保存整个 entity
 
 ## 待办
 
-- [ ] 修前端 5 处漏传（Character/Location/StoryArc/ArcNode）
-- [ ] AI 写入字段从 input 移除（personality/detail_json）
-- [ ] App 层其他 Update 方法改 PUT（按第 3 步顺序）
-- [ ] `UpdateArcNode` 快速状态切换特殊处理
+### 前端（融入 v1.4.0 前端架构重构，领域推进时顺手做）
+
+- [ ] 各领域 useUpdateXxx mutation 的 payload 全量回传 input 所有字段（见 [refactor-plan/00-conventions.md §6](./refactor-plan/00-conventions.md)）
+- [ ] `UpdateArcNode` 快速状态切换：从 query 缓存读完整节点 → 改 status → 全量回传，或单独提供 `UpdateArcNodeStatus` API
+
+### 后端（单独重构）
+
+- [ ] 从前端 input 移除前端不可编辑字段（`UpdateCharacterInput.Personality` / `UpdateLocationInput.DetailJSON` 等 AI 字段）
+- [ ] input 全必填 + 去 `omitempty` + `db.Save` 全量覆盖（按第 3 步顺序）
 - [ ] 评估 check_omitempty 脚本去留
+
+### 说明
+
+- 前端全量回传在后端 input 变化前后都能工作：移除 AI 字段前透传 query 缓存最新值，移除后 TS 类型变必填前端自然适配。
+- 前后端解耦，前端规范统一是「全量回传 input 字段」，不依赖后端重构进度。
