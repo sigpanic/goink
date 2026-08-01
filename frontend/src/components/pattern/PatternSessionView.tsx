@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toErrorMessage } from "@/utils/error";
+import { splitModelKey } from "@/utils/modelKey";
 import { useApp } from "@/hooks/useApp";
 import { usePatternProgress } from "@/hooks/usePatternProgress";
 import Markdown from "@/components/Markdown";
@@ -53,7 +54,7 @@ export default function PatternSessionView({
     setResult(null);
     reset();
 
-    const [providerName, modelID] = modelKey.split("/");
+    const [providerName, modelID] = splitModelKey(modelKey);
     if (!providerName || !modelID) {
       setError(t("extract.extractFailed"));
       setStatus("failed");

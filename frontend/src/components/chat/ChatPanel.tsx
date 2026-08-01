@@ -26,6 +26,7 @@ import RecentSessions from "./RecentSessions";
 import SessionHistory from "./SessionHistory";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import { splitModelKey } from "@/utils/modelKey";
 
 interface Props {
   novelId: number;
@@ -990,7 +991,7 @@ export default function ChatPanel({
 
   const handleCompress = useCallback(async () => {
     if (!sessionId || !selectedKey || compressingRef.current) return;
-    const [providerName, modelID] = selectedKey.split("/");
+    const [providerName, modelID] = splitModelKey(selectedKey);
     if (!providerName || !modelID) return;
 
     compressingRef.current = true;
@@ -1049,7 +1050,7 @@ export default function ChatPanel({
   const handleSend = useCallback(
     async (content: string) => {
       if (!selectedKey) return;
-      const [p, m] = selectedKey.split("/");
+      const [p, m] = splitModelKey(selectedKey);
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
         app.CancelChat(sessionId);

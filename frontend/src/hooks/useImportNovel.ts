@@ -4,6 +4,7 @@ import type { imp, llm, config } from "@/lib/wailsjs/go/models";
 import type { app } from "@/lib/wailsjs/go/models";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { toErrorMessage } from "@/utils/error";
+import { splitModelKey } from "@/utils/modelKey";
 
 export type ImportProgressStage =
   | "idle"
@@ -180,7 +181,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
   // 用户点"AI 分析"→ 调 ImportWithLLM，LLM 分析后直接导入
   const startLLMImport = useCallback(async () => {
     if (!filePath || !modelKey) return;
-    const [providerName, modelID] = modelKey.split("/");
+    const [providerName, modelID] = splitModelKey(modelKey);
     if (!providerName || !modelID) return;
 
     setError("");

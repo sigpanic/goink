@@ -10,6 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import { splitModelKey } from "@/utils/modelKey";
 import { useApp } from "@/hooks/useApp";
 import type { novel } from "@/lib/wailsjs/go/models";
 import type { style } from "@/lib/wailsjs/go/models";
@@ -267,7 +268,7 @@ export default function StyleView({
       return;
     }
 
-    const [providerName, modelID] = modelKey.split("/");
+    const [providerName, modelID] = splitModelKey(modelKey);
     if (!providerName || !modelID) return;
 
     const taskId =
