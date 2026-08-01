@@ -62,6 +62,9 @@ const contentRefSpies = vi.hoisted(() => ({
   openFileWithHighlight: vi.fn(),
   clearHighlight: vi.fn(),
   closeAllTabs: vi.fn(),
+  openDiffTab: vi.fn(),
+  handleDiffApprove: vi.fn().mockResolvedValue(undefined),
+  handleDiffReject: vi.fn(),
 }));
 
 vi.mock("@/components/content/ContentPanel", async () => {
@@ -209,7 +212,19 @@ vi.mock("@/components/novel/BookshelfView", () => ({
   default: () => <div data-testid="bookshelf">bookshelf</div>,
 }));
 vi.mock("@/components/chat/ChatPanel", () => ({
-  default: () => <div data-testid="chat-panel">chat-panel</div>,
+  default: (props: {
+    onApprove?: (toolId: string, feedback: string) => void;
+    onReject?: (toolId: string, feedback: string) => void;
+  }) => (
+    <div data-testid="chat-panel">
+      <button onClick={() => props.onApprove?.("tool-1", "looks good")}>
+        approve-btn
+      </button>
+      <button onClick={() => props.onReject?.("tool-2", "needs rework")}>
+        reject-btn
+      </button>
+    </div>
+  ),
 }));
 vi.mock("@/components/profile/ProfileView", () => ({
   default: () => <div data-testid="profile">profile</div>,
@@ -369,5 +384,35 @@ describe("WorkspaceView search navigation", () => {
       0,
       5,
     );
+  });
+});
+
+describe("WorkspaceView approval bridge", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
+    mockGetPlatform.mockResolvedValue({ os: "linux" });
+    mockSetActiveNovel.mockResolvedValue(undefined);
+    mockApproveTool.mockResolvedValue(undefined);
+  });
+
+  it("approve 调 ApproveTool(true) + handleDiffApprove", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("approve-btn"));
+    await vi.waitFor(() => {
+      expect(mockApproveTool).toHaveBeenCalledWith("tool-1", true, "looks good");
+    });
+    expect(contentRefSpies.handleDiffApprove).toHaveBeenCalledWith("tool-1");
+  });
+
+  it("reject 调 ApproveTool(false) + handleDiffReject", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("reject-btn"));
+    await vi.waitFor(() => {
+      expect(mockApproveTool).toHaveBeenCalledWith("tool-2", false, "needs rework");
+    });
+    expect(contentRefSpies.handleDiffReject).toHaveBeenCalledWith("tool-2");
   });
 });
