@@ -6,9 +6,9 @@
 
 ## 进度勾选
 
-- [ ] 2.1 PanelId 联合类型
-- [ ] 2.2 CONTENT_PANEL_IDS Set
-- [ ] 2.3 替换 activePanel 类型 + 删否定链
+- [x] 2.1 PanelId 联合类型
+- [x] 2.2 CONTENT_PANEL_IDS Set
+- [x] 2.3 替换 activePanel 类型 + 删否定链
 - [ ] 2.4 抽 WindowControls 组件
 - [ ] 2.5 switchNovel 抽函数
 - [ ] 2.6 FocusId 对象化
@@ -84,7 +84,7 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 
 ## 2.4 抽 WindowControls 组件
 
-**目标**：把 L481-561 的 80 行内联 SVG（最小化/最大化/关闭按钮）抽成独立组件。
+**目标**：把 header 内 `platformOS !== "darwin"` 条件渲染的 3 个窗口按钮（最小化/最大化/关闭，约 82 行内联 SVG + winBtn/closeBtn 样式常量）抽成独立组件。header 其他部分（Logo/标题/GitHubLink/profile/help/theme/settings 按钮）保留不动。
 
 **改动文件**：新建 `frontend/src/components/shell/WindowControls.tsx`；改 `frontend/src/views/WorkspaceView.tsx`
 
@@ -92,8 +92,8 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 - 新组件接收 props：`platformOS`、`isMaximised`、`setIsMaximised`。
 - 把 `winBtn`/`closeBtn` 样式常量、3 个 SVG 按钮（最小化/最大化/关闭）、`platformOS !== "darwin"` 判断搬进新组件。
 - 组件内自己 `useTranslation()` 取 `t`，不透传；`WindowMinimise/WindowToggleMaximise/Quit` 直接 import wailsjs runtime（不用 useApp）。
-- WorkspaceView L448-563 区域换成 `<WindowControls platformOS=... isMaximised=... setIsMaximised=... />`。
-- header 双击最大化逻辑（L439-443）保留在 WorkspaceView。
+- WorkspaceView header 内 `platformOS !== "darwin"` 的整块换成 `<WindowControls platformOS=... isMaximised=... setIsMaximised=... />`，import 删除 WindowMinimise/Quit（仅保留双击用的 WindowToggleMaximise），删除 winBtn/closeBtn 局部常量。
+- header 双击最大化逻辑（onDoubleClick 调 WindowToggleMaximise + setIsMaximised）保留在 WorkspaceView。
 
 **验证**：build + lint + test。手测窗口按钮（Linux 上才显示，macOS 走原生）。
 
