@@ -9,7 +9,7 @@
 - [x] 2.1 PanelId 联合类型
 - [x] 2.2 CONTENT_PANEL_IDS Set
 - [x] 2.3 替换 activePanel 类型 + 删否定链
-- [ ] 2.4 抽 WindowControls 组件
+- [x] 2.4 抽 WindowControls 组件
 - [ ] 2.5 switchNovel 抽函数
 - [ ] 2.6 FocusId 对象化
 - [ ] 2.7 usePanelStore
@@ -113,12 +113,12 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 
 **怎么做**：
 - 抽 `switchToNovel(id)`，包含：`setActiveNovelId` + `setActivePanel("chapters")` + `contentRef.current?.closeAllTabs()` + `setTabTarget(null)` + `setActiveContent("")` + `setSelectedGitFile(null)` + `app.SetActiveNovel`。依赖 `[app]`。
-- 4 处改成调 `switchToNovel(id)`：`handleImportedNovel`（L176-188）、`handleSelectNovel`（L322-334）、`handleCreateNovel`（L336-355）、`handleCreateNovelFromDialog`（L357-379）。
+- 4 处改成调 `switchToNovel(id)`：`handleImportedNovel`（导入回调）、`handleSelectNovel`（选小说）、`handleCreateNovel`（侧栏创建）、`handleCreateNovelFromDialog`（书架 dialog 创建）。
 - 各处保留独有的后续动作（如 `handleCreateNovel` 还要 `setTitle("")`/`setDescription("")`/`setShowCreate(false)`）。
 
 **验证**：build + lint + test（1.7 switchNovel 测试必须仍绿）。
 
-**风险**：低。行为等价收敛。
+**风险**：低。handleCreateNovel/handleCreateNovelFromDialog 原缺 closeAllTabs/setTabTarget/setActiveContent/setSelectedGitFile 4 步，抽函数后补上。因 4 处都在 novels 面板触发，ContentPanel 未挂载，closeAllTabs 为 no-op；其余 3 步只清 WorkspaceView 层 UI 残留，不影响 ContentPanel tabs（useEditorTabs + localStorage 恢复）。属无害统一。
 
 **手测点**：切小说、创建小说、导入小说，确认 tabs 清空、内容重置、Git 文件选中清空。
 

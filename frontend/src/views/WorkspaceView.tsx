@@ -175,18 +175,25 @@ export default function WorkspaceView({
     loadedRef.current = true;
   }, [app]);
 
+  // 切小说重置：4 处入口（导入/选/创建/dialog创建）共用，
+  // 统一清 activeNovelId/panel/tabs/tabTarget/content/gitFile + 通知后端。
+  // 注：创建路径在 novels 面板触发，ContentPanel 未挂载，closeAllTabs 为 no-op。
+  const switchToNovel = useCallback(async (id: number) => {
+    setActiveNovelId(id);
+    setActivePanel("chapters");
+    contentRef.current?.closeAllTabs();
+    setTabTarget(null);
+    setActiveContent("");
+    setSelectedGitFile(null);
+    await app.SetActiveNovel({ novel_id: id });
+  }, [app]);
+
   const handleImportedNovel = useCallback(
     async (res: imp.ImportResult) => {
       await loadNovels();
-      setActiveNovelId(res.novel_id);
-      setActivePanel("chapters");
-      contentRef.current?.closeAllTabs();
-      setTabTarget(null);
-      setActiveContent("");
-      setSelectedGitFile(null);
-      await app.SetActiveNovel({ novel_id: res.novel_id });
+      await switchToNovel(res.novel_id);
     },
-    [app, loadNovels],
+    [loadNovels, switchToNovel],
   );
 
   const importNovel = useImportNovel({ app, onImported: handleImportedNovel });
@@ -323,13 +330,7 @@ export default function WorkspaceView({
 
   async function handleSelectNovel(n: novel.Novel) {
     try {
-      setActiveNovelId(n.id);
-      setActivePanel("chapters");
-      contentRef.current?.closeAllTabs();
-      setTabTarget(null);
-      setActiveContent("");
-      setSelectedGitFile(null);
-      await app.SetActiveNovel({ novel_id: n.id });
+      await switchToNovel(n.id);
     } catch (err) {
       console.error(err);
     }
@@ -347,9 +348,7 @@ export default function WorkspaceView({
         setDescription("");
         setShowCreate(false);
         await loadNovels();
-        setActiveNovelId(n.id);
-        setActivePanel("chapters");
-        await app.SetActiveNovel({ novel_id: n.id });
+        await switchToNovel(n.id);
       }
     } catch (err) {
       console.error(err);
@@ -370,9 +369,7 @@ export default function WorkspaceView({
       if (n) {
         setShowCreateDialog(false);
         await loadNovels();
-        setActiveNovelId(n.id);
-        setActivePanel("chapters");
-        await app.SetActiveNovel({ novel_id: n.id });
+        await switchToNovel(n.id);
       }
     } catch (err) {
       console.error(err);
