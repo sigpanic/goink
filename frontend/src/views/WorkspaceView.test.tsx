@@ -55,6 +55,25 @@ vi.mock("@/hooks/useImportNovel", () => ({
   }),
 }));
 
+// ── ContentPanel ref spy（forwardRef + useImperativeHandle）──────────
+// 暴露 4 个方法 spy，让测试能验证 contentRef.current.openFileWithHighlight 等被调用
+const contentRefSpies = vi.hoisted(() => ({
+  openFile: vi.fn(),
+  openFileWithHighlight: vi.fn(),
+  clearHighlight: vi.fn(),
+  closeAllTabs: vi.fn(),
+}));
+
+vi.mock("@/components/content/ContentPanel", async () => {
+  const { forwardRef, useImperativeHandle } = await import("react");
+  return {
+    default: forwardRef<unknown, unknown>((_props, ref) => {
+      useImperativeHandle(ref, () => contentRefSpies);
+      return <div data-testid="content-panel">content-panel</div>;
+    }),
+  };
+});
+
 // ── Mock 子组件为带 testid 的 stub，测路由不测子组件内部 ──────────────
 vi.mock("@/components/shell/ActivityBar", () => ({
   default: ({ onSelect }: { onSelect: (id: string) => void }) => (
@@ -71,32 +90,120 @@ vi.mock("@/components/shell/ActivityBar", () => ({
 vi.mock("@/components/shell/StatusBar", () => ({
   default: () => <div data-testid="status-bar">status-bar</div>,
 }));
+
+// SidePanel mock：接收搜索导航回调，渲染按钮触发（测 handleSearchNavigate* 路径）
 vi.mock("@/components/sidebar/SidePanel", () => ({
-  default: () => <div data-testid="side-panel">side-panel</div>,
+  default: (props: {
+    onSearchNavigateEntity?: (
+      panelId: string,
+      entityId: number,
+    ) => void;
+    onSearchNavigateChapter?: (
+      filePath: string,
+      title: string,
+      num: number,
+      matchPos: number,
+      matchLen: number,
+    ) => void;
+  }) => (
+    <div data-testid="side-panel">
+      <button
+        onClick={() => props.onSearchNavigateEntity?.("characters", 5)}
+      >
+        nav-entity-characters
+      </button>
+      <button
+        onClick={() => props.onSearchNavigateEntity?.("locations", 7)}
+      >
+        nav-entity-locations
+      </button>
+      <button
+        onClick={() => props.onSearchNavigateEntity?.("timeline", 9)}
+      >
+        nav-entity-timeline
+      </button>
+      <button
+        onClick={() => props.onSearchNavigateEntity?.("storyarcs", 11)}
+      >
+        nav-entity-storyarcs
+      </button>
+      <button onClick={() => props.onSearchNavigateEntity?.("reader", 13)}>
+        nav-entity-reader
+      </button>
+      <button
+        onClick={() =>
+          props.onSearchNavigateChapter?.("path/ch1.md", "第一章", 1, 10, 5)
+        }
+      >
+        nav-chapter-highlight
+      </button>
+      <button
+        onClick={() =>
+          props.onSearchNavigateChapter?.("path/ch2.md", "第二章", 2, -1, 0)
+        }
+      >
+        nav-chapter-no-highlight
+      </button>
+      <button
+        onClick={() =>
+          props.onSearchNavigateChapter?.("path/ch3.md", "第三章", 3, 0, 5)
+        }
+      >
+        nav-chapter-pos0
+      </button>
+    </div>
+  ),
 }));
-vi.mock("@/components/content/ContentPanel", () => ({
-  default: () => <div data-testid="content-panel">content-panel</div>,
-}));
+
+// 各 View mock：接收 focusId 类 prop 渲染出来，验证 focusId 传递正确
 vi.mock("@/components/character/CharacterListView", () => ({
-  default: () => <div data-testid="character-list">character-list</div>,
+  default: ({ focusId }: { focusId: number }) => (
+    <div data-testid="character-list" data-focusid={focusId}>
+      character-list
+    </div>
+  ),
 }));
 vi.mock("@/components/location/LocationListView", () => ({
-  default: () => <div data-testid="location-list">location-list</div>,
+  default: ({ focusId }: { focusId: number }) => (
+    <div data-testid="location-list" data-focusid={focusId}>
+      location-list
+    </div>
+  ),
 }));
 vi.mock("@/components/storyarc/ArcListView", () => ({
-  default: () => <div data-testid="arc-list">arc-list</div>,
+  default: ({ focusArcId }: { focusArcId: number }) => (
+    <div data-testid="arc-list" data-focusarcid={focusArcId}>
+      arc-list
+    </div>
+  ),
 }));
 vi.mock("@/components/timeline/TimelineView", () => ({
-  default: () => <div data-testid="timeline">timeline</div>,
+  default: ({ focusEntryId }: { focusEntryId: number }) => (
+    <div data-testid="timeline" data-focusentryid={focusEntryId}>
+      timeline
+    </div>
+  ),
 }));
 vi.mock("@/components/reader/ReaderView", () => ({
-  default: () => <div data-testid="reader">reader</div>,
+  default: ({ focusId }: { focusId: number }) => (
+    <div data-testid="reader" data-focusid={focusId}>
+      reader
+    </div>
+  ),
 }));
 vi.mock("@/components/preference/PreferenceView", () => ({
-  default: () => <div data-testid="preference">preference</div>,
+  default: ({ focusId }: { focusId: number }) => (
+    <div data-testid="preference" data-focusid={focusId}>
+      preference
+    </div>
+  ),
 }));
 vi.mock("@/components/novel-setting/NovelSettingView", () => ({
-  default: () => <div data-testid="novel-setting">novel-setting</div>,
+  default: ({ focusId }: { focusId: number }) => (
+    <div data-testid="novel-setting" data-focusid={focusId}>
+      novel-setting
+    </div>
+  ),
 }));
 vi.mock("@/components/novel/BookshelfView", () => ({
   default: () => <div data-testid="bookshelf">bookshelf</div>,
@@ -167,5 +274,100 @@ describe("WorkspaceView panel switching", () => {
     fireEvent.click(screen.getByText("btn-profile"));
     expect(await screen.findByTestId("profile")).toBeInTheDocument();
     expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument();
+  });
+});
+
+describe("WorkspaceView search navigation", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
+    mockGetPlatform.mockResolvedValue({ os: "linux" });
+    mockSetActiveNovel.mockResolvedValue(undefined);
+    mockApproveTool.mockResolvedValue(undefined);
+  });
+
+  it("entity 跳转 characters 设置 focusId 并切面板", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-entity-characters"));
+    const list = await screen.findByTestId("character-list");
+    expect(list).toBeInTheDocument();
+    expect(list).toHaveAttribute("data-focusid", "5");
+  });
+
+  it("entity 跳转 locations 设置 focusId", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-entity-locations"));
+    expect(await screen.findByTestId("location-list")).toHaveAttribute(
+      "data-focusid",
+      "7",
+    );
+  });
+
+  it("entity 跳转 timeline 设置 focusEntryId", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-entity-timeline"));
+    expect(await screen.findByTestId("timeline")).toHaveAttribute(
+      "data-focusentryid",
+      "9",
+    );
+  });
+
+  it("entity 跳转 storyarcs 设置 focusArcId", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-entity-storyarcs"));
+    expect(await screen.findByTestId("arc-list")).toHaveAttribute(
+      "data-focusarcid",
+      "11",
+    );
+  });
+
+  it("entity 跳转 reader 设置 focusId", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-entity-reader"));
+    expect(await screen.findByTestId("reader")).toHaveAttribute(
+      "data-focusid",
+      "13",
+    );
+  });
+
+  it("chapter 跳转有高亮调 openFileWithHighlight", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-chapter-highlight"));
+    expect(contentRefSpies.openFileWithHighlight).toHaveBeenCalledWith(
+      "path/ch1.md",
+      "第一章",
+      10,
+      5,
+    );
+    expect(contentRefSpies.openFile).not.toHaveBeenCalled();
+  });
+
+  it("chapter 跳转无高亮(matchPos=-1)调 openFile", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-chapter-no-highlight"));
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "path/ch2.md",
+      "第二章",
+    );
+    expect(contentRefSpies.openFileWithHighlight).not.toHaveBeenCalled();
+  });
+
+  it("chapter 跳转 matchPos=0 仍调 openFileWithHighlight（position 0 合法）", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-chapter-pos0"));
+    expect(contentRefSpies.openFileWithHighlight).toHaveBeenCalledWith(
+      "path/ch3.md",
+      "第三章",
+      0,
+      5,
+    );
   });
 });
