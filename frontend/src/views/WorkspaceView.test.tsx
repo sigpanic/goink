@@ -12,6 +12,7 @@ const mockGetNovels = vi.fn();
 const mockSetActiveNovel = vi.fn();
 const mockGetPlatform = vi.fn();
 const mockApproveTool = vi.fn();
+const mockCreateNovel = vi.fn();
 
 vi.mock("@/hooks/useApp", () => ({
   useApp: () => ({
@@ -19,7 +20,7 @@ vi.mock("@/hooks/useApp", () => ({
     SetActiveNovel: mockSetActiveNovel,
     GetPlatform: mockGetPlatform,
     ApproveTool: mockApproveTool,
-    CreateNovel: vi.fn(),
+    CreateNovel: mockCreateNovel,
     UpdateNovel: vi.fn(),
     DeleteNovel: vi.fn(),
     ExportNovel: vi.fn(),
@@ -45,8 +46,12 @@ vi.mock("@/hooks/useWindowState", () => ({
 }));
 
 vi.mock("@/hooks/useImportNovel", () => ({
-  useImportNovel: () => ({
-    startImport: vi.fn(),
+  useImportNovel: ({
+    onImported,
+  }: {
+    onImported: (res: { novel_id: number }) => void;
+  }) => ({
+    startImport: () => onImported({ novel_id: 3 }),
     dialogProps: { open: false },
     modelKey: "",
     setModelKey: vi.fn(),
@@ -97,6 +102,7 @@ vi.mock("@/components/shell/StatusBar", () => ({
 // SidePanel mock：接收搜索导航回调，渲染按钮触发（测 handleSearchNavigate* 路径）
 vi.mock("@/components/sidebar/SidePanel", () => ({
   default: (props: {
+    onSelectNovel?: (n: { id: number; title: string }) => void;
     onSearchNavigateEntity?: (
       panelId: string,
       entityId: number,
@@ -154,6 +160,9 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
       >
         nav-chapter-pos0
       </button>
+      <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
+        nav-select-novel
+      </button>
     </div>
   ),
 }));
@@ -209,7 +218,19 @@ vi.mock("@/components/novel-setting/NovelSettingView", () => ({
   ),
 }));
 vi.mock("@/components/novel/BookshelfView", () => ({
-  default: () => <div data-testid="bookshelf">bookshelf</div>,
+  default: (props: {
+    onSelectNovel?: (n: { id: number; title: string }) => void;
+    onCreateNovel?: () => void;
+    onImportNovel?: () => void;
+  }) => (
+    <div data-testid="bookshelf">
+      <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
+        shelf-select-novel
+      </button>
+      <button onClick={() => props.onCreateNovel?.()}>shelf-create-novel</button>
+      <button onClick={() => props.onImportNovel?.()}>shelf-import-novel</button>
+    </div>
+  ),
 }));
 vi.mock("@/components/chat/ChatPanel", () => ({
   default: (props: {
@@ -238,7 +259,23 @@ vi.mock("@/components/extract/ExtractWorkspaceView", () => ({
 vi.mock("@/components/shell/GitHubLink", () => ({ default: () => null }));
 vi.mock("@/components/settings/SettingsDialog", () => ({ default: () => null }));
 vi.mock("@/components/help/HelpDialog", () => ({ default: () => null }));
-vi.mock("@/components/novel/NovelEditDialog", () => ({ default: () => null }));
+vi.mock("@/components/novel/NovelEditDialog", () => ({
+  default: (props: {
+    open?: boolean;
+    onSave?: (input: { title: string; description: string; genre: string }) => void;
+  }) =>
+    props.open ? (
+      <div data-testid="novel-edit-dialog">
+        <button
+          onClick={() =>
+            props.onSave?.({ title: "新小说", description: "描述", genre: "" })
+          }
+        >
+          dialog-save-novel
+        </button>
+      </div>
+    ) : null,
+}));
 vi.mock("@/components/novel/NovelDeleteDialog", () => ({ default: () => null }));
 vi.mock("@/components/novel/ImportProgressDialog", () => ({ default: () => null }));
 vi.mock("@/components/export/ExportDialog", () => ({ default: () => null }));
@@ -414,5 +451,65 @@ describe("WorkspaceView approval bridge", () => {
       expect(mockApproveTool).toHaveBeenCalledWith("tool-2", false, "needs rework");
     });
     expect(contentRefSpies.handleDiffReject).toHaveBeenCalledWith("tool-2");
+  });
+});
+
+describe("WorkspaceView switchNovel state reset", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetNovels.mockResolvedValue([
+      { id: 1, title: "小说1" },
+      { id: 2, title: "小说2" },
+    ]);
+    mockGetPlatform.mockResolvedValue({ os: "linux" });
+    mockSetActiveNovel.mockResolvedValue(undefined);
+    mockApproveTool.mockResolvedValue(undefined);
+    mockCreateNovel.mockResolvedValue({ id: 5, title: "新小说" });
+  });
+
+  it("侧栏选小说调 SetActiveNovel + closeAllTabs（ContentPanel 保持挂载）", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-select-novel"));
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 2 });
+    });
+    expect(contentRefSpies.closeAllTabs).toHaveBeenCalled();
+    // 切小说后 activePanel 仍为 chapters，content-panel 保持可见
+    expect(screen.getByTestId("content-panel")).toBeInTheDocument();
+  });
+
+  it("书架导入小说回调调 loadNovels + SetActiveNovel", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    // 切到书架触发导入（ContentPanel 卸载，closeAllTabs 不该调用）
+    fireEvent.click(screen.getByText("btn-novels"));
+    expect(await screen.findByTestId("bookshelf")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("shelf-import-novel"));
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 3 });
+    });
+    // 导入回调触发 loadNovels 重拉（mount + 导入后至少 2 次）
+    expect(mockGetNovels.mock.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("dialog 创建小说调 CreateNovel + SetActiveNovel", async () => {
+    mockGetNovels.mockResolvedValue([]);
+    render(<WorkspaceView initialNovelId={0} />);
+    expect(await screen.findByTestId("bookshelf")).toBeInTheDocument();
+    // 打开创建 dialog
+    fireEvent.click(screen.getByText("shelf-create-novel"));
+    expect(await screen.findByTestId("novel-edit-dialog")).toBeInTheDocument();
+    // 保存
+    fireEvent.click(screen.getByText("dialog-save-novel"));
+    // SetActiveNovel 在 CreateNovel + loadNovels 之后，等它即覆盖全链路
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 5 });
+    });
+    expect(mockCreateNovel).toHaveBeenCalledWith({
+      title: "新小说",
+      description: "描述",
+      genre: "",
+    });
   });
 });
