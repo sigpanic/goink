@@ -15,9 +15,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import type { SidebarPanelId } from "@/types/panel";
 
 interface Activity {
-  id: string;
+  id: SidebarPanelId;
   icon: LucideIcon;
   labelKey: string;
   disabled?: boolean;
@@ -40,8 +41,8 @@ const activities: Activity[] = [
 ];
 
 interface Props {
-  activeId: string;
-  onSelect: (id: string) => void;
+  activeId: SidebarPanelId;
+  onSelect: (id: SidebarPanelId) => void;
 }
 
 export default function ActivityBar({ activeId, onSelect }: Props) {

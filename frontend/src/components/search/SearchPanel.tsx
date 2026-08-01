@@ -13,6 +13,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { SearchAll } from "@/lib/wailsjs/go/app/App";
 import { search } from "@/lib/wailsjs/go/models";
+import type { PanelId } from "@/types/panel";
 
 export type SearchResult = search.Result;
 
@@ -21,7 +22,7 @@ interface Props {
   query: string;
   results: SearchResult[];
   onResultsChange: (query: string, results: SearchResult[]) => void;
-  onNavigateEntity: (panelId: string, entityId: number) => void;
+  onNavigateEntity: (panelId: PanelId, entityId: number) => void;
   onNavigateChapter: (
     filePath: string,
     title: string,
@@ -168,7 +169,7 @@ export default function SearchPanel({
         r.match_len ?? 0,
       );
     } else {
-      onNavigateEntity(r.panel_id, r.id);
+      onNavigateEntity(r.panel_id as PanelId, r.id);
     }
   }
 

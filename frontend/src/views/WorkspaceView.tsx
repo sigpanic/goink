@@ -46,11 +46,16 @@ import { useLayoutState } from "@/hooks/useLayoutState";
 import { useWindowState } from "@/hooks/useWindowState";
 import { useImportNovel } from "@/hooks/useImportNovel";
 import { RefreshContext } from "@/hooks/useRefresh";
+import type { PanelId, SidebarPanelId } from "@/types/panel";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
   dark: <Sun className="w-5 h-5" />,
 };
+
+// 走 ContentPanel 的面板（activePanel 路由层）。ContentPanel 内部通过 tab 机制
+// 显示章节/skill/goink.md/diff/大纲，不经过 activePanel 路由。
+const CONTENT_PANEL_IDS = new Set<PanelId>(["chapters", "skills"]);
 
 interface Props {
   initialNovelId: number;
@@ -71,10 +76,10 @@ export default function WorkspaceView({
 
   const [novels, setNovels] = useState<novel.Novel[]>([]);
   const [activeNovelId, setActiveNovelId] = useState(initialNovelId);
-  const [activePanel, setActivePanel] = useState(
+  const [activePanel, setActivePanel] = useState<PanelId>(
     initialNovelId ? "chapters" : "novels",
   );
-  const [sidebarPanel, setSidebarPanel] = useState<string | null>(null);
+  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanelId | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<search.Result[]>([]);
   const [characterFocusId, setCharacterFocusId] = useState<number>(0);
@@ -246,7 +251,7 @@ export default function WorkspaceView({
     }
   }, [app, novels, activeNovelId]);
 
-  function handleActivitySelect(id: string) {
+  function handleActivitySelect(id: SidebarPanelId) {
     const currentPanel = sidebarPanel ?? activePanel;
     if (id === currentPanel && !sidebarClosed) {
       setSidebarClosed(true);
@@ -266,7 +271,7 @@ export default function WorkspaceView({
     setSelectedGitFile(file);
   }
 
-  function handleSearchNavigateEntity(panelId: string, entityId: number) {
+  function handleSearchNavigateEntity(panelId: PanelId, entityId: number) {
     setCharacterFocusId(0);
     setLocationFocusId(0);
     setTimelineFocusId(0);
@@ -632,16 +637,7 @@ export default function WorkspaceView({
               onImportNovel={() => importNovel.startImport()}
             />
           ) : (
-            activePanel !== "characters" &&
-            activePanel !== "locations" &&
-            activePanel !== "storyarcs" &&
-            activePanel !== "timeline" &&
-            activePanel !== "reader" &&
-            activePanel !== "preferences" &&
-            activePanel !== "novel-settings" &&
-            activePanel !== "profile" &&
-            activePanel !== "git" &&
-            activePanel !== "style-samples" && (
+            CONTENT_PANEL_IDS.has(activePanel) && (
               <ContentPanel
                 ref={contentRef}
                 novelId={activeNovelId}

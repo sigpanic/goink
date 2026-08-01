@@ -16,6 +16,7 @@ import StyleSampleList from "@/components/style/StyleSampleList";
 import type { SearchResult } from "@/components/search/SearchPanel";
 import GitHistoryList from "@/components/git/GitHistoryList";
 import type { git } from "@/lib/wailsjs/go/models";
+import type { PanelId } from "@/types/panel";
 
 interface Props {
   activePanel: string;
@@ -37,7 +38,7 @@ interface Props {
   onSelectSkill: (path: string, title: string, readOnly: boolean) => void;
   onEditSkill: (path: string, title: string, readOnly: boolean) => void;
   onNewSkill: (name: string) => void;
-  onSearchNavigateEntity: (panelId: string, entityId: number) => void;
+  onSearchNavigateEntity: (panelId: PanelId, entityId: number) => void;
   onSearchNavigateChapter: (
     filePath: string,
     title: string,
