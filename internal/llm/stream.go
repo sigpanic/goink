@@ -281,6 +281,10 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 	}
 	accumulated := make([]accToolCall, 0, 4)
 	hasContent := false // 追踪是否产出了有效事件
+	// usage 缓冲：部分 provider（如硅基流动）在每个 SSE chunk 都带 usage，
+	// 而非只在末尾。这里只保留最后一个，流结束后统一发一次，避免每 chunk
+	// 触发一次 DB 持久化（tokens.go updateUsage）和前端事件刷屏。
+	var lastUsage map[string]any
 
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -304,9 +308,10 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 			continue
 		}
 
-		// 提取 usage（可能出现在最后一个 chunk）
+		// 提取 usage：标准 provider 只在末尾 chunk 发一次，硅基流动等会每个 chunk 都发。
+		// 只缓存最后一个，流结束后统一发一次（见循环外）。
 		if usage, ok := chunk["usage"].(map[string]any); ok && usage != nil {
-			ch <- StreamEvent{Type: EventUsage, Usage: usage}
+			lastUsage = usage
 		}
 
 		// 提取 choices
@@ -406,6 +411,12 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		// 流异常中断：不再做 tool call 收尾，避免与 invalidToolErrors 分支叠加
 		// 产生第二个 EventError（scanner.Err 后 accumulated 数据不可信，保守丢弃）
 		return
+	}
+
+	// 流正常结束：发送本次 stream 的最终 usage（只发一次，见循环内缓冲说明）。
+	// 放在 tool call 收尾之前，与标准 provider「末尾 chunk 发 usage」的时序一致。
+	if lastUsage != nil {
+		ch <- StreamEvent{Type: EventUsage, Usage: lastUsage}
 	}
 
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。
