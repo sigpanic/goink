@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, CheckSquare, Sparkle, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
-import type { chapter, novel } from "@/hooks/useApp";
+import { useNovels } from "@/components/novel/useNovels";
+import type { chapter } from "@/hooks/useApp";
 import { createPatternTaskID } from "@/hooks/usePatternProgress";
 import PopSelect from "@/components/chat/PopSelect";
 import ChapterRangeInput from "./ChapterRangeInput";
@@ -38,28 +39,13 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     null,
   );
   const [targetNovelId, setTargetNovelId] = useState(currentNovelId);
-  const [novels, setNovels] = useState<novel.Novel[]>([]);
+  // 3.9: novels 走 useNovels query（共享缓存）。refetchNovels 供 PopSelect onOpen 强制刷新。
+  const { data: novels = [], refetch: refetchNovels } = useNovels();
   const [chapters, setChapters] = useState<chapter.Chapter[]>([]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [scope, setScope] = useState<Scope>("all");
   const [modelKey, setModelKey] = useState("");
   const [models, setModels] = useState<ModelOption[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    app
-      .GetNovels()
-      .then((list) => {
-        if (cancelled) return;
-        setNovels(list ?? []);
-      })
-      .catch((e) => {
-        if (!cancelled) console.error("Load novels failed", e);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [app]);
 
   useEffect(() => {
     if (!userSelectedNovelRef.current) {
@@ -219,10 +205,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
             options={novelOptions}
             onChange={handleTargetNovelChange}
             onOpen={() => {
-              app
-                .GetNovels()
-                .then((list) => setNovels(list ?? []))
-                .catch(() => {});
+              refetchNovels();
             }}
             minWidth="160px"
             placeholder={t("extract.noAvailableWork")}

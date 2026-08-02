@@ -12,7 +12,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { splitModelKey } from "@/utils/modelKey";
 import { useApp } from "@/hooks/useApp";
-import type { novel } from "@/lib/wailsjs/go/models";
+import { useNovels } from "@/components/novel/useNovels";
 import type { style } from "@/lib/wailsjs/go/models";
 import StyleSampleCard from "./StyleSampleCard";
 import Markdown from "@/components/Markdown";
@@ -71,22 +71,8 @@ export default function StyleView({
     rawContent: string;
   } | null>(null);
 
-  // novels for PopSelect
-  const [novels, setNovels] = useState<novel.Novel[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    app
-      .GetNovels()
-      .then((list) => {
-        if (cancelled) return;
-        setNovels(list ?? []);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [app]);
+  // 3.9: novels 走 useNovels query（与 WorkspaceView/GeneralConfigTab/PatternExtractView 共享缓存）。
+  const { data: novels = [] } = useNovels();
 
   const novelOptions = useMemo(
     () => [

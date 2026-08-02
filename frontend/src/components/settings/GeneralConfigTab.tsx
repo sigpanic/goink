@@ -16,7 +16,8 @@ import {
   CheckUpdate,
 } from "@/lib/wailsjs/go/app/App";
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
-import { useApp, type novel } from "@/hooks/useApp";
+import { useApp } from "@/hooks/useApp";
+import { useNovels } from "@/components/novel/useNovels";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -25,7 +26,8 @@ export default function GeneralConfigTab() {
   const app = useApp();
   const { t, i18n } = useTranslation();
   const [dataDir, setDataDir] = useState("");
-  const [novels, setNovels] = useState<novel.Novel[]>([]);
+  // 3.9: novels 走 useNovels query（共享缓存）。
+  const { data: novels = [] } = useNovels();
   const [selectedID, setSelectedID] = useState<number>(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [gitName, setGitName] = useState("");
@@ -45,12 +47,6 @@ export default function GeneralConfigTab() {
       .GetAppConfig()
       .then((cfg) => {
         setDataDir((cfg?.data_dir as string) || "");
-      })
-      .catch(() => {});
-    app
-      .GetNovels()
-      .then((list) => {
-        setNovels(list || []);
       })
       .catch(() => {});
     app

@@ -12,9 +12,9 @@
 - [x] 3.4 useUpdateNovel mutation
 - [x] 3.5 useDeleteNovel mutation
 - [x] 3.6 抽 <NovelDialogs> 组件
-- [ ] 3.7 switchNovel 迁到 store action
-- [ ] 3.8 ContentPanel 订阅 activeNovelId
-- [ ] 3.9 其余 3 处 GetNovels 消费方迁移
+- [x] 3.7 switchNovel 迁到 store action
+- [x] 3.8 ContentPanel 订阅 activeNovelId
+- [x] 3.9 其余 3 处 GetNovels 消费方迁移
 
 ---
 

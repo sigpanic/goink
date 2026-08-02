@@ -69,6 +69,11 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
+// 3.9: StyleView 改用 useNovels query（不再走 useApp.GetNovels）。mock 返回空数组。
+vi.mock("@/components/novel/useNovels", () => ({
+  useNovels: () => ({ data: [] }),
+}));
+
 describe("StyleView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
