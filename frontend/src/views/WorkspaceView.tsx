@@ -462,7 +462,6 @@ export default function WorkspaceView({
             CONTENT_PANEL_IDS.has(activePanel) && (
               <ContentPanel
                 ref={contentRef}
-                novelId={activeNovelId}
                 onContentChange={setActiveContent}
                 onDirtyChange={setIsDirty}
               />

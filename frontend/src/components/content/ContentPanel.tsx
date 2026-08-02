@@ -13,6 +13,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
+import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import TabBar from "./TabBar";
@@ -64,14 +65,15 @@ export interface ContentPanelHandle {
 }
 
 interface Props {
-  novelId: number;
   onContentChange?: (content: string) => void;
   onDirtyChange?: (isDirty: boolean) => void;
 }
 
 const ContentPanel = forwardRef<ContentPanelHandle, Props>(
-  function ContentPanel({ novelId, onContentChange, onDirtyChange }, ref) {
+  function ContentPanel({ onContentChange, onDirtyChange }, ref) {
     const app = useApp();
+    // 3.8: novelId 从 useNovelStore 订阅（替代 prop）。切小说时 store 变化触发 re-render，行为等价。
+    const novelId = useNovelStore((s) => s.activeNovelId);
     const { t } = useTranslation();
     const {
       tabs,

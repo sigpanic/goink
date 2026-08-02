@@ -115,6 +115,11 @@ vi.mock("@/hooks/useApp", () => ({
   }),
 }));
 
+// 3.8: ContentPanel 从 useNovelStore 订阅 activeNovelId（替代 prop）。mock 提供固定值 1。
+vi.mock("@/components/novel/useNovelStore", () => ({
+  useNovelStore: (selector: any) => selector({ activeNovelId: 1 }),
+}));
+
 describe("ContentPanel", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -126,7 +131,7 @@ describe("ContentPanel", () => {
   });
 
   it("renders empty state when no tabs", () => {
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
     expect(
       screen.getByText("content.selectOrCreateChapter"),
     ).toBeInTheDocument();
@@ -137,7 +142,7 @@ describe("ContentPanel", () => {
       { id: "f1", type: "file", path: "chapters/001.md", title: "Ch1" },
     ];
     mockActiveTabIdState = null;
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
     expect(screen.getByText("content.selectTab")).toBeInTheDocument();
   });
 
@@ -157,7 +162,7 @@ describe("ContentPanel", () => {
     mockActiveTabIdState = "f1";
     mockUpdateTab.mockImplementation(() => {});
 
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
 
     // Click the save button in SkillEditForm mock — triggers doSave
     const saveBtn = screen.getByText("save");
@@ -178,7 +183,7 @@ describe("ContentPanel", () => {
     });
 
     const ref = { current: null as ContentPanelHandle | null };
-    render(<ContentPanel ref={ref} novelId={1} />);
+    render(<ContentPanel ref={ref} />);
 
     await act(async () => {
       ref.current?.openFile("chapters/001.md", "Chapter 1");
@@ -195,7 +200,7 @@ describe("ContentPanel", () => {
     });
 
     const ref = { current: null as ContentPanelHandle | null };
-    render(<ContentPanel ref={ref} novelId={1} />);
+    render(<ContentPanel ref={ref} />);
 
     await act(async () => {
       ref.current?.openFile("chapters/001.md", "Chapter 1");
@@ -220,7 +225,7 @@ describe("ContentPanel", () => {
     ];
     mockActiveTabIdState = "f1";
 
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
     expect(screen.getByTestId("content-editor")).toBeInTheDocument();
     expect(screen.getByText("hello world")).toBeInTheDocument();
   });
@@ -238,7 +243,7 @@ describe("ContentPanel", () => {
     ];
     mockActiveTabIdState = "f1";
 
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
     expect(screen.getByTestId("skill-preview")).toBeInTheDocument();
   });
 
@@ -255,13 +260,13 @@ describe("ContentPanel", () => {
     ];
     mockActiveTabIdState = "d1";
 
-    render(<ContentPanel novelId={1} />);
+    render(<ContentPanel />);
     expect(screen.getByTestId("diff-editor")).toBeInTheDocument();
   });
 
   it("calls closeAllTabs via ref", async () => {
     const ref = { current: null as ContentPanelHandle | null };
-    render(<ContentPanel ref={ref} novelId={1} />);
+    render(<ContentPanel ref={ref} />);
 
     await act(async () => {
       ref.current?.closeAllTabs();
