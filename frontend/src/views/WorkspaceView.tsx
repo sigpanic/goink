@@ -46,6 +46,9 @@ import { RefreshContext } from "@/hooks/useRefresh";
 import type { PanelId, SidebarPanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { useNovels } from "@/components/novel/useNovels";
+import { novelKeys } from "@/lib/queryKeys";
+import { useQueryClient } from "@tanstack/react-query";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -73,7 +76,10 @@ export default function WorkspaceView({
   const app = useApp();
   const contentRef = useRef<ContentPanelHandle>(null);
 
-  const [novels, setNovels] = useState<novel.Novel[]>([]);
+  // novels 走 useNovels query（3.1）：替换原 novels state + loadNovels + useEffect。
+  // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
+  const { data: novels = [], isLoading: novelsLoading } = useNovels();
+  const queryClient = useQueryClient();
   const [activeNovelId, setActiveNovelId] = useState(initialNovelId);
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
@@ -108,7 +114,6 @@ export default function WorkspaceView({
     null,
   );
   const [platformOS, setPlatformOS] = useState("");
-  const loadedRef = useRef(false);
   const { theme, toggle: toggleTheme } = useTheme();
   const { isMaximised, setIsMaximised } = useWindowState();
   const {
@@ -175,14 +180,6 @@ export default function WorkspaceView({
     return () => clearTimeout(timer);
   }, []);
 
-  // ── 作品列表 ────────────────────────────────────────────
-
-  const loadNovels = useCallback(async () => {
-    const list = await app.GetNovels();
-    setNovels(list ?? []);
-    loadedRef.current = true;
-  }, [app]);
-
   // 切小说重置：4 处入口（导入/选/创建/dialog创建）共用，
   // 统一清 activeNovelId/panel/tabs/tabTarget/content/gitFile + 通知后端。
   // 注：创建路径在 novels 面板触发，ContentPanel 未挂载，closeAllTabs 为 no-op。
@@ -198,17 +195,14 @@ export default function WorkspaceView({
 
   const handleImportedNovel = useCallback(
     async (res: imp.ImportResult) => {
-      await loadNovels();
+      // 临时：invalidateQueries 触发 useNovels refetch；3.3 mutation 建好后由 onSuccess 接管。
+      await queryClient.invalidateQueries({ queryKey: novelKeys.all });
       await switchToNovel(res.novel_id);
     },
-    [loadNovels, switchToNovel],
+    [queryClient, switchToNovel],
   );
 
   const importNovel = useImportNovel({ app, onImported: handleImportedNovel });
-
-  useEffect(() => {
-    loadNovels();
-  }, [loadNovels]);
 
   // ── SidePanel → ContentPanel 桥接 ─────────────────────────
 
@@ -251,7 +245,7 @@ export default function WorkspaceView({
   // ── 自动选择小说 ────────────────────────────────────────
 
   useEffect(() => {
-    if (!loadedRef.current) return;
+    if (novelsLoading) return;
     const exists = novels.find((n) => n.id === activeNovelId);
     if (!exists && novels.length > 0) {
       const first = novels[0];
@@ -327,7 +321,7 @@ export default function WorkspaceView({
         setTitle("");
         setDescription("");
         setShowCreate(false);
-        await loadNovels();
+        await queryClient.invalidateQueries({ queryKey: novelKeys.all });
         await switchToNovel(n.id);
       }
     } catch (err) {
@@ -348,7 +342,7 @@ export default function WorkspaceView({
       });
       if (n) {
         setShowCreateDialog(false);
-        await loadNovels();
+        await queryClient.invalidateQueries({ queryKey: novelKeys.all });
         await switchToNovel(n.id);
       }
     } catch (err) {
@@ -366,7 +360,7 @@ export default function WorkspaceView({
     try {
       await app.UpdateNovel(editingNovel.id, input);
       setEditingNovel(null);
-      await loadNovels();
+      await queryClient.invalidateQueries({ queryKey: novelKeys.all });
     } catch (err) {
       console.error(err);
       throw err;
@@ -378,7 +372,7 @@ export default function WorkspaceView({
     try {
       await app.DeleteNovel(deletingNovel.id);
       setDeletingNovel(null);
-      await loadNovels();
+      await queryClient.invalidateQueries({ queryKey: novelKeys.all });
     } catch (err) {
       console.error(err);
       throw err;

@@ -1,15 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render as originalRender, screen, fireEvent } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import WorkspaceView from "./WorkspaceView";
 import { useFocusStore } from "@/stores/useFocusStore";
 
+// 3.1 useNovels 引入 useQuery，render 需包 QueryClientProvider。
+// 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
+function render(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return originalRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
+// 3.1 useNovels 直接 import GetNovels from wailsjs（绕过 useApp），这里要 mock GetNovels。
+// mockGetNovels 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
+const { mockGetNovels } = vi.hoisted(() => ({ mockGetNovels: vi.fn() }));
+
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   CheckUpdate: vi.fn().mockResolvedValue(null),
+  GetNovels: mockGetNovels,
 }));
 
 // ── Mock useApp（关键异步方法返回 Promise，避免 .then 报错）──────────
-const mockGetNovels = vi.fn();
 const mockSetActiveNovel = vi.fn();
 const mockGetPlatform = vi.fn();
 const mockApproveTool = vi.fn();
