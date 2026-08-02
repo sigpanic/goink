@@ -86,6 +86,9 @@ export default function WorkspaceView({
   const activeNovelId = useNovelStore((s) => s.activeNovelId);
   const setActiveNovelId = useNovelStore((s) => s.setActiveNovelId);
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
+  // 3.7: switchNovel action（set activeNovelId + SetActiveNovel 后端）。
+  // switchToNovel 改瘦 wrapper 调它；closeAllTabs 删（useEditorTabs 接管 tab 切换）。
+  const switchNovel = useNovelStore((s) => s.switchNovel);
   // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；
   // handleCreateNovel（SidePanel 内联表单）专用，dialog 路径的 createNovel 实例在 NovelDialogs。
   const createNovel = useCreateNovel();
@@ -186,18 +189,16 @@ export default function WorkspaceView({
     return () => clearTimeout(timer);
   }, []);
 
-  // 切小说重置：4 处入口（导入/选/创建/dialog创建）共用，
-  // 统一清 activeNovelId/panel/tabs/tabTarget/content/gitFile + 通知后端。
-  // 注：创建路径在 novels 面板触发，ContentPanel 未挂载，closeAllTabs 为 no-op。
+  // 切小说瘦 wrapper（3.7）：switchNovel action 管 activeNovelId + SetActiveNovel 后端；
+  // 本地重置 panel/tabTarget/activeContent/selectedGitFile（喂 SidePanel/StatusBar/GitCommitView）。
+  // tab 切换由 useEditorTabs 的 novelId effect 接管，不再命令式调 closeAllTabs。
   const switchToNovel = useCallback(async (id: number) => {
-    setActiveNovelId(id);
+    await switchNovel(id);
     setActivePanel("chapters");
-    contentRef.current?.closeAllTabs();
     setTabTarget(null);
     setActiveContent("");
     setSelectedGitFile(null);
-    await app.SetActiveNovel({ novel_id: id });
-  }, [app]);
+  }, [switchNovel, setActivePanel]);
 
   const handleImportedNovel = useCallback(
     async (res: imp.ImportResult) => {

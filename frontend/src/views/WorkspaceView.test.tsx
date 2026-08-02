@@ -33,12 +33,13 @@ beforeEach(() => {
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
 // 3.1 useNovels / 3.3 useCreateNovel / 3.4 useUpdateNovel / 3.5 useDeleteNovel 直接 import wailsjs（绕过 useApp），这里要 mock。
 // mockGetNovels/mockCreateNovel/mockUpdateNovel/mockDeleteNovel 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
-const { mockGetNovels, mockCreateNovel, mockUpdateNovel, mockDeleteNovel, mockExportNovel } = vi.hoisted(() => ({
+const { mockGetNovels, mockCreateNovel, mockUpdateNovel, mockDeleteNovel, mockExportNovel, mockSetActiveNovel } = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
   mockUpdateNovel: vi.fn(),
   mockDeleteNovel: vi.fn(),
   mockExportNovel: vi.fn(),
+  mockSetActiveNovel: vi.fn(),
 }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
@@ -49,10 +50,12 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   DeleteNovel: mockDeleteNovel,
   // 3.6: NovelDialogs 直接 import ExportNovel（绕过 useApp），需在 wailsjs mock 覆盖。
   ExportNovel: mockExportNovel,
+  // 3.7: useNovelStore.switchNovel 直接 import SetActiveNovel（绕过 useApp），需在 wailsjs mock 覆盖。
+  SetActiveNovel: mockSetActiveNovel,
 }));
 
 // ── Mock useApp（关键异步方法返回 Promise，避免 .then 报错）──────────
-const mockSetActiveNovel = vi.fn();
+// mockSetActiveNovel 提升到 wailsjs hoisted 块（3.7 switchNovel 直接 import SetActiveNovel，useApp 复用同一 mock）。
 const mockGetPlatform = vi.fn();
 const mockApproveTool = vi.fn();
 
@@ -521,14 +524,13 @@ describe("WorkspaceView switchNovel state reset", () => {
     mockCreateNovel.mockResolvedValue({ id: 5, title: "新小说" });
   });
 
-  it("侧栏选小说调 SetActiveNovel + closeAllTabs（ContentPanel 保持挂载）", async () => {
+  it("侧栏选小说调 SetActiveNovel（ContentPanel 保持挂载）", async () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
     fireEvent.click(screen.getByText("nav-select-novel"));
     await vi.waitFor(() => {
       expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 2 });
     });
-    expect(contentRefSpies.closeAllTabs).toHaveBeenCalled();
     // 切小说后 activePanel 仍为 chapters，content-panel 保持可见
     expect(screen.getByTestId("content-panel")).toBeInTheDocument();
   });
@@ -536,7 +538,7 @@ describe("WorkspaceView switchNovel state reset", () => {
   it("书架导入小说回调调 loadNovels + SetActiveNovel", async () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
-    // 切到书架触发导入（ContentPanel 卸载，closeAllTabs 不该调用）
+    // 切到书架触发导入（ContentPanel 卸载）
     fireEvent.click(screen.getByText("btn-novels"));
     expect(await screen.findByTestId("bookshelf")).toBeInTheDocument();
     fireEvent.click(screen.getByText("shelf-import-novel"));

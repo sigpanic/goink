@@ -28,6 +28,7 @@
 | 4b 搜索补全 | [04b-search-preference-setting-reader.md](./04b-search-preference-setting-reader.md) | preference/setting/reader 接入搜索 | 低~中 | 阶段 4 完成（正交于阶段 5，可并行）|
 | 5 其他模块 | [05-misc-modules.md](./05-misc-modules.md) | chat/content/skill/git/search | 中 | 阶段 4 完成 |
 | 6 拆巨石（可选） | [06-monolith-optional.md](./06-monolith-optional.md) | ChatPanel/ArcListView/去 imperativeHandle | 高 | 痛点驱动，先扩测试 |
+| 7 localStorage 迁 persist | [07-localstorage-persist.md](./07-localstorage-persist.md) | useTheme/useLayoutState/useWindowState → store + persist | 低~中 | 阶段 5 完成；正交于阶段 6，可并行 |
 
 通用规范（queryKey、测试原则、commit 风格、目录约定）见 [00-conventions.md](./00-conventions.md)。
 
@@ -51,3 +52,5 @@
 - **useApp.ts 在阶段 5 之前保留不动**（它有修 bug 留下的 useMemo，删早了会重现丢事件 bug，详见设计文档「useApp 章节历史真相」）。
 - **refreshNonce 机制在阶段 4 之前保留**，最后一个领域迁移完才整体删除。
 - **chat 流式数据永远不走 query 缓存**，保持本地 state。
+- **useEditorTabs 的 persist 迁移与阶段 6.5 useTabStore 合并执行**，不在阶段 7 单独迁，避免两次改同一组 tab 状态逻辑。
+- **flushSync 在搜索章节跳转路径保留**（3.8 调研结论）：ContentPanel 条件渲染，从非 chapters 面板搜索章节时未挂载，flushSync 确保挂载后才调 `contentRef.current?.openFileWithHighlight`。完整删除需 ContentPanel 改为始终挂载或搜索跳转改声明式，属痛点驱动，非必做。
