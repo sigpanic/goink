@@ -13,6 +13,8 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { characterKeys } from "@/lib/queryKeys";
 import { useCharacters } from "./useCharacters";
+import { useDeleteCharacter } from "./useDeleteCharacter";
+import { useCharacterStore } from "./useCharacterStore";
 
 interface Props {
   novelId: number;
@@ -58,8 +60,13 @@ export default function CharacterListView({ novelId }: Props) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // 4.1.2: 删除走 useDeleteCharacter mutation + useCharacterStore 共享 deletingCharacterId。
+  // CharacterList 点删除只 dispatch setDeletingCharacterId，ConfirmDialog + 执行集中在此处。
+  const deleteMutation = useDeleteCharacter(novelId);
+  const deletingCharacterId = useCharacterStore((s) => s.deletingCharacterId);
+  const setDeletingCharacterId = useCharacterStore(
+    (s) => s.setDeletingCharacterId,
+  );
 
   // ── CRUD handlers ─────────────────────────────────────
 
@@ -131,23 +138,17 @@ export default function CharacterListView({ novelId }: Props) {
   }
 
   function handleDelete(charId: number) {
-    setDeleteTarget(charId);
+    setDeletingCharacterId(charId);
   }
 
   async function confirmDelete() {
-    if (deleteTarget === null) return;
-    setDeleting(true);
+    if (deletingCharacterId === null) return;
     try {
-      await app.DeleteCharacter(novelId, deleteTarget);
-      setDeleteTarget(null);
-      await queryClient.invalidateQueries({
-        queryKey: characterKeys.list(novelId),
-      });
+      await deleteMutation.mutateAsync(deletingCharacterId);
+      setDeletingCharacterId(null);
     } catch (err) {
       toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -433,13 +434,13 @@ export default function CharacterListView({ novelId }: Props) {
       )}
 
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={deletingCharacterId !== null}
         title={t("common.confirmDelete")}
-        message={t("character.confirmDeleteIrreversible")}
+        message={t("character.confirmDeleteWithRelation")}
         danger
-        loading={deleting}
+        loading={deleteMutation.isPending}
         confirmText={t("common.delete")}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => setDeletingCharacterId(null)}
         onConfirm={confirmDelete}
       />
     </main>

@@ -4,16 +4,6 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import CharacterList from "./CharacterList";
-import { toastError } from "@/utils/toast";
-
-// Mock toastError
-vi.mock("@/utils/toast", async (importOriginal) => {
-  const mod = await importOriginal<typeof import("@/utils/toast")>();
-  return {
-    ...mod,
-    toastError: vi.fn(),
-  };
-});
 
 // 4.1.1: useCharacters 引入 useQuery，render 需包 QueryClientProvider。
 // 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
@@ -28,21 +18,20 @@ function render(ui: ReactElement) {
 
 // 4.1.1: characters 数据走 useCharacters query（不再走 useApp.GetCharacters）。
 // mockUseCharacters 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
-const { mockUseCharacters } = vi.hoisted(() => ({
+const { mockUseCharacters, mockSetDeletingCharacterId } = vi.hoisted(() => ({
   mockUseCharacters: vi.fn(),
+  mockSetDeletingCharacterId: vi.fn(),
 }));
 
 vi.mock("@/components/character/useCharacters", () => ({
   useCharacters: mockUseCharacters,
 }));
 
-// Mock useApp — DeleteCharacter 仍走 useApp（mockGetCharacters 已不需要）
-const mockDeleteCharacter = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    DeleteCharacter: mockDeleteCharacter,
-  }),
+// 4.1.2: 删除合并 —— CharacterList 只 dispatch setDeletingCharacterId，
+// ConfirmDialog + 执行集中在 CharacterListView。mock store 的 selector 取 setter 断言被调。
+vi.mock("@/components/character/useCharacterStore", () => ({
+  useCharacterStore: (selector: (s: { setDeletingCharacterId: ReturnType<typeof vi.fn> }) => unknown) =>
+    selector({ setDeletingCharacterId: mockSetDeletingCharacterId }),
 }));
 
 describe("CharacterList", () => {
@@ -54,7 +43,6 @@ describe("CharacterList", () => {
       isLoading: false,
       isError: false,
     });
-    mockDeleteCharacter.mockResolvedValue(undefined);
   });
 
   it("renders empty state when no characters", async () => {
@@ -101,50 +89,23 @@ describe("CharacterList", () => {
     expect(screen.queryByText("Bob")).not.toBeInTheDocument();
   });
 
-  it("calls DeleteCharacter on confirm and reloads", async () => {
+  // 4.1.2: 删除合并后 CharacterList 只 dispatch setDeletingCharacterId，
+  // 不再挂 ConfirmDialog / 执行删除。断言 dispatch 被调（测"调用什么 action"原则，2.2）。
+  // 删除执行 + toast 失败的覆盖在 CharacterListView（本次未加测试，靠手测点覆盖）。
+  it("dispatches setDeletingCharacterId on delete click", async () => {
     mockUseCharacters.mockReturnValue({
       data: [{ id: 1, name: "Alice" }],
       isLoading: false,
       isError: false,
     });
-    mockDeleteCharacter.mockResolvedValue(undefined);
-
     render(<CharacterList novelId={1} />);
     expect(await screen.findByText("Alice")).toBeInTheDocument();
 
     const deleteBtn = screen.getByTitle("character.delete");
     fireEvent.click(deleteBtn);
 
-    // 删除按钮现在弹出 ConfirmDialog，需点确认才执行删除
-    const confirmBtn = await screen.findByText("common.delete");
-    fireEvent.click(confirmBtn);
-
     await vi.waitFor(() => {
-      expect(mockDeleteCharacter).toHaveBeenCalledWith(1, 1);
-    });
-  });
-
-  it("shows toastError when delete fails", async () => {
-    mockUseCharacters.mockReturnValue({
-      data: [{ id: 1, name: "Alice" }],
-      isLoading: false,
-      isError: false,
-    });
-    mockDeleteCharacter.mockRejectedValue(new Error("network error"));
-
-    render(<CharacterList novelId={1} />);
-    expect(await screen.findByText("Alice")).toBeInTheDocument();
-
-    const deleteBtn = screen.getByTitle("character.delete");
-    fireEvent.click(deleteBtn);
-
-    const confirmBtn = await screen.findByText("common.delete");
-    fireEvent.click(confirmBtn);
-
-    await vi.waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(
-        "character.deleteFailed: network error",
-      );
+      expect(mockSetDeletingCharacterId).toHaveBeenCalledWith(1);
     });
   });
 });

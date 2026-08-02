@@ -30,6 +30,7 @@
      - 表单提交失败：表单下方 UI 显示错误 + toast 提示（双重）
    - **必须带具体 err.message**：toast/UI 错误文案必须是 `<i18n key>: <err.message>` 格式，不允许只显示固定 i18n 文案不带具体原因（用户无法定位问题）。
    - **降级压力测试**：每步迁移后必须自检——错误路径是否仍能让用户看到具体原因？toast 是否只触发一次？UI 是否仍正常渲染周边控件？
+10. **领域无跨组件 UI 状态时不建 store**。store 为跨组件共享状态 / 避免 props 透传而设；组件内部自用状态（editMode / form / viewTab / search 等）留组件内，不进 store。如 character 领域 editMode/form/viewTab 留 CharacterListView 组件内，仅因删除合并（主区 CharacterListView + 侧边栏 CharacterList 共用唯一 ConfirmDialog）引入跨组件 deletingCharacterId，建最小 useCharacterStore 只放该字段。
 
 ## 步骤总览
 

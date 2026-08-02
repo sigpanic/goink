@@ -1,28 +1,24 @@
 import { useState, useMemo } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
-import { useApp } from "@/hooks/useApp";
-import { characterKeys } from "@/lib/queryKeys";
 import { useCharacters } from "./useCharacters";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useCharacterStore } from "./useCharacterStore";
 
 interface Props {
   novelId: number;
 }
 
 export default function CharacterList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   // 4.1.1: characters 数据走 useCharacters query，跨组件共享缓存（CharacterListView / CharacterGraph 同源）。
   // 删除原 useState<characters> + useEffect + useRefresh 链路；CRUD 后由 invalidateQueries 触发自动 refetch。
   const { data: characters = [] } = useCharacters(novelId);
+  // 4.1.2: 删除合并 —— 点删除只 dispatch setDeletingCharacterId，
+  // ConfirmDialog + 执行集中在 CharacterListView（唯一确认入口，两处共用）。
+  const setDeletingCharacterId = useCharacterStore(
+    (s) => s.setDeletingCharacterId,
+  );
   const [search, setSearch] = useState("");
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return characters;
@@ -31,25 +27,7 @@ export default function CharacterList({ novelId }: Props) {
   }, [characters, search]);
 
   function handleDelete(charId: number) {
-    setDeleteTarget(charId);
-  }
-
-  async function confirmDelete() {
-    if (deleteTarget === null) return;
-    setDeleting(true);
-    try {
-      await app.DeleteCharacter(novelId, deleteTarget);
-      setDeleteTarget(null);
-      // 4.1.1: 失效 characterKeys.list(novelId) → 触发所有订阅 useCharacters 的组件 refetch（CharacterListView / CharacterGraph 同步）。
-      await queryClient.invalidateQueries({
-        queryKey: characterKeys.list(novelId),
-      });
-    } catch (err) {
-      toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setDeleting(false);
-    }
+    setDeletingCharacterId(charId);
   }
 
   return (
@@ -106,17 +84,6 @@ export default function CharacterList({ novelId }: Props) {
           ))
         )}
       </div>
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        title={t("common.confirmDelete")}
-        message={t("character.confirmDeleteWithRelation")}
-        danger
-        loading={deleting}
-        confirmText={t("common.delete")}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-      />
     </>
   );
 }
