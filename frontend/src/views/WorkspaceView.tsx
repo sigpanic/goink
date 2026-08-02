@@ -79,13 +79,9 @@ export default function WorkspaceView({
   const [sidebarPanel, setSidebarPanel] = useState<SidebarPanelId | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<search.Result[]>([]);
-  const [characterFocusId, setCharacterFocusId] = useState<number>(0);
-  const [locationFocusId, setLocationFocusId] = useState<number>(0);
-  const [timelineFocusId, setTimelineFocusId] = useState<number>(0);
-  const [arcFocusId, setArcFocusId] = useState<number>(0);
-  const [readerFocusId, setReaderFocusId] = useState<number>(0);
-  const [preferenceFocusId, setPreferenceFocusId] = useState<number>(0);
-  const [settingFocusId, setSettingFocusId] = useState<number>(0);
+  // 7 个实体面板的 focusId 收敛成 focusMap。搜索导航时整体替换，
+  // 未命中面板 fallback 0。styleSampleFocusId 语义不同（null=已处理），单独保留。
+  const [focusMap, setFocusMap] = useState<Partial<Record<PanelId, number>>>({});
   const [styleSampleFocusId, setStyleSampleFocusId] = useState<number | null>(
     null,
   );
@@ -276,35 +272,7 @@ export default function WorkspaceView({
   }
 
   function handleSearchNavigateEntity(panelId: PanelId, entityId: number) {
-    setCharacterFocusId(0);
-    setLocationFocusId(0);
-    setTimelineFocusId(0);
-    setArcFocusId(0);
-    setReaderFocusId(0);
-    setPreferenceFocusId(0);
-    switch (panelId) {
-      case "characters":
-        setCharacterFocusId(entityId);
-        break;
-      case "locations":
-        setLocationFocusId(entityId);
-        break;
-      case "timeline":
-        setTimelineFocusId(entityId);
-        break;
-      case "storyarcs":
-        setArcFocusId(entityId);
-        break;
-      case "reader":
-        setReaderFocusId(entityId);
-        break;
-      case "preferences":
-        setPreferenceFocusId(entityId);
-        break;
-      case "novel-settings":
-        setSettingFocusId(entityId);
-        break;
-    }
+    setFocusMap({ [panelId]: entityId } as Partial<Record<PanelId, number>>);
     setActivePanel(panelId);
   }
 
@@ -577,43 +545,43 @@ export default function WorkspaceView({
             <ErrorBoundary>
               <CharacterListView
                 novelId={activeNovelId}
-                focusId={characterFocusId}
+                focusId={focusMap.characters ?? 0}
               />
             </ErrorBoundary>
           ) : activePanel === "locations" ? (
             <ErrorBoundary>
               <LocationListView
                 novelId={activeNovelId}
-                focusId={locationFocusId}
+                focusId={focusMap.locations ?? 0}
               />
             </ErrorBoundary>
           ) : activePanel === "storyarcs" ? (
             <ErrorBoundary>
-              <ArcListView novelId={activeNovelId} focusArcId={arcFocusId} />
+              <ArcListView novelId={activeNovelId} focusArcId={focusMap.storyarcs ?? 0} />
             </ErrorBoundary>
           ) : activePanel === "timeline" ? (
             <ErrorBoundary>
               <TimelineView
                 novelId={activeNovelId}
-                focusEntryId={timelineFocusId}
+                focusEntryId={focusMap.timeline ?? 0}
               />
             </ErrorBoundary>
           ) : activePanel === "reader" ? (
             <ErrorBoundary>
-              <ReaderView novelId={activeNovelId} focusId={readerFocusId} />
+              <ReaderView novelId={activeNovelId} focusId={focusMap.reader ?? 0} />
             </ErrorBoundary>
           ) : activePanel === "preferences" ? (
             <ErrorBoundary>
               <PreferenceView
                 novelId={activeNovelId}
-                focusId={preferenceFocusId}
+                focusId={focusMap.preferences ?? 0}
               />
             </ErrorBoundary>
           ) : activePanel === "novel-settings" ? (
             <ErrorBoundary>
               <NovelSettingView
                 novelId={activeNovelId}
-                focusId={settingFocusId}
+                focusId={focusMap["novel-settings"] ?? 0}
               />
             </ErrorBoundary>
           ) : activePanel === "git" ? (

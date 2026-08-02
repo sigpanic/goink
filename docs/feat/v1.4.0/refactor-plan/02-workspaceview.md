@@ -10,8 +10,8 @@
 - [x] 2.2 CONTENT_PANEL_IDS Set
 - [x] 2.3 替换 activePanel 类型 + 删否定链
 - [x] 2.4 抽 WindowControls 组件
-- [ ] 2.5 switchNovel 抽函数
-- [ ] 2.6 FocusId 对象化
+- [x] 2.5 switchNovel 抽函数
+- [x] 2.6 FocusId 对象化
 - [ ] 2.7 usePanelStore
 - [ ] 2.8 useFocusStore
 
@@ -128,14 +128,14 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 
 ## 2.6 FocusId 对象化
 
-**目标**：8 个 `*FocusId` state → 1 个 `focusMap`。
+**目标**：7 个 number 型 `*FocusId` state → 1 个 `focusMap`（`styleSampleFocusId` 语义不同，单独保留）。
 
 **改动文件**：改 `frontend/src/views/WorkspaceView.tsx`
 
 **怎么做**：
 - L80-89 的 7 个 number 型 focusId 合并成 `focusMap: Partial<Record<PanelId, number>>`（character/location/timeline/arc/reader/preference/setting）。
 - `styleSampleFocusId`（number | null，L87-89）单独保留——它用 null 语义表示「已处理」，与其他不同。
-- `handleSearchNavigateEntity`（L269-300）的 8 分支 switch 收敛成：`setFocusMap({ [panelId]: entityId })` + `setActivePanel(panelId)`（之前是先清 8 个再 set 一个，合并后一次 set 即可）。
+- `handleSearchNavigateEntity` 的 7 分支 switch 收敛成：`setFocusMap({ [panelId]: entityId })` + `setActivePanel(panelId)`（原代码先清 6 个 focusId 再 set 一个，**遗漏 settingFocusId**——novel-settings 跳转后残留旧值；合并后整体替换，顺带修复该遗漏）。
 - 各 View 的 props 从 focusMap 取值（如 `focusId={focusMap.characters ?? 0}`）。
 
 **验证**：build + lint + test（1.5 搜索导航测试必须仍绿）。
@@ -144,7 +144,7 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 
 **手测点**：搜索实体（角色/地点/时间线/弧线/读者/偏好/设置）跳转，确认对应 View 收到 focusId 并定位/高亮。
 
-**commit**：`refactor(workspace): collapse 8 FocusId states into focusMap`
+**commit**：`refactor(workspace): collapse 7 FocusId states into focusMap`
 
 ---
 
@@ -200,7 +200,7 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 - activePanel 类型化，否定链删除
 - WindowControls 独立组件
 - switchNovel 单函数
-- 8 FocusId 收敛成 focusMap
+- 7 FocusId 收敛成 focusMap（styleSample 保留）
 - usePanelStore / useFocusStore 就位，SidePanel 透传 props 大幅减少
 - 1.4-1.7 测试全绿
 - 手测面板切换 + 搜索导航 + 审批 + 切小说全通过
