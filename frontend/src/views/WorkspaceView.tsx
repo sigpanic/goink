@@ -262,7 +262,11 @@ export default function WorkspaceView({
     } else if (novels.length === 0) {
       setActivePanel("novels");
     }
-  }, [app, novels, activeNovelId]);
+    // 3.9 fix: 只在 novels 变化时触发（不加 activeNovelId）。
+    // 否则新建小说时 switchToNovel 设 activeNovelId=新小说，但 useNovels refetch 未完，
+    // novels 旧列表不含新小说 → find 失败 → 误选 novels[0]（旧小说）。
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [app, novels]);
 
   function handleActivitySelect(id: SidebarPanelId) {
     const currentPanel = sidebarPanel ?? activePanel;
