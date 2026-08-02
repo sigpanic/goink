@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import WorkspaceView from "./WorkspaceView";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { useNovelStore } from "@/components/novel/useNovelStore";
 
 // 3.1 useNovels 引入 useQuery，render 需包 QueryClientProvider。
 // 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
@@ -15,6 +16,19 @@ function render(ui: ReactElement) {
     ),
   });
 }
+
+// 3.2: useNovelStore 是全局单例，跨测试用例有状态残留（同 useFocusStore 问题）。
+// 顶层 beforeEach 重置所有 5 个字段，避免上个用例的 activeNovelId/showCreateDialog 等影响下个用例。
+// initialNovelId 由 useLayoutEffect 在 mount 时同步覆盖，重置 activeNovelId=0 不影响 initialNovelId 测试。
+beforeEach(() => {
+  useNovelStore.setState({
+    activeNovelId: 0,
+    editingNovel: null,
+    deletingNovel: null,
+    showCreateDialog: false,
+    exportNovelId: null,
+  });
+});
 
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
 // 3.1 useNovels 直接 import GetNovels from wailsjs（绕过 useApp），这里要 mock GetNovels。
@@ -243,19 +257,23 @@ vi.mock("@/components/novel-setting/NovelSettingView", () => ({
   default: () => <div data-testid="novel-setting">novel-setting</div>,
 }));
 vi.mock("@/components/novel/BookshelfView", () => ({
-  default: (props: {
+  // 3.2: BookshelfView 内部订阅 useNovelStore.setShowCreateDialog（不再通过 prop 接收 onCreateNovel）。
+  // mock 也要订阅，模拟"点新建按钮 → 打开 dialog"行为。
+  default: function BookshelfViewMock(props: {
     onSelectNovel?: (n: { id: number; title: string }) => void;
-    onCreateNovel?: () => void;
     onImportNovel?: () => void;
-  }) => (
-    <div data-testid="bookshelf">
-      <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
-        shelf-select-novel
-      </button>
-      <button onClick={() => props.onCreateNovel?.()}>shelf-create-novel</button>
-      <button onClick={() => props.onImportNovel?.()}>shelf-import-novel</button>
-    </div>
-  ),
+  }) {
+    const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
+    return (
+      <div data-testid="bookshelf">
+        <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
+          shelf-select-novel
+        </button>
+        <button onClick={() => setShowCreateDialog(true)}>shelf-create-novel</button>
+        <button onClick={() => props.onImportNovel?.()}>shelf-import-novel</button>
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/chat/ChatPanel", () => ({
   default: (props: {

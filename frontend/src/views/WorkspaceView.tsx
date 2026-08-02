@@ -47,6 +47,7 @@ import type { PanelId, SidebarPanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { useNovels } from "@/components/novel/useNovels";
+import { useNovelStore } from "@/components/novel/useNovelStore";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -80,7 +81,18 @@ export default function WorkspaceView({
   // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
   const { data: novels = [], isLoading: novelsLoading } = useNovels();
   const queryClient = useQueryClient();
-  const [activeNovelId, setActiveNovelId] = useState(initialNovelId);
+  // 小说领域 UI 状态（activeNovelId + 4 对话框开关）外置到 useNovelStore（3.2）。
+  // 数据走 useNovels query；switchToNovel action 3.7 才迁入，本版仅 state + setter。
+  const activeNovelId = useNovelStore((s) => s.activeNovelId);
+  const editingNovel = useNovelStore((s) => s.editingNovel);
+  const deletingNovel = useNovelStore((s) => s.deletingNovel);
+  const showCreateDialog = useNovelStore((s) => s.showCreateDialog);
+  const exportNovelId = useNovelStore((s) => s.exportNovelId);
+  const setActiveNovelId = useNovelStore((s) => s.setActiveNovelId);
+  const setEditingNovel = useNovelStore((s) => s.setEditingNovel);
+  const setDeletingNovel = useNovelStore((s) => s.setDeletingNovel);
+  const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
+  const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -122,9 +134,11 @@ export default function WorkspaceView({
     setSidePanelWidth,
     setChatPanelWidth,
   } = useLayoutState();
-  // 首次 mount 同步初始化 activePanel（store 默认 "novels"，用 initialNovelId 覆盖）。
+  // 首次 mount 同步初始化 activeNovelId + activePanel（store 默认 0/"novels"，用 initialNovelId 覆盖）。
   // useLayoutEffect 在 paint 前跑，避免首屏用默认值再切换的闪烁。
+  // 注：原 useState(initialNovelId) 同步初值，改 store 后 store 默认 0，必须在这里同步覆盖。
   useLayoutEffect(() => {
+    setActiveNovelId(initialNovelId);
     setActivePanel(initialNovelId ? "chapters" : "novels");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -143,11 +157,7 @@ export default function WorkspaceView({
   const [updateResult, setUpdateResult] =
     useState<updateModels.CheckResult | null>(null);
 
-  // ── 书籍管理弹窗 ──────────────────────────────────────
-  const [editingNovel, setEditingNovel] = useState<novel.Novel | null>(null);
-  const [deletingNovel, setDeletingNovel] = useState<novel.Novel | null>(null);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [exportNovelId, setExportNovelId] = useState<number | null>(null);
+  // ── 书籍管理弹窗（state 见 useNovelStore，3.2 外置）──────────────────────────────
 
   // ── 窗口状态 ────────────────────────────────────────────
 
@@ -506,14 +516,8 @@ export default function WorkspaceView({
 
           {activePanel === "novels" ? (
             <BookshelfView
-              novels={novels}
-              activeNovelId={activeNovelId}
               onSelectNovel={handleSelectNovel}
-              onEditNovel={setEditingNovel}
-              onDeleteNovel={setDeletingNovel}
-              onCreateNovel={() => setShowCreateDialog(true)}
               onSaveCover={handleSaveCover}
-              onExportNovel={(n) => setExportNovelId(n.id)}
               onImportNovel={() => importNovel.startImport()}
             />
           ) : (

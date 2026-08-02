@@ -10,33 +10,31 @@ import {
   Upload,
 } from "lucide-react";
 import BookCover from "@/components/sidebar/BookCover";
+import { useNovels } from "@/components/novel/useNovels";
+import { useNovelStore } from "@/components/novel/useNovelStore";
 import type { novel } from "@/hooks/useApp";
 import { toErrorMessage } from "@/utils/error";
 
 interface Props {
-  novels: novel.Novel[];
-  activeNovelId: number;
   onSelectNovel: (n: novel.Novel) => void;
-  onEditNovel: (n: novel.Novel) => void;
-  onDeleteNovel: (n: novel.Novel) => void;
-  onCreateNovel: () => void;
   onSaveCover: (novelID: number, file: File) => Promise<void>;
-  onExportNovel: (n: novel.Novel) => void;
   onImportNovel: () => void;
 }
 
 export default function BookshelfView({
-  novels,
-  activeNovelId,
   onSelectNovel,
-  onEditNovel,
-  onDeleteNovel,
-  onCreateNovel,
   onSaveCover,
-  onExportNovel,
   onImportNovel,
 }: Props) {
   const { t } = useTranslation();
+  // 3.2: 数据 + UI 状态从 store/query 订阅（原由 WorkspaceView 注入 props）。
+  // useNovels 与 WorkspaceView 共享 novelKeys.all 缓存，不重复 fetch。
+  const { data: novels = [] } = useNovels();
+  const activeNovelId = useNovelStore((s) => s.activeNovelId);
+  const setEditingNovel = useNovelStore((s) => s.setEditingNovel);
+  const setDeletingNovel = useNovelStore((s) => s.setDeletingNovel);
+  const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
+  const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
   const [coverKeys, setCoverKeys] = useState<Record<number, number>>({});
   const [coverError, setCoverError] = useState<Record<number, string>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -108,7 +106,7 @@ export default function BookshelfView({
             {t("novel.importBook")}
           </button>
           <button
-            onClick={onCreateNovel}
+            onClick={() => setShowCreateDialog(true)}
             className="inline-flex items-center gap-1.5 h-8 px-3 rounded-md text-sm bg-primary text-primary-foreground hover:opacity-90 transition-opacity"
           >
             <Plus className="w-4 h-4" />
@@ -187,7 +185,7 @@ export default function BookshelfView({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onExportNovel(n);
+                      setExportNovelId(n.id);
                     }}
                     className="w-7 h-7 flex items-center justify-center rounded-md bg-background/90 border shadow-sm hover:bg-muted transition-colors"
                     title={t("novel.export")}
@@ -197,7 +195,7 @@ export default function BookshelfView({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onEditNovel(n);
+                      setEditingNovel(n);
                     }}
                     className="w-7 h-7 flex items-center justify-center rounded-md bg-background/90 border shadow-sm hover:bg-muted transition-colors"
                     title={t("novel.edit")}
@@ -207,7 +205,7 @@ export default function BookshelfView({
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDeleteNovel(n);
+                      setDeletingNovel(n);
                     }}
                     className="w-7 h-7 flex items-center justify-center rounded-md bg-background/90 border shadow-sm hover:bg-danger-bg hover:border-danger-border transition-colors"
                     title={t("novel.delete")}
