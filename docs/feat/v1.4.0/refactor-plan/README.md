@@ -24,6 +24,7 @@
 | 2 拆 WorkspaceView | [02-workspaceview.md](./02-workspaceview.md) | 2.1 PanelId 类型 → 2.8 useFocusStore | 低~中 | 1.7 测试就位 |
 | 3 小说领域模板 | [03-novel-template.md](./03-novel-template.md) | 3.1 useNovels → 3.9 4 处消费方迁移 | 中 | 阶段 2 完成 |
 | 4 7 实体批量 | [04-entities-batch.md](./04-entities-batch.md) | character → novel-setting，删 refreshNonce | 中 | 阶段 3 验证手感 |
+| 4b 搜索补全 | [04b-search-preference-setting-reader.md](./04b-search-preference-setting-reader.md) | preference/setting/reader 接入搜索 | 低~中 | 阶段 4 完成（正交于阶段 5，可并行）|
 | 5 其他模块 | [05-misc-modules.md](./05-misc-modules.md) | chat/content/skill/git/search | 中 | 阶段 4 完成 |
 | 6 拆巨石（可选） | [06-monolith-optional.md](./06-monolith-optional.md) | ChatPanel/ArcListView/去 imperativeHandle | 高 | 痛点驱动，先扩测试 |
 
