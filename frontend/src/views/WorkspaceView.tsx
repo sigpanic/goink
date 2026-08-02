@@ -48,6 +48,7 @@ import { usePanelStore } from "@/stores/usePanelStore";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
+import { useCreateNovel } from "@/components/novel/useCreateNovel";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -93,6 +94,8 @@ export default function WorkspaceView({
   const setDeletingNovel = useNovelStore((s) => s.setDeletingNovel);
   const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
+  // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 switchToNovel + 关 UI。
+  const createNovel = useCreateNovel();
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -323,17 +326,15 @@ export default function WorkspaceView({
   async function handleCreateNovel() {
     try {
       if (!title.trim()) return;
-      const n = await app.CreateNovel({
+      // 3.3: 改用 mutation，invalidate 由 onSuccess 接管；switchToNovel + 清表单留 handler。
+      const n = await createNovel.mutateAsync({
         title: title.trim(),
         description: description.trim(),
       });
-      if (n) {
-        setTitle("");
-        setDescription("");
-        setShowCreate(false);
-        await queryClient.invalidateQueries({ queryKey: novelKeys.all });
-        await switchToNovel(n.id);
-      }
+      setTitle("");
+      setDescription("");
+      setShowCreate(false);
+      await switchToNovel(n.id);
     } catch (err) {
       console.error(err);
     }
@@ -345,16 +346,10 @@ export default function WorkspaceView({
     genre: string;
   }) {
     try {
-      const n = await app.CreateNovel({
-        title: input.title,
-        description: input.description,
-        genre: input.genre,
-      });
-      if (n) {
-        setShowCreateDialog(false);
-        await queryClient.invalidateQueries({ queryKey: novelKeys.all });
-        await switchToNovel(n.id);
-      }
+      // 3.3: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog + switchToNovel 留 handler。
+      const n = await createNovel.mutateAsync(input);
+      setShowCreateDialog(false);
+      await switchToNovel(n.id);
     } catch (err) {
       console.error(err);
       throw err;
