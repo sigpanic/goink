@@ -50,6 +50,7 @@ import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useCreateNovel } from "@/components/novel/useCreateNovel";
 import { useUpdateNovel } from "@/components/novel/useUpdateNovel";
+import { useDeleteNovel } from "@/components/novel/useDeleteNovel";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -99,6 +100,8 @@ export default function WorkspaceView({
   const createNovel = useCreateNovel();
   // 3.4: 更新小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 setEditingNovel(null)。
   const updateNovel = useUpdateNovel();
+  // 3.5: 删除小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 setDeletingNovel(null)。
+  const deleteNovel = useDeleteNovel();
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -378,9 +381,10 @@ export default function WorkspaceView({
   async function handleDeleteNovel() {
     if (!deletingNovel) return;
     try {
-      await app.DeleteNovel(deletingNovel.id);
+      // 3.5: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog 留 handler。
+      // 删除当前 activeNovelId 时，refetch 后自动选小说 effect 选第一个接管。
+      await deleteNovel.mutateAsync(deletingNovel.id);
       setDeletingNovel(null);
-      await queryClient.invalidateQueries({ queryKey: novelKeys.all });
     } catch (err) {
       console.error(err);
       throw err;
