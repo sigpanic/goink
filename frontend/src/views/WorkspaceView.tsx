@@ -19,10 +19,8 @@ import ReaderView from "@/components/reader/ReaderView";
 import PreferenceView from "@/components/preference/PreferenceView";
 import NovelSettingView from "@/components/novel-setting/NovelSettingView";
 import BookshelfView from "@/components/novel/BookshelfView";
-import NovelEditDialog from "@/components/novel/NovelEditDialog";
-import NovelDeleteDialog from "@/components/novel/NovelDeleteDialog";
+import NovelDialogs from "@/components/novel/NovelDialogs";
 import ImportProgressDialog from "@/components/novel/ImportProgressDialog";
-import ExportDialog from "@/components/export/ExportDialog";
 import ChatPanel from "@/components/chat/ChatPanel";
 import GitHubLink from "@/components/shell/GitHubLink";
 import SettingsDialog from "@/components/settings/SettingsDialog";
@@ -49,8 +47,6 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useCreateNovel } from "@/components/novel/useCreateNovel";
-import { useUpdateNovel } from "@/components/novel/useUpdateNovel";
-import { useDeleteNovel } from "@/components/novel/useDeleteNovel";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -84,24 +80,15 @@ export default function WorkspaceView({
   // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
   const { data: novels = [], isLoading: novelsLoading } = useNovels();
   const queryClient = useQueryClient();
-  // 小说领域 UI 状态（activeNovelId + 4 对话框开关）外置到 useNovelStore（3.2）。
-  // 数据走 useNovels query；switchToNovel action 3.7 才迁入，本版仅 state + setter。
+  // 小说领域 UI 状态：activeNovelId 留 WorkspaceView（路由用）；
+  // 对话框开关 + setter 由 NovelDialogs 订阅（3.6）；唯独 setExportNovelId 留此
+  // —— SidePanel 通过 onExportNovel 触发开 dialog，setter 引用稳定不引发重渲染。
   const activeNovelId = useNovelStore((s) => s.activeNovelId);
-  const editingNovel = useNovelStore((s) => s.editingNovel);
-  const deletingNovel = useNovelStore((s) => s.deletingNovel);
-  const showCreateDialog = useNovelStore((s) => s.showCreateDialog);
-  const exportNovelId = useNovelStore((s) => s.exportNovelId);
   const setActiveNovelId = useNovelStore((s) => s.setActiveNovelId);
-  const setEditingNovel = useNovelStore((s) => s.setEditingNovel);
-  const setDeletingNovel = useNovelStore((s) => s.setDeletingNovel);
-  const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
-  // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 switchToNovel + 关 UI。
+  // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；
+  // handleCreateNovel（SidePanel 内联表单）专用，dialog 路径的 createNovel 实例在 NovelDialogs。
   const createNovel = useCreateNovel();
-  // 3.4: 更新小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 setEditingNovel(null)。
-  const updateNovel = useUpdateNovel();
-  // 3.5: 删除小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 setDeletingNovel(null)。
-  const deleteNovel = useDeleteNovel();
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -346,60 +333,8 @@ export default function WorkspaceView({
     }
   }
 
-  async function handleCreateNovelFromDialog(input: {
-    title: string;
-    description: string;
-    genre: string;
-  }) {
-    try {
-      // 3.3: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog + switchToNovel 留 handler。
-      const n = await createNovel.mutateAsync(input);
-      setShowCreateDialog(false);
-      await switchToNovel(n.id);
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  }
-
-  async function handleUpdateNovel(input: {
-    title: string;
-    description: string;
-    genre: string;
-  }) {
-    if (!editingNovel) return;
-    try {
-      // 3.4: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog 留 handler。
-      await updateNovel.mutateAsync({ id: editingNovel.id, input });
-      setEditingNovel(null);
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  }
-
-  async function handleDeleteNovel() {
-    if (!deletingNovel) return;
-    try {
-      // 3.5: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog 留 handler。
-      // 删除当前 activeNovelId 时，refetch 后自动选小说 effect 选第一个接管。
-      await deleteNovel.mutateAsync(deletingNovel.id);
-      setDeletingNovel(null);
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  }
-
-  async function handleExportNovel(format: "epub" | "markdown" | "txt") {
-    if (exportNovelId == null) return;
-    try {
-      await app.ExportNovel(exportNovelId, format);
-    } catch (err) {
-      console.error(err);
-      throw err;
-    }
-  }
+  // 3.6: 4 个对话框 handler（create-dialog/update/delete/export）已移到 NovelDialogs。
+  // handleCreateNovel（SidePanel 内联表单）留此——它不走 dialog，直接 mutateAsync + switchToNovel。
 
   async function handleSaveCover(novelID: number, file: File) {
     const buf = await file.arrayBuffer();
@@ -609,30 +544,7 @@ export default function WorkspaceView({
 
         <HelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
 
-        <NovelEditDialog
-          open={showCreateDialog}
-          onClose={() => setShowCreateDialog(false)}
-          onSave={handleCreateNovelFromDialog}
-        />
-        <NovelEditDialog
-          open={!!editingNovel}
-          novel={editingNovel}
-          onClose={() => setEditingNovel(null)}
-          onSave={handleUpdateNovel}
-        />
-        <NovelDeleteDialog
-          open={!!deletingNovel}
-          novelTitle={deletingNovel?.title ?? ""}
-          onClose={() => setDeletingNovel(null)}
-          onConfirm={handleDeleteNovel}
-        />
-
-        <ExportDialog
-          open={exportNovelId !== null}
-          novelTitle={novels.find((n) => n.id === exportNovelId)?.title ?? ""}
-          onClose={() => setExportNovelId(null)}
-          onExport={handleExportNovel}
-        />
+        <NovelDialogs switchToNovel={switchToNovel} />
 
         <ImportProgressDialog
           {...importNovel.dialogProps}
