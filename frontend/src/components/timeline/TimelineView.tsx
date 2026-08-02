@@ -18,10 +18,10 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useFocusStore } from "@/stores/useFocusStore";
 
 interface Props {
   novelId: number;
-  focusEntryId?: number;
 }
 
 type Tab = "next" | "near" | "far";
@@ -86,7 +86,8 @@ const EDIT_FORM_EMPTY: EditForm = {
   resolved_chapter: 0,
 };
 
-export default function TimelineView({ novelId, focusEntryId }: Props) {
+export default function TimelineView({ novelId }: Props) {
+  const focusEntryId = useFocusStore((s) => s.focusMap.timeline ?? 0);
   const app = useApp();
   const { t } = useTranslation();
   const { bumpRefresh, refreshNonce } = useRefresh();

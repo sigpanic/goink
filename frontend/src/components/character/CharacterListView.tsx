@@ -10,10 +10,10 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useFocusStore } from "@/stores/useFocusStore";
 
 interface Props {
   novelId: number;
-  focusId?: number;
 }
 
 type ViewTab = "list" | "graph";
@@ -37,7 +37,8 @@ function safeJson<T>(json: string, fallback: T): T {
   }
 }
 
-export default function CharacterListView({ novelId, focusId }: Props) {
+export default function CharacterListView({ novelId }: Props) {
+  const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
   const app = useApp();
   const { t } = useTranslation();
   const { bumpRefresh, refreshNonce } = useRefresh();

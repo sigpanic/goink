@@ -45,6 +45,7 @@ import { useImportNovel } from "@/hooks/useImportNovel";
 import { RefreshContext } from "@/hooks/useRefresh";
 import type { PanelId, SidebarPanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
+import { useFocusStore } from "@/stores/useFocusStore";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -85,9 +86,9 @@ export default function WorkspaceView({
   const setSidebarClosed = usePanelStore((s) => s.setSidebarClosed);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<search.Result[]>([]);
-  // 7 个实体面板的 focusId 收敛成 focusMap。搜索导航时整体替换，
-  // 未命中面板 fallback 0。styleSampleFocusId 语义不同（null=已处理），单独保留。
-  const [focusMap, setFocusMap] = useState<Partial<Record<PanelId, number>>>({});
+  // focusMap 外置到 useFocusStore（2.8）。各 View 自己订阅 focusId。
+  // styleSampleFocusId 语义不同（null=已处理），保留本地 state。
+  const focusEntity = useFocusStore((s) => s.focusEntity);
   const [styleSampleFocusId, setStyleSampleFocusId] = useState<number | null>(
     null,
   );
@@ -283,7 +284,7 @@ export default function WorkspaceView({
   }
 
   function handleSearchNavigateEntity(panelId: PanelId, entityId: number) {
-    setFocusMap({ [panelId]: entityId } as Partial<Record<PanelId, number>>);
+    focusEntity(panelId, entityId);
     setActivePanel(panelId);
   }
 
@@ -550,46 +551,31 @@ export default function WorkspaceView({
           </div>
           {activePanel === "characters" ? (
             <ErrorBoundary>
-              <CharacterListView
-                novelId={activeNovelId}
-                focusId={focusMap.characters ?? 0}
-              />
+              <CharacterListView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "locations" ? (
             <ErrorBoundary>
-              <LocationListView
-                novelId={activeNovelId}
-                focusId={focusMap.locations ?? 0}
-              />
+              <LocationListView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "storyarcs" ? (
             <ErrorBoundary>
-              <ArcListView novelId={activeNovelId} focusArcId={focusMap.storyarcs ?? 0} />
+              <ArcListView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "timeline" ? (
             <ErrorBoundary>
-              <TimelineView
-                novelId={activeNovelId}
-                focusEntryId={focusMap.timeline ?? 0}
-              />
+              <TimelineView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "reader" ? (
             <ErrorBoundary>
-              <ReaderView novelId={activeNovelId} focusId={focusMap.reader ?? 0} />
+              <ReaderView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "preferences" ? (
             <ErrorBoundary>
-              <PreferenceView
-                novelId={activeNovelId}
-                focusId={focusMap.preferences ?? 0}
-              />
+              <PreferenceView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "novel-settings" ? (
             <ErrorBoundary>
-              <NovelSettingView
-                novelId={activeNovelId}
-                focusId={focusMap["novel-settings"] ?? 0}
-              />
+              <NovelSettingView novelId={activeNovelId} />
             </ErrorBoundary>
           ) : activePanel === "git" ? (
             <ErrorBoundary>

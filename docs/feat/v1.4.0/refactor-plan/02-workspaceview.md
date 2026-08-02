@@ -13,7 +13,7 @@
 - [x] 2.5 switchNovel 抽函数
 - [x] 2.6 FocusId 对象化
 - [x] 2.7 usePanelStore
-- [ ] 2.8 useFocusStore
+- [x] 2.8 useFocusStore
 
 ---
 
@@ -181,9 +181,25 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 **改动文件**：新建 `frontend/src/stores/useFocusStore.ts`；改 `frontend/src/views/WorkspaceView.tsx`、各 View（CharacterListView/LocationListView/ArcListView/TimelineView/ReaderView/PreferenceView/NovelSettingView）
 
 **怎么做**：
-- store 状态：`focusMap`；actions：`focusEntity(panelId, id)`（设单个）、`clear()`。
-- `handleSearchNavigateEntity` 改成调 `focusEntity`。
-- 各 View 用 selector 订阅自己的（如 `useFocusStore((s) => s.focusMap.characters ?? 0)`）。
+- store 状态：`focusMap`；action：`focusEntity(panelId, id)`（整体替换 `set({ focusMap: { [panelId]: id } })`，等价 2.6 的 setFocusMap 语义，自动清旧值）。无 `clear()`——无调用场景（YAGNI，同 2.7 去 toggleSidebar 理由）。
+- `handleSearchNavigateEntity` 改成调 `focusEntity`；删 WorkspaceView 的 `focusMap` state。
+- 各 View 删 `focusId`/`focusArcId`/`focusEntryId` prop，改 selector 订阅（用 2.7 的 selector 模式，非整体解构）：
+
+  | View | 原 prop 名 | selector |
+  |---|---|---|
+  | CharacterListView | focusId | `s.focusMap.characters ?? 0` |
+  | LocationListView | focusId | `s.focusMap.locations ?? 0` |
+  | ArcListView | focusArcId | `s.focusMap.storyarcs ?? 0` |
+  | TimelineView | focusEntryId | `s.focusMap.timeline ?? 0` |
+  | ReaderView | focusId | `s.focusMap.reader ?? 0` |
+  | PreferenceView | focusId | 不订阅（见下方说明）|
+  | NovelSettingView | focusId | 不订阅（见下方说明）|
+
+  > **PreferenceView / NovelSettingView**：原 `focusId` prop 是死代码（WorkspaceView 传了但函数体未用），后端搜索未接入这两个实体。2.8 只删 prop 不订阅，待后端搜索接入后再补 `s.focusMap.preferences` / `s.focusMap["novel-settings"]` 订阅。
+
+- `styleSampleFocusId` 保留 WorkspaceView 不动（2.6 已定，语义不同：null=已处理）。
+
+**测试适配**：`WorkspaceView.test.tsx` 的 5 个 View mock（Character/Location/Arc/Timeline/Reader）从 props 接收 focusId 改成订阅 `useFocusStore`（mock 组件需用具名函数 `function XxxViewMock()` 满足 rules-of-hooks）；PreferenceView/NovelSettingView mock 删 focusId prop；search navigation 的 beforeEach 加 `useFocusStore.setState({ focusMap: {} })` 隔离状态。断言不变（仍验证 `data-focusid` 等 DOM 属性）。
 
 **验证**：build + lint + test（1.5 搜索导航测试必须仍绿）。
 

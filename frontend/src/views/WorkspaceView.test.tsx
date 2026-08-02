@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import WorkspaceView from "./WorkspaceView";
+import { useFocusStore } from "@/stores/useFocusStore";
 
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
@@ -169,53 +170,60 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
 
 // 各 View mock：接收 focusId 类 prop 渲染出来，验证 focusId 传递正确
 vi.mock("@/components/character/CharacterListView", () => ({
-  default: ({ focusId }: { focusId: number }) => (
-    <div data-testid="character-list" data-focusid={focusId}>
-      character-list
-    </div>
-  ),
+  default: function CharacterListViewMock() {
+    const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
+    return (
+      <div data-testid="character-list" data-focusid={focusId}>
+        character-list
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/location/LocationListView", () => ({
-  default: ({ focusId }: { focusId: number }) => (
-    <div data-testid="location-list" data-focusid={focusId}>
-      location-list
-    </div>
-  ),
+  default: function LocationListViewMock() {
+    const focusId = useFocusStore((s) => s.focusMap.locations ?? 0);
+    return (
+      <div data-testid="location-list" data-focusid={focusId}>
+        location-list
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/storyarc/ArcListView", () => ({
-  default: ({ focusArcId }: { focusArcId: number }) => (
-    <div data-testid="arc-list" data-focusarcid={focusArcId}>
-      arc-list
-    </div>
-  ),
+  default: function ArcListViewMock() {
+    const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
+    return (
+      <div data-testid="arc-list" data-focusarcid={focusArcId}>
+        arc-list
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/timeline/TimelineView", () => ({
-  default: ({ focusEntryId }: { focusEntryId: number }) => (
-    <div data-testid="timeline" data-focusentryid={focusEntryId}>
-      timeline
-    </div>
-  ),
+  default: function TimelineViewMock() {
+    const focusEntryId = useFocusStore((s) => s.focusMap.timeline ?? 0);
+    return (
+      <div data-testid="timeline" data-focusentryid={focusEntryId}>
+        timeline
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/reader/ReaderView", () => ({
-  default: ({ focusId }: { focusId: number }) => (
-    <div data-testid="reader" data-focusid={focusId}>
-      reader
-    </div>
-  ),
+  default: function ReaderViewMock() {
+    const focusId = useFocusStore((s) => s.focusMap.reader ?? 0);
+    return (
+      <div data-testid="reader" data-focusid={focusId}>
+        reader
+      </div>
+    );
+  },
 }));
 vi.mock("@/components/preference/PreferenceView", () => ({
-  default: ({ focusId }: { focusId: number }) => (
-    <div data-testid="preference" data-focusid={focusId}>
-      preference
-    </div>
-  ),
+  default: () => <div data-testid="preference">preference</div>,
 }));
 vi.mock("@/components/novel-setting/NovelSettingView", () => ({
-  default: ({ focusId }: { focusId: number }) => (
-    <div data-testid="novel-setting" data-focusid={focusId}>
-      novel-setting
-    </div>
-  ),
+  default: () => <div data-testid="novel-setting">novel-setting</div>,
 }));
 vi.mock("@/components/novel/BookshelfView", () => ({
   default: (props: {
@@ -332,6 +340,7 @@ describe("WorkspaceView panel switching", () => {
 describe("WorkspaceView search navigation", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useFocusStore.setState({ focusMap: {} });
     mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
     mockGetPlatform.mockResolvedValue({ os: "linux" });
     mockSetActiveNovel.mockResolvedValue(undefined);

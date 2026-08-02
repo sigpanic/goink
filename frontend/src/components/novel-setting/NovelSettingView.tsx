@@ -11,7 +11,6 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   novelId: number;
-  focusId?: number;
 }
 
 type EditMode =

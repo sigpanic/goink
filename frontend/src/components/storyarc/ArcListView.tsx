@@ -11,10 +11,10 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useFocusStore } from "@/stores/useFocusStore";
 
 interface Props {
   novelId: number;
-  focusArcId?: number;
 }
 
 type ViewTab = "list" | "swimlane";
@@ -81,7 +81,8 @@ type NodeForm = {
 const EMPTY_ARC: ArcForm = { name: "", arc_type: "main" };
 const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
 
-export default function ArcListView({ novelId, focusArcId }: Props) {
+export default function ArcListView({ novelId }: Props) {
+  const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
   const app = useApp();
   const { t } = useTranslation();
   const { theme } = useTheme();
