@@ -3,8 +3,6 @@ import { Graph, treeToGraphData } from "@antv/g6";
 import { LocateFixed, RefreshCw, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useGraphColors } from "@/components/graphColors";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
 import type { character } from "@/hooks/useApp";
 import { useCharacters } from "./useCharacters";
 import { useCharacterRelations } from "./useCharacterRelations";
@@ -122,25 +120,6 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
   const relsError = relsQuery.isError;
   // loading 合成：两个 query 任一在拉时整体显示 loading（同时拉难以独立区分）。
   const loading = charsLoading || relsLoading;
-
-  // 4.1.1 规则 8.1：query 把错误吞进 error 字段后不主动触发副作用，必须挂 useEffect 监听。
-  // 原代码只 console.error，按规则 8「不静默，任何错误前端必须能看到原因」主动补 toast 显示具体 err.message。
-  // 不重复：TanStack Query error 引用稳定，fetch 失败后 error 不变，useEffect 只触发一次（refetch 再次失败时引用变化才再触发）。
-  useEffect(() => {
-    if (charsQuery.error) {
-      toastError(t("character.charsLoadFailed") + ": " + toErrorMessage(charsQuery.error));
-      console.error("CharacterGraph characters load failed:", charsQuery.error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [charsQuery.error]);
-
-  useEffect(() => {
-    if (relsQuery.error) {
-      toastError(t("character.relationsLoadFailed") + ": " + toErrorMessage(relsQuery.error));
-      console.error("CharacterGraph relations load failed:", relsQuery.error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [relsQuery.error]);
 
   const [selectedCharacter, setSelectedCharacter] =
     useState<character.Character | null>(null);

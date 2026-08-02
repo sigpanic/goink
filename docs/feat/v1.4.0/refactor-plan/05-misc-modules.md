@@ -86,6 +86,8 @@
 - skills 走 query（key `["skills"]` 全局）。
 - GitCommitView 的 file diff 数据按需走 query 或保持 props（git 操作低频，可评估是否值得迁）。
 - skill CRUD mutation。
+- **apperr 适配（必做）**：`ListRemoteSkills` / `GetRemoteSkillContent` 是 apperr 新 API（返回 `Result[T]`，HTTP 200，不 throw）。迁移 query 时 queryFn 必须先建 `frontend/src/utils/wailsResult.ts`（`unwrapResult` + `AppErr`），queryFn 用 `unwrapResult(res)` 解包（err_code 非空时 throw AppErr），否则错误静默吞掉（违反规则 8）。`InstallRemoteSkill` 是 mutation 不走 query，无需适配。方案详见 [04a-query-error-toast.md](./04a-query-error-toast.md) 的「apperr 新 API 适配」章节。
+- **重复 toast 检查（必做）**：迁移前 grep `frontend/src/components/skill/` 的 `toastError` 调用。GET 错误处理只 inline（无 toastError）→ 中间件接管 toast 不重复；mutation/校验保留组件级 toastError。判断规则详见 [04a-query-error-toast.md](./04a-query-error-toast.md) 的「改造 query 后是否重复 toast」章节。
 
 **验证**：build + lint + test（SkillList.test.tsx 必须仍绿）。
 

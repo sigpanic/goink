@@ -372,7 +372,8 @@
     "importAnalyzing": "AI 正在分析章节格式",
     "importAnalyzeBtn": "AI 分析",
     "importAnalyzeFailed": "AI 分析失败",
-    "importModel": "模型"
+    "importModel": "模型",
+    "loadFailed": "加载失败"
   },
   "character": {
     "character": "角色",

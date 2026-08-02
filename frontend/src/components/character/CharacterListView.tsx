@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -47,21 +47,12 @@ export default function CharacterListView({ novelId }: Props) {
   // 4.1.1: characters 数据走 useCharacters query，与 CharacterGraph / CharacterList 共享缓存。
   // 删除原 useState<characters> + useEffect + useRefresh 链路；
   // CRUD 后由 invalidateQueries 触发所有订阅者 refetch。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  // 中间件在 QueryCache 层 fire 一次，避免多组件订阅同 queryKey 时重复 toast。
   const charsQuery = useCharacters(novelId);
   const characters = charsQuery.data ?? [];
   const loading = charsQuery.isLoading;
   const loadFailed = charsQuery.isError;
-
-  // 4.1.1 规则 8.1：query 把错误吞进 error 字段后不主动触发副作用，必须挂 useEffect 监听。
-  // 原 catch 块的 toastError + console.error 在此恢复，保证不静默、不丢失具体错误消息。
-  // 不重复：TanStack Query error 引用稳定，fetch 失败后 error 不变，useEffect 只触发一次（refetch 再次失败时引用变化才再触发）。
-  useEffect(() => {
-    if (charsQuery.error) {
-      toastError(t("character.loadFailed") + ": " + toErrorMessage(charsQuery.error));
-      console.error(charsQuery.error);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [charsQuery.error]);
 
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);

@@ -385,7 +385,8 @@
     "importAnalyzing": "AI is analyzing chapter format",
     "importAnalyzeBtn": "AI Analysis",
     "importAnalyzeFailed": "AI analysis failed",
-    "importModel": "Model"
+    "importModel": "Model",
+    "loadFailed": "Load failed"
   },
   "character": {
     "character": "Character",
