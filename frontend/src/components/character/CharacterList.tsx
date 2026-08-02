@@ -1,11 +1,12 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
-import type { character } from "@/hooks/useApp";
+import { characterKeys } from "@/lib/queryKeys";
+import { useCharacters } from "./useCharacters";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -15,30 +16,13 @@ interface Props {
 export default function CharacterList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce, bumpRefresh } = useRefresh();
-
-  const [characters, setCharacters] = useState<character.Character[]>([]);
+  const queryClient = useQueryClient();
+  // 4.1.1: characters 数据走 useCharacters query，跨组件共享缓存（CharacterListView / CharacterGraph 同源）。
+  // 删除原 useState<characters> + useEffect + useRefresh 链路；CRUD 后由 invalidateQueries 触发自动 refetch。
+  const { data: characters = [] } = useCharacters(novelId);
   const [search, setSearch] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setCharacters([]);
-      return;
-    }
-    try {
-      const list = await app.GetCharacters(novelId);
-      setCharacters(list ?? []);
-    } catch (err) {
-      console.error("CharacterList load failed:", err);
-      setCharacters([]);
-    }
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return characters;
@@ -56,8 +40,10 @@ export default function CharacterList({ novelId }: Props) {
     try {
       await app.DeleteCharacter(novelId, deleteTarget);
       setDeleteTarget(null);
-      await load();
-      bumpRefresh();
+      // 4.1.1: 失效 characterKeys.list(novelId) → 触发所有订阅 useCharacters 的组件 refetch（CharacterListView / CharacterGraph 同步）。
+      await queryClient.invalidateQueries({
+        queryKey: characterKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);

@@ -398,6 +398,8 @@
     "relationGraph": "Relation Graph",
     "loading": "Loading...",
     "loadFailed": "Load failed",
+    "charsLoadFailed": "Character load failed",
+    "relationsLoadFailed": "Relation load failed",
     "person": "person",
     "refresh": "Refresh",
     "newCharacter": "New Character",

@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
 import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -11,6 +11,8 @@ import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { characterKeys } from "@/lib/queryKeys";
+import { useCharacters } from "./useCharacters";
 
 interface Props {
   novelId: number;
@@ -41,41 +43,32 @@ export default function CharacterListView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
   const app = useApp();
   const { t } = useTranslation();
-  const { bumpRefresh, refreshNonce } = useRefresh();
+  const queryClient = useQueryClient();
+  // 4.1.1: characters 数据走 useCharacters query，与 CharacterGraph / CharacterList 共享缓存。
+  // 删除原 useState<characters> + useEffect + useRefresh 链路；
+  // CRUD 后由 invalidateQueries 触发所有订阅者 refetch。
+  const charsQuery = useCharacters(novelId);
+  const characters = charsQuery.data ?? [];
+  const loading = charsQuery.isLoading;
+  const loadFailed = charsQuery.isError;
 
-  const [characters, setCharacters] = useState<character.Character[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.1.1 规则 8.1：query 把错误吞进 error 字段后不主动触发副作用，必须挂 useEffect 监听。
+  // 原 catch 块的 toastError + console.error 在此恢复，保证不静默、不丢失具体错误消息。
+  // 不重复：TanStack Query error 引用稳定，fetch 失败后 error 不变，useEffect 只触发一次（refetch 再次失败时引用变化才再触发）。
+  useEffect(() => {
+    if (charsQuery.error) {
+      toastError(t("character.loadFailed") + ": " + toErrorMessage(charsQuery.error));
+      console.error(charsQuery.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [charsQuery.error]);
+
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setCharacters([]);
-      setLoadFailed(false);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const list = await app.GetCharacters(novelId);
-      setCharacters(list ?? []);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("character.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   // ── CRUD handlers ─────────────────────────────────────
 
@@ -114,8 +107,9 @@ export default function CharacterListView({ novelId }: Props) {
     try {
       await app.CreateCharacter(novelId, buildPayload());
       setEditMode(null);
-      await load();
-      bumpRefresh();
+      await queryClient.invalidateQueries({
+        queryKey: characterKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("character.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -134,8 +128,9 @@ export default function CharacterListView({ novelId }: Props) {
     try {
       await app.UpdateCharacter(novelId, editMode.item.id, buildPayload());
       setEditMode(null);
-      await load();
-      bumpRefresh();
+      await queryClient.invalidateQueries({
+        queryKey: characterKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("character.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -154,8 +149,9 @@ export default function CharacterListView({ novelId }: Props) {
     try {
       await app.DeleteCharacter(novelId, deleteTarget);
       setDeleteTarget(null);
-      await load();
-      bumpRefresh();
+      await queryClient.invalidateQueries({
+        queryKey: characterKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("character.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -291,7 +287,11 @@ export default function CharacterListView({ novelId }: Props) {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={load}
+                  onClick={() =>
+                    queryClient.invalidateQueries({
+                      queryKey: characterKeys.list(novelId),
+                    })
+                  }
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {t("character.refresh")}

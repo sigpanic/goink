@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Graph, treeToGraphData } from "@antv/g6";
 import { LocateFixed, RefreshCw, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
-import type { character } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import type { character } from "@/hooks/useApp";
+import { useCharacters } from "./useCharacters";
+import { useCharacterRelations } from "./useCharacterRelations";
 
 interface Props {
   novelId: number;
@@ -102,47 +103,53 @@ function buildCharacterTree(
 }
 
 export default function CharacterGraph({ novelId, focusId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
   const C = useGraphColors();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
 
-  const [characters, setCharacters] = useState<character.Character[]>([]);
-  const [relations, setRelations] = useState<character.CharacterRelation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.1.1: characters + relations 走两个独立 query。
+  // 与 CharacterListView / CharacterList 共享 characters 缓存（同 queryKey）。
+  // 删除原 useState + useEffect + Promise.all 链路；
+  // CRUD 后由 mutation 的 invalidateQueries 同步（4.1.2 抽 mutation）。
+  const charsQuery = useCharacters(novelId);
+  const relsQuery = useCharacterRelations(novelId);
+  const characters = charsQuery.data ?? [];
+  const relations = relsQuery.data ?? [];
+  const charsLoading = charsQuery.isLoading;
+  const relsLoading = relsQuery.isLoading;
+  const charsError = charsQuery.isError;
+  const relsError = relsQuery.isError;
+  // loading 合成：两个 query 任一在拉时整体显示 loading（同时拉难以独立区分）。
+  const loading = charsLoading || relsLoading;
+
+  // 4.1.1 规则 8.1：query 把错误吞进 error 字段后不主动触发副作用，必须挂 useEffect 监听。
+  // 原代码只 console.error，按规则 8「不静默，任何错误前端必须能看到原因」主动补 toast 显示具体 err.message。
+  // 不重复：TanStack Query error 引用稳定，fetch 失败后 error 不变，useEffect 只触发一次（refetch 再次失败时引用变化才再触发）。
+  useEffect(() => {
+    if (charsQuery.error) {
+      toastError(t("character.charsLoadFailed") + ": " + toErrorMessage(charsQuery.error));
+      console.error("CharacterGraph characters load failed:", charsQuery.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [charsQuery.error]);
+
+  useEffect(() => {
+    if (relsQuery.error) {
+      toastError(t("character.relationsLoadFailed") + ": " + toErrorMessage(relsQuery.error));
+      console.error("CharacterGraph relations load failed:", relsQuery.error);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [relsQuery.error]);
+
   const [selectedCharacter, setSelectedCharacter] =
     useState<character.Character | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setCharacters([]);
-      setRelations([]);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [charList, relList] = await Promise.all([
-        app.GetCharacters(novelId),
-        app.GetCharacterRelations(novelId),
-      ]);
-      setCharacters(charList ?? []);
-      setRelations(relList ?? []);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("character.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const refresh = useCallback(() => {
+    charsQuery.refetch();
+    relsQuery.refetch();
+  }, [charsQuery, relsQuery]);
 
   useEffect(() => {
     if (focusId && focusId > 0 && characters.length > 0) {
@@ -343,7 +350,7 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={refresh}
             className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title={t("character.refresh")}
           >
@@ -467,15 +474,24 @@ export default function CharacterGraph({ novelId, focusId }: Props) {
         </span>
       </div>
 
-      {loading ? (
-        <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
-          {t("character.loading")}
-        </div>
-      ) : loadFailed ? (
+      {/* 4.1.1: 独立 loading/error 分支（方式 B）。
+          - loading 合成：两 query 任一在拉即整体 loading（同时拉难独立区分）
+          - error 独立：charsError / relsError 分别显示对应失败信息，便于定位错误来源 */}
+      {charsError ? (
         <div className="relative z-10 flex h-full items-center justify-center">
           <p className="text-xs text-destructive py-4">
-            {t("character.loadFailed")}
+            {t("character.charsLoadFailed")}
           </p>
+        </div>
+      ) : relsError ? (
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <p className="text-xs text-destructive py-4">
+            {t("character.relationsLoadFailed")}
+          </p>
+        </div>
+      ) : loading ? (
+        <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
+          {t("character.loading")}
         </div>
       ) : characters.length === 0 ? (
         <div className="relative z-10 flex h-full items-center justify-center">

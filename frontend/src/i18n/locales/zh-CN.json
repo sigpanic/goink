@@ -385,6 +385,8 @@
     "relationGraph": "关系图",
     "loading": "加载中...",
     "loadFailed": "加载失败",
+    "charsLoadFailed": "角色加载失败",
+    "relationsLoadFailed": "关系加载失败",
     "person": "人",
     "refresh": "刷新",
     "newCharacter": "新建角色",
