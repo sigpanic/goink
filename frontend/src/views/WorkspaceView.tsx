@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useLayoutEffect, useCallback, useRef, useMemo } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
@@ -44,6 +44,7 @@ import { useWindowState } from "@/hooks/useWindowState";
 import { useImportNovel } from "@/hooks/useImportNovel";
 import { RefreshContext } from "@/hooks/useRefresh";
 import type { PanelId, SidebarPanelId } from "@/types/panel";
+import { usePanelStore } from "@/stores/usePanelStore";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -73,10 +74,15 @@ export default function WorkspaceView({
 
   const [novels, setNovels] = useState<novel.Novel[]>([]);
   const [activeNovelId, setActiveNovelId] = useState(initialNovelId);
-  const [activePanel, setActivePanel] = useState<PanelId>(
-    initialNovelId ? "chapters" : "novels",
-  );
-  const [sidebarPanel, setSidebarPanel] = useState<SidebarPanelId | null>(null);
+  // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
+  // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
+  // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
+  const activePanel = usePanelStore((s) => s.activePanel);
+  const sidebarPanel = usePanelStore((s) => s.sidebarPanel);
+  const sidebarClosed = usePanelStore((s) => s.sidebarClosed);
+  const setActivePanel = usePanelStore((s) => s.setActivePanel);
+  const setSidebarPanel = usePanelStore((s) => s.setSidebarPanel);
+  const setSidebarClosed = usePanelStore((s) => s.setSidebarClosed);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<search.Result[]>([]);
   // 7 个实体面板的 focusId 收敛成 focusMap。搜索导航时整体替换，
@@ -110,7 +116,12 @@ export default function WorkspaceView({
     setSidePanelWidth,
     setChatPanelWidth,
   } = useLayoutState();
-  const [sidebarClosed, setSidebarClosed] = useState(false);
+  // 首次 mount 同步初始化 activePanel（store 默认 "novels"，用 initialNovelId 覆盖）。
+  // useLayoutEffect 在 paint 前跑，避免首屏用默认值再切换的闪烁。
+  useLayoutEffect(() => {
+    setActivePanel(initialNovelId ? "chapters" : "novels");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // 侧边栏 List 与主区 View 的刷新信号：View 保存/删除后 bumpRefresh，
   // List 的 useEffect 依赖 refreshNonce，变化即重载。Provider 包裹下方 SidePanel + 各 View。
@@ -447,14 +458,10 @@ export default function WorkspaceView({
         </header>
 
         <div className="flex-1 flex min-h-0 overflow-hidden">
-          <ActivityBar
-            activeId={sidebarPanel ?? activePanel}
-            onSelect={handleActivitySelect}
-          />
+          <ActivityBar onSelect={handleActivitySelect} />
 
           {!sidebarClosed && (
             <SidePanel
-              activePanel={sidebarPanel ?? activePanel}
               novels={novels}
               novelId={activeNovelId}
               onSelectNovel={handleSelectNovel}

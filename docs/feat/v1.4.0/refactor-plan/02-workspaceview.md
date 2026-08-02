@@ -12,7 +12,7 @@
 - [x] 2.4 抽 WindowControls 组件
 - [x] 2.5 switchNovel 抽函数
 - [x] 2.6 FocusId 对象化
-- [ ] 2.7 usePanelStore
+- [x] 2.7 usePanelStore
 - [ ] 2.8 useFocusStore
 
 ---
@@ -157,11 +157,12 @@ WorkspaceView 顶部加 `import type { PanelId }`，本步不替换使用点。
 **改动文件**：新建 `frontend/src/stores/usePanelStore.ts`；改 `frontend/src/views/WorkspaceView.tsx`、`frontend/src/components/sidebar/SidePanel.tsx`、`frontend/src/components/shell/ActivityBar.tsx`
 
 **怎么做**：
-- store 状态：`activePanel`、`sidebarPanel`、`sidebarClosed`；actions：`setActive`、`setSidebarPanel`、`setSidebarClosed`、`toggleSidebar`。`activePanel` 默认 `"novels"`，由 WorkspaceView mount 时用 `initialNovelId` 覆盖（`initialNovelId ? "chapters" : "novels"`）。
-- WorkspaceView 删这 3 个 state，改用 store selector；`handleActivitySelect` 改用 store actions。
-- SidePanel/ActivityBar 删对应 props，改 `usePanelStore` 订阅。
+- store 状态：`activePanel`、`sidebarPanel`、`sidebarClosed`；actions：`setActivePanel`、`setSidebarPanel`、`setSidebarClosed`（无 `toggleSidebar`——现有折叠/展开逻辑是 condition-based，非简单 toggle，由 `handleActivitySelect` 用 3 个 setter 组合实现）。`activePanel` 默认 `"novels"`，由 WorkspaceView mount 时用 `initialNovelId` 覆盖（`initialNovelId ? "chapters" : "novels"`）。
+- WorkspaceView 删这 3 个 state，改用 store selector；`handleActivitySelect` 留在 WorkspaceView（依赖 `contentRef.current?.clearHighlight()` 命令式副作用），内部改用 store 的 3 个 setter 组合实现现有逻辑。
+- ActivityBar 删 `activeId` prop 改订阅 store（selector 取 `sidebarPanel ?? activePanel`）；`onSelect` prop 保留（`handleActivitySelect` 依赖 contentRef）。
+- SidePanel 删 `activePanel` prop 改订阅 store；顺带把现有 `activePanel: string` 类型修正为 `PanelId`（2.3 遗漏）。
 
-> 注意 activePanel 默认值依赖 `initialNovelId` prop，初始化要在 WorkspaceView mount 时一次性 `setActive`，避免循环更新。
+> 注意 activePanel 默认值依赖 `initialNovelId` prop，初始化要在 WorkspaceView mount 时一次性 `setActivePanel`，避免循环更新。
 
 **验证**：build + lint + test（1.4 面板切换测试必须仍绿）。
 

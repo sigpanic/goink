@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { SidebarPanelId } from "@/types/panel";
+import { usePanelStore } from "@/stores/usePanelStore";
 
 interface Activity {
   id: SidebarPanelId;
@@ -41,12 +42,12 @@ const activities: Activity[] = [
 ];
 
 interface Props {
-  activeId: SidebarPanelId;
   onSelect: (id: SidebarPanelId) => void;
 }
 
-export default function ActivityBar({ activeId, onSelect }: Props) {
+export default function ActivityBar({ onSelect }: Props) {
   const { t } = useTranslation();
+  const activeId = usePanelStore((s) => s.sidebarPanel ?? s.activePanel);
 
   return (
     <nav className="w-12 flex flex-col items-center py-3 gap-1.5 border-r bg-sidebar select-none cursor-default">

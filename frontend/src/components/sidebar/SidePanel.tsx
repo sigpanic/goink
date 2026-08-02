@@ -17,9 +17,9 @@ import type { SearchResult } from "@/components/search/SearchPanel";
 import GitHistoryList from "@/components/git/GitHistoryList";
 import type { git } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
+import { usePanelStore } from "@/stores/usePanelStore";
 
 interface Props {
-  activePanel: string;
   novels: novel.Novel[];
   novelId: number;
   onSelectNovel: (n: novel.Novel) => void;
@@ -56,7 +56,6 @@ interface Props {
 }
 
 export default function SidePanel({
-  activePanel,
   novels,
   novelId,
   onSelectNovel,
@@ -86,6 +85,7 @@ export default function SidePanel({
   onSidePanelResize,
 }: Props) {
   const { t } = useTranslation();
+  const activePanel = usePanelStore((s) => s.sidebarPanel ?? s.activePanel);
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(sidePanelWidth);
