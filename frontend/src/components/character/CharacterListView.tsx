@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
 import type { character } from "@/hooks/useApp";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -13,6 +12,8 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { characterKeys } from "@/lib/queryKeys";
 import { useCharacters } from "./useCharacters";
+import { useCreateCharacter } from "./useCreateCharacter";
+import { useUpdateCharacter } from "./useUpdateCharacter";
 import { useDeleteCharacter } from "./useDeleteCharacter";
 import { useCharacterStore } from "./useCharacterStore";
 
@@ -23,7 +24,9 @@ interface Props {
 type ViewTab = "list" | "graph";
 
 type EditMode =
-  { type: "create" } | { type: "edit"; item: character.Character } | null;
+  | { type: "create" }
+  | { type: "edit"; item: character.Character }
+  | null;
 
 type CharForm = {
   name: string;
@@ -43,7 +46,6 @@ function safeJson<T>(json: string, fallback: T): T {
 
 export default function CharacterListView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
-  const app = useApp();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   // 4.1.1: characters 数据走 useCharacters query，与 CharacterGraph / CharacterList 共享缓存。
@@ -59,7 +61,11 @@ export default function CharacterListView({ novelId }: Props) {
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
+  // 4.1.2: create/update/delete 走 mutation，saving 由 mutation.isPending 推导（不再用 useState）。
+  // create/update 共用 saving（同一时刻只可能开一个编辑表单）；delete 用 deleteMutation.isPending。
+  const createMutation = useCreateCharacter(novelId);
+  const updateMutation = useUpdateCharacter(novelId);
+  const saving = createMutation.isPending || updateMutation.isPending;
   // 4.1.2: 删除走 useDeleteCharacter mutation + useCharacterStore 共享 deletingCharacterId。
   // CharacterList 点删除只 dispatch setDeletingCharacterId，ConfirmDialog + 执行集中在此处。
   const deleteMutation = useDeleteCharacter(novelId);
@@ -101,18 +107,13 @@ export default function CharacterListView({ novelId }: Props) {
       toastError(t("character.pleaseEnterName"));
       return;
     }
-    setSaving(true);
+    // 4.1.2: create 走 mutation，onSuccess 失效 list；setEditMode + 错误 toast 留 handler。
     try {
-      await app.CreateCharacter(novelId, buildPayload());
+      await createMutation.mutateAsync(buildPayload());
       setEditMode(null);
-      await queryClient.invalidateQueries({
-        queryKey: characterKeys.list(novelId),
-      });
     } catch (err) {
       toastError(t("character.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -122,18 +123,16 @@ export default function CharacterListView({ novelId }: Props) {
       toastError(t("character.pleaseEnterName"));
       return;
     }
-    setSaving(true);
+    // 4.1.2: update 走 mutation，onSuccess 失效 list；setEditMode + 错误 toast 留 handler。
     try {
-      await app.UpdateCharacter(novelId, editMode.item.id, buildPayload());
-      setEditMode(null);
-      await queryClient.invalidateQueries({
-        queryKey: characterKeys.list(novelId),
+      await updateMutation.mutateAsync({
+        id: editMode.item.id,
+        input: buildPayload(),
       });
+      setEditMode(null);
     } catch (err) {
       toastError(t("character.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 

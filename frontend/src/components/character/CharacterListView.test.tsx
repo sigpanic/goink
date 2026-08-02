@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render as originalRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import CharacterListView from "./CharacterListView";
@@ -12,11 +13,18 @@ vi.mock("@/utils/toast", async (importOriginal) => {
   return { ...mod, toastError: vi.fn() };
 });
 
-// 4.1.2: 删除合并测试。CharacterListView 挂唯一 ConfirmDialog + 执行删除（mutateAsync）。
-// useCharacters / useDeleteCharacter mock；useCharacterStore 用真实 store（beforeEach reset）。
-const { mockUseCharacters, mockMutateAsync } = vi.hoisted(() => ({
+// 4.1.2: create/update/delete mutation 全 mock；useCharacters mock。
+// useApp 已不再用于 CRUD（mutation 直接 import wailsjs），删 useApp mock。
+const {
+  mockUseCharacters,
+  mockMutateAsync,
+  mockCreateMutateAsync,
+  mockUpdateMutateAsync,
+} = vi.hoisted(() => ({
   mockUseCharacters: vi.fn(),
   mockMutateAsync: vi.fn(),
+  mockCreateMutateAsync: vi.fn(),
+  mockUpdateMutateAsync: vi.fn(),
 }));
 
 vi.mock("@/components/character/useCharacters", () => ({
@@ -30,11 +38,17 @@ vi.mock("@/components/character/useDeleteCharacter", () => ({
   }),
 }));
 
-// useApp 仍用于 create/update（删除测试不触发），mock 空实现避免报错。
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    CreateCharacter: vi.fn(),
-    UpdateCharacter: vi.fn(),
+vi.mock("@/components/character/useCreateCharacter", () => ({
+  useCreateCharacter: () => ({
+    mutateAsync: mockCreateMutateAsync,
+    isPending: false,
+  }),
+}));
+
+vi.mock("@/components/character/useUpdateCharacter", () => ({
+  useUpdateCharacter: () => ({
+    mutateAsync: mockUpdateMutateAsync,
+    isPending: false,
   }),
 }));
 
@@ -42,7 +56,7 @@ vi.mock("@/stores/useFocusStore", () => ({
   useFocusStore: () => 0,
 }));
 
-// Mock CharacterGraph 避免 import @antv/g6（proxy 兼容问题），删除测试不涉及 graph。
+// Mock CharacterGraph 避免 import @antv/g6（proxy 兼容问题）。
 vi.mock("@/components/character/CharacterGraph", () => ({
   default: () => null,
 }));
@@ -74,7 +88,6 @@ describe("CharacterListView delete", () => {
 
     fireEvent.click(screen.getByTitle("character.delete"));
 
-    // ConfirmDialog 弹出（标题 common.confirmDelete）
     expect(await screen.findByText("common.confirmDelete")).toBeInTheDocument();
   });
 
@@ -100,7 +113,6 @@ describe("CharacterListView delete", () => {
     await waitFor(() => {
       expect(mockMutateAsync).toHaveBeenCalledWith(1);
     });
-    // Dialog 关闭：标题 common.confirmDelete 消失
     await waitFor(() => {
       expect(
         screen.queryByText("common.confirmDelete"),
@@ -119,6 +131,133 @@ describe("CharacterListView delete", () => {
     await waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
         "character.deleteFailed: network error",
+      );
+    });
+  });
+});
+
+// 4.1.2: create mutation 测试。点 newCharacter → 填 name → save → mutateAsync 被调。
+describe("CharacterListView create", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCharacterStore.setState({ deletingCharacterId: null });
+    mockUseCharacters.mockReturnValue({
+      data: [{ id: 1, name: "Alice", description: "", abilities: "[]" }],
+      isLoading: false,
+      isError: false,
+    });
+    mockCreateMutateAsync.mockResolvedValue(undefined);
+  });
+
+  it("shows create form when new character clicked", async () => {
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("character.newCharacter"));
+
+    // 表单出现（name 输入框 placeholder: character.characterName）
+    expect(
+      screen.getByPlaceholderText("character.characterName"),
+    ).toBeInTheDocument();
+  });
+
+  it("calls createMutation.mutateAsync with form payload on save", async () => {
+    const user = userEvent.setup();
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("character.newCharacter"));
+    const nameInput = screen.getByPlaceholderText("character.characterName");
+    await user.type(nameInput, "Bob");
+    fireEvent.click(screen.getByText("common.save"));
+
+    await waitFor(() => {
+      expect(mockCreateMutateAsync).toHaveBeenCalledWith({
+        name: "Bob",
+        description: "",
+        abilities: "[]",
+      });
+    });
+  });
+
+  it("shows toastError with specific message when create fails", async () => {
+    const user = userEvent.setup();
+    mockCreateMutateAsync.mockRejectedValue(new Error("network error"));
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("character.newCharacter"));
+    const nameInput = screen.getByPlaceholderText("character.characterName");
+    await user.type(nameInput, "Bob");
+    fireEvent.click(screen.getByText("common.save"));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        "character.createFailed: network error",
+      );
+    });
+  });
+});
+
+// 4.1.2: update mutation 测试。点 edit → 改 name → save → mutateAsync 被调。
+describe("CharacterListView update", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useCharacterStore.setState({ deletingCharacterId: null });
+    mockUseCharacters.mockReturnValue({
+      data: [
+        { id: 1, name: "Alice", description: "old desc", abilities: "[]" },
+      ],
+      isLoading: false,
+      isError: false,
+    });
+    mockUpdateMutateAsync.mockResolvedValue(undefined);
+  });
+
+  it("shows edit form with character data when edit clicked", async () => {
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("common.edit"));
+
+    // 编辑表单出现，name input 有值 Alice
+    expect(screen.getByDisplayValue("Alice")).toBeInTheDocument();
+  });
+
+  it("calls updateMutation.mutateAsync with id and payload on save", async () => {
+    const user = userEvent.setup();
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("common.edit"));
+    const nameInput = screen.getByDisplayValue("Alice");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Alice2");
+    fireEvent.click(screen.getByText("common.save"));
+
+    await waitFor(() => {
+      expect(mockUpdateMutateAsync).toHaveBeenCalledWith({
+        id: 1,
+        input: { name: "Alice2", description: "old desc", abilities: "[]" },
+      });
+    });
+  });
+
+  it("shows toastError with specific message when update fails", async () => {
+    const user = userEvent.setup();
+    mockUpdateMutateAsync.mockRejectedValue(new Error("network error"));
+    render(<CharacterListView novelId={1} />);
+    expect(await screen.findByText("Alice")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTitle("common.edit"));
+    const nameInput = screen.getByDisplayValue("Alice");
+    await user.clear(nameInput);
+    await user.type(nameInput, "Alice2");
+    fireEvent.click(screen.getByText("common.save"));
+
+    await waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        "character.updateFailed: network error",
       );
     });
   });
