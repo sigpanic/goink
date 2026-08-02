@@ -31,17 +31,19 @@ beforeEach(() => {
 });
 
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
-// 3.1 useNovels / 3.3 useCreateNovel 直接 import wailsjs（绕过 useApp），这里要 mock GetNovels/CreateNovel。
-// mockGetNovels/mockCreateNovel 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
-const { mockGetNovels, mockCreateNovel } = vi.hoisted(() => ({
+// 3.1 useNovels / 3.3 useCreateNovel / 3.4 useUpdateNovel 直接 import wailsjs（绕过 useApp），这里要 mock。
+// mockGetNovels/mockCreateNovel/mockUpdateNovel 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
+const { mockGetNovels, mockCreateNovel, mockUpdateNovel } = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
+  mockUpdateNovel: vi.fn(),
 }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   CheckUpdate: vi.fn().mockResolvedValue(null),
   GetNovels: mockGetNovels,
   CreateNovel: mockCreateNovel,
+  UpdateNovel: mockUpdateNovel,
 }));
 
 // ── Mock useApp（关键异步方法返回 Promise，避免 .then 报错）──────────
@@ -56,7 +58,7 @@ vi.mock("@/hooks/useApp", () => ({
     GetPlatform: mockGetPlatform,
     ApproveTool: mockApproveTool,
     CreateNovel: mockCreateNovel,
-    UpdateNovel: vi.fn(),
+    UpdateNovel: mockUpdateNovel,
     DeleteNovel: vi.fn(),
     ExportNovel: vi.fn(),
     SaveCover: vi.fn(),

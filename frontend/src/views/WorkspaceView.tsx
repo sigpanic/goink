@@ -49,6 +49,7 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useCreateNovel } from "@/components/novel/useCreateNovel";
+import { useUpdateNovel } from "@/components/novel/useUpdateNovel";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -96,6 +97,8 @@ export default function WorkspaceView({
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
   // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 switchToNovel + 关 UI。
   const createNovel = useCreateNovel();
+  // 3.4: 更新小说 mutation。onSuccess 失效 novelKeys.all；handler 负责 setEditingNovel(null)。
+  const updateNovel = useUpdateNovel();
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -363,9 +366,9 @@ export default function WorkspaceView({
   }) {
     if (!editingNovel) return;
     try {
-      await app.UpdateNovel(editingNovel.id, input);
+      // 3.4: 改用 mutation，invalidate 由 onSuccess 接管；关 dialog 留 handler。
+      await updateNovel.mutateAsync({ id: editingNovel.id, input });
       setEditingNovel(null);
-      await queryClient.invalidateQueries({ queryKey: novelKeys.all });
     } catch (err) {
       console.error(err);
       throw err;
