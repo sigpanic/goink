@@ -15,8 +15,9 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // 后续领域 query 化时补：
   locations: "location.locationsLoadFailed",
   "location-relations": "location.relationsLoadFailed",
-  // storyarcs: "storyarc.loadFailed",
-  // "arc-nodes": "storyarc.nodesLoadFailed",
+  storyarcs: "storyarc.arcsLoadFailed",
+  "arc-nodes": "storyarc.nodesLoadFailed",
+  "max-chapter": "storyarc.maxChapterLoadFailed",
   // timeline: "timeline.loadFailed",
   // reader: "reader.loadFailed",
   // preferences: "preference.loadFailed",

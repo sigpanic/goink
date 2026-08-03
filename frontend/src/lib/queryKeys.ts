@@ -29,10 +29,16 @@ export const storyarcKeys = {
   detail: (id: number) => ["storyarc", id] as const,
 };
 
-// arc-nodes 是 storyarc 的子资源，queryKey 第二段用父 arcId（非 novelId）
+// arc-nodes: 后端 GetArcNodes(novelId, fromChapter, toChapter) 第二三参数是章节窗口非 arcId，
+// 无按 arcId 拉取的 API，故 queryKey 第二段用 novelId（全量缓存，invalidate 一次刷全部）。
 export const arcNodeKeys = {
-  list: (arcId: number) => ["arc-nodes", arcId] as const,
+  list: (novelId: number) => ["arc-nodes", novelId] as const,
   detail: (id: number) => ["arc-node", id] as const,
+};
+
+// maxChapter: 小说最大章节号（用于 storyarc 章节窗口中心 windowCenter）。
+export const maxChapterKeys = {
+  detail: (novelId: number) => ["max-chapter", novelId] as const,
 };
 
 export const timelineKeys = {

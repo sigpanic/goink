@@ -1,34 +1,20 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Search, GitBranch } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
-import type { storyarc } from "@/hooks/useApp";
+import { useStoryArcs } from "./useStoryArcs";
 
 interface Props {
   novelId: number;
 }
 
 export default function SidebarArcList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce } = useRefresh();
-
-  const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
+  // 4.3.1: arcs 走 useStoryArcs query（与 ArcListView / StoryArcGraph 共享缓存）。
+  // 删原 useApp.GetStoryArcs + useRefresh.refreshNonce + useState + useEffect + load 链路；
+  // CRUD 后由 invalidateQueries 触发所有订阅者 refetch（commit 2/3 抽 mutation）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const { data: arcs = [], isError } = useStoryArcs(novelId);
   const [search, setSearch] = useState("");
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setArcs([]);
-      return;
-    }
-    const list = await app.GetStoryArcs(novelId);
-    setArcs(list ?? []);
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return arcs;
@@ -69,7 +55,13 @@ export default function SidebarArcList({ novelId }: Props) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {filtered.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("storyarc.arcsLoadFailed")}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {search ? t("storyarc.noMatchingArcs") : t("storyarc.noArcs")}

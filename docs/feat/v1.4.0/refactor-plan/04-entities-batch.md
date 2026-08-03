@@ -75,15 +75,20 @@
 
 ## 4.3 storyarc
 
-**特殊点**：arc-nodes 是 storyarc 的子资源，queryKey 用父 id（`arc-nodes` key 第二段是 arcId 而非 novelId）。ArcListView 1129 行是巨石，本阶段**只迁移数据层**，不拆组件（拆组件留阶段 6）。
+**特殊点**：arc-nodes 原文档写按 arcId 切分，但后端 `GetArcNodes(novelId, fromChapter, toChapter)` 第二三参数是章节窗口非 arcId，无按 arcId 拉取的 API，故 queryKey 改为 `["arc-nodes", novelId]` 全量（已同步改 00-conventions.md §1.2 + queryKeys.ts）。额外有 `GetMaxChapterNumber(novelId)` 用于章节窗口中心 windowCenter，抽 `useMaxChapterNumber` query。ArcListView 1130 行是巨石，本阶段**只迁移数据层**，不拆组件（拆组件留阶段 6）。
 
-**改动文件**：`frontend/src/components/storyarc/ArcListView.tsx`
+**改动文件**：`frontend/src/components/storyarc/ArcList.tsx`、`ArcListView.tsx`、`StoryArcGraph.tsx`
 
-**怎么做**：`useStoryArcs(novelId)` + `useArcNodes(arcId)` 两个 query。arc CRUD 和 node CRUD 各一组 mutation。
+**怎么做**：`useStoryArcs(novelId)` + `useArcNodes(novelId)` + `useMaxChapterNumber(novelId)` 三个 query。arc CRUD 和 node CRUD 各一组 mutation。
 
-**手测点**：arc/node CRUD 后列表同步。
+**手测点**：arc/node CRUD 后列表同步；focusArcId 联动（自动展开+定位章节窗口）；章节窗口前/后翻；快速状态切换。
 
-**commit**：同 4.1 拆 4 个。
+**commit**：同 4.1 拆 4 个（storyarc 跳过 store commit，因 ArcList 侧边栏只读无跨组件 state，按规则 10 不建 store）。
+
+**进度**：
+- [x] commit 1: useStoryArcs + useArcNodes + useMaxChapterNumber query + ArcList/ArcListView/StoryArcGraph 改造（删 useApp/useRefresh/load 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate）+ 中间件映射（queryErrorToast 补 storyarcs/arc-nodes/max-chapter）+ i18n 补 arcsLoadFailed/nodesLoadFailed/maxChapterLoadFailed + queryKeys.ts 改 arcNodeKeys.list(novelId) + 新增 maxChapterKeys + 00-conventions.md §1.2 同步
+- [ ] commit 2: useDeleteStoryArc + useDeleteArcNode mutation + 删除逻辑改 mutateAsync
+- [ ] commit 3: useCreate/UpdateStoryArc + useCreate/UpdateArcNode mutation（含 handleQuickNodeStatus 全量回传，§6）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh
 
 ---
 

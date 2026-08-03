@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Graph } from "@antv/g6";
 import {
   ArrowLeft,
@@ -9,13 +9,15 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
+import { useQueryClient } from "@tanstack/react-query";
 import { useGraphColors } from "@/components/graphColors";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
+import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
 import type { storyarc } from "@/hooks/useApp";
+import { useStoryArcs } from "./useStoryArcs";
+import { useArcNodes } from "./useArcNodes";
+import { useMaxChapterNumber } from "./useMaxChapterNumber";
 
 interface Props {
   novelId: number;
@@ -54,7 +56,7 @@ function centerOnChapter(
 }
 
 export default function StoryArcGraph({ novelId }: Props) {
-  const app = useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const C = useGraphColors();
   const { theme } = useTheme();
@@ -62,10 +64,20 @@ export default function StoryArcGraph({ novelId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
 
-  const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
-  const [allNodes, setAllNodes] = useState<storyarc.ArcNode[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.3.1: arcs/allNodes/maxChapter 走 query（与 ArcList / ArcListView 共享缓存）。
+  // 删原 useApp.GetStoryArcs/GetArcNodes/GetMaxChapterNumber + load() + useState；
+  // CRUD 后由 invalidateQueries 触发 refetch（commit 2/3 抽 mutation）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const arcsQuery = useStoryArcs(novelId);
+  const nodesQuery = useArcNodes(novelId);
+  const maxChQuery = useMaxChapterNumber(novelId);
+  const arcs = arcsQuery.data ?? [];
+  const allNodes = nodesQuery.data ?? [];
+  const loading = arcsQuery.isLoading || nodesQuery.isLoading;
+  // 4.3.1: loadFailed 只看 arcs（arcs 失败整图不可用）。
+  // nodes 失败时图仍渲染（空节点），nodes 错误 toast 由中间件弹，不阻塞图渲染。
+  const loadFailed = arcsQuery.isError;
+
   const [selectedNode, setSelectedNode] = useState<storyarc.ArcNode | null>(
     null,
   );
@@ -75,6 +87,13 @@ export default function StoryArcGraph({ novelId }: Props) {
   const [expanded, setExpanded] = useState(false);
   const [windowCenter, setWindowCenter] = useState(0);
   const [edgeCounts, setEdgeCounts] = useState({ left: 0, right: 0 });
+
+  // 4.3.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
+  // 只在 maxChapter 变化时设，不覆盖用户后续 shift 操作。
+  useEffect(() => {
+    const max = maxChQuery.data ?? 0;
+    if (max > 0) setWindowCenter(Math.max(1, max));
+  }, [maxChQuery.data]);
 
   const windowFrom = useMemo(
     () => Math.max(1, windowCenter - WINDOW),
@@ -99,38 +118,6 @@ export default function StoryArcGraph({ novelId }: Props) {
     totalChaptersRef.current = totalChapters;
     allNodesRef.current = allNodes;
   }, [totalChapters, allNodes]);
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setArcs([]);
-      setAllNodes([]);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [arcList, nodeList, maxCh] = await Promise.all([
-        app.GetStoryArcs(novelId),
-        app.GetArcNodes(novelId, 0, 0),
-        app.GetMaxChapterNumber(novelId),
-      ]);
-      setArcs(arcList ?? []);
-      const nodes = nodeList ?? [];
-      setAllNodes(nodes);
-
-      setWindowCenter(Math.max(1, maxCh));
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("storyarc.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   const nodesByArc = useMemo(() => {
     const map = new Map<number, storyarc.ArcNode[]>();
@@ -575,7 +562,12 @@ export default function StoryArcGraph({ novelId }: Props) {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={() => {
+              // 4.3.1: refresh 按钮 invalidate 三个 query（替代原 load()）。
+              queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
+              queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
+              queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+            }}
             className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title={t("storyarc.refresh")}
           >
@@ -789,7 +781,7 @@ export default function StoryArcGraph({ novelId }: Props) {
       ) : loadFailed ? (
         <div className="relative z-10 flex h-full items-center justify-center">
           <p className="text-xs text-destructive py-4">
-            {t("storyarc.loadFailed")}
+            {t("storyarc.arcsLoadFailed")}
           </p>
         </div>
       ) : arcs.length === 0 ? (

@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { GitBranch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
+import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
 import type { storyarc } from "@/hooks/useApp";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
 import { toastError } from "@/utils/toast";
@@ -12,6 +14,9 @@ import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { useStoryArcs } from "./useStoryArcs";
+import { useArcNodes } from "./useArcNodes";
+import { useMaxChapterNumber } from "./useMaxChapterNumber";
 
 interface Props {
   novelId: number;
@@ -84,15 +89,25 @@ const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
 export default function ArcListView({ novelId }: Props) {
   const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
   const app = useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { theme } = useTheme();
   const { bumpRefresh, refreshNonce } = useRefresh();
   const PALETTE = arcPalette(theme);
 
-  const [arcs, setArcs] = useState<storyarc.StoryArc[]>([]);
-  const [allNodes, setAllNodes] = useState<storyarc.ArcNode[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.3.1: arcs/allNodes/maxChapter 走 query（与 ArcList / StoryArcGraph 共享缓存）。
+  // 删原 useApp.GetStoryArcs/GetArcNodes/GetMaxChapterNumber + load() + useState；
+  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const arcsQuery = useStoryArcs(novelId);
+  const nodesQuery = useArcNodes(novelId);
+  const maxChQuery = useMaxChapterNumber(novelId);
+  const arcs = arcsQuery.data ?? [];
+  const allNodes = nodesQuery.data ?? [];
+  const loading = arcsQuery.isLoading || nodesQuery.isLoading;
+  // loadFailed 只看 arcs（arcs 失败整列表不可用）。nodes 失败时列表仍渲染（空节点）+ toast。
+  const loadFailed = arcsQuery.isError;
+
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [windowCenter, setWindowCenter] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
@@ -108,35 +123,21 @@ export default function ArcListView({ novelId }: Props) {
   } | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setArcs([]);
-      setAllNodes([]);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [arcList, nodeList, maxCh] = await Promise.all([
-        app.GetStoryArcs(novelId),
-        app.GetArcNodes(novelId, 0, 0),
-        app.GetMaxChapterNumber(novelId),
-      ]);
-      setArcs(arcList ?? []);
-      setAllNodes(nodeList ?? []);
-      setWindowCenter(Math.max(1, maxCh));
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("storyarc.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
+  // 4.3.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
+    const max = maxChQuery.data ?? 0;
+    if (max > 0) setWindowCenter(Math.max(1, max));
+  }, [maxChQuery.data]);
+
+  // 4.3.1: refreshNonce 变化时 invalidate 三个 query（替代原 load()）。
+  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
+  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
+  useEffect(() => {
+    if (!refreshNonce) return;
+    queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
+    queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
+    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+  }, [refreshNonce, queryClient, novelId]);
 
   useEffect(() => {
     if (focusArcId && focusArcId > 0 && allNodes.length > 0) {
@@ -239,7 +240,6 @@ export default function ArcListView({ novelId }: Props) {
     try {
       await app.CreateStoryArc(novelId, arcForm);
       setEditMode(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.createArcFailed") + ": " + toErrorMessage(err));
@@ -255,7 +255,6 @@ export default function ArcListView({ novelId }: Props) {
     try {
       await app.UpdateStoryArc(novelId, editMode.arc.id, arcForm);
       setEditMode(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.updateArcFailed") + ": " + toErrorMessage(err));
@@ -307,7 +306,7 @@ export default function ArcListView({ novelId }: Props) {
     try {
       const created = await app.CreateArcNode(novelId, nodeForm);
       setEditMode(null);
-      await load();
+      // 4.3.1: load() 已删，CRUD 后由 bumpRefresh → invalidateQueries 刷新。
       setExpandedId(created.id);
       bumpRefresh();
     } catch (err) {
@@ -329,7 +328,7 @@ export default function ArcListView({ novelId }: Props) {
     try {
       await app.UpdateArcNode(novelId, nodeId, nodeForm);
       setEditMode(null);
-      await load();
+      // 4.3.1: load() 已删，CRUD 后由 bumpRefresh → invalidateQueries 刷新。
       setExpandedId(nodeId);
       bumpRefresh();
     } catch (err) {
@@ -356,7 +355,6 @@ export default function ArcListView({ novelId }: Props) {
         setExpandedId(null);
       }
       setDeleteTarget(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       const key =
@@ -377,7 +375,6 @@ export default function ArcListView({ novelId }: Props) {
     setSaving(true);
     try {
       await app.UpdateArcNode(novelId, node.id, { status: newStatus });
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(
@@ -708,7 +705,12 @@ export default function ArcListView({ novelId }: Props) {
                   · {t("storyarc.totalChapters", { count: maxChapter })}
                 </span>
                 <button
-                  onClick={load}
+                  onClick={() => {
+                    // 4.3.1: refresh 按钮 invalidate 三个 query（替代原 load()）。
+                    queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
+                    queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
+                    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+                  }}
                   className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                   {t("storyarc.refresh")}
@@ -892,7 +894,7 @@ export default function ArcListView({ novelId }: Props) {
             {/* Node list */}
             {loadFailed ? (
               <p className="text-xs text-destructive py-4">
-                {t("storyarc.loadFailed")}
+                {t("storyarc.arcsLoadFailed")}
               </p>
             ) : grouped.length === 0 ? (
               <div className="text-center py-12">

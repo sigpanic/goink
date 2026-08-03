@@ -21,7 +21,8 @@
 ["locations", novelId]
 ["location-relations", novelId]
 ["storyarcs", novelId]
-["arc-nodes", arcId]          子资源用父 id
+["arc-nodes", novelId]         全量（后端 GetArcNodes(novelId, fromChapter, toChapter) 第二三参数是章节窗口非 arcId，无按 arcId 拉取的 API）
+["max-chapter", novelId]       storyarc 章节窗口中心 windowCenter 用
 ["timeline", novelId]
 ["reader", novelId]
 ["preferences", novelId]
