@@ -425,6 +425,8 @@
     "relationGraph": "关系图",
     "loading": "加载中...",
     "loadFailed": "加载失败",
+    "locationsLoadFailed": "地点加载失败",
+    "relationsLoadFailed": "关系加载失败",
     "place": "处",
     "refresh": "刷新",
     "newLocation": "新建地点",

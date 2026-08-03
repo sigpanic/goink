@@ -1,11 +1,13 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
+import { useQueryClient } from "@tanstack/react-query";
 import type { location } from "@/hooks/useApp";
+import { useLocations } from "./useLocations";
+import { locationKeys } from "@/lib/queryKeys";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface TreeNode {
@@ -39,25 +41,14 @@ function buildTree(locations: location.Location[]): TreeNode[] {
 export default function LocationList({ novelId }: Props) {
   const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce, bumpRefresh } = useRefresh();
+  const queryClient = useQueryClient();
+  // 4.2.1: locations 走 useLocations query（与 LocationListView / LocationGraph 共享缓存）。
+  // 删原 useState<location[]> + load() + useEffect + useRefresh；CRUD 后由 invalidateQueries 触发 refetch。
+  const { data: locations = [] } = useLocations(novelId);
 
-  const [locations, setLocations] = useState<location.Location[]>([]);
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setLocations([]);
-      return;
-    }
-    const list = await app.GetLocations(novelId);
-    setLocations(list ?? []);
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   function handleDelete(locId: number) {
     setDeleteTarget(locId);
@@ -69,8 +60,11 @@ export default function LocationList({ novelId }: Props) {
     try {
       await app.DeleteLocation(novelId, deleteTarget);
       setDeleteTarget(null);
-      await load();
-      bumpRefresh();
+      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
+      // （LocationListView / LocationGraph 同步）。
+      await queryClient.invalidateQueries({
+        queryKey: locationKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -116,7 +110,7 @@ export default function LocationList({ novelId }: Props) {
           ) : (
             <span className="w-3.5 shrink-0" />
           )}
-          <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
           <span className="flex-1 text-sm truncate">{loc.name}</span>
           {loc.location_type && (
             <span className="text-[10px] text-muted-foreground/60 shrink-0">

@@ -17,13 +17,13 @@
 6. **禁止功能/实现降级**。重构不得静默简化、跳过边界 case 或丢弃特性；遇到降级压力（实现复杂、风险高、卡壳）必须与用户商讨，不得自行决定降级。
 7. **迁移过程 UI/UX 完全不变**。重构不得借机重写 UI 导致视觉大变样或丢失细微交互（hover/focus/快捷键/过渡动画/边界态提示等）。本计划只搬代码、不改呈现。若某步发现不得不变动 UI/UX（如旧实现依赖被破坏），必须立刻汇报用户商讨，不得自行决定变更。手测点以「与重构前完全一致」为验收标准。
 8. **禁止丢失错误处理 / 降级错误展示**。重构严禁以任何方式弱化或丢弃错误处理：
-   - **不得丢失错误副作用**：手动 fetch 迁移到 `useQuery` / `useMutation` 时，必须把原 `catch` 块的副作用（`toastError` / `console.error` / 上报等）搬到 `useEffect` 监听 `query.error`（v5 query 无 `onError` 回调；mutation 仍可用 `onError`）。query 把错误吞进 `error` 字段后不会自动触发副作用，漏挂 useEffect 即等于静默丢错误。
+   - **不得丢失错误副作用**：**仅 `useQuery`（GET 查询）的错误走全局中间件**（`queryErrorToast.ts` 通过 `QueryCache.subscribe` 监听，按 queryKey 前缀查 `QUERY_ERROR_I18N` 映射表 → `toastError("<label>: <err.message>")` + `console.error`），组件**不需挂 `useEffect` 监听 `query.error`**。新增领域 query 时必须在中间件映射表补对应前缀 → i18n key，漏配会 fallback 到 `${prefix}.loadFailed` 或 `${prefix} load failed`（不静默，但文案可能不准）。**以下错误不接入中间件，仍各自处理**：mutation（POST/PUT/DELETE）错误由调用方 `try/catch + toastError` 处理（mutation 只挂 `onSuccess` 失效缓存，不挂 `onError`；`mutateAsync` 抛错由 handler 的 try/catch 接住，参考 character 的 [useCreateCharacter](file:///home/nianhe/projects/goink/frontend/src/components/character/useCreateCharacter.ts) / [useDeleteCharacter](file:///home/nianhe/projects/goink/frontend/src/components/character/useDeleteCharacter.ts)）；命令操作（approve/reject/import 等）走 `try/catch + toastError`；表单校验（如「请输入名称」）保留组件级 `toastError`。中间件只订阅 `QueryCache`，不订阅 `MutationCache`。详见 [04a-query-error-toast.md](./04a-query-error-toast.md)。
    - **不得改变错误展示方式**：原 `toast` + UI 文本双重提示的，迁移后必须双重提示都在；原带具体 `err.message` 的，迁移后必须仍显示具体消息，不得改成只显示固定文案。
    - **数据加载失败时 UI 正常渲染**：失败状态仅作用在「数据显示处」（如 list 区 / graph 容器区），header / 控件按钮 / 浮窗 / 图例等周边 UI 必须正常渲染。严禁整屏只渲染一个「加载失败」文本，导致周边交互入口丢失。
    - **降级压力测试**：每步 query/mutation 化完成后，必须自检「错误路径是否完整保留原行为」——toast 是否仍弹、UI 是否仍显示、错误消息是否仍具体。发现降级立即修，禁止「等下个步骤再补」。
 9. **错误提示原则（toast + UI）**。任何抛到前端的错误必须以合理方式让用户看到原因，不得静默：
    - **不静默**：错误必须至少有一种用户可见的反馈（toast 或 UI 显示），不允许只 `console.error` 把错误埋在 dev 工具里。
-   - **不重复**：同一错误事件只触发一次 toast，避免重复弹窗骚扰。query/mutation 场景靠 `useEffect` 监听 `error` 引用变化触发（TanStack Query error 引用稳定，fetch 失败后不变，useEffect 只触发一次）；其他场景靠 `try/catch` 单次触发。
+   - **不重复**：同一错误事件只触发一次 toast，避免重复弹窗骚扰。query 错误由全局中间件在 `QueryCache.subscribe` 层 fire（subscribe 是 query 级 callback，多组件订阅同 queryKey 也只 fire 1 次；retry 期间不 fire；组件卸载无 observer 时静默，避免用户在别的页面突然看到已离开页面的报错）；mutation 错误靠调用方 `try/catch` 单次触发（`mutateAsync` 抛错）。
    - **灵活配合**：toast + UI 文本双重、只 toast、只 UI 文本都行，按场景选：
      - 数据列表加载失败：UI 显示「加载失败」文本 + toast 显示具体 `err.message`（双重提示，列表区不挤占）
      - 命令操作失败（CRUD/approve/reject 等）：toast 显示 `xxxFailed: err.message`（操作本身无固定 UI 区，toast 即可）

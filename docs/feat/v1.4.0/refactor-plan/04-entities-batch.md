@@ -64,6 +64,12 @@
 
 **commit**：同 4.1 拆 4 个。
 
+**进度**：
+- [x] commit 1: useLocations + useLocationRelations query + LocationListView/LocationGraph/LocationList 改造 + 测试适配 + 中间件映射（queryErrorToast 补 locations/location-relations）+ i18n 补 locationsLoadFailed/relationsLoadFailed
+- [ ] commit 2: useLocationStore
+- [ ] commit 3: useCreate/Update/DeleteLocation mutation
+- [ ] commit 4: LocationDialogs 抽出
+
 ---
 
 ## 4.3 storyarc

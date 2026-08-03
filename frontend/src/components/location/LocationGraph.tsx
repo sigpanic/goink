@@ -2,11 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Graph, treeToGraphData } from "@antv/g6";
 import { LocateFixed, Map as MapIcon, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
 import { useGraphColors } from "@/components/graphColors";
 import type { location } from "@/hooks/useApp";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
+import { useLocations } from "./useLocations";
+import { useLocationRelations } from "./useLocationRelations";
 
 interface Props {
   novelId: number;
@@ -50,47 +49,35 @@ function buildTreeData(locs: location.Location[]) {
 }
 
 export default function LocationGraph({ novelId, focusId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
   const C = useGraphColors();
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);
 
-  const [locations, setLocations] = useState<location.Location[]>([]);
-  const [relations, setRelations] = useState<location.LocationRelation[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.2.1: locations + relations 走两个独立 query（参考 CharacterGraph）。
+  // 与 LocationListView / LocationList 共享 locations 缓存（同 queryKey）。
+  // 删除原 useState + useEffect + Promise.all 链路；
+  // CRUD 后由 mutation 的 invalidateQueries 同步（4.2.2 抽 mutation）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不挂 useEffect。
+  const locsQuery = useLocations(novelId);
+  const relsQuery = useLocationRelations(novelId);
+  const locations = locsQuery.data ?? [];
+  const relations = relsQuery.data ?? [];
+  const locationsLoading = locsQuery.isLoading;
+  const relsLoading = relsQuery.isLoading;
+  const locationsError = locsQuery.isError;
+  const relationsError = relsQuery.isError;
+  // loading 合成：两个 query 任一在拉时整体显示 loading（同时拉难以独立区分）。
+  const loading = locationsLoading || relsLoading;
+
   const [selectedLocation, setSelectedLocation] =
     useState<location.Location | null>(null);
   const [expanded, setExpanded] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setLocations([]);
-      setRelations([]);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [locList, relList] = await Promise.all([
-        app.GetLocations(novelId),
-        app.GetLocationRelations(novelId),
-      ]);
-      setLocations(locList ?? []);
-      setRelations(relList ?? []);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("location.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const refresh = useCallback(() => {
+    locsQuery.refetch();
+    relsQuery.refetch();
+  }, [locsQuery, relsQuery]);
 
   useEffect(() => {
     if (focusId && focusId > 0 && locations.length > 0) {
@@ -286,7 +273,7 @@ export default function LocationGraph({ novelId, focusId }: Props) {
           </button>
           <button
             type="button"
-            onClick={load}
+            onClick={refresh}
             className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title={t("location.refresh")}
           >
@@ -411,15 +398,25 @@ export default function LocationGraph({ novelId, focusId }: Props) {
           );
         })()}
 
-      {loading ? (
-        <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
-          {t("location.loading")}
-        </div>
-      ) : loadFailed ? (
+      {/* 4.2.1: 独立 loading/error 分支（方式 B，参考 CharacterGraph）。
+          - loading 合成：两 query 任一在拉即整体 loading（同时拉难独立区分）
+          - error 独立：locationsError / relationsError 分别显示对应失败信息，便于定位错误来源
+          - toast 由全局中间件接管（queryErrorToast.ts），此处只负责 UI 显示 */}
+      {locationsError ? (
         <div className="relative z-10 flex h-full items-center justify-center">
           <p className="text-xs text-destructive py-4">
-            {t("location.loadFailed")}
+            {t("location.locationsLoadFailed")}
           </p>
+        </div>
+      ) : relationsError ? (
+        <div className="relative z-10 flex h-full items-center justify-center">
+          <p className="text-xs text-destructive py-4">
+            {t("location.relationsLoadFailed")}
+          </p>
+        </div>
+      ) : loading ? (
+        <div className="relative z-10 flex h-full items-center justify-center text-sm text-muted-foreground">
+          {t("location.loading")}
         </div>
       ) : locations.length === 0 ? (
         <div className="relative z-10 flex h-full items-center justify-center">

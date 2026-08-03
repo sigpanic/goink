@@ -441,6 +441,8 @@
     "relationGraph": "Relation Graph",
     "loading": "Loading...",
     "loadFailed": "Load failed",
+    "locationsLoadFailed": "Location load failed",
+    "relationsLoadFailed": "Relation load failed",
     "place": "places",
     "refresh": "Refresh",
     "newLocation": "New Location",

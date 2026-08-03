@@ -13,8 +13,8 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "character-relations": "character.relationsLoadFailed",
   novels: "novel.loadFailed",
   // 后续领域 query 化时补：
-  // locations: "location.loadFailed",
-  // "location-relations": "location.relationsLoadFailed",
+  locations: "location.locationsLoadFailed",
+  "location-relations": "location.relationsLoadFailed",
   // storyarcs: "storyarc.loadFailed",
   // "arc-nodes": "storyarc.nodesLoadFailed",
   // timeline: "timeline.loadFailed",

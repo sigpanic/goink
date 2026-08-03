@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ChevronRight, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
 import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -11,6 +11,8 @@ import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { locationKeys } from "@/lib/queryKeys";
+import { useLocations } from "./useLocations";
 
 interface Props {
   novelId: number;
@@ -48,41 +50,21 @@ export default function LocationListView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.locations ?? 0);
   const app = useApp();
   const { t } = useTranslation();
-  const { bumpRefresh, refreshNonce } = useRefresh();
+  const queryClient = useQueryClient();
+  // 4.2.1: locations 走 useLocations query（与 LocationList / LocationGraph 共享缓存）。
+  // 删原 useState<locations[]> + load() + useEffect + useRefresh；CRUD 后由 invalidateQueries 触发 refetch。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const locsQuery = useLocations(novelId);
+  const locations = locsQuery.data ?? [];
+  const loading = locsQuery.isLoading;
+  const loadFailed = locsQuery.isError;
 
-  const [locations, setLocations] = useState<location.Location[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setLocations([]);
-      setLoadFailed(false);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const list = await app.GetLocations(novelId);
-      setLocations(list ?? []);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("location.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   const nameMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -209,8 +191,11 @@ export default function LocationListView({ novelId }: Props) {
     try {
       await app.CreateLocation(novelId, buildPayload());
       setEditMode(null);
-      await load();
-      bumpRefresh();
+      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
+      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
+      await queryClient.invalidateQueries({
+        queryKey: locationKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("location.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -229,8 +214,11 @@ export default function LocationListView({ novelId }: Props) {
     try {
       await app.UpdateLocation(novelId, editMode.item.id, buildPayload());
       setEditMode(null);
-      await load();
-      bumpRefresh();
+      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
+      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
+      await queryClient.invalidateQueries({
+        queryKey: locationKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("location.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -249,8 +237,11 @@ export default function LocationListView({ novelId }: Props) {
     try {
       await app.DeleteLocation(novelId, deleteTarget);
       setDeleteTarget(null);
-      await load();
-      bumpRefresh();
+      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
+      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
+      await queryClient.invalidateQueries({
+        queryKey: locationKeys.list(novelId),
+      });
     } catch (err) {
       toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -429,7 +420,11 @@ export default function LocationListView({ novelId }: Props) {
               </div>
               <div className="flex items-center gap-2">
                 <button
-                  onClick={load}
+                  onClick={() =>
+                    queryClient.invalidateQueries({
+                      queryKey: locationKeys.list(novelId),
+                    })
+                  }
                   className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {t("location.refresh")}
