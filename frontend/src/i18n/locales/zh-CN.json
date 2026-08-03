@@ -417,7 +417,7 @@
   },
   "location": {
     "location": "地点",
-    "confirmDeleteWithChildren": "确定要删除该地点吗？子地点将变为根节点，关联的空间关系也会被删除。",
+    "confirmDeleteLocation": "确定要删除该地点吗？子地点将变为根节点，关联的空间关系也会被删除。此操作不可撤销。",
     "noLocations": "暂无地点",
     "delete": "删除",
     "list": "列表",
@@ -444,7 +444,6 @@
     "pleaseEnterName": "请输入地点名称",
     "createFailed": "创建失败",
     "updateFailed": "更新失败",
-    "confirmDeleteIrreversible": "确定要删除该地点吗？子地点的父级将被清空，关联的空间关系也会被删除。此操作不可撤销。",
     "deleteFailed": "删除失败",
     "addSubLocation": "添加子地点",
     "relationGraphTitle": "地点关系图",

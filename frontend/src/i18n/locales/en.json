@@ -433,7 +433,7 @@
   },
   "location": {
     "location": "Location",
-    "confirmDeleteWithChildren": "Are you sure you want to delete this location? Child locations will become root nodes, associated spatial relations will also be deleted.",
+    "confirmDeleteLocation": "Are you sure you want to delete this location? Child locations will become root nodes, associated spatial relations will also be deleted. This action cannot be undone.",
     "noLocations": "No locations yet",
     "delete": "Delete",
     "list": "List",
@@ -460,7 +460,6 @@
     "pleaseEnterName": "Please enter location name",
     "createFailed": "Create failed",
     "updateFailed": "Update failed",
-    "confirmDeleteIrreversible": "Are you sure you want to delete this location? Children's parent will be cleared, associated spatial relations will also be deleted. This action cannot be undone.",
     "deleteFailed": "Delete failed",
     "addSubLocation": "Add Sub-location",
     "relationGraphTitle": "Location Relation Graph",

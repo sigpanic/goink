@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
-import { useApp } from "@/hooks/useApp";
-import { useQueryClient } from "@tanstack/react-query";
 import type { location } from "@/hooks/useApp";
 import { useLocations } from "./useLocations";
-import { locationKeys } from "@/lib/queryKeys";
-import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useLocationStore } from "./useLocationStore";
 
 interface TreeNode {
   location: location.Location;
@@ -39,40 +34,18 @@ function buildTree(locations: location.Location[]): TreeNode[] {
 }
 
 export default function LocationList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   // 4.2.1: locations 走 useLocations query（与 LocationListView / LocationGraph 共享缓存）。
   // 删原 useState<location[]> + load() + useEffect + useRefresh；CRUD 后由 invalidateQueries 触发 refetch。
   // isError 内连显示加载失败（toast 由全局中间件接管）。
   const { data: locations = [], isError } = useLocations(novelId);
+  // 4.2.2: 删除合并 —— 点删除只 dispatch setDeletingLocationId，
+  // ConfirmDialog + 执行集中在 LocationListView（唯一确认入口，两处共用）。
+  const setDeletingLocationId = useLocationStore(
+    (s) => s.setDeletingLocationId,
+  );
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  function handleDelete(locId: number) {
-    setDeleteTarget(locId);
-  }
-
-  async function confirmDelete() {
-    if (deleteTarget === null) return;
-    setDeleting(true);
-    try {
-      await app.DeleteLocation(novelId, deleteTarget);
-      setDeleteTarget(null);
-      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
-      // （LocationListView / LocationGraph 同步）。
-      await queryClient.invalidateQueries({
-        queryKey: locationKeys.list(novelId),
-      });
-    } catch (err) {
-      toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setDeleting(false);
-    }
-  }
 
   useEffect(() => {
     // 默认展开根节点
@@ -89,6 +62,10 @@ export default function LocationList({ novelId }: Props) {
       else next.add(id);
       return next;
     });
+  }
+
+  function handleDelete(locId: number) {
+    setDeletingLocationId(locId);
   }
 
   function renderNode(node: TreeNode, depth: number) {
@@ -163,17 +140,6 @@ export default function LocationList({ novelId }: Props) {
           tree.map((node) => renderNode(node, 0))
         )}
       </div>
-
-      <ConfirmDialog
-        open={deleteTarget !== null}
-        title={t("common.confirmDelete")}
-        message={t("location.confirmDeleteWithChildren")}
-        danger
-        loading={deleting}
-        confirmText={t("common.delete")}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={confirmDelete}
-      />
     </>
   );
 }

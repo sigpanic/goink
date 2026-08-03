@@ -13,6 +13,8 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { locationKeys } from "@/lib/queryKeys";
 import { useLocations } from "./useLocations";
+import { useLocationStore } from "./useLocationStore";
+import { useDeleteLocation } from "./useDeleteLocation";
 
 interface Props {
   novelId: number;
@@ -63,8 +65,14 @@ export default function LocationListView({ novelId }: Props) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
-  const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // 4.2.2: create/update 走 useApp（commit 3 再 mutation 化）；delete 走 useDeleteLocation mutation。
+  // deleting 由 deleteMutation.isPending 推导（不再用 useState）。
+  // 删除合并：deletingLocationId 走 useLocationStore，LocationList 侧边栏 dispatch 同一 store。
+  const deleteMutation = useDeleteLocation(novelId);
+  const deletingLocationId = useLocationStore((s) => s.deletingLocationId);
+  const setDeletingLocationId = useLocationStore(
+    (s) => s.setDeletingLocationId,
+  );
 
   const nameMap = useMemo(() => {
     const m = new Map<number, string>();
@@ -228,25 +236,19 @@ export default function LocationListView({ novelId }: Props) {
   }
 
   function handleDelete(locId: number) {
-    setDeleteTarget(locId);
+    setDeletingLocationId(locId);
   }
 
+  // 4.2.2: delete 走 useDeleteLocation mutation（onSuccess 失效 list + relations，
+  // 后端 DeleteLocation 事务级联删 LocationRelation，两个缓存都要刷）。
   async function confirmDelete() {
-    if (deleteTarget === null) return;
-    setDeleting(true);
+    if (deletingLocationId === null) return;
     try {
-      await app.DeleteLocation(novelId, deleteTarget);
-      setDeleteTarget(null);
-      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
-      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
-      await queryClient.invalidateQueries({
-        queryKey: locationKeys.list(novelId),
-      });
+      await deleteMutation.mutateAsync(deletingLocationId);
+      setDeletingLocationId(null);
     } catch (err) {
       toastError(t("location.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 
@@ -596,13 +598,13 @@ export default function LocationListView({ novelId }: Props) {
       )}
 
       <ConfirmDialog
-        open={deleteTarget !== null}
+        open={deletingLocationId !== null}
         title={t("common.confirmDelete")}
-        message={t("location.confirmDeleteIrreversible")}
+        message={t("location.confirmDeleteLocation")}
         danger
-        loading={deleting}
+        loading={deleteMutation.isPending}
         confirmText={t("common.delete")}
-        onClose={() => setDeleteTarget(null)}
+        onClose={() => setDeletingLocationId(null)}
         onConfirm={confirmDelete}
       />
     </main>
