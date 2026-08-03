@@ -378,7 +378,7 @@
   "character": {
     "character": "角色",
     "searchCharacter": "搜索角色...",
-    "confirmDeleteWithRelation": "确定要删除该角色吗？关联的关系记录也会被删除。",
+    "confirmDeleteWithRelation": "确定要删除该角色吗？关联的关系记录也会被删除。此操作不可撤销。",
     "noMatchingCharacters": "无匹配角色",
     "noCharacters": "暂无角色",
     "delete": "删除",
@@ -402,7 +402,6 @@
     "pleaseEnterName": "请输入角色名称",
     "createFailed": "创建失败",
     "updateFailed": "更新失败",
-    "confirmDeleteIrreversible": "确定要删除该角色吗？关联的所有关系记录也会被删除。此操作不可撤销。",
     "deleteFailed": "删除失败",
     "relationGraphTitle": "角色关系图",
     "characterCount": "{{count}} 个角色",

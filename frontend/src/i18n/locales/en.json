@@ -391,7 +391,7 @@
   "character": {
     "character": "Character",
     "searchCharacter": "Search characters...",
-    "confirmDeleteWithRelation": "Are you sure you want to delete this character? Associated relations will also be deleted.",
+    "confirmDeleteWithRelation": "Are you sure you want to delete this character? Associated relations will also be deleted. This action cannot be undone.",
     "noMatchingCharacters": "No matching characters",
     "noCharacters": "No characters yet",
     "delete": "Delete",
@@ -415,7 +415,6 @@
     "pleaseEnterName": "Please enter character name",
     "createFailed": "Create failed",
     "updateFailed": "Update failed",
-    "confirmDeleteIrreversible": "Are you sure you want to delete this character? All associated relations will also be deleted. This action cannot be undone.",
     "deleteFailed": "Delete failed",
     "relationGraphTitle": "Character Relation Graph",
     "characterCount_one": "{{count}} character",
