@@ -17,6 +17,8 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { useStoryArcs } from "./useStoryArcs";
 import { useArcNodes } from "./useArcNodes";
 import { useMaxChapterNumber } from "./useMaxChapterNumber";
+import { useDeleteStoryArc } from "./useDeleteStoryArc";
+import { useDeleteArcNode } from "./useDeleteArcNode";
 
 interface Props {
   novelId: number;
@@ -108,6 +110,12 @@ export default function ArcListView({ novelId }: Props) {
   // loadFailed 只看 arcs（arcs 失败整列表不可用）。nodes 失败时列表仍渲染（空节点）+ toast。
   const loadFailed = arcsQuery.isError;
 
+  // 4.3.2: delete 走 mutation，deleting 由 mutation.isPending 推导（不再用 useState）。
+  // onSuccess 失效对应 query（删 arc 失效 storyarcs + arc-nodes；删 node 失效 arc-nodes）。
+  const deleteArcMutation = useDeleteStoryArc(novelId);
+  const deleteNodeMutation = useDeleteArcNode(novelId);
+  const deleting = deleteArcMutation.isPending || deleteNodeMutation.isPending;
+
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [windowCenter, setWindowCenter] = useState(0);
   const [filter, setFilter] = useState<Filter>("all");
@@ -121,7 +129,6 @@ export default function ArcListView({ novelId }: Props) {
     kind: "arc" | "node";
     id: number;
   } | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // 4.3.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
@@ -345,17 +352,15 @@ export default function ArcListView({ novelId }: Props) {
 
   async function confirmDelete() {
     if (!deleteTarget) return;
-    setDeleting(true);
+    // 4.3.2: delete 走 mutation（onSuccess 失效对应 query），删 setDeleting + bumpRefresh。
     try {
       if (deleteTarget.kind === "arc") {
-        await app.DeleteStoryArc(novelId, deleteTarget.id);
-        setExpandedId(null);
+        await deleteArcMutation.mutateAsync(deleteTarget.id);
       } else {
-        await app.DeleteArcNode(novelId, deleteTarget.id);
-        setExpandedId(null);
+        await deleteNodeMutation.mutateAsync(deleteTarget.id);
       }
+      setExpandedId(null);
       setDeleteTarget(null);
-      bumpRefresh();
     } catch (err) {
       const key =
         deleteTarget.kind === "arc"
@@ -363,8 +368,6 @@ export default function ArcListView({ novelId }: Props) {
           : "storyarc.deleteNodeFailed";
       toastError(t(key) + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 

@@ -87,7 +87,7 @@
 
 **进度**：
 - [x] commit 1: useStoryArcs + useArcNodes + useMaxChapterNumber query + ArcList/ArcListView/StoryArcGraph 改造（删 useApp/useRefresh/load 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate）+ 中间件映射（queryErrorToast 补 storyarcs/arc-nodes/max-chapter）+ i18n 补 arcsLoadFailed/nodesLoadFailed/maxChapterLoadFailed + queryKeys.ts 改 arcNodeKeys.list(novelId) + 新增 maxChapterKeys + 00-conventions.md §1.2 同步
-- [ ] commit 2: useDeleteStoryArc + useDeleteArcNode mutation + 删除逻辑改 mutateAsync
+- [x] commit 2: useDeleteStoryArc + useDeleteArcNode mutation + confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效对应 query：删 arc 失效 storyarcs + arc-nodes，删 node 失效 arc-nodes）
 - [ ] commit 3: useCreate/UpdateStoryArc + useCreate/UpdateArcNode mutation（含 handleQuickNodeStatus 全量回传，§6）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh
 
 ---
