@@ -53,6 +53,18 @@ describe("CharacterList", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows charsLoadFailed when isError", async () => {
+    mockUseCharacters.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+    });
+    render(<CharacterList novelId={1} />);
+    expect(
+      await screen.findByText("character.charsLoadFailed"),
+    ).toBeInTheDocument();
+  });
+
   it("displays character list", async () => {
     mockUseCharacters.mockReturnValue({
       data: [

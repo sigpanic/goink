@@ -63,6 +63,18 @@ describe("LocationList", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows locationsLoadFailed when isError", async () => {
+    mockUseLocations.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+    });
+    render(<LocationList novelId={1} />);
+    expect(
+      await screen.findByText("location.locationsLoadFailed"),
+    ).toBeInTheDocument();
+  });
+
   it("displays location tree", async () => {
     mockUseLocations.mockReturnValue({
       data: [

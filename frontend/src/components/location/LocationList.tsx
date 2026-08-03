@@ -44,7 +44,8 @@ export default function LocationList({ novelId }: Props) {
   const queryClient = useQueryClient();
   // 4.2.1: locations 走 useLocations query（与 LocationListView / LocationGraph 共享缓存）。
   // 删原 useState<location[]> + load() + useEffect + useRefresh；CRUD 后由 invalidateQueries 触发 refetch。
-  const { data: locations = [] } = useLocations(novelId);
+  // isError 内连显示加载失败（toast 由全局中间件接管）。
+  const { data: locations = [], isError } = useLocations(novelId);
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
@@ -146,7 +147,13 @@ export default function LocationList({ novelId }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {tree.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("location.locationsLoadFailed")}
+            </p>
+          </div>
+        ) : tree.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {t("location.noLocations")}

@@ -12,7 +12,7 @@ export default function CharacterList({ novelId }: Props) {
   const { t } = useTranslation();
   // 4.1.1: characters 数据走 useCharacters query，跨组件共享缓存（CharacterListView / CharacterGraph 同源）。
   // 删除原 useState<characters> + useEffect + useRefresh 链路；CRUD 后由 invalidateQueries 触发自动 refetch。
-  const { data: characters = [] } = useCharacters(novelId);
+  const { data: characters = [], isError } = useCharacters(novelId);
   // 4.1.2: 删除合并 —— 点删除只 dispatch setDeletingCharacterId，
   // ConfirmDialog + 执行集中在 CharacterListView（唯一确认入口，两处共用）。
   const setDeletingCharacterId = useCharacterStore(
@@ -52,7 +52,13 @@ export default function CharacterList({ novelId }: Props) {
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {filtered.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("character.charsLoadFailed")}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {search
