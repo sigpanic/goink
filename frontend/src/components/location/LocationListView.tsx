@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { ChevronRight, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
 import type { location } from "@/hooks/useApp";
 import LocationGraph from "@/components/location/LocationGraph";
 import TagInput from "@/components/shared/TagInput";
@@ -15,6 +14,8 @@ import { locationKeys } from "@/lib/queryKeys";
 import { useLocations } from "./useLocations";
 import { useLocationStore } from "./useLocationStore";
 import { useDeleteLocation } from "./useDeleteLocation";
+import { useCreateLocation } from "./useCreateLocation";
+import { useUpdateLocation } from "./useUpdateLocation";
 
 interface Props {
   novelId: number;
@@ -50,7 +51,6 @@ function safeJson<T>(json: string, fallback: T): T {
 
 export default function LocationListView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.locations ?? 0);
-  const app = useApp();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   // 4.2.1: locations 走 useLocations query（与 LocationList / LocationGraph 共享缓存）。
@@ -64,11 +64,13 @@ export default function LocationListView({ novelId }: Props) {
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
-  // 4.2.2: create/update 走 useApp（commit 3 再 mutation 化）；delete 走 useDeleteLocation mutation。
-  // deleting 由 deleteMutation.isPending 推导（不再用 useState）。
+  // 4.2.2: create/update/delete 走 mutation，saving 由 mutation.isPending 推导（不再用 useState）。
+  // create/update 共用 saving（同一时刻只可能开一个编辑表单）；delete 用 deleteMutation.isPending。
   // 删除合并：deletingLocationId 走 useLocationStore，LocationList 侧边栏 dispatch 同一 store。
+  const createMutation = useCreateLocation(novelId);
+  const updateMutation = useUpdateLocation(novelId);
   const deleteMutation = useDeleteLocation(novelId);
+  const saving = createMutation.isPending || updateMutation.isPending;
   const deletingLocationId = useLocationStore((s) => s.deletingLocationId);
   const setDeletingLocationId = useLocationStore(
     (s) => s.setDeletingLocationId,
@@ -195,20 +197,13 @@ export default function LocationListView({ novelId }: Props) {
       toastError(t("location.pleaseEnterName"));
       return;
     }
-    setSaving(true);
+    // 4.2.2: create 走 mutation，onSuccess 失效 list；setEditMode + 错误 toast 留 handler。
     try {
-      await app.CreateLocation(novelId, buildPayload());
+      await createMutation.mutateAsync(buildPayload());
       setEditMode(null);
-      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
-      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
-      await queryClient.invalidateQueries({
-        queryKey: locationKeys.list(novelId),
-      });
     } catch (err) {
       toastError(t("location.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -218,20 +213,16 @@ export default function LocationListView({ novelId }: Props) {
       toastError(t("location.pleaseEnterName"));
       return;
     }
-    setSaving(true);
+    // 4.2.2: update 走 mutation，onSuccess 失效 list；setEditMode + 错误 toast 留 handler。
     try {
-      await app.UpdateLocation(novelId, editMode.item.id, buildPayload());
-      setEditMode(null);
-      // 4.2.1: 失效 locationKeys.list(novelId) → 触发所有订阅 useLocations 的组件 refetch
-      // （LocationList / LocationGraph 同步）。mutation 化留 commit 3。
-      await queryClient.invalidateQueries({
-        queryKey: locationKeys.list(novelId),
+      await updateMutation.mutateAsync({
+        id: editMode.item.id,
+        input: buildPayload(),
       });
+      setEditMode(null);
     } catch (err) {
       toastError(t("location.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 

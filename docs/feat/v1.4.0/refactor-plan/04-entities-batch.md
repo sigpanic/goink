@@ -66,8 +66,9 @@
 
 **进度**：
 - [x] commit 1: useLocations + useLocationRelations query + LocationListView/LocationGraph/LocationList 改造 + 测试适配 + 中间件映射（queryErrorToast 补 locations/location-relations）+ i18n 补 locationsLoadFailed/relationsLoadFailed
-- [ ] commit 2: useLocationStore
-- [ ] commit 3: useCreate/Update/DeleteLocation mutation
+- [x] commit 1.5: LocationList/CharacterList 侧边栏加 isError 内连错误显示（commit 1 漏补）
+- [x] commit 2: useLocationStore + useDeleteLocation mutation + 删除合并（LocationList 侧边栏 dispatch store，LocationListView 集中 ConfirmDialog）+ i18n 文案融合（新建 confirmDeleteLocation，删 confirmDeleteWithChildren/confirmDeleteIrreversible，含 character 块清理 ee13b0b）
+- [x] commit 3: useCreate/UpdateLocation mutation（handleCreate/handleUpdate 改 mutateAsync，saving 由 mutation.isPending 推导，删 useApp + setSaving useState）
 - [ ] commit 4: LocationDialogs 抽出
 
 ---
