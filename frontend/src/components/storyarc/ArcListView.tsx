@@ -2,8 +2,6 @@ import { useState, useEffect, useMemo } from "react";
 import { GitBranch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
@@ -19,6 +17,10 @@ import { useArcNodes } from "./useArcNodes";
 import { useMaxChapterNumber } from "./useMaxChapterNumber";
 import { useDeleteStoryArc } from "./useDeleteStoryArc";
 import { useDeleteArcNode } from "./useDeleteArcNode";
+import { useCreateStoryArc } from "./useCreateStoryArc";
+import { useUpdateStoryArc } from "./useUpdateStoryArc";
+import { useCreateArcNode } from "./useCreateArcNode";
+import { useUpdateArcNode } from "./useUpdateArcNode";
 
 interface Props {
   novelId: number;
@@ -90,16 +92,14 @@ const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
 
 export default function ArcListView({ novelId }: Props) {
   const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
-  const app = useApp();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { theme } = useTheme();
-  const { bumpRefresh, refreshNonce } = useRefresh();
   const PALETTE = arcPalette(theme);
 
   // 4.3.1: arcs/allNodes/maxChapter 走 query（与 ArcList / StoryArcGraph 共享缓存）。
   // 删原 useApp.GetStoryArcs/GetArcNodes/GetMaxChapterNumber + load() + useState；
-  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
+  // CRUD 后由 mutation onSuccess invalidate 触发 refetch（4.3.2/4.3.3）。
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
   const arcsQuery = useStoryArcs(novelId);
   const nodesQuery = useArcNodes(novelId);
@@ -110,11 +110,21 @@ export default function ArcListView({ novelId }: Props) {
   // loadFailed 只看 arcs（arcs 失败整列表不可用）。nodes 失败时列表仍渲染（空节点）+ toast。
   const loadFailed = arcsQuery.isError;
 
-  // 4.3.2: delete 走 mutation，deleting 由 mutation.isPending 推导（不再用 useState）。
-  // onSuccess 失效对应 query（删 arc 失效 storyarcs + arc-nodes；删 node 失效 arc-nodes）。
+  // 4.3.2/4.3.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
+  // onSuccess 失效对应 query（删/改 arc 失效 storyarcs；删/改 node 失效 arc-nodes；
+  // 删 arc 级联删其下 node，故额外失效 arc-nodes；create arc 无 node 不失效 arc-nodes）。
   const deleteArcMutation = useDeleteStoryArc(novelId);
   const deleteNodeMutation = useDeleteArcNode(novelId);
+  const createArcMutation = useCreateStoryArc(novelId);
+  const updateArcMutation = useUpdateStoryArc(novelId);
+  const createNodeMutation = useCreateArcNode(novelId);
+  const updateNodeMutation = useUpdateArcNode(novelId);
   const deleting = deleteArcMutation.isPending || deleteNodeMutation.isPending;
+  const saving =
+    createArcMutation.isPending ||
+    updateArcMutation.isPending ||
+    createNodeMutation.isPending ||
+    updateNodeMutation.isPending;
 
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [windowCenter, setWindowCenter] = useState(0);
@@ -124,7 +134,6 @@ export default function ArcListView({ novelId }: Props) {
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [arcForm, setArcForm] = useState<ArcForm>(EMPTY_ARC);
   const [nodeForm, setNodeForm] = useState<NodeForm>(EMPTY_NODE);
-  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     kind: "arc" | "node";
     id: number;
@@ -135,16 +144,6 @@ export default function ArcListView({ novelId }: Props) {
     const max = maxChQuery.data ?? 0;
     if (max > 0) setWindowCenter(Math.max(1, max));
   }, [maxChQuery.data]);
-
-  // 4.3.1: refreshNonce 变化时 invalidate 三个 query（替代原 load()）。
-  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
-  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
-  useEffect(() => {
-    if (!refreshNonce) return;
-    queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
-    queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
-    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
-  }, [refreshNonce, queryClient, novelId]);
 
   useEffect(() => {
     if (focusArcId && focusArcId > 0 && allNodes.length > 0) {
@@ -225,11 +224,15 @@ export default function ArcListView({ novelId }: Props) {
   }
 
   function openEditArc(arc: storyarc.StoryArc) {
+    // 4.3.3: 全量回传（§6）— 编辑时把 status/reactivate_at 也填进 form，
+    // handleUpdateArc 直接传 arcForm 所有字段，等价 PUT。
     setArcForm({
       name: arc.name,
       arc_type: arc.arc_type,
       description: arc.description || "",
       importance: arc.importance,
+      status: arc.status,
+      reactivate_at: arc.reactivate_at,
     });
     setEditMode({ type: "edit_arc", arc });
   }
@@ -243,31 +246,42 @@ export default function ArcListView({ novelId }: Props) {
       toastError(t("storyarc.pleaseSelectArcType"));
       return;
     }
-    setSaving(true);
+    // 4.3.3: create 走 mutation（onSuccess 失效 storyarcs），删 setSaving/bumpRefresh。
+    // input 只传 CreateStoryArcInput 字段（create 不含 status/reactivate_at）。
     try {
-      await app.CreateStoryArc(novelId, arcForm);
+      await createArcMutation.mutateAsync({
+        name: arcForm.name,
+        arc_type: arcForm.arc_type,
+        description: arcForm.description,
+        importance: arcForm.importance,
+      });
       setEditMode(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.createArcFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
   async function handleUpdateArc() {
     if (!editMode || editMode.type !== "edit_arc") return;
-    setSaving(true);
+    // 4.3.3: update 走 mutation（onSuccess 失效 storyarcs），删 setSaving/bumpRefresh。
+    // 全量回传 input 所有字段（§6 等价 PUT，openEditArc 已把 status/reactivate_at 填进 form）。
     try {
-      await app.UpdateStoryArc(novelId, editMode.arc.id, arcForm);
+      await updateArcMutation.mutateAsync({
+        id: editMode.arc.id,
+        input: {
+          name: arcForm.name,
+          arc_type: arcForm.arc_type,
+          description: arcForm.description,
+          importance: arcForm.importance,
+          status: arcForm.status,
+          reactivate_at: arcForm.reactivate_at,
+        },
+      });
       setEditMode(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.updateArcFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -287,11 +301,15 @@ export default function ArcListView({ novelId }: Props) {
   }
 
   function openEditNode(node: storyarc.ArcNode) {
+    // 4.3.3: 全量回传（§6）— 编辑时把 actual_chapter/status 也填进 form，
+    // handleUpdateNode 直接传 nodeForm 所有字段，等价 PUT。
     setNodeForm({
       story_arc_id: node.story_arc_id,
       title: node.title,
       description: node.description || "",
       target_chapter: node.target_chapter,
+      actual_chapter: node.actual_chapter,
+      status: node.status,
     });
     setEditMode({ type: "edit_node", node });
   }
@@ -309,18 +327,20 @@ export default function ArcListView({ novelId }: Props) {
       toastError(t("storyarc.pleaseEnterTargetChapter"));
       return;
     }
-    setSaving(true);
     try {
-      const created = await app.CreateArcNode(novelId, nodeForm);
+      // 4.3.3: create 走 mutation（onSuccess 失效 arc-nodes），删 setSaving/bumpRefresh。
+      // 返回值 created.id 用于 setExpandedId（副作用各异，不放进 mutation）。
+      const created = await createNodeMutation.mutateAsync({
+        story_arc_id: nodeForm.story_arc_id,
+        title: nodeForm.title,
+        description: nodeForm.description,
+        target_chapter: nodeForm.target_chapter,
+      });
       setEditMode(null);
-      // 4.3.1: load() 已删，CRUD 后由 bumpRefresh → invalidateQueries 刷新。
       setExpandedId(created.id);
-      bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.createNodeFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -330,19 +350,25 @@ export default function ArcListView({ novelId }: Props) {
       toastError(t("storyarc.pleaseEnterNodeTitle"));
       return;
     }
+    // 4.3.3: update 走 mutation（onSuccess 失效 arc-nodes），删 setSaving/bumpRefresh。
+    // 全量回传 input 所有字段（§6 等价 PUT，openEditNode 已把 actual_chapter/status 填进 form）。
     const nodeId = editMode.node.id;
-    setSaving(true);
     try {
-      await app.UpdateArcNode(novelId, nodeId, nodeForm);
+      await updateNodeMutation.mutateAsync({
+        id: nodeId,
+        input: {
+          title: nodeForm.title,
+          description: nodeForm.description,
+          target_chapter: nodeForm.target_chapter,
+          actual_chapter: nodeForm.actual_chapter,
+          status: nodeForm.status,
+        },
+      });
       setEditMode(null);
-      // 4.3.1: load() 已删，CRUD 后由 bumpRefresh → invalidateQueries 刷新。
       setExpandedId(nodeId);
-      bumpRefresh();
     } catch (err) {
       toastError(t("storyarc.updateNodeFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -375,17 +401,24 @@ export default function ArcListView({ novelId }: Props) {
     node: storyarc.ArcNode,
     newStatus: string,
   ) {
-    setSaving(true);
+    // 4.3.3: 走 updateNodeMutation（onSuccess 失效 arc-nodes），删 setSaving/bumpRefresh。
+    // 全量回传 input 所有字段（§6 等价 PUT）：其他字段传 node 原值，status 传 newStatus。
     try {
-      await app.UpdateArcNode(novelId, node.id, { status: newStatus });
-      bumpRefresh();
+      await updateNodeMutation.mutateAsync({
+        id: node.id,
+        input: {
+          title: node.title,
+          description: node.description,
+          target_chapter: node.target_chapter,
+          actual_chapter: node.actual_chapter,
+          status: newStatus,
+        },
+      });
     } catch (err) {
       toastError(
         t("storyarc.updateNodeStatusFailed") + ": " + toErrorMessage(err),
       );
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 

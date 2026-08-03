@@ -50,6 +50,7 @@
 - `useSaveContent` mutation，onSuccess 失效 `["chapter", path]`。
 - `file:changed` 事件订阅（L353）：handler 调 `qc.invalidateQueries({ queryKey: ["chapter", path] })` + `invalidateQueries(["chapters", novelId])`（章节列表也要刷）。
 - EventsOn 订阅依赖从 `loadXxx` 改成 `qc`（这是 useApp 废弃顺序纪律的第一步）。
+- **章节增删失效 max-chapter（必做）**：章节 create/delete mutation（ChapterList 的 CreateChapter/DeleteChapter）的 `onSuccess` 必须补 `qc.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) })`。storyarc 的 `useMaxChapterNumber` 依赖章节号定 `windowCenter`，章节增删后不失效会导致窗口中心不更新（遗留自 4.3 storyarc，见 [04-entities-batch.md](./04-entities-batch.md) 4.3「遗留」备注）。`file:changed` 收到 chapters/ 路径变更时同样要 invalidate max-chapter。
 
 **验证**：build + lint + test（ContentPanel.test.tsx 必须仍绿）。
 
