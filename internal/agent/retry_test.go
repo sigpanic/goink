@@ -24,11 +24,14 @@ func TestComputeBackoff_RetryAfterCappedAtMax(t *testing.T) {
 func TestComputeBackoff_FixedBackoffBase(t *testing.T) {
 	// 无 Retry-After header 时使用固定基数
 	expected := []time.Duration{
-		1555 * time.Millisecond,
-		5578 * time.Millisecond,
-		8741 * time.Millisecond,
-		10421 * time.Millisecond,
-		15123 * time.Millisecond,
+		2347 * time.Millisecond,
+		4618 * time.Millisecond,
+		8283 * time.Millisecond,
+		16742 * time.Millisecond,
+		31189 * time.Millisecond,
+		48631 * time.Millisecond,
+		60473 * time.Millisecond,
+		60218 * time.Millisecond,
 	}
 	for i, want := range expected {
 		attempt := i + 1
