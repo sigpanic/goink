@@ -180,7 +180,7 @@ func (c *Client) ChatStream(
 		}
 
 		// SSE 逐行解析
-		c.parseSSE(ch, resp.Body)
+		c.parseSSE(ch, resp)
 	}()
 
 	return ch
@@ -269,8 +269,8 @@ func (c *Client) buildPayload(
 }
 
 // parseSSE 解析 SSE 流，产出 StreamEvent。
-func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
-	scanner := bufio.NewScanner(body)
+func (c *Client) parseSSE(ch chan<- StreamEvent, resp *http.Response) {
+	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024) // 行最长 2MB
 
 	// 工具调用累积缓冲区：按 index 对齐
@@ -280,24 +280,34 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		arguments strings.Builder
 	}
 	accumulated := make([]accToolCall, 0, 4)
-	hasContent := false // 追踪是否产出了有效事件
-	// usage 缓冲：部分 provider（如硅基流动）在每个 SSE chunk 都带 usage，
+	var diag sseDiagnostics // 诊断追踪（hasContent/hasToolCalls/hasReason/headLines/tailLines 等）
+	// usage 缓冲（diag.lastUsage）：部分 provider（如硅基流动）在每个 SSE chunk 都带 usage，
 	// 而非只在末尾。这里只保留最后一个，流结束后统一发一次，避免每 chunk
 	// 触发一次 DB 持久化（tokens.go updateUsage）和前端事件刷屏。
-	var lastUsage map[string]any
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		// 累积原始行样本用于 empty 诊断（前 10 行 + 后 10 行环形）
+		if len(diag.headLines) < 10 {
+			diag.headLines = append(diag.headLines, line)
+		}
+		diag.tailLines = append(diag.tailLines, line)
+		if len(diag.tailLines) > 10 {
+			diag.tailLines = diag.tailLines[1:]
+		}
 
 		// SSE data 行
 		const prefix = "data: "
 		if !strings.HasPrefix(line, prefix) {
 			continue
 		}
+		diag.dataLineCount++
 		data := line[len(prefix):]
 
 		// 流结束标记
 		if data == "[DONE]" {
+			diag.gotDone = true
 			break
 		}
 
@@ -311,7 +321,7 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		// 提取 usage：标准 provider 只在末尾 chunk 发一次，硅基流动等会每个 chunk 都发。
 		// 只缓存最后一个，流结束后统一发一次（见循环外）。
 		if usage, ok := chunk["usage"].(map[string]any); ok && usage != nil {
-			lastUsage = usage
+			diag.lastUsage = usage
 		}
 
 		// 提取 choices
@@ -331,12 +341,13 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 		// reasoning_content → EventThinking
 		if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
 			ch <- StreamEvent{Type: EventThinking, Data: reasoning}
+			diag.hasReason = true
 		}
 
 		// content → EventContent
 		if content, ok := delta["content"].(string); ok && content != "" {
 			ch <- StreamEvent{Type: EventContent, Data: content}
-			hasContent = true
+			diag.hasContent = true
 		}
 
 		// tool_calls delta → 按 index 累积
@@ -415,8 +426,8 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 
 	// 流正常结束：发送本次 stream 的最终 usage（只发一次，见循环内缓冲说明）。
 	// 放在 tool call 收尾之前，与标准 provider「末尾 chunk 发 usage」的时序一致。
-	if lastUsage != nil {
-		ch <- StreamEvent{Type: EventUsage, Usage: lastUsage}
+	if diag.lastUsage != nil {
+		ch <- StreamEvent{Type: EventUsage, Usage: diag.lastUsage}
 	}
 
 	// 流结束后，发送完整工具调用。参数保留原始 JSON，由 Registry 按目标类型反序列化。
@@ -487,12 +498,18 @@ func (c *Client) parseSSE(ch chan<- StreamEvent, body io.Reader) {
 					ArgumentsJSON: json.RawMessage(vtc.raw),
 				},
 			}
-			hasContent = true
+			diag.hasToolCalls = true
 		}
 
-		// 零产出检测：流结束但未收到任何有效内容，可能是服务商返回了非标准响应
-		if !hasContent {
-			c.logger.Warn("empty sse response")
+		// 零产出检测：流结束但未收到任何有效内容（content 或 tool call 收尾）。
+		// 填充 HTTP 快照后通过 LogValuer 输出结构化诊断，区分限流软拒绝 / 推理失控 / 非标准格式。
+		if !diag.hasContent && !diag.hasToolCalls {
+			diag.statusCode = resp.StatusCode
+			diag.contentType = resp.Header.Get("Content-Type")
+			diag.contentLength = resp.Header.Get("Content-Length")
+			diag.retryAfter = resp.Header.Get("Retry-After")
+			diag.rateLimitRemain = resp.Header.Get("X-RateLimit-Remaining")
+			c.logger.Warn("empty sse response", "diag", diag)
 			ch <- StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
 				Message:    "流式响应为空，服务商可能不支持流式请求或返回了非标准格式",
