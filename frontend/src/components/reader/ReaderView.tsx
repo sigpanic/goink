@@ -11,8 +11,6 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -22,6 +20,8 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { readerKeys } from "@/lib/queryKeys";
 import { useReaderPerspectives } from "./useReaderPerspectives";
 import { useDeleteReaderPerspective } from "./useDeleteReaderPerspective";
+import { useCreateReaderPerspective } from "./useCreateReaderPerspective";
+import { useUpdateReaderPerspective } from "./useUpdateReaderPerspective";
 
 interface Props {
   novelId: number;
@@ -130,22 +130,22 @@ function typeMeta(type: string, t: (key: string) => string) {
 
 export default function ReaderView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.reader ?? 0);
-  const app = useApp();
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { bumpRefresh, refreshNonce } = useRefresh();
 
   // 4.5.1: entries 走 query（与 ReaderList 共享缓存）。
-  // 删原 useApp.GetReaderPerspectives + load() + useState；
-  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
-  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不挂 useEffect。
   const entriesQuery = useReaderPerspectives(novelId);
   const entries = entriesQuery.data ?? [];
   const loading = entriesQuery.isLoading;
   const loadFailed = entriesQuery.isError;
-  // 4.5.2: delete 走 mutation（onSuccess 失效 reader），删 setDeleting useState + bumpRefresh。
+  // 4.5.2/4.5.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
+  // onSuccess 失效 reader（entry CRUD 都失效 reader，ReaderView + ReaderList 共享缓存）。
   const deleteMutation = useDeleteReaderPerspective(novelId);
+  const createMutation = useCreateReaderPerspective(novelId);
+  const updateMutation = useUpdateReaderPerspective(novelId);
   const deleting = deleteMutation.isPending;
+  const saving = createMutation.isPending || updateMutation.isPending;
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -153,7 +153,6 @@ export default function ReaderView({ novelId }: Props) {
   const [windowCenter, setWindowCenter] = useState(0);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
   // 4.5.1: entries 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
@@ -164,14 +163,6 @@ export default function ReaderView({ novelId }: Props) {
       if (maxCh > 0) setWindowCenter((prev) => prev || maxCh);
     }
   }, [entries]);
-
-  // 4.5.1: refreshNonce 变化时 invalidate reader query（替代原 load()）。
-  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
-  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
-  useEffect(() => {
-    if (!refreshNonce) return;
-    queryClient.invalidateQueries({ queryKey: readerKeys.list(novelId) });
-  }, [refreshNonce, queryClient, novelId]);
 
   useEffect(() => {
     if (focusId && focusId > 0 && entries.length > 0) {
@@ -248,9 +239,9 @@ export default function ReaderView({ novelId }: Props) {
       toastError(t("reader.pleaseSelectType"));
       return;
     }
-    setSaving(true);
+    // 4.5.3: 走 mutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
     try {
-      const created = await app.CreateReaderPerspective(novelId, {
+      const created = await createMutation.mutateAsync({
         type: form.type,
         content: form.content,
         planted_chapter: form.planted_chapter,
@@ -260,12 +251,9 @@ export default function ReaderView({ novelId }: Props) {
       setEditMode(null);
       setForm(EMPTY_FORM);
       setExpandedId(created.id);
-      bumpRefresh();
     } catch (err) {
       toastError(t("reader.createFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -276,24 +264,25 @@ export default function ReaderView({ novelId }: Props) {
       return;
     }
     const entryId = editMode.item.id;
-    setSaving(true);
+    // 4.5.3: 走 mutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
+    // 全量回传 input 所有字段（§6 等价 PUT）。
     try {
-      await app.UpdateReaderPerspective(entryId, novelId, {
-        type: form.type,
-        content: form.content,
-        related_truth: form.related_truth,
-        planted_chapter: form.planted_chapter,
-        revealed_chapter: form.revealed_chapter,
+      await updateMutation.mutateAsync({
+        id: entryId,
+        input: {
+          type: form.type,
+          content: form.content,
+          related_truth: form.related_truth,
+          planted_chapter: form.planted_chapter,
+          revealed_chapter: form.revealed_chapter,
+        },
       });
       setEditMode(null);
       setForm(EMPTY_FORM);
       setExpandedId(entryId);
-      bumpRefresh();
     } catch (err) {
       toastError(t("reader.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -315,21 +304,22 @@ export default function ReaderView({ novelId }: Props) {
   }
 
   async function handleQuickReveal(item: reader.ReaderPerspective) {
-    setSaving(true);
+    // 4.5.3: 走 updateMutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
+    // 全量回传 input 所有字段（§6 等价 PUT）：其他字段传 item 原值，revealed_chapter 传 item.planted_chapter（标记已揭示）。
     try {
-      await app.UpdateReaderPerspective(item.id, novelId, {
-        type: item.type,
-        content: item.content,
-        related_truth: item.related_truth || "",
-        planted_chapter: item.planted_chapter,
-        revealed_chapter: item.planted_chapter,
+      await updateMutation.mutateAsync({
+        id: item.id,
+        input: {
+          type: item.type,
+          content: item.content,
+          related_truth: item.related_truth || "",
+          planted_chapter: item.planted_chapter,
+          revealed_chapter: item.planted_chapter,
+        },
       });
-      bumpRefresh();
     } catch (err) {
       toastError(t("reader.updateFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
@@ -452,7 +442,12 @@ export default function ReaderView({ novelId }: Props) {
                 · {t("storyarc.totalChapters", { count: maxChapter })}
               </span>
               <button
-                onClick={() => bumpRefresh()}
+                // 4.5.3: refresh 按钮 invalidate reader query（替代原 bumpRefresh，对齐 timeline/storyarc）。
+                onClick={() =>
+                  queryClient.invalidateQueries({
+                    queryKey: readerKeys.list(novelId),
+                  })
+                }
                 className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
               >
                 {t("reader.refresh")}
