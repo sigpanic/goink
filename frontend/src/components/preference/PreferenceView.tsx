@@ -11,6 +11,7 @@ import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { preferenceKeys } from "@/lib/queryKeys";
 import { usePreferences } from "./usePreferences";
+import { useDeletePreference } from "./useDeletePreference";
 
 interface Props {
   novelId: number;
@@ -51,7 +52,10 @@ export default function PreferenceView({ novelId }: Props) {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+
+  // 4.6.2: delete 走 mutation（onSuccess 失效 preferences），删 setDeleting useState。
+  const deleteMutation = useDeletePreference(novelId);
+  const deleting = deleteMutation.isPending;
 
   // 4.6.1: refreshNonce 变化时 invalidate preferences query（替代原 load()）。
   // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
@@ -121,16 +125,13 @@ export default function PreferenceView({ novelId }: Props) {
 
   async function confirmDelete() {
     if (deleteTarget === null) return;
-    setDeleting(true);
+    // 4.6.2: 走 mutation（onSuccess 失效 preferences），删 setDeleting/bumpRefresh。
     try {
-      await app.DeletePreference(deleteTarget);
+      await deleteMutation.mutateAsync(deleteTarget);
       setDeleteTarget(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("preference.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 
