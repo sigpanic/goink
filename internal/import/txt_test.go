@@ -988,3 +988,102 @@ func TestChapterPatterns_NumericLine(t *testing.T) {
 		}
 	}
 }
+
+// ── 13. 数字+点号章节（numeric_dot 模式） ──────────────────
+// 网文常见格式："01.梦境"、"1、梦境"、"1)梦境"，行首数字+分隔符+标题。
+
+func TestParseTxt_NumericDotChapters(t *testing.T) {
+	content := "01.梦境\n正文一。\n\n02.吞噬基因\n正文二。\n\n03.绑架\n正文三。\n"
+	path := writeTxtFile(t, "数字点.txt", content)
+	r, err := parseTxt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Chapters) != 3 {
+		t.Fatalf("期望 3 章（numeric_dot 模式），实际 %d 章", len(r.Chapters))
+	}
+	if !strings.Contains(r.Chapters[0].Title, "梦境") {
+		t.Errorf("第1章标题应包含'梦境'，实际: %q", r.Chapters[0].Title)
+	}
+	if !strings.Contains(r.Chapters[2].Title, "绑架") {
+		t.Errorf("第3章标题应包含'绑架'，实际: %q", r.Chapters[2].Title)
+	}
+	if !strings.Contains(r.Chapters[1].Content, "正文二") {
+		t.Errorf("第2章内容应包含'正文二'，实际: %q", r.Chapters[1].Content)
+	}
+}
+
+// 数字+点号，行首有空格（如《神话入侵》" 01.梦境"格式）
+func TestParseTxt_NumericDotWithLeadingSpace(t *testing.T) {
+	content := " 01.梦境\n正文一。\n\n 02.吞噬基因\n正文二。\n\n 03.绑架\n正文三。\n"
+	path := writeTxtFile(t, "数字点空格.txt", content)
+	r, err := parseTxt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Chapters) != 3 {
+		t.Fatalf("期望 3 章（行首空格的 numeric_dot），实际 %d 章", len(r.Chapters))
+	}
+	if !strings.Contains(r.Chapters[0].Title, "梦境") {
+		t.Errorf("第1章标题应包含'梦境'，实际: %q", r.Chapters[0].Title)
+	}
+}
+
+// 数字+顿号
+func TestParseTxt_NumericDotChineseComma(t *testing.T) {
+	content := "1、梦境\n正文一。\n\n2、吞噬\n正文二。\n\n3、绑架\n正文三。\n"
+	path := writeTxtFile(t, "数字顿号.txt", content)
+	r, err := parseTxt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Chapters) != 3 {
+		t.Fatalf("期望 3 章（顿号分隔），实际 %d 章", len(r.Chapters))
+	}
+}
+
+// 数字+右括号
+func TestParseTxt_NumericDotParenthesis(t *testing.T) {
+	content := "1)梦境\n正文一。\n\n2)吞噬\n正文二。\n\n3)绑架\n正文三。\n"
+	path := writeTxtFile(t, "数字括号.txt", content)
+	r, err := parseTxt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(r.Chapters) != 3 {
+		t.Fatalf("期望 3 章（右括号分隔），实际 %d 章", len(r.Chapters))
+	}
+}
+
+// numeric_dot 正则单元测试
+func TestChapterPatterns_NumericDot(t *testing.T) {
+	p := chapterPatterns[7] // numeric_dot
+	tests := []struct {
+		line    string
+		matches bool
+	}{
+		// 应匹配
+		{"01.梦境", true},
+		{"1. 梦境", true},
+		{" 01.梦境", true},
+		{"  1、梦境", true},
+		{"1)梦境", true},
+		{"1）梦境", true},
+		{"100.章节标题", true},
+		{"9999.末章", true},
+		{"# 1.标题", true},
+		// 不应匹配
+		{"梦境", false},
+		{"第1章", false},
+		{"", false},
+		{"1.", false},      // 无标题
+		{"1. ", false},     // 无标题（只有空格）
+		{"12345.标题", false}, // 超过4位
+	}
+	for _, tc := range tests {
+		got := p.pattern.MatchString(tc.line)
+		if got != tc.matches {
+			t.Errorf("numeric_dot.MatchString(%q) = %v, want %v", tc.line, got, tc.matches)
+		}
+	}
+}

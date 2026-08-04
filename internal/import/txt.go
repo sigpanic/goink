@@ -32,7 +32,7 @@ var chapterPatterns = []struct {
 	},
 	{
 		name:    "english",
-		pattern: regexp.MustCompile(`(?im)^Chapter\s+\d+`),
+		pattern: regexp.MustCompile(`(?im)^(?:[ 　\t]*)Chapter\s+\d+`),
 	},
 	{
 		name:    "juan_line_start",
@@ -55,6 +55,13 @@ var chapterPatterns = []struct {
 	{
 		name:    "numeric_line",
 		pattern: regexp.MustCompile(`(?m)^(?:#{1,6}\s+)?(?:[ 　\t]*)\d{1,5}$`),
+	},
+	{
+		// 兼容"数字+分隔符+标题"格式，如"01.梦境"、"1、梦境"、"1)梦境"。
+		// 行长度过滤（maxChapterTitleLen）+ filterByGap 间距验证 + isReasonableChapterCount
+		// 三道关卡过滤正文列表项误报。
+		name:    "numeric_dot",
+		pattern: regexp.MustCompile(`(?m)^(?:#{1,6}\s+)?(?:[ 　\t]*)\d{1,4}[.．、)）\]】]\s*\S`),
 	},
 }
 
