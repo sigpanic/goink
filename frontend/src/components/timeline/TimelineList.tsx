@@ -1,34 +1,16 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Search, Target, Lightbulb } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
-import type { timeline } from "@/hooks/useApp";
+import { useTimelineEntries } from "./useTimelineEntries";
 
 interface Props {
   novelId: number;
 }
 
 export default function SidebarTimelineList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce } = useRefresh();
-
-  const [entries, setEntries] = useState<timeline.TimelineEntry[]>([]);
+  const { data: entries = [], isError } = useTimelineEntries(novelId);
   const [search, setSearch] = useState("");
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setEntries([]);
-      return;
-    }
-    const list = await app.GetTimelineEntries(novelId, 0, 0);
-    setEntries(list ?? []);
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return entries;
@@ -82,7 +64,13 @@ export default function SidebarTimelineList({ novelId }: Props) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {filtered.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("timeline.loadFailed")}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {search

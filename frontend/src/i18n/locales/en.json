@@ -606,6 +606,7 @@
     "all": "All",
     "loading": "Loading...",
     "loadFailed": "Load failed",
+    "chapterPlansLoadFailed": "Chapter plans load failed",
     "chapterPlan": "Chapter Plan",
     "noPlan": "No {{type}} plan",
     "edit": "Edit",

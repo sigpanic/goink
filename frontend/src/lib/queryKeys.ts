@@ -46,6 +46,11 @@ export const timelineKeys = {
   detail: (id: number) => ["timeline-entry", id] as const,
 };
 
+// chapter-plans: 章节计划 3-slot（next/near/far），GetChapterPlans(novelId) 独立 API。
+export const chapterPlanKeys = {
+  list: (novelId: number) => ["chapter-plans", novelId] as const,
+};
+
 export const readerKeys = {
   list: (novelId: number) => ["reader", novelId] as const,
   detail: (id: number) => ["reader-perspective", id] as const,

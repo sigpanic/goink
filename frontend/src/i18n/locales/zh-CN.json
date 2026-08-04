@@ -583,6 +583,7 @@
     "all": "全部",
     "loading": "加载中...",
     "loadFailed": "加载失败",
+    "chapterPlansLoadFailed": "章节计划加载失败",
     "chapterPlan": "章节计划",
     "noPlan": "暂无{{type}}计划",
     "edit": "编辑",

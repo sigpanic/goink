@@ -96,13 +96,20 @@
 
 ## 4.4 timeline
 
-**改动文件**：`frontend/src/components/timeline/TimelineView.tsx`
+**特殊点**：TimelineView 的 `load()` 用 `Promise.all` 拉 3 个数据（同 storyarc 三 query 同构）：①`GetTimelineEntries(novelId, 0, 0)` → entries（第二三参数是章节窗口，传 0,0 拿全量，同 `GetArcNodes` 模式，queryKey 用 `["timeline", novelId]` 全量）；②`GetChapterPlans(novelId)` → plans（章节计划 3-slot next/near/far，独立 API，新建 `useChapterPlans` + `chapterPlanKeys`）；③`GetMaxChapterNumber(novelId)` → windowCenter（复用 storyarc 4.3 已建 `useMaxChapterNumber`，同 novelId 共享 `maxChapterKeys` 缓存）。TimelineList 侧边栏独立 fetch `GetTimelineEntries`，改造后与 TimelineView 共享 entries 缓存（同 character/location/storyarc 的 List+View 模式）。TimelineView 934 行巨石，本阶段**只迁数据层**不拆组件（拆组件留阶段 6）。
 
-**怎么做**：`useTimelineEntries(novelId)` query + CRUD mutation。TimelineView 934 行巨石，同 storyarc 只迁数据层不拆组件。
+**改动文件**：`frontend/src/components/timeline/TimelineView.tsx`、`TimelineList.tsx`
 
-**手测点**：entry CRUD 同步。
+**怎么做**：`useTimelineEntries(novelId)` + `useChapterPlans(novelId)` + 复用 `useMaxChapterNumber(novelId)` 三个 query。entry CRUD（create/update/delete/handleQuickStatus PATCH 单字段）+ plan CRUD（handleSavePlan）各一组 mutation。handleQuickStatus 全量回传（§6，同 storyarc handleQuickNodeStatus）。
 
-**commit**：同 4.1 拆 4 个。
+**手测点**：entry/plan CRUD 后列表同步；focusEntryId 联动；章节窗口前/后翻；快速状态切换。
+
+**commit**：同 4.1 拆 4 个（timeline 跳过 store commit，因 TimelineList 侧边栏只读无跨组件 state，按规则 10 不建 store，同 storyarc）。
+
+**进度**：
+- [x] commit 1: useTimelineEntries + useChapterPlans query（复用 useMaxChapterNumber）+ TimelineView/TimelineList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 timeline + chapter-plans）+ i18n 补 chapterPlansLoadFailed + queryKeys.ts 新增 chapterPlanKeys + 00-conventions.md §1.2 同步
+- [ ] commit 2: useDeleteTimelineEntry mutation + confirmDelete 改 mutateAsync
+- [ ] commit 3: useCreate/UpdateTimelineEntry mutation（含 handleQuickStatus 全量回传，§6）+ useSaveChapterPlan mutation（plan CRUD）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh
 
 ---
 

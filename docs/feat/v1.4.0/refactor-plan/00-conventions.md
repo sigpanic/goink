@@ -22,8 +22,9 @@
 ["location-relations", novelId]
 ["storyarcs", novelId]
 ["arc-nodes", novelId]         全量（后端 GetArcNodes(novelId, fromChapter, toChapter) 第二三参数是章节窗口非 arcId，无按 arcId 拉取的 API）
-["max-chapter", novelId]       storyarc 章节窗口中心 windowCenter 用
+["max-chapter", novelId]       storyarc / timeline 章节窗口中心 windowCenter 共用（GetMaxChapterNumber 同一 API，跨领域共享缓存）
 ["timeline", novelId]
+["chapter-plans", novelId]    章节计划 3-slot（next/near/far），GetChapterPlans(novelId) 独立 API
 ["reader", novelId]
 ["preferences", novelId]
 ["novel-settings", novelId]

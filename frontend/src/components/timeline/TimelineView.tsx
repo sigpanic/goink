@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -11,6 +11,7 @@ import {
   X,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { timeline } from "@/hooks/useApp";
@@ -19,6 +20,12 @@ import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { timelineKeys, chapterPlanKeys, maxChapterKeys } from "@/lib/queryKeys";
+import { useTimelineEntries } from "./useTimelineEntries";
+import { useChapterPlans } from "./useChapterPlans";
+// useMaxChapterNumber 跨领域复用：storyarc 4.3 先建，timeline 共用
+// （GetMaxChapterNumber 同一 API，maxChapterKeys 共享缓存）。
+import { useMaxChapterNumber } from "../storyarc/useMaxChapterNumber";
 
 interface Props {
   novelId: number;
@@ -89,13 +96,23 @@ const EDIT_FORM_EMPTY: EditForm = {
 export default function TimelineView({ novelId }: Props) {
   const focusEntryId = useFocusStore((s) => s.focusMap.timeline ?? 0);
   const app = useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { bumpRefresh, refreshNonce } = useRefresh();
 
-  const [plans, setPlans] = useState<timeline.ChapterPlan[]>([]);
-  const [entries, setEntries] = useState<timeline.TimelineEntry[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.4.1: entries/plans/maxChapter 走 query（与 TimelineList 共享缓存）。
+  // 删原 useApp.GetTimelineEntries/GetChapterPlans/GetMaxChapterNumber + load() + useState；
+  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const entriesQuery = useTimelineEntries(novelId);
+  const plansQuery = useChapterPlans(novelId);
+  const maxChQuery = useMaxChapterNumber(novelId);
+  const entries = entriesQuery.data ?? [];
+  const plans = plansQuery.data ?? [];
+  const loading = entriesQuery.isLoading || plansQuery.isLoading;
+  // loadFailed 只看 entries（entries 失败整列表不可用）。plans 失败时列表仍渲染（空 plan）+ toast。
+  const loadFailed = entriesQuery.isError;
+
   const [planTab, setPlanTab] = useState<Tab>("next");
   const [filter, setFilter] = useState<Filter>("all");
   const [windowCenter, setWindowCenter] = useState(0);
@@ -106,36 +123,21 @@ export default function TimelineView({ novelId }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setPlans([]);
-      setEntries([]);
-      setLoadFailed(false);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [planList, entryList, maxCh] = await Promise.all([
-        app.GetChapterPlans(novelId),
-        app.GetTimelineEntries(novelId, 0, 0),
-        app.GetMaxChapterNumber(novelId),
-      ]);
-      setPlans(planList ?? []);
-      setEntries(entryList ?? []);
-      setWindowCenter(Math.max(1, maxCh));
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("timeline.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
+  // 4.4.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
+    const max = maxChQuery.data ?? 0;
+    if (max > 0) setWindowCenter(Math.max(1, max));
+  }, [maxChQuery.data]);
+
+  // 4.4.1: refreshNonce 变化时 invalidate 三个 query（替代原 load()）。
+  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
+  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
+  useEffect(() => {
+    if (!refreshNonce) return;
+    queryClient.invalidateQueries({ queryKey: timelineKeys.list(novelId) });
+    queryClient.invalidateQueries({ queryKey: chapterPlanKeys.list(novelId) });
+    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+  }, [refreshNonce, queryClient, novelId]);
 
   useEffect(() => {
     if (focusEntryId && focusEntryId > 0 && entries.length > 0) {
@@ -282,7 +284,6 @@ export default function TimelineView({ novelId }: Props) {
         content: form.content,
       });
       setEditMode(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("timeline.savePlanFailed") + ": " + toErrorMessage(err));
@@ -314,7 +315,6 @@ export default function TimelineView({ novelId }: Props) {
         source: "user",
       });
       setEditMode(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("timeline.createFailed") + ": " + toErrorMessage(err));
@@ -346,7 +346,6 @@ export default function TimelineView({ novelId }: Props) {
       };
       await app.UpdateTimelineEntry(novelId, editMode.entry.id, payload);
       setEditMode(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("timeline.updateFailed") + ": " + toErrorMessage(err));
@@ -366,7 +365,6 @@ export default function TimelineView({ novelId }: Props) {
     try {
       await app.DeleteTimelineEntry(novelId, deleteTarget);
       setDeleteTarget(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("timeline.deleteFailed") + ": " + toErrorMessage(err));
@@ -391,7 +389,6 @@ export default function TimelineView({ novelId }: Props) {
         status: newStatus,
         resolved_chapter: newStatus === "resolved" ? entry.target_chapter : 0,
       });
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("timeline.updateStatusFailed") + ": " + toErrorMessage(err));
@@ -582,7 +579,11 @@ export default function TimelineView({ novelId }: Props) {
                 </div>
               ) : (
                 <>
-                  {planMap[planTab] ? (
+                  {plansQuery.isError ? (
+                    <p className="text-sm text-destructive">
+                      {t("timeline.chapterPlansLoadFailed")}
+                    </p>
+                  ) : planMap[planTab] ? (
                     <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                       {planMap[planTab]}
                     </p>
@@ -624,7 +625,7 @@ export default function TimelineView({ novelId }: Props) {
                   · {t("storyarc.totalChapters", { count: maxChapter })}
                 </span>
                 <button
-                  onClick={load}
+                  onClick={() => bumpRefresh()}
                   className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
                 >
                   {t("timeline.refresh")}
