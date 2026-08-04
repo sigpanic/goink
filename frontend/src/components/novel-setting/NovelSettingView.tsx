@@ -11,6 +11,7 @@ import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { novelSettingKeys } from "@/lib/queryKeys";
 import { useNovelSettings } from "./useNovelSettings";
+import { useDeleteNovelSetting } from "./useDeleteNovelSetting";
 
 interface Props {
   novelId: number;
@@ -47,7 +48,10 @@ export default function NovelSettingView({ novelId }: Props) {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
+
+  // 4.7.2: delete 走 mutation（onSuccess 失效 novel-settings），删 setDeleting useState。
+  const deleteMutation = useDeleteNovelSetting(novelId);
+  const deleting = deleteMutation.isPending;
 
   // 4.7.1: refreshNonce 变化时 invalidate settings query（替代原 load()）。
   // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
@@ -111,16 +115,13 @@ export default function NovelSettingView({ novelId }: Props) {
 
   async function confirmDelete() {
     if (deleteTarget === null) return;
-    setDeleting(true);
+    // 4.7.2: 走 mutation（onSuccess 失效 novel-settings），删 setDeleting/bumpRefresh。
     try {
-      await app.DeleteNovelSetting(deleteTarget);
+      await deleteMutation.mutateAsync(deleteTarget);
       setDeleteTarget(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("novelSetting.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 
