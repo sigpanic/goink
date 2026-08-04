@@ -21,6 +21,7 @@ import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { readerKeys } from "@/lib/queryKeys";
 import { useReaderPerspectives } from "./useReaderPerspectives";
+import { useDeleteReaderPerspective } from "./useDeleteReaderPerspective";
 
 interface Props {
   novelId: number;
@@ -142,6 +143,9 @@ export default function ReaderView({ novelId }: Props) {
   const entries = entriesQuery.data ?? [];
   const loading = entriesQuery.isLoading;
   const loadFailed = entriesQuery.isError;
+  // 4.5.2: delete 走 mutation（onSuccess 失效 reader），删 setDeleting useState + bumpRefresh。
+  const deleteMutation = useDeleteReaderPerspective(novelId);
+  const deleting = deleteMutation.isPending;
 
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -151,7 +155,6 @@ export default function ReaderView({ novelId }: Props) {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // 4.5.1: entries 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   // 保持原语义：(prev) => prev || maxCh（仅当 prev 为 0 时才设，不覆盖 focusId 联动已设的值）。
@@ -300,17 +303,14 @@ export default function ReaderView({ novelId }: Props) {
 
   async function confirmDelete() {
     if (deleteTarget === null) return;
-    setDeleting(true);
+    // 4.5.2: 走 mutation（onSuccess 失效 reader），删 setDeleting/bumpRefresh。
     try {
-      await app.DeleteReaderPerspective(deleteTarget, novelId);
+      await deleteMutation.mutateAsync(deleteTarget);
       if (expandedId === deleteTarget) setExpandedId(null);
       setDeleteTarget(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("reader.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 

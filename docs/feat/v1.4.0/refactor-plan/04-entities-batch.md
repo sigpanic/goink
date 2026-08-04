@@ -127,7 +127,7 @@
 
 **进度**：
 - [x] commit 1: useReaderPerspectives query + ReaderView/ReaderList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 reader）+ i18n 复用 reader.loadFailed（已存在）+ queryKeys.ts 复用 readerKeys（已存在）+ ReaderList 加 isError 内连显示（对齐 TimelineList）
-- [ ] commit 2: useDeleteReaderPerspective mutation + confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 reader；useApp/useRefresh/saving 暂保留供 commit 3）
+- [x] commit 2: useDeleteReaderPerspective mutation + confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 reader；useApp/useRefresh/saving 暂保留供 commit 3）
 - [ ] commit 3: useCreate/UpdateReaderPerspective mutation（含 handleQuickReveal 全量回传，§6）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect + refresh 按钮改 invalidateQueries（对齐 timeline/storyarc）
 
 ---
