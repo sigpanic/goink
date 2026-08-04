@@ -75,7 +75,7 @@ func AnalyzeWithLLM(ctx context.Context, filePath string, providerName string, m
 }
 
 // cleanLLMPatternOutput 清理 LLM 输出的正则字符串，
-// 去除可能的 markdown 代码块标记、引号等。
+// 去除可能的 markdown 代码块标记、引号等，并确保以 (?m) 多行模式开头。
 func cleanLLMPatternOutput(output string) string {
 	s := strings.TrimSpace(output)
 
@@ -91,8 +91,13 @@ func cleanLLMPatternOutput(output string) string {
 
 	// 去除前后引号
 	s = strings.Trim(s, "`\"'")
+	s = strings.TrimSpace(s)
 
-	return strings.TrimSpace(s)
+	// 确保以 (?m) 多行模式开头，使 ^ 匹配每行首而非全文首
+	if !strings.HasPrefix(s, "(?m)") {
+		s = "(?m)" + s
+	}
+	return s
 }
 
 // ParseWithLLMPattern 使用 LLM 返回的正则表达式对全文进行章节分割。

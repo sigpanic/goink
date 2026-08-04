@@ -22,7 +22,8 @@ type ImportResult struct {
 	ChapterCount    int              `json:"chapter_count"`
 	SkippedCount    int              `json:"skipped_count"`
 	SkippedChapters []SkippedChapter `json:"skipped_chapters"`
-	NeedsLLM        bool             `json:"needs_llm"` // 正则分割结果不合理，提示前端可调用 LLM 分析
+	NeedsLLM        bool             `json:"needs_llm"`           // 正则分割结果不合理，提示前端可调用 LLM 分析
+	FilePath        string           `json:"file_path,omitempty"` // NeedsLLM 时回传文件路径，供前端调 ImportWithLLM
 }
 
 // ProgressCallback 是进度回调函数，app 层用它来推送前端事件。
@@ -39,10 +40,12 @@ func Import(ctx context.Context, logger *slog.Logger, db *gorm.DB, filePath stri
 	}
 
 	// 正则分割结果不合理，直接返回 NeedsLLM 标记，不创建 Novel
+	// FilePath 回传给前端，供其调用 ImportWithLLM
 	if result.NeedsLLM {
 		return &ImportResult{
 			Title:    result.Title,
 			NeedsLLM: true,
+			FilePath: filePath,
 		}, nil
 	}
 

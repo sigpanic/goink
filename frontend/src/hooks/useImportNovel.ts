@@ -152,9 +152,9 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
       }
 
       // 正则分割失败，提示用户使用 AI 分析
+      // 优先使用后端回传的 file_path（PickAndImportNovel 路径下 fp 为 undefined）
       if (result.needs_llm) {
-        const resolvedPath = fp || "";
-        setFilePath(resolvedPath);
+        setFilePath(result.file_path || fp || "");
         setProgress((prev) => ({
           ...prev,
           stage: "needs_llm",

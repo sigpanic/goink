@@ -1268,6 +1268,7 @@ export namespace imp {
 	    skipped_count: number;
 	    skipped_chapters: SkippedChapter[];
 	    needs_llm: boolean;
+	    file_path?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ImportResult(source);
@@ -1281,6 +1282,7 @@ export namespace imp {
 	        this.skipped_count = source["skipped_count"];
 	        this.skipped_chapters = this.convertValues(source["skipped_chapters"], SkippedChapter);
 	        this.needs_llm = source["needs_llm"];
+	        this.file_path = source["file_path"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
