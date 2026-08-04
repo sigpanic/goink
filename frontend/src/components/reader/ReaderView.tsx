@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -10,6 +10,7 @@ import {
   Eye,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { reader } from "@/hooks/useApp";
@@ -18,6 +19,8 @@ import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { readerKeys } from "@/lib/queryKeys";
+import { useReaderPerspectives } from "./useReaderPerspectives";
 
 interface Props {
   novelId: number;
@@ -127,12 +130,19 @@ function typeMeta(type: string, t: (key: string) => string) {
 export default function ReaderView({ novelId }: Props) {
   const focusId = useFocusStore((s) => s.focusMap.reader ?? 0);
   const app = useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { bumpRefresh, refreshNonce } = useRefresh();
 
-  const [entries, setEntries] = useState<reader.ReaderPerspective[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.5.1: entries 走 query（与 ReaderList 共享缓存）。
+  // 删原 useApp.GetReaderPerspectives + load() + useState；
+  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const entriesQuery = useReaderPerspectives(novelId);
+  const entries = entriesQuery.data ?? [];
+  const loading = entriesQuery.isLoading;
+  const loadFailed = entriesQuery.isError;
+
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -143,33 +153,22 @@ export default function ReaderView({ novelId }: Props) {
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setEntries([]);
-      setLoadFailed(false);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const items = await app.GetReaderPerspectives(novelId);
-      setEntries(items ?? []);
-      if (items && items.length > 0) {
-        const maxCh = Math.max(...items.map((e) => e.planted_chapter));
-        setWindowCenter((prev) => prev || maxCh);
-      }
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("reader.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
+  // 4.5.1: entries 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
+  // 保持原语义：(prev) => prev || maxCh（仅当 prev 为 0 时才设，不覆盖 focusId 联动已设的值）。
   useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
+    if (entries.length > 0) {
+      const maxCh = Math.max(...entries.map((e) => e.planted_chapter));
+      if (maxCh > 0) setWindowCenter((prev) => prev || maxCh);
+    }
+  }, [entries]);
+
+  // 4.5.1: refreshNonce 变化时 invalidate reader query（替代原 load()）。
+  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
+  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
+  useEffect(() => {
+    if (!refreshNonce) return;
+    queryClient.invalidateQueries({ queryKey: readerKeys.list(novelId) });
+  }, [refreshNonce, queryClient, novelId]);
 
   useEffect(() => {
     if (focusId && focusId > 0 && entries.length > 0) {
@@ -257,7 +256,6 @@ export default function ReaderView({ novelId }: Props) {
       });
       setEditMode(null);
       setForm(EMPTY_FORM);
-      await load();
       setExpandedId(created.id);
       bumpRefresh();
     } catch (err) {
@@ -286,7 +284,6 @@ export default function ReaderView({ novelId }: Props) {
       });
       setEditMode(null);
       setForm(EMPTY_FORM);
-      await load();
       setExpandedId(entryId);
       bumpRefresh();
     } catch (err) {
@@ -308,7 +305,6 @@ export default function ReaderView({ novelId }: Props) {
       await app.DeleteReaderPerspective(deleteTarget, novelId);
       if (expandedId === deleteTarget) setExpandedId(null);
       setDeleteTarget(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("reader.deleteFailed") + ": " + toErrorMessage(err));
@@ -328,7 +324,6 @@ export default function ReaderView({ novelId }: Props) {
         planted_chapter: item.planted_chapter,
         revealed_chapter: item.planted_chapter,
       });
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("reader.updateFailed") + ": " + toErrorMessage(err));
@@ -457,7 +452,7 @@ export default function ReaderView({ novelId }: Props) {
                 · {t("storyarc.totalChapters", { count: maxChapter })}
               </span>
               <button
-                onClick={load}
+                onClick={() => bumpRefresh()}
                 className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
               >
                 {t("reader.refresh")}

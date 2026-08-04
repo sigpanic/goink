@@ -115,13 +115,20 @@
 
 ## 4.5 reader
 
-**改动文件**：`frontend/src/components/reader/ReaderView.tsx`
+**特殊点**：ReaderView 的 `load()` 拉 `GetReaderPerspectives(novelId)` 单参 API（无章节窗口参数，区别于 timeline/storyarc），windowCenter 从 `entries.planted_chapter` 算（不引入 `useMaxChapterNumber`）。ReaderList 侧边栏独立 fetch `GetReaderPerspectives`，改造后与 ReaderView 共享 entries 缓存（同 character/location/storyarc/timeline 的 List+View 模式）。ReaderList 侧边栏只读无跨组件 state，按规则10 跳过 store commit + dialog commit（同 storyarc/timeline），实际拆 3 个 commit。
 
-**怎么做**：`useReaderPerspectives(novelId)` query + CRUD mutation。
+**改动文件**：`frontend/src/components/reader/ReaderView.tsx`、`ReaderList.tsx`
 
-**手测点**：perspective CRUD 同步。
+**怎么做**：`useReaderPerspectives(novelId)` 单 query。entry CRUD（create/update/delete/handleQuickReveal 全量回传）一组 mutation。handleQuickReveal 全量回传（§6，同 timeline handleQuickStatus）。
 
-**commit**：同 4.1 拆 4 个。
+**手测点**：entry CRUD 后列表同步；focusId 联动；章节窗口前/后翻；快速状态切换（handleQuickReveal）。
+
+**commit**：拆 3 个（reader 跳过 store commit + dialog commit，因 ReaderList 侧边栏只读无跨组件 state，按规则10，同 storyarc/timeline）。
+
+**进度**：
+- [x] commit 1: useReaderPerspectives query + ReaderView/ReaderList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 reader）+ i18n 复用 reader.loadFailed（已存在）+ queryKeys.ts 复用 readerKeys（已存在）+ ReaderList 加 isError 内连显示（对齐 TimelineList）
+- [ ] commit 2: useDeleteReaderPerspective mutation + confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 reader；useApp/useRefresh/saving 暂保留供 commit 3）
+- [ ] commit 3: useCreate/UpdateReaderPerspective mutation（含 handleQuickReveal 全量回传，§6）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect + refresh 按钮改 invalidateQueries（对齐 timeline/storyarc）
 
 ---
 

@@ -20,7 +20,7 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "max-chapter": "storyarc.maxChapterLoadFailed",
   timeline: "timeline.loadFailed",
   "chapter-plans": "timeline.chapterPlansLoadFailed",
-  // reader: "reader.loadFailed",
+  reader: "reader.loadFailed",
   // preferences: "preference.loadFailed",
   // novel-settings: "novelSetting.loadFailed",
   // "style-samples": "styleSample.loadFailed",

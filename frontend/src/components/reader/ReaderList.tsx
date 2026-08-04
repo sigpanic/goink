@@ -1,34 +1,18 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Search, Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
-import type { reader } from "@/hooks/useApp";
+import { useReaderPerspectives } from "./useReaderPerspectives";
 
 interface Props {
   novelId: number;
 }
 
 export default function SidebarReaderList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce } = useRefresh();
-
-  const [items, setItems] = useState<reader.ReaderPerspective[]>([]);
+  // 4.5.1: entries 走 query（与 ReaderView 共享缓存）。
+  // 4a: query 错误 toast 由全局中间件接管，组件加 isError 内连显示（对齐 TimelineList）。
+  const { data: items = [], isError } = useReaderPerspectives(novelId);
   const [search, setSearch] = useState("");
-
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setItems([]);
-      return;
-    }
-    const list = await app.GetReaderPerspectives(novelId);
-    setItems(list ?? []);
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return items;
@@ -69,7 +53,13 @@ export default function SidebarReaderList({ novelId }: Props) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {filtered.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("reader.loadFailed")}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {search ? t("reader.noMatchingEntries2") : t("reader.noEntries")}
