@@ -109,7 +109,7 @@
 **进度**：
 - [x] commit 1: useTimelineEntries + useChapterPlans query（复用 useMaxChapterNumber）+ TimelineView/TimelineList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 timeline + chapter-plans）+ i18n 补 chapterPlansLoadFailed + queryKeys.ts 新增 chapterPlanKeys + 00-conventions.md §1.2 同步
 - [x] commit 2: useDeleteTimelineEntry mutation + confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 timeline；useApp/useRefresh/saving 暂保留供 commit 3）
-- [ ] commit 3: useCreate/UpdateTimelineEntry mutation（含 handleQuickStatus 全量回传，§6）+ useSaveChapterPlan mutation（plan CRUD）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh
+- [x] commit 3: useCreate/UpdateTimelineEntry mutation（含 handleQuickStatus 全量回传，§6）+ useSaveChapterPlan mutation（plan CRUD）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect + refresh 按钮改 invalidateQueries（对齐 storyarc）
 
 ---
 
