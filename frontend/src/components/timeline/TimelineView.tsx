@@ -23,6 +23,7 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { timelineKeys, chapterPlanKeys, maxChapterKeys } from "@/lib/queryKeys";
 import { useTimelineEntries } from "./useTimelineEntries";
 import { useChapterPlans } from "./useChapterPlans";
+import { useDeleteTimelineEntry } from "./useDeleteTimelineEntry";
 // useMaxChapterNumber 跨领域复用：storyarc 4.3 先建，timeline 共用
 // （GetMaxChapterNumber 同一 API，maxChapterKeys 共享缓存）。
 import { useMaxChapterNumber } from "../storyarc/useMaxChapterNumber";
@@ -107,6 +108,11 @@ export default function TimelineView({ novelId }: Props) {
   const entriesQuery = useTimelineEntries(novelId);
   const plansQuery = useChapterPlans(novelId);
   const maxChQuery = useMaxChapterNumber(novelId);
+  // 4.4.2: delete 走 mutation（onSuccess 失效 timeline），删 setDeleting useState + bumpRefresh。
+  // deleting 由 mutation.isPending 推导（ConfirmDialog loading）。
+  // useApp/useRefresh/saving 暂保留（commit 3 改 create/update mutation 时删）。
+  const deleteMutation = useDeleteTimelineEntry(novelId);
+  const deleting = deleteMutation.isPending;
   const entries = entriesQuery.data ?? [];
   const plans = plansQuery.data ?? [];
   const loading = entriesQuery.isLoading || plansQuery.isLoading;
@@ -121,7 +127,6 @@ export default function TimelineView({ novelId }: Props) {
   const [createCat, setCreateCat] = useState("foreshadowing");
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // 4.4.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
@@ -361,16 +366,13 @@ export default function TimelineView({ novelId }: Props) {
 
   async function confirmDelete() {
     if (deleteTarget === null) return;
-    setDeleting(true);
+    // 4.4.2: 走 mutation（onSuccess 失效 timeline），删 setDeleting/bumpRefresh。
     try {
-      await app.DeleteTimelineEntry(novelId, deleteTarget);
+      await deleteMutation.mutateAsync(deleteTarget);
       setDeleteTarget(null);
-      bumpRefresh();
     } catch (err) {
       toastError(t("timeline.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   }
 
