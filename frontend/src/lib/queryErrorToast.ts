@@ -22,7 +22,7 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "chapter-plans": "timeline.chapterPlansLoadFailed",
   reader: "reader.loadFailed",
   preferences: "preference.loadFailed",
-  // novel-settings: "novelSetting.loadFailed",
+  "novel-settings": "novelSetting.loadFailed",
   // "style-samples": "styleSample.loadFailed",
   // skills: "skill.loadFailed",
   // sessions: "session.loadFailed",

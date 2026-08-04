@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Plus, Globe, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
 import { useRefresh } from "@/hooks/useRefresh";
 import type { setting } from "@/hooks/useApp";
@@ -8,6 +9,8 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { novelSettingKeys } from "@/lib/queryKeys";
+import { useNovelSettings } from "./useNovelSettings";
 
 interface Props {
   novelId: number;
@@ -25,47 +28,34 @@ const EMPTY_FORM: EditForm = { category: "", content: "" };
 
 export default function NovelSettingView({ novelId }: Props) {
   const app = useApp();
+  const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { bumpRefresh, refreshNonce } = useRefresh();
 
-  const [items, setItems] = useState<setting.SettingItem[]>([]);
-  const [tokenCount, setTokenCount] = useState(0);
-  const [overBudget, setOverBudget] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadFailed, setLoadFailed] = useState(false);
+  // 4.7.1: settings 走 query（与 NovelSettingList 共享缓存）。
+  // 删原 useApp.GetNovelSettings + load() + useState；
+  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  const settingsQuery = useNovelSettings(novelId);
+  const items = settingsQuery.data?.items ?? [];
+  const tokenCount = settingsQuery.data?.token_count ?? 0;
+  const overBudget = settingsQuery.data?.over_budget ?? false;
+  const loading = settingsQuery.isLoading;
+  const loadFailed = settingsQuery.isError;
+
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
   const [deleting, setDeleting] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setItems([]);
-      setTokenCount(0);
-      setOverBudget(false);
-      setLoadFailed(false);
-      return;
-    }
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const result = await app.GetNovelSettings(novelId);
-      setItems(result.items ?? []);
-      setTokenCount(result.token_count ?? 0);
-      setOverBudget(result.over_budget ?? false);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("novelSetting.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId, t]);
-
+  // 4.7.1: refreshNonce 变化时 invalidate settings query（替代原 load()）。
+  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
+  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
   useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
+    if (!refreshNonce) return;
+    queryClient.invalidateQueries({ queryKey: novelSettingKeys.list(novelId) });
+  }, [refreshNonce, queryClient, novelId]);
 
   // ── CRUD handlers ────────────────────────────────────
 
@@ -106,7 +96,6 @@ export default function NovelSettingView({ novelId }: Props) {
       }
       setEditMode(null);
       setForm(EMPTY_FORM);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("novelSetting.saveFailed") + ": " + toErrorMessage(err));
@@ -126,7 +115,6 @@ export default function NovelSettingView({ novelId }: Props) {
     try {
       await app.DeleteNovelSetting(deleteTarget);
       setDeleteTarget(null);
-      await load();
       bumpRefresh();
     } catch (err) {
       toastError(t("novelSetting.deleteFailed") + ": " + toErrorMessage(err));

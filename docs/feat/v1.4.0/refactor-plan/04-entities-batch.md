@@ -153,13 +153,18 @@
 
 ## 4.7 novel-setting
 
-**改动文件**：`frontend/src/components/novel-setting/NovelSettingView.tsx`
+**改动文件**：`frontend/src/components/novel-setting/NovelSettingView.tsx` + `NovelSettingList.tsx`
 
-**怎么做**：`useNovelSettings(novelId)` query + CRUD mutation。模式同 preference。
+**怎么做**：`useNovelSettings(novelId)` query（返回 SettingResult，含 items/token_count/over_budget，**单 items 数组不区分 global/novel**，区别于 preference 的 PreferenceResult 双数组）+ CRUD mutation。模式同 preference，无 is_global 字段。
 
 **手测点**：setting CRUD 同步。
 
-**commit**：同 4.1 拆 4 个。
+**commit**：拆 3 个（novel-setting 跳过 store commit + dialog commit，因 NovelSettingList 侧边栏只读无跨组件 state，按规则10，同 preference/reader/timeline/storyarc）。
+
+**进度**：
+- [x] commit 1: useNovelSettings query（返回 SettingResult 非 PreferenceResult，单 items 数组）+ NovelSettingView/NovelSettingList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 novel-settings，注意带引号因含连字符）+ i18n 复用 novelSetting.loadFailed（已存在）+ queryKeys.ts 复用 novelSettingKeys（已存在）+ NovelSettingList 加 isError 内连显示（对齐 PreferenceList，原缺失）
+- [ ] commit 2: useDeleteNovelSetting mutation（DeleteNovelSetting(id) 单参）+ confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 novel-settings；useApp/useRefresh/saving 暂保留供 commit 3）
+- [ ] commit 3: useCreate/UpdateNovelSetting mutation（UpdateNovelSetting(novelId, id, input) 参数顺序 novelId 在前，同 preference）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 preference/timeline/storyarc/reader）
 
 ---
 
