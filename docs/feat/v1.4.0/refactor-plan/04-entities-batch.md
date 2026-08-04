@@ -147,7 +147,7 @@
 **进度**：
 - [x] commit 1: usePreferences query（返回 PreferenceResult 非数组）+ PreferenceView/PreferenceList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 preferences）+ i18n 复用 preference.loadFailed（已存在）+ queryKeys.ts 复用 preferenceKeys（已存在）+ PreferenceList 加 isError 内连显示（对齐 ReaderList，原缺失）
 - [x] commit 2: useDeletePreference mutation（DeletePreference(id) 单参）+ confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 preferences；useApp/useRefresh/saving 暂保留供 commit 3）
-- [ ] commit 3: useCreate/UpdatePreference mutation（UpdatePreference(novelId, id, input) 参数顺序 novelId 在前，与 reader 相反）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 timeline/storyarc/reader）
+- [x] commit 3: useCreate/UpdatePreference mutation（UpdatePreference(novelId, id, input) 参数顺序 novelId 在前，与 reader 相反）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 timeline/storyarc/reader）
 
 ---
 
