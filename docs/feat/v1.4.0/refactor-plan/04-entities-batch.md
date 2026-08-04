@@ -134,15 +134,20 @@
 
 ## 4.6 preference
 
-**特殊点**：preference 有 `is_global` 字段区分全局/小说级。queryKey 用 `preferences` + novelId（小说级）或全局。注意后端 PATCH 语义（参考 project_memory：Category/Content 必填值类型，IsGlobal 指针类型 omitempty）。
+**特殊点**：preference 有 `is_global` 字段区分全局/小说级。`GetPreferences(novelId)` 返回 `app.PreferenceResult`（含 global/novel/token_count/over_budget 四字段，非数组，区别于 reader/timeline）。`DeletePreference(id)` 单参（无 novelId，与 reader/timeline 不同）。`UpdatePreference(novelId, id, input)` 参数顺序 novelId 在前（与 reader 的 `UpdateReaderPerspective(id, novelId, input)` 相反）。PreferenceList 合并 global+novel 为一个列表展示。PreferenceList 侧边栏只读无跨组件 state，按规则10 跳过 store commit + dialog commit（同 reader/timeline/storyarc），实际拆 3 个 commit。
 
-**改动文件**：`frontend/src/components/preference/PreferenceList.tsx`、PreferenceView
+**改动文件**：`frontend/src/components/preference/PreferenceList.tsx`、`PreferenceView.tsx`
 
-**怎么做**：`usePreferences(novelId)` query。mutation 处理 is_global 归属（全局时 novelId=0）。迁移后 PreferenceList 的 bumpRefresh 删除。
+**怎么做**：`usePreferences(novelId)` 单 query（返回 PreferenceResult，消费方各自取字段）。preference CRUD（create/update/delete）一组 mutation。create/update 全量回传 input（§6，is_global 字段含归属切换，后端按 is_global 决定 novelId=0 或当前 novelId）。
 
-**手测点**：全局/小说级 preference CRUD 同步。
+**手测点**：全局/小说级 preference CRUD 同步；is_global 归属切换（edit 时改 global↔book）；token 预算显示（overBudget）。
 
-**commit**：同 4.1 拆 4 个。
+**commit**：拆 3 个（preference 跳过 store commit + dialog commit，因 PreferenceList 侧边栏只读无跨组件 state，按规则10，同 reader/timeline/storyarc）。
+
+**进度**：
+- [x] commit 1: usePreferences query（返回 PreferenceResult 非数组）+ PreferenceView/PreferenceList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 preferences）+ i18n 复用 preference.loadFailed（已存在）+ queryKeys.ts 复用 preferenceKeys（已存在）+ PreferenceList 加 isError 内连显示（对齐 ReaderList，原缺失）
+- [ ] commit 2: useDeletePreference mutation（DeletePreference(id) 单参）+ confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 preferences；useApp/useRefresh/saving 暂保留供 commit 3）
+- [ ] commit 3: useCreate/UpdatePreference mutation（UpdatePreference(novelId, id, input) 参数顺序 novelId 在前，与 reader 相反）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 timeline/storyarc/reader）
 
 ---
 

@@ -1,34 +1,24 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Search, Settings } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
-import type { preference } from "@/hooks/useApp";
+import { usePreferences } from "./usePreferences";
 
 interface Props {
   novelId: number;
 }
 
 export default function SidebarPreferenceList({ novelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
-  const { refreshNonce } = useRefresh();
-
-  const [items, setItems] = useState<preference.PreferenceItem[]>([]);
+  // 4.6.1: preferences 走 query（与 PreferenceView 共享缓存）。
+  // 4a: query 错误 toast 由全局中间件接管，组件加 isError 内连显示（对齐 ReaderList）。
+  const { data, isError } = usePreferences(novelId);
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setItems([]);
-      return;
-    }
-    const result = await app.GetPreferences(novelId);
-    setItems([...(result.global ?? []), ...(result.novel ?? [])]);
-  }, [novelId, app]);
-
-  useEffect(() => {
-    load();
-  }, [load, refreshNonce]);
+  // PreferenceList 合并 global + novel 两组为一个列表（保持原 load() 行为）。
+  const items = useMemo(() => {
+    if (!data) return [];
+    return [...(data.global ?? []), ...(data.novel ?? [])];
+  }, [data]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return items;
@@ -60,7 +50,13 @@ export default function SidebarPreferenceList({ novelId }: Props) {
         </div>
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {filtered.length === 0 ? (
+        {isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-destructive">
+              {t("preference.loadFailed")}
+            </p>
+          </div>
+        ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">
             <p className="text-xs text-muted-foreground">
               {search
