@@ -175,20 +175,16 @@ func TestParseTxt_MixedFormat_StrictPatternWins(t *testing.T) {
 // ── 6. 完全没有章节标记 ──────────────────────────────────
 
 func TestParseTxt_NoChapterMarkers(t *testing.T) {
-	content := "这是一段没有任何章节标记的纯文本。\n它只有正文内容，没有第1章这种标记。\n应该整段作为一个章节处理。\n"
+	// 真正无章节标记（不含"第X章"字样，避免 loose_inline 误匹配）
+	content := "这是一段没有任何章节标记的纯文本。\n它只有正文内容，没有任何章节号。\n应该整段作为一个章节处理。\n"
 	path := writeTxtFile(t, "纯文本.txt", content)
 	r, err := parseTxt(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Chapters) != 1 {
-		t.Fatalf("期望 1 章（无章节标记时整文件为一章），实际 %d 章", len(r.Chapters))
-	}
-	if r.Chapters[0].Title != "第1章" {
-		t.Errorf("默认标题应为'第1章'，实际: %q", r.Chapters[0].Title)
-	}
-	if !strings.Contains(r.Chapters[0].Content, "没有任何章节标记") {
-		t.Errorf("章节内容应包含原文，实际: %q", r.Chapters[0].Content)
+	// 无章节标记 → candidates==0 → NeedsLLM=true（不导入单章）
+	if !r.NeedsLLM {
+		t.Errorf("期望 NeedsLLM=true（无章节标记时不导入单章），实际 NeedsLLM=%v chapters=%d", r.NeedsLLM, len(r.Chapters))
 	}
 }
 
@@ -754,8 +750,9 @@ func TestParseTxt_ZeroMatches(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Chapters) != 1 {
-		t.Fatalf("期望 1 章（0 匹配时整文件为一章），实际 %d 章", len(r.Chapters))
+	// 0 匹配 → 不导入单章，提示 AI 分析
+	if !r.NeedsLLM {
+		t.Errorf("期望 NeedsLLM=true（0 匹配时不导入单章），实际 NeedsLLM=%v", r.NeedsLLM)
 	}
 }
 

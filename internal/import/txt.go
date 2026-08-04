@@ -72,6 +72,9 @@ func parseTxt(filePath string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	if strings.TrimSpace(content) == "" {
+		return nil, fmt.Errorf("文件内容为空")
+	}
 
 	title := inferTitle(filePath)
 
@@ -180,54 +183,19 @@ func parseTxt(filePath string) (*Result, error) {
 		return candidates[i].start < candidates[j].start
 	})
 
-	// 合并后匹配数 <= 1，整个文件视为一章
-	if len(candidates) <= 1 {
-		content = strings.TrimSpace(content)
-		if content == "" {
-			return nil, fmt.Errorf("文件内容为空")
-		}
-		return &Result{
-			Title: title,
-			Chapters: []Chapter{{
-				Title:   "第1章",
-				Content: content,
-			}},
-		}, nil
-	}
-
 	// 间距验证：过滤掉间距过小的假阳性匹配
 	candidates = filterByGap(candidates, content)
-	if len(candidates) <= 1 {
-		content = strings.TrimSpace(content)
-		if content == "" {
-			return nil, fmt.Errorf("文件内容为空")
-		}
-		return &Result{
-			Title: title,
-			Chapters: []Chapter{{
-				Title:   "第1章",
-				Content: content,
-			}},
-		}, nil
-	}
 
+	// 统一按匹配点切分：candidates==0 返回空切片，==1 切 1 章（首个匹配点之前的内容按前言丢弃，与多匹配点行为一致），>=2 正常切分
 	chapters := splitByPositions(content, candidates)
 
-	if len(chapters) == 0 {
-		return nil, fmt.Errorf("未能从文件中提取到章节")
-	}
-
-	// 文件大小估算验证：章节数应与文件总字数大致匹配
+	// 最后统一 guard：章节数与文件大小不匹配（含 0 章）→ 提示前端走 LLM
 	totalChars := utf8.RuneCountInString(content)
 	if !isReasonableChapterCount(len(chapters), totalChars) {
-		content = strings.TrimSpace(content)
 		return &Result{
-			Title: title,
-			Chapters: []Chapter{{
-				Title:   "第1章",
-				Content: content,
-			}},
-			NeedsLLM: true, // 正则分割结果不合理，提示前端可调用 LLM 分析
+			Title:    title,
+			Chapters: chapters,
+			NeedsLLM: true,
 		}, nil
 	}
 
@@ -343,8 +311,8 @@ func filterByGap(matches []matchLine, content string) []matchLine {
 // 中文网络小说平均每章 2000-5000 字，取 3000 字估算，
 // 若实际章节数不足估算的 10%，说明分割可能失败。
 func isReasonableChapterCount(chapters int, totalChars int) bool {
-	if chapters <= 1 {
-		return true
+	if chapters == 0 {
+		return false // 0 章永远不合理（识别不出章节格式）
 	}
 	if totalChars < 3000 {
 		return true // 文件太短，无法估算

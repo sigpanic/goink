@@ -131,11 +131,9 @@ func TestParseTxt_NoChapters(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(r.Chapters) != 1 {
-		t.Fatalf("expected 1 chapter (whole file), got %d", len(r.Chapters))
-	}
-	if r.Chapters[0].Title != "第1章" {
-		t.Errorf("expected title '第1章', got %q", r.Chapters[0].Title)
+	// 无章节标记 → 不导入单章，提示 AI 分析
+	if !r.NeedsLLM {
+		t.Errorf("expected NeedsLLM=true for no chapter markers, got NeedsLLM=%v chapters=%d", r.NeedsLLM, len(r.Chapters))
 	}
 }
 
