@@ -164,7 +164,7 @@
 **进度**：
 - [x] commit 1: useNovelSettings query（返回 SettingResult 非 PreferenceResult，单 items 数组）+ NovelSettingView/NovelSettingList 改造（删 load() 三件套，改用 query data；CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 刷新，commit 2/3 改 mutation 后改 onSuccess invalidate；useApp/useRefresh 暂保留供 CRUD handler 过渡）+ 中间件映射（queryErrorToast 启用 novel-settings，注意带引号因含连字符）+ i18n 复用 novelSetting.loadFailed（已存在）+ queryKeys.ts 复用 novelSettingKeys（已存在）+ NovelSettingList 加 isError 内连显示（对齐 PreferenceList，原缺失）
 - [x] commit 2: useDeleteNovelSetting mutation（DeleteNovelSetting(id) 单参）+ confirmDelete 改 mutateAsync（deleting 由 mutation.isPending 推导，删 setDeleting useState + bumpRefresh；onSuccess 失效 novel-settings；useApp/useRefresh/saving 暂保留供 commit 3）
-- [ ] commit 3: useCreate/UpdateNovelSetting mutation（UpdateNovelSetting(novelId, id, input) 参数顺序 novelId 在前，同 preference）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 preference/timeline/storyarc/reader）
+- [x] commit 3: useCreate/UpdateNovelSetting mutation（UpdateNovelSetting(novelId, id, input) 参数顺序 novelId 在前，同 preference）+ saving 由 mutation.isPending 推导 + 删 bumpRefresh/useRefresh/useApp + refreshNonce effect（对齐 preference/timeline/storyarc/reader）
 
 ---
 

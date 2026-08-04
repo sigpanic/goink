@@ -1,17 +1,15 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Pencil, Plus, Globe, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
-import { useRefresh } from "@/hooks/useRefresh";
 import type { setting } from "@/hooks/useApp";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { novelSettingKeys } from "@/lib/queryKeys";
 import { useNovelSettings } from "./useNovelSettings";
 import { useDeleteNovelSetting } from "./useDeleteNovelSetting";
+import { useCreateNovelSetting } from "./useCreateNovelSetting";
+import { useUpdateNovelSetting } from "./useUpdateNovelSetting";
 
 interface Props {
   novelId: number;
@@ -28,15 +26,10 @@ type EditForm = {
 const EMPTY_FORM: EditForm = { category: "", content: "" };
 
 export default function NovelSettingView({ novelId }: Props) {
-  const app = useApp();
-  const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { bumpRefresh, refreshNonce } = useRefresh();
 
   // 4.7.1: settings 走 query（与 NovelSettingList 共享缓存）。
-  // 删原 useApp.GetNovelSettings + load() + useState；
-  // CRUD 后由 bumpRefresh → refreshNonce → invalidateQueries 触发 refetch（commit 2/3 抽 mutation 后改 onSuccess invalidate）。
-  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
+  // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不挂 useEffect。
   const settingsQuery = useNovelSettings(novelId);
   const items = settingsQuery.data?.items ?? [];
   const tokenCount = settingsQuery.data?.token_count ?? 0;
@@ -44,22 +37,17 @@ export default function NovelSettingView({ novelId }: Props) {
   const loading = settingsQuery.isLoading;
   const loadFailed = settingsQuery.isError;
 
+  // 4.7.2/4.7.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
+  // onSuccess 失效对应 query（entry CRUD 失效 novel-settings，NovelSettingView + NovelSettingList 共享缓存）。
+  const deleteMutation = useDeleteNovelSetting(novelId);
+  const createMutation = useCreateNovelSetting(novelId);
+  const updateMutation = useUpdateNovelSetting(novelId);
+  const deleting = deleteMutation.isPending;
+  const saving = createMutation.isPending || updateMutation.isPending;
+
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
-  const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
-
-  // 4.7.2: delete 走 mutation（onSuccess 失效 novel-settings），删 setDeleting useState。
-  const deleteMutation = useDeleteNovelSetting(novelId);
-  const deleting = deleteMutation.isPending;
-
-  // 4.7.1: refreshNonce 变化时 invalidate settings query（替代原 load()）。
-  // CRUD 后 bumpRefresh 触发 refreshNonce → invalidate → query refetch。
-  // commit 2/3 抽 mutation 后改 onSuccess invalidate，届时删 bumpRefresh + 此 effect。
-  useEffect(() => {
-    if (!refreshNonce) return;
-    queryClient.invalidateQueries({ queryKey: novelSettingKeys.list(novelId) });
-  }, [refreshNonce, queryClient, novelId]);
 
   // ── CRUD handlers ────────────────────────────────────
 
@@ -84,28 +72,28 @@ export default function NovelSettingView({ novelId }: Props) {
       toastError(t("novelSetting.pleaseEnterContent"));
       return;
     }
-
-    setSaving(true);
+    // 4.7.3: 走 mutation（onSuccess 失效 novel-settings），删 setSaving/bumpRefresh。
     try {
       if (editMode.type === "create") {
-        await app.CreateNovelSetting(novelId, {
+        await createMutation.mutateAsync({
           category: form.category || t("novelSetting.uncategorized"),
           content: form.content,
         });
       } else {
-        await app.UpdateNovelSetting(novelId, editMode.item.id, {
-          category: form.category,
-          content: form.content,
+        // 全量回传 input 所有字段（§6 等价 PUT）。
+        await updateMutation.mutateAsync({
+          id: editMode.item.id,
+          input: {
+            category: form.category,
+            content: form.content,
+          },
         });
       }
       setEditMode(null);
       setForm(EMPTY_FORM);
-      bumpRefresh();
     } catch (err) {
       toastError(t("novelSetting.saveFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setSaving(false);
     }
   }
 
