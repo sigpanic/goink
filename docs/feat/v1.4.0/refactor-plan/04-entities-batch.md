@@ -168,13 +168,15 @@
 
 ---
 
-## 4.8 删除 useRefresh / refreshNonce 整套机制
+## 4.8 删除 useRefresh / refreshNonce 整套机制  ✅
 
 **目标**：所有领域迁移完后，refreshNonce 已无消费方，整体删除。
 
 **前置条件**：4.1-4.7 全部完成，确认无组件再调 bumpRefresh。
 
-**改动文件**：删 `frontend/src/hooks/useRefresh.ts`；改 `frontend/src/views/WorkspaceView.tsx`（删 RefreshContext.Provider L434 + L119-124 的 refreshNonce state）；删各组件残留的 `useRefresh` import。
+**改动文件**：删 `frontend/src/hooks/useRefresh.ts`；改 `frontend/src/views/WorkspaceView.tsx`（删 RefreshContext.Provider 包裹 + refreshNonce state + bumpRefresh useCallback + refreshValue useMemo + useMemo import）；各组件残留的 `useRefresh` import 已在领域迁移时逐步删清。
+
+**进度**：✅ 完成。删 useRefresh.ts；WorkspaceView 删 RefreshContext import + refreshNonce/bumpRefresh/refreshValue + Provider 包裹改 fragment；全局搜确认无实际代码引用残留（仅注释提及历史）。三绿通过。
 
 **怎么做**：
 - 全局搜 `useRefresh` / `refreshNonce` / `bumpRefresh`，确认无引用（之前各领域迁移时已逐步删，本步扫尾）。
