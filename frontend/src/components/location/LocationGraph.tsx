@@ -9,7 +9,11 @@ import { useLocationRelations } from "./useLocationRelations";
 
 interface Props {
   novelId: number;
-  focusId?: number;
+  // focus 通过 props 传递（而非子组件直接 useFocusWithNonce 订阅）：
+  // 子组件直接订阅会在 unmount（切 viewTab list/graph）时 clearFocus，
+  // 误清父组件 LocationListView 的 focus。props 传递让只有父组件订阅 + cleanup，
+  // 切 viewTab 不清 focus，切面板（父 unmount）才清。
+  focus?: { id: number; nonce: number };
 }
 
 const NODE_COLOR = { fill: "#dbeafe", stroke: "#3b82f6", text: "#1d4ed8" };
@@ -48,7 +52,7 @@ function buildTreeData(locs: location.Location[]) {
   return { id: "__root__", data: { name: "", type: "" }, children: roots };
 }
 
-export default function LocationGraph({ novelId, focusId }: Props) {
+export default function LocationGraph({ novelId, focus }: Props) {
   const { t } = useTranslation();
   const C = useGraphColors();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -80,11 +84,12 @@ export default function LocationGraph({ novelId, focusId }: Props) {
   }, [locsQuery, relsQuery]);
 
   useEffect(() => {
+    const focusId = focus?.id;
     if (focusId && focusId > 0 && locations.length > 0) {
       const loc = locations.find((l) => l.id === focusId);
       if (loc) setSelectedLocation(loc);
     }
-  }, [focusId, locations]);
+  }, [focus?.id, focus?.nonce, locations]);
 
   const graphData = useMemo(() => {
     const locIds = new Set(locations.map((l) => l.id));

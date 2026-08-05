@@ -52,8 +52,8 @@ vi.mock("@/components/character/useUpdateCharacter", () => ({
   }),
 }));
 
-vi.mock("@/stores/useFocusStore", () => ({
-  useFocusStore: () => 0,
+vi.mock("@/hooks/useFocusWithNonce", () => ({
+  useFocusWithNonce: () => undefined,
 }));
 
 // Mock CharacterGraph 避免 import @antv/g6（proxy 兼容问题）。

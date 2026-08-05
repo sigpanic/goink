@@ -215,7 +215,7 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
 // 各 View mock：接收 focusId 类 prop 渲染出来，验证 focusId 传递正确
 vi.mock("@/components/character/CharacterListView", () => ({
   default: function CharacterListViewMock() {
-    const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
+    const focusId = useFocusStore((s) => s.focusMap.characters?.id ?? 0);
     return (
       <div data-testid="character-list" data-focusid={focusId}>
         character-list
@@ -225,7 +225,7 @@ vi.mock("@/components/character/CharacterListView", () => ({
 }));
 vi.mock("@/components/location/LocationListView", () => ({
   default: function LocationListViewMock() {
-    const focusId = useFocusStore((s) => s.focusMap.locations ?? 0);
+    const focusId = useFocusStore((s) => s.focusMap.locations?.id ?? 0);
     return (
       <div data-testid="location-list" data-focusid={focusId}>
         location-list
@@ -235,7 +235,7 @@ vi.mock("@/components/location/LocationListView", () => ({
 }));
 vi.mock("@/components/storyarc/ArcListView", () => ({
   default: function ArcListViewMock() {
-    const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
+    const focusArcId = useFocusStore((s) => s.focusMap.storyarcs?.id ?? 0);
     return (
       <div data-testid="arc-list" data-focusarcid={focusArcId}>
         arc-list
@@ -245,7 +245,7 @@ vi.mock("@/components/storyarc/ArcListView", () => ({
 }));
 vi.mock("@/components/timeline/TimelineView", () => ({
   default: function TimelineViewMock() {
-    const focusEntryId = useFocusStore((s) => s.focusMap.timeline ?? 0);
+    const focusEntryId = useFocusStore((s) => s.focusMap.timeline?.id ?? 0);
     return (
       <div data-testid="timeline" data-focusentryid={focusEntryId}>
         timeline
@@ -255,7 +255,7 @@ vi.mock("@/components/timeline/TimelineView", () => ({
 }));
 vi.mock("@/components/reader/ReaderView", () => ({
   default: function ReaderViewMock() {
-    const focusId = useFocusStore((s) => s.focusMap.reader ?? 0);
+    const focusId = useFocusStore((s) => s.focusMap.reader?.id ?? 0);
     return (
       <div data-testid="reader" data-focusid={focusId}>
         reader

@@ -11,7 +11,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useFocusStore } from "@/stores/useFocusStore";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { useStoryArcs } from "./useStoryArcs";
 import { useArcNodes } from "./useArcNodes";
 import { useMaxChapterNumber } from "./useMaxChapterNumber";
@@ -91,7 +91,8 @@ const EMPTY_ARC: ArcForm = { name: "", arc_type: "main" };
 const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
 
 export default function ArcListView({ novelId }: Props) {
-  const focusArcId = useFocusStore((s) => s.focusMap.storyarcs ?? 0);
+  const focus = useFocusWithNonce("storyarcs");
+  const focusArcId = focus?.id ?? 0;
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -156,7 +157,7 @@ export default function ArcListView({ novelId }: Props) {
         setExpandedId(firstNode.id);
       }
     }
-  }, [focusArcId, allNodes]);
+  }, [focusArcId, allNodes, focus?.nonce]);
 
   const windowFrom = Math.max(1, windowCenter - WINDOW);
   const windowTo = windowCenter + WINDOW;

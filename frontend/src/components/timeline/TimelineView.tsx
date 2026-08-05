@@ -17,7 +17,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useFocusStore } from "@/stores/useFocusStore";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { timelineKeys, chapterPlanKeys, maxChapterKeys } from "@/lib/queryKeys";
 import { useTimelineEntries } from "./useTimelineEntries";
 import { useChapterPlans } from "./useChapterPlans";
@@ -96,7 +96,8 @@ const EDIT_FORM_EMPTY: EditForm = {
 };
 
 export default function TimelineView({ novelId }: Props) {
-  const focusEntryId = useFocusStore((s) => s.focusMap.timeline ?? 0);
+  const focus = useFocusWithNonce("timeline");
+  const focusEntryId = focus?.id ?? 0;
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
@@ -144,7 +145,7 @@ export default function TimelineView({ novelId }: Props) {
         setWindowCenter(entry.target_chapter || entry.source_chapter || 1);
       }
     }
-  }, [focusEntryId, entries]);
+  }, [focusEntryId, entries, focus?.nonce]);
 
   const windowFrom = Math.max(1, windowCenter - ENTRY_WINDOW);
   const windowTo = windowCenter + ENTRY_WINDOW;

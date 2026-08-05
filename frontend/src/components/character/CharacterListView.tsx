@@ -9,7 +9,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useFocusStore } from "@/stores/useFocusStore";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { characterKeys } from "@/lib/queryKeys";
 import { useCharacters } from "./useCharacters";
 import { useCreateCharacter } from "./useCreateCharacter";
@@ -45,7 +45,7 @@ function safeJson<T>(json: string, fallback: T): T {
 }
 
 export default function CharacterListView({ novelId }: Props) {
-  const focusId = useFocusStore((s) => s.focusMap.characters ?? 0);
+  const focus = useFocusWithNonce("characters");
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   // 4.1.1: characters 数据走 useCharacters query，与 CharacterGraph / CharacterList 共享缓存。
@@ -257,7 +257,7 @@ export default function CharacterListView({ novelId }: Props) {
       </div>
 
       {viewTab === "graph" ? (
-        <CharacterGraph novelId={novelId} focusId={focusId} />
+        <CharacterGraph novelId={novelId} focus={focus} />
       ) : loading ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("character.loading")}

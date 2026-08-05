@@ -16,7 +16,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useFocusStore } from "@/stores/useFocusStore";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { readerKeys } from "@/lib/queryKeys";
 import { useReaderPerspectives } from "./useReaderPerspectives";
 import { useDeleteReaderPerspective } from "./useDeleteReaderPerspective";
@@ -129,7 +129,8 @@ function typeMeta(type: string, t: (key: string) => string) {
 }
 
 export default function ReaderView({ novelId }: Props) {
-  const focusId = useFocusStore((s) => s.focusMap.reader ?? 0);
+  const focus = useFocusWithNonce("reader");
+  const focusId = focus?.id ?? 0;
   const queryClient = useQueryClient();
   const { t } = useTranslation();
 
@@ -169,7 +170,7 @@ export default function ReaderView({ novelId }: Props) {
       const entry = entries.find((e) => e.id === focusId);
       if (entry) setWindowCenter(entry.planted_chapter);
     }
-  }, [focusId, entries]);
+  }, [focusId, entries, focus?.nonce]);
 
   const filtered = useMemo(() => {
     let items = entries;

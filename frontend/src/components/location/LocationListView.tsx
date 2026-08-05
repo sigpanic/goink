@@ -9,7 +9,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { useFocusStore } from "@/stores/useFocusStore";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { locationKeys } from "@/lib/queryKeys";
 import { useLocations } from "./useLocations";
 import { useLocationStore } from "./useLocationStore";
@@ -50,7 +50,7 @@ function safeJson<T>(json: string, fallback: T): T {
 }
 
 export default function LocationListView({ novelId }: Props) {
-  const focusId = useFocusStore((s) => s.focusMap.locations ?? 0);
+  const focus = useFocusWithNonce("locations");
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   // 4.2.1: locations 走 useLocations query（与 LocationList / LocationGraph 共享缓存）。
@@ -392,7 +392,7 @@ export default function LocationListView({ novelId }: Props) {
       </div>
 
       {viewTab === "graph" ? (
-        <LocationGraph novelId={novelId} focusId={focusId} />
+        <LocationGraph novelId={novelId} focus={focus} />
       ) : loading ? (
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
           {t("location.loading")}
