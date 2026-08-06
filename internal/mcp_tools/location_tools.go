@@ -60,6 +60,7 @@ func (t *GetLocationsTool) executeList(ctx context.Context, a *GetLocationsArgs,
 		PageParams:   storage.PageParams{Page: a.Page, Size: a.Size},
 		LocationType: a.LocationType,
 		Search:       a.Search,
+		Order:        "updated_at DESC", // MCP 按最近编辑排序，截断时保留活跃地点
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)
@@ -149,6 +150,7 @@ func (t *GetLocationsTool) executeNetwork(ctx context.Context, tc ToolContext, s
 	// 全部地点
 	allResult, err := store.ListByNovel(ctx, tc.NovelID, location.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: 1, Size: -1},
+		Order:      "name ASC", // network 需构建树，保持 name 升序
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)

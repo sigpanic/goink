@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -64,6 +64,9 @@ export default function LocationListView({ novelId }: Props) {
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<LocForm>(EMPTY_FORM);
+  // 4b: 高亮声明式——focus 触发后由 state 驱动 className，render 阶段应用。
+  // 参考 CharacterListView 的 highlightedId。
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
   // 4.2.2: create/update/delete 走 mutation，saving 由 mutation.isPending 推导（不再用 useState）。
   // create/update 共用 saving（同一时刻只可能开一个编辑表单）；delete 用 deleteMutation.isPending。
   // 删除合并：deletingLocationId 走 useLocationStore，LocationList 侧边栏 dispatch 同一 store。
@@ -81,6 +84,19 @@ export default function LocationListView({ novelId }: Props) {
     for (const loc of locations) m.set(loc.id, loc.name);
     return m;
   }, [locations]);
+
+  // 4b: list 模式 focusId 定位——搜索点击后 scrollIntoView + 临时高亮（声明式）。
+  // graph 模式定位由 LocationGraph 内部 useEffect 处理（setSelectedLocation）。
+  useEffect(() => {
+    if (!focus || focus.id <= 0 || locations.length === 0) return;
+    setHighlightedId(focus.id);
+    const el = document.querySelector<HTMLElement>(
+      `[data-location-id="${focus.id}"]`,
+    );
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
+    return () => clearTimeout(timer);
+  }, [focus?.id, focus?.nonce, locations]);
 
   const locationTypeTag = (typeName: string) => {
     // Build typeToTag from i18n keywords + fixed English keywords
@@ -511,7 +527,8 @@ export default function LocationListView({ novelId }: Props) {
                   return (
                     <div
                       key={loc.id}
-                      className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                      data-location-id={loc.id}
+                      className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${highlightedId === loc.id ? "ring-2 ring-primary" : ""}`}
                     >
                       <div className="flex items-start gap-3 px-4 py-3">
                         <span className="shrink-0 flex h-8 w-8 items-center justify-center rounded bg-tag-green text-tag-green-foreground">

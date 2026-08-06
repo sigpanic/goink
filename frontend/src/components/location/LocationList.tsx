@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { location } from "@/hooks/useApp";
+import { useFocusStore } from "@/stores/useFocusStore";
 import { useLocations } from "./useLocations";
 import { useLocationStore } from "./useLocationStore";
 
@@ -44,6 +45,9 @@ export default function LocationList({ novelId }: Props) {
   const setDeletingLocationId = useLocationStore(
     (s) => s.setDeletingLocationId,
   );
+  // 4b: 点击列表项触发 focusEntity（toggle + focus 同一 onClick），
+  // LocationListView 的 useEffect 收到后 scrollIntoView + 高亮。
+  const focusEntity = useFocusStore((s) => s.focusEntity);
 
   const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
@@ -77,6 +81,7 @@ export default function LocationList({ novelId }: Props) {
         <button
           onClick={() => {
             if (hasChildren) toggle(loc.id);
+            focusEntity("locations", loc.id);
           }}
           className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors"
           style={{ paddingLeft: `${12 + depth * 16}px` }}

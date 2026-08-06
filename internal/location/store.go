@@ -29,6 +29,7 @@ type ListByNovelOptions struct {
 	PageParams   storage.PageParams
 	LocationType string // 空字符串=不过滤
 	Search       string // 空字符串=不过滤，按 name LIKE 模糊匹配
+	Order        string // 空字符串=默认 name ASC；调用方显式传（App 传 "name ASC"，MCP 传 "updated_at DESC"）
 }
 
 // ListByNovel 分页列出某小说的地点，支持类型过滤和名称搜索。
@@ -50,23 +51,17 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 		return nil, fmt.Errorf("location store: count: %w", err)
 	}
 
+	order := opts.Order
+	if order == "" {
+		order = "name ASC"
+	}
 	var locs []Location
-	if err := q.Order("name ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&locs).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&locs).Error; err != nil {
 		return nil, fmt.Errorf("location store: list: %w", err)
 	}
 
 	s.logger.Debug("location store: listed", "novel_id", novelID, "total", total, "page", pp.Page)
 	return storage.NewPageResult(locs, total, pp.Page, pp.Size), nil
-}
-
-// ListAllByNovel 返回某小说的全部地点（不分页），供前端侧边栏嵌套树和关系图渲染。
-func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Location, error) {
-	var locs []Location
-	if err := s.DB.WithContext(ctx).Where("novel_id = ?", novelID).Order("name ASC").Find(&locs).Error; err != nil {
-		return nil, fmt.Errorf("location store: list all: %w", err)
-	}
-	s.logger.Debug("location store: list all", "novel_id", novelID, "count", len(locs))
-	return locs, nil
 }
 
 // GetChildren 返回某地点的直接子地点。

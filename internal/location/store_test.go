@@ -28,7 +28,7 @@ func testLocLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-func TestLocListAllByNovel(t *testing.T) {
+func TestLocListByNovel_All(t *testing.T) {
 	db := openLocDB(t)
 	s := NewStore(db, testLocLogger())
 	ctx := context.Background()
@@ -37,9 +37,11 @@ func TestLocListAllByNovel(t *testing.T) {
 	db.Create(&Location{NovelID: 1, Name: "城堡"})
 	db.Create(&Location{NovelID: 2, Name: "沙漠"})
 
-	locs, _ := s.ListAllByNovel(ctx, 1)
-	if len(locs) != 2 {
-		t.Errorf("expected 2, got %d", len(locs))
+	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if len(result.Items) != 2 {
+		t.Errorf("expected 2, got %d", len(result.Items))
 	}
 }
 

@@ -6,11 +6,21 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // GetLocations 返回指定小说的全部地点，供前端侧边栏嵌套树和关系图节点渲染。
+// 4b: 改调 ListByNovel(Size=-1) 全量（废弃 ListAllByNovel），传 Order="name ASC"
+// 保持原 name 升序行为。
 func (a *App) GetLocations(novelID int64) ([]location.Location, error) {
-	return a.location.ListAllByNovel(a.ctx, novelID)
+	result, err := a.location.ListByNovel(a.ctx, novelID, location.ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "name ASC",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
 }
 
 // GetLocationRelations 返回指定小说的全部空间关系（无向边），供前端关系图渲染。
