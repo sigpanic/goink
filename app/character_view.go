@@ -10,8 +10,17 @@ import (
 )
 
 // GetCharacters 返回指定小说的全部角色，供前端侧边栏列表和关系图节点渲染。
+// 4b: 改调 ListByNovel(Size=-1) 全量（废弃 ListAllByNovel），传 Order="name ASC"
+// 保持原 ListAllByNovel 的 name 升序行为。MCP 不传 Order，走默认 updated_at DESC。
 func (a *App) GetCharacters(novelID int64) ([]character.Character, error) {
-	return a.character.ListAllByNovel(a.ctx, novelID)
+	result, err := a.character.ListByNovel(a.ctx, novelID, character.ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "name ASC",
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.Items, nil
 }
 
 // GetCharacterRelations 返回指定小说的全部当前角色关系（有向边），供前端关系图渲染。

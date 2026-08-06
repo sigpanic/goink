@@ -41,7 +41,7 @@
 | 3 小说领域模板 | [03-novel-template.md](./03-novel-template.md) | 3.1 useNovels → 3.9 4 处消费方迁移 | 中 | 阶段 2 完成 |
 | 4 7 实体批量 | [04-entities-batch.md](./04-entities-batch.md) | character → novel-setting，删 refreshNonce | 中 | 阶段 3 验证手感 |
 | 4a 错误 toast 中间件 | [04a-query-error-toast.md](./04a-query-error-toast.md) | QueryCache.subscribe 全局中间件，修 character 重复 toast + novel 静默失败 | 低~中 | 4.1.1 完成（character 已 query 化） |
-| 4b 全领域 list/search 统一 | [04b-search-preference-setting-reader.md](./04b-search-preference-setting-reader.md) | store 统一 ListByNovel(Search, Page, Size=0) + 废弃不一致命名 + 修复 storyarc 截断/reader 循环 + 全局搜索补 3 类 + 前端展示 | 中 | 阶段 4 完成 |
+| 4b 全领域 list/search 统一 | [04b-search-preference-setting-reader.md](./04b-search-preference-setting-reader.md) | store 统一 ListByNovel(Search, Page, Size=-1) + 废弃不一致命名 + 修复 storyarc 截断/reader 循环 + 全局搜索补 3 类 + 前端展示 | 中 | 阶段 4 完成 |
 | 5 其他模块 | [05-misc-modules.md](./05-misc-modules.md) | chat/content/skill/git/search | 中 | 阶段 4 完成 |
 | 6 拆巨石（可选） | [06-monolith-optional.md](./06-monolith-optional.md) | ChatPanel/ArcListView/去 imperativeHandle | 高 | 痛点驱动，先扩测试 |
 | 7 localStorage 迁 persist | [07-localstorage-persist.md](./07-localstorage-persist.md) | useTheme/useLayoutState/useWindowState → store + persist | 低~中 | 阶段 5 完成；正交于阶段 6，可并行 |

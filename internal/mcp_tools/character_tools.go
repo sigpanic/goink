@@ -43,6 +43,7 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 	result, err := store.ListByNovel(ctx, tc.NovelID, character.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		Search:     a.Search,
+		Order:      "updated_at DESC", // MCP 按最近编辑排序，截断时保留活跃角色
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list characters: %w", err)

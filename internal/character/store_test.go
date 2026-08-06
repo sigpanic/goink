@@ -28,7 +28,7 @@ func testCharLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-func TestListAllByNovel(t *testing.T) {
+func TestListByNovel_Full(t *testing.T) {
 	db := openCharDB(t)
 	s := NewStore(db, testCharLogger())
 	ctx := context.Background()
@@ -37,12 +37,13 @@ func TestListAllByNovel(t *testing.T) {
 	db.Create(&Character{NovelID: 1, Name: "李四"})
 	db.Create(&Character{NovelID: 2, Name: "王五"})
 
-	chars, err := s.ListAllByNovel(ctx, 1)
+	// 4b: ListAllByNovel 已废弃，Size=-1 全量等价。
+	result, err := s.ListByNovel(ctx, 1, ListByNovelOptions{PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
-		t.Fatalf("ListAllByNovel: %v", err)
+		t.Fatalf("ListByNovel: %v", err)
 	}
-	if len(chars) != 2 {
-		t.Errorf("expected 2, got %d", len(chars))
+	if result.Total != 2 {
+		t.Errorf("expected 2, got %d", result.Total)
 	}
 }
 

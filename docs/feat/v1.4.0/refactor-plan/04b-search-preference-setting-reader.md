@@ -1,16 +1,19 @@
 # 阶段 4b：全领域 list/search 统一
 
 > 前置条件：[阶段 4](./04-entities-batch.md) 完成（8 实体领域已 query 化）。
-> 完成后：各领域 store 统一 `ListByNovel(Search, Page, Size=0 全量, 领域filter)` 作为基础查询方法，废弃 ListAllByNovel / SearchByNovel；全局搜索覆盖全部实体；前端领域内搜索保持 filter。
+> 完成后：各领域 store 统一 `ListByNovel(Search, Page, Size=-1 全量, 领域filter)` 作为基础查询方法，废弃 ListAllByNovel / SearchByNovel；全局搜索覆盖全部实体；前端领域内搜索保持 filter。
 > 与 [阶段 5](./05-misc-modules.md) 正交，可独立推进。
 
 ## 核心思想：ListByNovel 作为基础查询方法
 
 `ListByNovel` 是各领域通用的基础查询方法，能力边界：
-- **分页**：Page/Size，Size=0 表示全量（不 Limit）
+- **分页**：Page/Size，Size=-1 表示全量（GORM Limit(-1) 取消限制），Size=0 表示 Limit(0) 快速失败返回 0 条，Size>0 正常分页
 - **搜索**：Search 非空时 LIKE 模糊匹配
+- **排序**：Order raw string（空=领域默认排序），调用方显式传入（如 App 层传 `"name ASC"`，MCP 传 `"updated_at DESC"`），DB 层 ORDER BY，不用 App 层 sort
 - **领域专属过滤**：适合 opts 的过滤（如种类/状态），传了过滤，不传不过滤
 - 作为基础方法被 App 层 / MCP / searchEntities 复用
+
+**所有领域 ListByNovel 同步加 Order 字段**（raw string，GORM 惯例，代码传参无注入面），调用方显式传入排序，不依赖默认值。
 
 **不在 ListByNovel 边界内的特殊查询**（保留独立方法）：
 - 窗口切分（timeline.ListBefore / ListAfter / ListPendingBefore；storyarc.ListNodesBefore/After/PendingByArc / GetBreakpoint）
@@ -28,7 +31,7 @@
 
 | 领域 | App 方法 | 调的 store 方法 | 模式 | 问题 |
 |---|---|---|---|---|
-| character | GetCharacters | `ListAllByNovel` | 全量无分页 | ListAll 是 ListByNovel(Size=0) 的特例，冗余 |
+| character | GetCharacters | `ListAllByNovel` | 全量无分页 | ListAll 是 ListByNovel(Size=-1) 的特例，冗余 |
 | location | GetLocations | `ListAllByNovel` | 全量无分页 | 同上 |
 | setting | GetNovelSettings | `ListSettings` | 全量无分页 | 命名不一致 |
 | preference | GetPreferences | `ListGlobalPreferences + ListNovelPreferences` | 双查询合并 | 命名不一致 |
@@ -51,9 +54,9 @@
 ```
 前端 (wails bind)
   ↓
-App 层 (app/*.go) — GetXxx 包装 ListByNovel(Size=0) 全量
+App 层 (app/*.go) — GetXxx 包装 ListByNovel(Size=-1) 全量
   ↓
-store 层 (internal/*/store.go) — 统一 ListByNovel(Search, Page, Size=0, 领域filter)
+store 层 (internal/*/store.go) — 统一 ListByNovel(Search, Page, Size=-1, 领域filter)
   ↓
 DB
 
@@ -68,14 +71,14 @@ MCP 层 — 直接调 store.ListByNovel(Page:N, Size:M) 分页，或调特殊方
 
 | 领域 | ListByNovel 现状 | 改动 |
 |---|---|---|
-| character | 已有 Search option | 保持 |
-| location | 已有 Search option | 保持 |
-| storyarc | 有 ArcType/Status，无 Search | 加 Search option |
-| chapter | 有 Order，无 Search | 加 Search option |
-| reader | 有 Type，无 Search | 加 Search option |
-| timeline | 有 Category/Status，无 Search | 加 Search + FromChapter + ToChapter 三个 option（合并 ListByChapterRange + SearchByNovel） |
-| setting | 只有 ListSettings（无分页无 Search） | 改名 ListByNovel + 加 Search/Page |
-| preference | ListGlobal/ListNovel/ListPreferences | ListGlobalPreferences + ListNovelPreferences 各加 Search + Page；删 ListPreferences（死代码） |
+| character | 已有 Search option | 加 Order option |
+| location | 已有 Search option | 加 Order option |
+| storyarc | 有 ArcType/Status，无 Search | 加 Search + Order option |
+| chapter | 有 Order，无 Search | 加 Search option（Order 已有） |
+| reader | 有 Type，无 Search | 加 Search + Order option |
+| timeline | 有 Category/Status，无 Search | 加 Search + FromChapter + ToChapter + Order（合并 ListByChapterRange + SearchByNovel） |
+| setting | 只有 ListSettings（无分页无 Search） | 改名 ListByNovel + 加 Search/Page/Order |
+| preference | ListGlobal/ListNovel/ListPreferences | ListGlobalPreferences + ListNovelPreferences 各加 Search + Page + Order；删 ListPreferences（死代码） |
 
 **LIKE 字段**：
 - character: name
@@ -88,7 +91,7 @@ MCP 层 — 直接调 store.ListByNovel(Page:N, Size:M) 分页，或调特殊方
 - preference: content + category
 
 **废弃方法**：
-- `ListAllByNovel`（character/location/chapter）→ 被 `ListByNovel(Size=0)` 替代
+- `ListAllByNovel`（character/location/chapter）→ 被 `ListByNovel(Size=-1)` 替代
 - `SearchByNovel`（timeline/storyarc/chapter）→ 被 `ListByNovel(Search)` 替代
 - `ListByChapterRange`（timeline）→ 被 `ListByNovel(FromChapter, ToChapter)` 替代（前端传 0,0 全量，等价原行为；MCP 用 ListBefore/After/PendingBefore 不受影响）
 - `ListSettings`（setting）→ 改名 `ListByNovel`
@@ -111,26 +114,26 @@ preference 有 `is_global` 区分（全局 + 小说专属），App 层 GetPrefer
 
 **全局搜索 searchEntities 搜 preference**：调两次（ListGlobalPreferences + ListNovelPreferences）合并结果
 
-### PageParams.Normalize 改造
+### PageParams.Normalize 改造（已完成，commit eaf448f / 276257a）
 
 当前：`Size<1 或 Size>100` → `Size=20`。
-改造：`Size=0` 表示全量（不 Limit），`Size>0` 正常分页，移除 `Size>100` 上限。
+改造为严格 GORM 语义：`Size>=0` 原样透传（0=Limit(0) 快速失败，>0 正常分页），`Size<0` 归一化为 -1（Limit(-1) 取消限制）并强制 Page=1 保证 offset=0。新增 `Offset()` 集中计算偏移量。`NewPageResult` 归一化 nil Items 为空切片 + 修正 size<0 时 TotalPages。
 
 影响面：所有 ListByNovel 调用方确认 Size 语义。MCP 传具体 Size（如 20/50），不受影响。
 
-### App 层 GetXxx 内部改调 ListByNovel(Size=0)
+### App 层 GetXxx 内部改调 ListByNovel(Size=-1)
 
-- `GetCharacters` → `character.ListByNovel(Size=0)`
-- `GetLocations` → `location.ListByNovel(Size=0)`
-- `GetNovelSettings` → `setting.ListByNovel(Size=0)`（保持返回 SettingResult）
-- `GetTimelineEntries(from,to)` → `timeline.ListByNovel(Size=0, FromChapter=from, ToChapter=to)`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价；废弃 ListByChapterRange）
-- `GetStoryArcs` → `storyarc.ListByNovel(Size=0)`（修复截断 bug）
-- `GetReaderPerspectives` → `reader.ListByNovel(Size=0)`（废弃循环拉全）
+- `GetCharacters` → `character.ListByNovel(Size=-1)`
+- `GetLocations` → `location.ListByNovel(Size=-1)`
+- `GetNovelSettings` → `setting.ListByNovel(Size=-1)`（保持返回 SettingResult）
+- `GetTimelineEntries(from,to)` → `timeline.ListByNovel(Size=-1, FromChapter=from, ToChapter=to)`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价；废弃 ListByChapterRange）
+- `GetStoryArcs` → `storyarc.ListByNovel(Size=-1)`（修复截断 bug）
+- `GetReaderPerspectives` → `reader.ListByNovel(Size=-1)`（废弃循环拉全）
 - `GetPreferences` → preference 方案待定
 
 **修复 bug**：
-- storyarc `Size:100` 截断 → `Size=0` 全量
-- reader 循环拉全 → `Size=0` 一次拉全
+- storyarc `Size:100` 截断 → `Size=-1` 全量
+- reader 循环拉全 → `Size=-1` 一次拉全
 
 ### searchEntities 改造（全局搜索）
 
@@ -231,6 +234,8 @@ useEffect(() => {
 
 领域内搜索点击 list 项时也调 `focusEntity(currentPanel, id)`，触发同一个 useEffect 定位。
 
+**所有领域 List 组件（侧边栏列表）的列表项加 `onClick → focusEntity`**，不区分搜索/非搜索——单击列表项即触发定位，与全局搜索点击效果一致。
+
 **领域内搜索**：保持现状（前端 `useState + useMemo filter`），不走后端。搜索字段需与后端 Search 字段一致。
 
 ## JS filter vs 后端 LIKE 差异
@@ -268,8 +273,9 @@ useEffect(() => {
 **目标**：跑通纵切流程模板。
 
 **改动**：
-- store 层：character 已有 Search option，保持
-- App 层：`GetCharacters` 改调 `ListByNovel(Size=0)`，废弃 `ListAllByNovel`
+- store 层：character.ListByNovel 加 Order option（raw string，空=默认 `updated_at DESC`），废弃 ListAllByNovel
+- App 层：`GetCharacters` 改调 `ListByNovel(Size=-1, Order="name ASC")`（保持原 name 升序行为）
+- MCP 层：GetCharactersTool 显式传 `Order="updated_at DESC"`（不依赖默认值）
 - searchEntities：character 已接入，保持
 - 前端 SearchPanel：character 已配置 TYPE_CONFIG，保持
 - 前端 View 定位：CharacterListView list 模式补 focusId useEffect（scrollIntoView + 高亮），参考已有 graph 模式
@@ -283,8 +289,8 @@ useEffect(() => {
 **目标**：参考 character 模板，location 同构推进。
 
 **改动**：
-- store 层：location 已有 Search option，保持
-- App 层：`GetLocations` 改调 `ListByNovel(Size=0)`，废弃 `ListAllByNovel`
+- store 层：location.ListByNovel 加 Order option
+- App 层：`GetLocations` 改调 `ListByNovel(Size=-1, Order="name ASC")`，废弃 `ListAllByNovel`
 - searchEntities：location 已接入，保持
 - 前端 SearchPanel：location 已配置，保持
 - 前端 View 定位：LocationListView/LocationGraph 补 focusId useEffect（如未实现）
@@ -298,8 +304,8 @@ useEffect(() => {
 **目标**：store 加 Search + 修复 Size:100 截断 bug。
 
 **改动**：
-- store 层：`storyarc.ListByNovel` 加 Search option（保持 ArcType/Status）
-- App 层：`GetStoryArcs` 改调 `ListByNovel(Size=0)`（修复 Size:100 截断 bug）
+- store 层：`storyarc.ListByNovel` 加 Search + Order option（保持 ArcType/Status）
+- App 层：`GetStoryArcs` 改调 `ListByNovel(Size=-1, Order="updated_at DESC")`（修复 Size:100 截断 bug）
 - searchEntities：storyarc 从 `SearchByNovel` 改为 `ListByNovel(Search, Size:EntityLimit)`，废弃 `SearchByNovel`
 - 前端 SearchPanel：storyarc 已配置，保持
 - 前端 View 定位：ArcListView 补 focusId useEffect（如未实现）
@@ -313,9 +319,9 @@ useEffect(() => {
 **目标**：合并 ListByChapterRange + SearchByNovel 到 ListByNovel opts。
 
 **改动**：
-- store 层：`timeline.ListByNovel` 加 Search + FromChapter + ToChapter 三个 option（合并 `ListByChapterRange` + `SearchByNovel`，opts 放 range 符合 Go 惯例，等价 SQL BETWEEN AND）
+- store 层：`timeline.ListByNovel` 加 Search + FromChapter + ToChapter + Order 四个 option（合并 `ListByChapterRange` + `SearchByNovel`，opts 放 range 符合 Go 惯例，等价 SQL BETWEEN AND）
 - 废弃 `ListByChapterRange` + `SearchByNovel`
-- App 层：`GetTimelineEntries(from,to)` 改调 `ListByNovel(Size=0, FromChapter=from, ToChapter=to)`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价）
+- App 层：`GetTimelineEntries(from,to)` 改调 `ListByNovel(Size=-1, FromChapter=from, ToChapter=to, Order="target_chapter ASC")`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价）
 - searchEntities：timeline 从 `SearchByNovel` 改为 `ListByNovel(Search, Size:EntityLimit)`
 - 前端 SearchPanel：timeline 已配置，保持
 - 前端 View 定位：TimelineView 已接入 focusStore（windowCenter 对齐），改依赖加 nonce
@@ -329,8 +335,8 @@ useEffect(() => {
 **目标**：store 加 Search + 修复循环拉全低效。
 
 **改动**：
-- store 层：`reader.ListByNovel` 加 Search option（保持 Type）
-- App 层：`GetReaderPerspectives` 改调 `ListByNovel(Size=0)`（废弃循环拉全）
+- store 层：`reader.ListByNovel` 加 Search + Order option（保持 Type）
+- App 层：`GetReaderPerspectives` 改调 `ListByNovel(Size=-1, Order="planted_chapter ASC")`（废弃循环拉全）
 - searchEntities：新增 reader 分支（`Type="reader"`, `PanelID="reader"`, `Title=Content`, `Subtitle=type 中文映射`, `ChapterNum=PlantedChapter`）
 - 前端 SearchPanel：TYPE_CONFIG 加 reader（图标 `Eye`），GROUP_ORDER 加 reader
 - i18n：加 `search.reader="读者视角"`
@@ -345,7 +351,7 @@ useEffect(() => {
 **目标**：拆 ListGlobal/ListNovel + 加 Search/Page + searchEntities 加分支。
 
 **改动**：
-- store 层：`ListGlobalPreferences` + `ListNovelPreferences` 各加 Search + Page；删 `ListPreferences`（死代码）
+- store 层：`ListGlobalPreferences` + `ListNovelPreferences` 各加 Search + Page + Order；删 `ListPreferences`（死代码）
 - App 层：`GetPreferences` 保持调 ListGlobalPreferences + ListNovelPreferences 两次（各加 Search/Page）
 - searchEntities：新增 preference 分支（调两次合并结果；`Type="preference"`, `PanelID="preferences"`, `Title=Content`, `Subtitle=Category`）
 - Service struct 加 `prefStore` 字段；`NewService` 多接 1 个参数；`app/handler.go` 两处 `search.NewService` 调用补传参数
@@ -362,8 +368,8 @@ useEffect(() => {
 **目标**：ListSettings 改名 ListByNovel + 加 Search/Page。
 
 **改动**：
-- store 层：`ListSettings` → `ListByNovel` + 加 Search/Page
-- App 层：`GetNovelSettings` 改调 `ListByNovel(Size=0)`（保持返回 SettingResult）
+- store 层：`ListSettings` → `ListByNovel` + 加 Search/Page/Order
+- App 层：`GetNovelSettings` 改调 `ListByNovel(Size=-1, Order="updated_at DESC")`（保持返回 SettingResult）
 - searchEntities：新增 setting 分支（`Type="setting"`, `PanelID="novel-settings"`, `Title=Content`, `Subtitle=Category`）
 - Service struct 加 `settingStore` 字段；`NewService` 多接 1 个参数；`app/handler.go` 两处 `search.NewService` 调用补传参数
 - 前端 SearchPanel：TYPE_CONFIG 加 setting（图标 `Globe`），GROUP_ORDER 加 setting
@@ -374,26 +380,28 @@ useEffect(() => {
 - `go build ./...` && `go test ./internal/setting/... ./internal/search/... ./app/...`
 - 手测：创建 setting → 搜索 → 点击 → 切到 novel-settings 面板 → 自动定位
 
-### Commit 8（前置基础设施，可与 Commit 0 合并或独立）：PageParams.Normalize 改造
+### Commit 8（前置基础设施）：PageParams.Normalize 改造 — ✅ 已完成
 
-**目标**：Size=0 全量语义。
+**目标**：严格 GORM 分页语义。
 
-**改动**：
-- `internal/storage/pagination.go`：Normalize 支持 `Size=0` 全量（不 Limit），移除 `Size>100` 上限
+**改动**（commit eaf448f / 276257a）：
+- `internal/storage/pagination.go`：`Normalize` 改为严格语义（`Size>=0` 原样透传，`Size<0` 归一化 -1 全量并强制 Page=1）；新增 `Offset()` 集中计算偏移量
+- `NewPageResult`：nil Items 归一化为空切片（避免 JSON null）；`size<0` 有数据时 TotalPages=1
+- 各领域 store 的 `offset := (pp.Page-1)*pp.Size` 统一替换为 `pp.Offset()`
+- 修复 4 处全量截断 bug：GetNovels / GetWritingStats / SaveGitConfig / GetStoryArcs（Size=-1）；location_tools executeNetwork（Size=10000 → -1）
+- 补测试：`pagination_test.go` 覆盖 nil→[] 和各 size 档位 TotalPages
 
-**验证**：
-- `go build ./...` && `go test ./internal/storage/...`
-- 各领域 ListByNovel(Size=0) 全量调用方确认
+**验证**：`go build ./...` && `go test ./internal/storage/...` — 三绿通过
 
 ## 风险评估
 
 | 风险 | 等级 | 说明 |
 |---|---|---|
-| Normalize 改造影响面 | 中 | Size=0 语义变化，所有 ListByNovel 调用方需确认。MCP 传具体 Size 不受影响 |
+| Normalize 改造影响面 | 中 | Size=-1 全量语义，所有 ListByNovel 调用方需确认。MCP 传具体 Size 不受影响 |
 | preference is_global 跳转 | 中 | 全局偏好 IsGlobal=true 时 NovelID=0，搜索可命中，但跳转到当前小说 preferences 面板时全局偏好在另一组渲染，需确认滚动逻辑能跨组定位。建议 Subtitle 标注「全局」 |
 | 废弃方法调用方遗漏 | 低 | go build 会暴露编译错误 |
 | 前端 filter vs LIKE 差异 | 低 | 中文项目影响极小 |
-| storyarc 截断修复 | 低 | Size=0 全量，修复后数据完整 |
+| storyarc 截断修复 | 低 | Size=-1 全量，修复后数据完整 |
 
 ## 领域内搜索为何不走后端
 
@@ -404,7 +412,7 @@ useEffect(() => {
 
 ## 阶段 4b 完成标准
 
-- 各领域 store 统一 `ListByNovel(Search, Page, Size=0, 领域filter)` 作为基础查询方法
+- 各领域 store 统一 `ListByNovel(Search, Page, Size=-1, 领域filter)` 作为基础查询方法
 - 废弃 ListAllByNovel / ListSettings / SearchByNovel / ListPreferences（死代码）
 - 保留特殊查询方法（窗口/节点/关系边/批量ID 等）
 - 修复 storyarc Size:100 截断 bug

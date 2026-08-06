@@ -27,6 +27,7 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
 	Search     string // 空字符串=不过滤，按 name LIKE 模糊匹配
+	Order      string // 空字符串=默认 "updated_at DESC"；否则直接作为 ORDER BY 子句（如 "name ASC"）
 }
 
 // ListByNovel 分页列出某小说的角色，支持 name 搜索。
@@ -40,28 +41,23 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 		q = q.Where("name LIKE ?", "%"+opts.Search+"%")
 	}
 
+	order := opts.Order
+	if order == "" {
+		order = "updated_at DESC"
+	}
+
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, fmt.Errorf("character store: count: %w", err)
 	}
 
 	var chars []Character
-	if err := q.Order("updated_at DESC").Offset(pp.Offset()).Limit(pp.Size).Find(&chars).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&chars).Error; err != nil {
 		return nil, fmt.Errorf("character store: list: %w", err)
 	}
 
 	s.logger.Debug("character store: listed", "novel_id", novelID, "total", total, "page", pp.Page)
 	return storage.NewPageResult(chars, total, pp.Page, pp.Size), nil
-}
-
-// ListAllByNovel 返回某小说的全部角色（不分页），供前端侧边栏和关系图渲染。
-func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Character, error) {
-	var chars []Character
-	if err := s.DB.WithContext(ctx).Where("novel_id = ?", novelID).Order("name ASC").Find(&chars).Error; err != nil {
-		return nil, fmt.Errorf("character store: list all: %w", err)
-	}
-	s.logger.Debug("character store: list all", "novel_id", novelID, "count", len(chars))
-	return chars, nil
 }
 
 // GetByIDs 批量按 ID 取角色，用于关系查询时解析角色名。

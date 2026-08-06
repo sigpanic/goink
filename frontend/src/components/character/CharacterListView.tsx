@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -150,6 +150,22 @@ export default function CharacterListView({ novelId }: Props) {
       console.error(err);
     }
   }
+
+  // 4b: list 模式 focusId 定位——搜索点击后 scrollIntoView + 临时高亮。
+  // graph 模式定位由 CharacterGraph 内部 useEffect 处理（setSelectedCharacter）。
+  useEffect(() => {
+    if (!focus || focus.id <= 0 || characters.length === 0) return;
+    const el = document.querySelector<HTMLElement>(
+      `[data-character-id="${focus.id}"]`,
+    );
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    el.classList.add("ring-2", "ring-primary");
+    const timer = setTimeout(() => {
+      el.classList.remove("ring-2", "ring-primary");
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [focus?.id, focus?.nonce, characters]);
 
   // ── Render helpers ────────────────────────────────────
 
@@ -350,6 +366,7 @@ export default function CharacterListView({ novelId }: Props) {
                     return (
                       <div
                         key={c.id}
+                        data-character-id={c.id}
                         className="rounded-lg border border-border bg-card p-4"
                       >
                         <div className="flex items-center justify-between mb-3">
@@ -377,6 +394,7 @@ export default function CharacterListView({ novelId }: Props) {
                   return (
                     <div
                       key={c.id}
+                      data-character-id={c.id}
                       className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
                     >
                       <div className="flex items-start gap-3 px-4 py-3">

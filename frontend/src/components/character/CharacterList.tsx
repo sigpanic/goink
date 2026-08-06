@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Search, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useFocusStore } from "@/stores/useFocusStore";
 import { useCharacters } from "./useCharacters";
 import { useCharacterStore } from "./useCharacterStore";
 
@@ -18,6 +19,9 @@ export default function CharacterList({ novelId }: Props) {
   const setDeletingCharacterId = useCharacterStore(
     (s) => s.setDeletingCharacterId,
   );
+  // 4b: 点击列表项触发 focusEntity，不区分搜索/非搜索，
+  // CharacterListView 的 useEffect 收到后 scrollIntoView + 高亮（与全局搜索点击效果一致）。
+  const focusEntity = useFocusStore((s) => s.focusEntity);
   const [search, setSearch] = useState("");
 
   const filtered = useMemo(() => {
@@ -70,7 +74,8 @@ export default function CharacterList({ novelId }: Props) {
           filtered.map((c) => (
             <div
               key={c.id}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors group"
+              onClick={() => focusEntity("characters", c.id)}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors group"
             >
               <span className="w-5 h-5 rounded-full bg-tag-blue text-tag-blue-foreground text-[10px] font-medium flex items-center justify-center shrink-0">
                 {(c.name ?? "").charAt(0) || "?"}
