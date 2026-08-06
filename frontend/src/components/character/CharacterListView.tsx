@@ -61,6 +61,9 @@ export default function CharacterListView({ novelId }: Props) {
   const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
+  // 4b: 高亮声明式——focus 触发后由 state 驱动 className，render 阶段应用，
+  // 不再用命令式 classList.add/remove（易漏 cleanup）。参考 CharacterGraph 的 selectedCharacter。
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
   // 4.1.2: create/update/delete 走 mutation，saving 由 mutation.isPending 推导（不再用 useState）。
   // create/update 共用 saving（同一时刻只可能开一个编辑表单）；delete 用 deleteMutation.isPending。
   const createMutation = useCreateCharacter(novelId);
@@ -155,15 +158,13 @@ export default function CharacterListView({ novelId }: Props) {
   // graph 模式定位由 CharacterGraph 内部 useEffect 处理（setSelectedCharacter）。
   useEffect(() => {
     if (!focus || focus.id <= 0 || characters.length === 0) return;
+    // 高亮交给 state（render 阶段声明式应用），cleanup 只需 clearTimeout，杜绝漏移 class
+    setHighlightedId(focus.id);
     const el = document.querySelector<HTMLElement>(
       `[data-character-id="${focus.id}"]`,
     );
-    if (!el) return;
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
-    el.classList.add("ring-2", "ring-primary");
-    const timer = setTimeout(() => {
-      el.classList.remove("ring-2", "ring-primary");
-    }, 2000);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
     return () => clearTimeout(timer);
   }, [focus?.id, focus?.nonce, characters]);
 
@@ -395,7 +396,7 @@ export default function CharacterListView({ novelId }: Props) {
                     <div
                       key={c.id}
                       data-character-id={c.id}
-                      className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                      className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${highlightedId === c.id ? "ring-2 ring-primary" : ""}`}
                     >
                       <div className="flex items-start gap-3 px-4 py-3">
                         <span className="shrink-0 w-8 h-8 rounded-full bg-tag-blue text-tag-blue-foreground text-xs font-medium flex items-center justify-center">

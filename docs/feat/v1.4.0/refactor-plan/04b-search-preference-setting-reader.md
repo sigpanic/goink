@@ -205,6 +205,23 @@ useEffect(() => {
 }, [focus?.id, focus?.nonce]);  // nonce 让"重新点同一条"也触发
 ```
 
+**高亮规范（重要）**：定位 useEffect 若需高亮条目，**用 state 驱动 className（render 阶段声明式应用），不要命令式 `classList.add/remove`**。原因：命令式 DOM 操作的 cleanup 容易漏移 class（曾出现快速连点多条时旧高亮残留、多条同时高亮的 bug），且违背 React 声明式范式。参考 CharacterGraph 的 `selectedCharacter` + CharacterListView 的 `highlightedId`：
+```tsx
+const [highlightedId, setHighlightedId] = useState<number | null>(null);
+useEffect(() => {
+  if (!focus || focus.id <= 0) return;
+  setHighlightedId(focus.id);                                    // 高亮交给 state
+  document.querySelector(`[data-xxx-id="${focus.id}"]`)
+    ?.scrollIntoView({ behavior: "smooth", block: "center" });  // DOM API 留 useEffect
+  const timer = setTimeout(() => setHighlightedId(null), 2000);
+  return () => clearTimeout(timer);                              // cleanup 只清 timer，不再碰 class
+}, [focus?.id, focus?.nonce]);
+// render 阶段声明式应用：
+className={`... ${highlightedId === item.id ? "ring-2 ring-primary" : ""}`}
+```
+
+`scrollIntoView` 是 DOM API 必须放 useEffect（副作用），但**高亮是 UI 状态，应走 render 阶段**，让 React 管 re-render，从根上杜绝漏移 class。
+
 **期望行为验证**：
 
 | 场景 | 行为 |
