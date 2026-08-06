@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   Search,
-  X,
   User,
   MapPin,
   History,
@@ -14,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { SearchAll } from "@/lib/wailsjs/go/app/App";
 import { search } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
+import SearchInput from "@/components/shared/SearchInput";
 
 export type SearchResult = search.Result;
 
@@ -173,11 +173,6 @@ export default function SearchPanel({
     }
   }
 
-  function clearSearch() {
-    onResultsChange("", []);
-    inputRef.current?.focus();
-  }
-
   // auto-focus
   useEffect(() => {
     inputRef.current?.focus();
@@ -187,30 +182,15 @@ export default function SearchPanel({
     <div className="flex flex-col h-full">
       {/* 搜索输入区 */}
       <div className="flex items-center gap-1.5 px-2 py-2 border-b">
-        <div className="relative flex-1">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <input
-            ref={inputRef}
-            type="text"
-            value={query}
-            onChange={(e) => onResultsChange(e.target.value, [])}
-            onKeyDown={handleKeyDown}
-            placeholder={t("search.searchPlaceholder")}
-            className="w-full h-7 rounded-md border bg-background pl-7 pr-7 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          {(query || loading) && (
-            <button
-              onClick={clearSearch}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center text-muted-foreground hover:text-foreground"
-            >
-              {loading ? (
-                <Loader2 className="w-3 h-3 animate-spin" />
-              ) : (
-                <X className="w-3 h-3" />
-              )}
-            </button>
-          )}
-        </div>
+        <SearchInput
+          ref={inputRef}
+          value={query}
+          onChange={(v) => onResultsChange(v, [])}
+          onKeyDown={handleKeyDown}
+          placeholder={t("search.searchPlaceholder")}
+          loading={loading}
+          className="flex-1"
+        />
       </div>
 
       {/* 结果区 */}

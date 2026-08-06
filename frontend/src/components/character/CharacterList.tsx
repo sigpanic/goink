@@ -1,7 +1,8 @@
 import { useState, useMemo } from "react";
-import { Search, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useFocusStore } from "@/stores/useFocusStore";
+import SearchInput from "@/components/shared/SearchInput";
 import { useCharacters } from "./useCharacters";
 import { useCharacterStore } from "./useCharacterStore";
 
@@ -43,16 +44,11 @@ export default function CharacterList({ novelId }: Props) {
       </div>
 
       <div className="px-2 py-1.5 border-b">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("character.searchCharacter")}
-            className="w-full h-7 rounded-md border bg-background pl-7 pr-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t("character.searchCharacter")}
+        />
       </div>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
