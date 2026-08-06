@@ -20,6 +20,7 @@ import (
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/session"
 	"github.com/sigpanic/goink/internal/setting"
+	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
 )
@@ -35,7 +36,7 @@ type SetActiveNovelInput struct {
 
 // GetNovels 返回小说列表。
 func (a *App) GetNovels() ([]novel.Novel, error) {
-	result, err := a.novel.List(a.ctx, novel.ListNovelsOptions{})
+	result, err := a.novel.List(a.ctx, novel.ListNovelsOptions{PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		return nil, err
 	}

@@ -48,8 +48,7 @@ func (s *Store) List(ctx context.Context, opts ListNovelsOptions) (*storage.Page
 	}
 
 	var novels []Novel
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("updated_at DESC").Offset(offset).Limit(pp.Size).Find(&novels).Error; err != nil {
+	if err := q.Order("updated_at DESC").Offset(pp.Offset()).Limit(pp.Size).Find(&novels).Error; err != nil {
 		return nil, fmt.Errorf("novel store: list: %w", err)
 	}
 

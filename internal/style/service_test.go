@@ -226,7 +226,7 @@ func TestStore_ListNovelScope(t *testing.T) {
 	}
 
 	// NovelID=0: 只返回全局
-	result, err := s.List(ctx, ListOptions{NovelID: 0})
+	result, err := s.List(ctx, ListOptions{NovelID: 0, PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		t.Fatalf("list global: %v", err)
 	}
@@ -235,7 +235,7 @@ func TestStore_ListNovelScope(t *testing.T) {
 	}
 
 	// NovelID=1: 全局 + 小说1专属
-	result, err = s.List(ctx, ListOptions{NovelID: 1})
+	result, err = s.List(ctx, ListOptions{NovelID: 1, PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		t.Fatalf("list novel 1: %v", err)
 	}

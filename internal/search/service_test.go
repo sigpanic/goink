@@ -504,8 +504,15 @@ func TestPageParams_Normalize(t *testing.T) {
 	if pp.Page != 1 {
 		t.Errorf("expected page 1, got %d", pp.Page)
 	}
-	if pp.Size != 20 {
-		t.Errorf("expected size 20, got %d", pp.Size)
+	if pp.Size != 0 {
+		t.Errorf("expected size 0 (zero passthrough), got %d", pp.Size)
+	}
+
+	// 负数归一化为 -1（全量）
+	pp = storage.PageParams{Size: -1}
+	pp.Normalize()
+	if pp.Size != -1 {
+		t.Errorf("expected size -1, got %d", pp.Size)
 	}
 }
 

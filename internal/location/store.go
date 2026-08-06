@@ -51,8 +51,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	var locs []Location
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("name ASC").Offset(offset).Limit(pp.Size).Find(&locs).Error; err != nil {
+	if err := q.Order("name ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&locs).Error; err != nil {
 		return nil, fmt.Errorf("location store: list: %w", err)
 	}
 

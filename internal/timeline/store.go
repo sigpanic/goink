@@ -95,8 +95,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	var entries []TimelineEntry
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("target_chapter ASC, importance DESC").Offset(offset).Limit(pp.Size).Find(&entries).Error; err != nil {
+	if err := q.Order("target_chapter ASC, importance DESC").Offset(pp.Offset()).Limit(pp.Size).Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("timeline store: list: %w", err)
 	}
 

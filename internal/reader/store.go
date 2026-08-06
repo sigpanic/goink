@@ -44,8 +44,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	var items []ReaderPerspective
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("type, planted_chapter ASC").Offset(offset).Limit(pp.Size).Find(&items).Error; err != nil {
+	if err := q.Order("type, planted_chapter ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("reader store: list: %w", err)
 	}
 

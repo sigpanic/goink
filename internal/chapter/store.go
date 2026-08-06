@@ -47,8 +47,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	var chapters []Chapter
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order(order).Offset(offset).Limit(pp.Size).Find(&chapters).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: list: %w", err)
 	}
 

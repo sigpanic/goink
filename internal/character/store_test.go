@@ -54,7 +54,7 @@ func TestListByNovel_Search(t *testing.T) {
 	db.Create(&Character{NovelID: 1, Name: "张三丰"})
 	db.Create(&Character{NovelID: 1, Name: "李四娘"})
 
-	result, err := s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "张三"})
+	result, err := s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "张三", PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		t.Fatalf("ListByNovel: %v", err)
 	}

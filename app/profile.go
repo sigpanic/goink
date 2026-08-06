@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/novel"
+	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -13,7 +14,7 @@ func (a *App) GetWritingActivity(months int) ([]writing.DailyActivity, error) {
 
 // GetWritingStats 返回全局写作统计，跨所有小说。
 func (a *App) GetWritingStats() (*writing.WritingStats, error) {
-	novels, err := a.novel.List(a.ctx, novel.ListNovelsOptions{})
+	novels, err := a.novel.List(a.ctx, novel.ListNovelsOptions{PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		return nil, err
 	}

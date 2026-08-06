@@ -54,7 +54,7 @@ func TestChListByNovel_Desc(t *testing.T) {
 	db.Create(&Chapter{NovelID: 1, ChapterNumber: 1})
 	db.Create(&Chapter{NovelID: 1, ChapterNumber: 2})
 
-	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Order: "desc"})
+	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Size: -1}})
 	if result.Items[0].ChapterNumber != 2 {
 		t.Errorf("desc: expected chapter 2 first, got %d", result.Items[0].ChapterNumber)
 	}

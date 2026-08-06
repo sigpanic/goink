@@ -58,8 +58,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	var arcs []StoryArc
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("importance DESC, created_at ASC").Offset(offset).Limit(pp.Size).Find(&arcs).Error; err != nil {
+	if err := q.Order("importance DESC, created_at ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&arcs).Error; err != nil {
 		return nil, fmt.Errorf("storyarc store: list: %w", err)
 	}
 

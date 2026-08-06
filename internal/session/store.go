@@ -59,8 +59,7 @@ func (s *Store) listAll(ctx context.Context, novelID int64, pp storage.PageParam
 	}
 
 	var sessions []Session
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("updated_at DESC").Offset(offset).Limit(pp.Size).Find(&sessions).Error; err != nil {
+	if err := q.Order("updated_at DESC").Offset(pp.Offset()).Limit(pp.Size).Find(&sessions).Error; err != nil {
 		return nil, fmt.Errorf("session store: list sessions: %w", err)
 	}
 

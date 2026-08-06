@@ -148,7 +148,7 @@ func (t *GetLocationsTool) executeDetail(ctx context.Context, a *GetLocationsArg
 func (t *GetLocationsTool) executeNetwork(ctx context.Context, tc ToolContext, store *location.Store) (*ToolResult, error) {
 	// 全部地点
 	allResult, err := store.ListByNovel(ctx, tc.NovelID, location.ListByNovelOptions{
-		PageParams: storage.PageParams{Page: 1, Size: 10000},
+		PageParams: storage.PageParams{Page: 1, Size: -1},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list locations: %w", err)

@@ -12,7 +12,7 @@ import (
 // GetStoryArcs 返回指定小说的全部叙事弧线。弧线通常 3-5 条，全量无分页。
 func (a *App) GetStoryArcs(novelID int64) ([]storyarc.StoryArc, error) {
 	result, err := a.storyarc.ListByNovel(a.ctx, novelID, storyarc.ListByNovelOptions{
-		PageParams: storage.PageParams{Size: 100},
+		PageParams: storage.PageParams{Size: -1},
 	})
 	if err != nil {
 		return nil, err

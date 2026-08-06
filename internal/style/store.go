@@ -55,8 +55,7 @@ func (s *Store) List(ctx context.Context, opts ListOptions) (*storage.PageResult
 	}
 
 	var samples []Sample
-	offset := (pp.Page - 1) * pp.Size
-	if err := q.Order("created_at ASC").Offset(offset).Limit(pp.Size).Find(&samples).Error; err != nil {
+	if err := q.Order("created_at ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&samples).Error; err != nil {
 		return nil, fmt.Errorf("style store: list: %w", err)
 	}
 

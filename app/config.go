@@ -12,6 +12,7 @@ import (
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // SaveSettingsInput 是保存设置的入参。
@@ -63,7 +64,7 @@ func (a *App) SaveGitConfig(name, email string) error {
 	if err := config.SaveSettings(a.db, a.settings); err != nil {
 		return err
 	}
-	result, err := a.novel.List(a.ctx, novel.ListNovelsOptions{})
+	result, err := a.novel.List(a.ctx, novel.ListNovelsOptions{PageParams: storage.PageParams{Size: -1}})
 	if err != nil {
 		return fmt.Errorf("save git config: list novels: %w", err)
 	}
