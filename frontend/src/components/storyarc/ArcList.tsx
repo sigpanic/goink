@@ -71,7 +71,7 @@ export default function SidebarArcList({ novelId }: Props) {
           filtered.map((a) => (
             <div
               key={a.id}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors"
             >
               <span className="shrink-0 flex h-5 w-5 items-center justify-center rounded bg-tag-purple text-tag-purple-foreground">
                 <GitBranch className="h-3 w-3" />

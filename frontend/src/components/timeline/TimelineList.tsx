@@ -82,7 +82,7 @@ export default function SidebarTimelineList({ novelId }: Props) {
           filtered.map((e) => (
             <div
               key={e.id}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors"
             >
               {catIcon(e.category)}
               <div className="flex-1 min-w-0">
