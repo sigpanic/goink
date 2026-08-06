@@ -33,10 +33,17 @@ func (p PageParams) Offset() int {
 	return (p.Page - 1) * p.Size
 }
 
-// NewPageResult 根据 total/size 自动计算 TotalPages。
+// NewPageResult 根据 total/size 自动计算 TotalPages，并保证 Items 非 nil。
 func NewPageResult[T any](items []T, total int64, page, size int) *PageResult[T] {
+	// nil 归一化为空切片，避免 JSON 序列化出 "items": null。
+	if items == nil {
+		items = []T{}
+	}
 	tp := 0
-	if size > 0 {
+	switch {
+	case size < 0 && total > 0:
+		tp = 1 // 全量无分页：有数据即 1 页，无数据 0 页
+	case size > 0:
 		tp = int(total) / size
 		if int(total)%size != 0 {
 			tp++
