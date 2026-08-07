@@ -36,9 +36,11 @@ type ListByNovelOptions struct {
 	PageParams storage.PageParams
 	ArcType    string // 空字符串=不过滤，"main"/"sub"/"character"/"background"
 	Status     string // 空字符串=不过滤，"active"/"paused"/"completed"/"abandoned"
+	Search     string // 空字符串=不过滤，按 name LIKE OR description LIKE 模糊匹配
+	Order      string // 空字符串=默认 importance DESC, created_at ASC；调用方显式传（App 传原排序，MCP 传 updated_at DESC）
 }
 
-// ListByNovel 分页列出某小说的叙事弧线，支持类型和状态过滤。前端管理页和 MCP full 模式用。
+// ListByNovel 分页列出某小说的叙事弧线，支持类型/状态过滤和名称搜索。前端管理页、MCP full 模式、全局搜索复用。
 func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovelOptions) (*storage.PageResult[StoryArc], error) {
 	pp := opts.PageParams
 	pp.Normalize()
@@ -51,14 +53,21 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	if opts.Status != "" {
 		q = q.Where("status = ?", opts.Status)
 	}
+	if opts.Search != "" {
+		q = q.Where("name LIKE ? OR description LIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
+	}
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
 		return nil, fmt.Errorf("storyarc store: count: %w", err)
 	}
 
+	order := opts.Order
+	if order == "" {
+		order = "importance DESC, created_at ASC"
+	}
 	var arcs []StoryArc
-	if err := q.Order("importance DESC, created_at ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&arcs).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&arcs).Error; err != nil {
 		return nil, fmt.Errorf("storyarc store: list: %w", err)
 	}
 
@@ -96,20 +105,42 @@ func (s *Store) ListByArcs(ctx context.Context, arcIDs []int64) ([]ArcNode, erro
 	return nodes, nil
 }
 
-// ListNodesByChapterRange 按章节范围取某小说的全部弧线节点。from/to 为 0 表示不限。
-func (s *Store) ListNodesByChapterRange(ctx context.Context, novelID int64, fromChapter, toChapter int) ([]ArcNode, error) {
-	q := s.DB.WithContext(ctx).Where("novel_id = ?", novelID)
-	if fromChapter > 0 {
-		q = q.Where("target_chapter >= ?", fromChapter)
+// ListNodesOptions 是 ListNodesByNovel 的可选参数。
+type ListNodesOptions struct {
+	PageParams storage.PageParams
+	Search     string // 空字符串=不过滤，按 title LIKE OR description LIKE 模糊匹配
+	Order      string // 空字符串=默认 target_chapter ASC, id ASC
+}
+
+// ListNodesByNovel 分页列出某小说的全部弧线节点，支持名称搜索。
+// 前端全量拉取（Size=-1）和全局搜索复用。
+// 废弃 ListNodesByChapterRange（当前无调用方需要章节范围查；per-arc 窗口切分走 ListNodesBeforeByArc/AfterByArc/PendingBeforeByArc）。
+func (s *Store) ListNodesByNovel(ctx context.Context, novelID int64, opts ListNodesOptions) (*storage.PageResult[ArcNode], error) {
+	pp := opts.PageParams
+	pp.Normalize()
+
+	q := s.DB.WithContext(ctx).Model(&ArcNode{}).Where("novel_id = ?", novelID)
+
+	if opts.Search != "" {
+		q = q.Where("title LIKE ? OR description LIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
 	}
-	if toChapter > 0 {
-		q = q.Where("target_chapter <= ?", toChapter)
+
+	var total int64
+	if err := q.Count(&total).Error; err != nil {
+		return nil, fmt.Errorf("storyarc store: count nodes: %w", err)
+	}
+
+	order := opts.Order
+	if order == "" {
+		order = "target_chapter ASC, id ASC"
 	}
 	var nodes []ArcNode
-	if err := q.Order("story_arc_id, target_chapter ASC, id ASC").Find(&nodes).Error; err != nil {
-		return nil, fmt.Errorf("storyarc store: list nodes by chapter range: %w", err)
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&nodes).Error; err != nil {
+		return nil, fmt.Errorf("storyarc store: list nodes: %w", err)
 	}
-	return nodes, nil
+
+	s.logger.Debug("storyarc store: listed nodes", "novel_id", novelID, "total", total, "page", pp.Page)
+	return storage.NewPageResult(nodes, total, pp.Page, pp.Size), nil
 }
 
 // ListNodesBeforeByArc 对每条弧线分别取 target_chapter < chapterNum 的最近 limit 条节点。
@@ -162,19 +193,6 @@ func (s *Store) ListNodesAfterByArc(ctx context.Context, arcIDs []int64, chapter
 		result[id] = nodes
 	}
 	return result, nil
-}
-
-// SearchByNovel 按关键词搜索某小说的叙事弧线，匹配名称和描述。
-func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, limit int) ([]StoryArc, error) {
-	var arcs []StoryArc
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND (name LIKE ? OR description LIKE ?)", novelID, "%"+query+"%", "%"+query+"%").
-		Order("importance DESC").
-		Limit(limit).
-		Find(&arcs).Error; err != nil {
-		return nil, fmt.Errorf("storyarc store: search: %w", err)
-	}
-	return arcs, nil
 }
 
 // GetBreakpoint 返回暂停弧线的断点及其前后节点：

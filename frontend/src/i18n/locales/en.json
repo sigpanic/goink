@@ -774,6 +774,7 @@
     "location": "Location",
     "timeline": "Timeline",
     "storyArc": "Story Arc",
+    "arcNode": "Arc Node",
     "chapter": "Chapter",
     "semanticMatch": "Semantic Match",
     "inputKeyword": "Enter keywords to search",

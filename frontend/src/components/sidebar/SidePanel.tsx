@@ -38,7 +38,12 @@ interface Props {
   onSelectSkill: (path: string, title: string, readOnly: boolean) => void;
   onEditSkill: (path: string, title: string, readOnly: boolean) => void;
   onNewSkill: (name: string) => void;
-  onSearchNavigateEntity: (panelId: PanelId, entityId: number) => void;
+  // 4b: 透传 type（storyarc 区分 arc/node 全局跳转，其他领域 undefined）。
+  onSearchNavigateEntity: (
+    panelId: PanelId,
+    entityId: number,
+    type?: "arc" | "node",
+  ) => void;
   onSearchNavigateChapter: (
     filePath: string,
     title: string,

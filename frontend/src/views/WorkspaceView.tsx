@@ -278,8 +278,13 @@ export default function WorkspaceView({
     setSelectedGitFile(file);
   }
 
-  function handleSearchNavigateEntity(panelId: PanelId, entityId: number) {
-    focusEntity(panelId, entityId);
+  // 4b: 接 type 透传给 focusEntity（storyarc 全局搜索区分 arc/node 跳转，其他领域 undefined）。
+  function handleSearchNavigateEntity(
+    panelId: PanelId,
+    entityId: number,
+    type?: "arc" | "node",
+  ) {
+    focusEntity(panelId, entityId, type);
     setActivePanel(panelId);
   }
 

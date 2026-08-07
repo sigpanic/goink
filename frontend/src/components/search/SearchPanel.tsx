@@ -22,7 +22,12 @@ interface Props {
   query: string;
   results: SearchResult[];
   onResultsChange: (query: string, results: SearchResult[]) => void;
-  onNavigateEntity: (panelId: PanelId, entityId: number) => void;
+  // 4b: type 透传——storyarc 全局搜索区分 arc/node 跳转（其他领域 undefined）。
+  onNavigateEntity: (
+    panelId: PanelId,
+    entityId: number,
+    type?: "arc" | "node",
+  ) => void;
   onNavigateChapter: (
     filePath: string,
     title: string,
@@ -38,6 +43,7 @@ const TYPE_CONFIG: Record<string, { icon: typeof Search; labelKey: string }> = {
   location: { icon: MapPin, labelKey: "search.location" },
   timeline: { icon: History, labelKey: "search.timeline" },
   storyarc: { icon: GitBranch, labelKey: "search.storyArc" },
+  arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
   chapter: { icon: FileText, labelKey: "search.chapter" },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
@@ -49,6 +55,7 @@ const GROUP_ORDER = [
   "chapter",
   "timeline",
   "storyarc",
+  "arc_node",
   "rag",
 ];
 
@@ -169,7 +176,12 @@ export default function SearchPanel({
         r.match_len ?? 0,
       );
     } else {
-      onNavigateEntity(r.panel_id as PanelId, r.id);
+      // 4b: 全局搜索 storyarc 区分 arc/node——后端 Type "storyarc" → "arc"，"arc_node" → "node"，
+      // 其他领域 undefined。focusStore 写入 type，ArcListView 的 useEffect 按 type 走对应分支。
+      let focusType: "arc" | "node" | undefined;
+      if (r.type === "storyarc") focusType = "arc";
+      else if (r.type === "arc_node") focusType = "node";
+      onNavigateEntity(r.panel_id as PanelId, r.id, focusType);
     }
   }
 

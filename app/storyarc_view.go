@@ -10,9 +10,11 @@ import (
 )
 
 // GetStoryArcs 返回指定小说的全部叙事弧线。弧线通常 3-5 条，全量无分页。
+// 4b: 显式传 Order 保持原排序行为（importance DESC, created_at ASC）。
 func (a *App) GetStoryArcs(novelID int64) ([]storyarc.StoryArc, error) {
 	result, err := a.storyarc.ListByNovel(a.ctx, novelID, storyarc.ListByNovelOptions{
 		PageParams: storage.PageParams{Size: -1},
+		Order:      "importance DESC, created_at ASC",
 	})
 	if err != nil {
 		return nil, err
@@ -23,16 +25,19 @@ func (a *App) GetStoryArcs(novelID int64) ([]storyarc.StoryArc, error) {
 	return result.Items, nil
 }
 
-// GetArcNodes 按章节窗口获取弧线节点。fromChapter/toChapter 为 0 表示不限。
-func (a *App) GetArcNodes(novelID int64, fromChapter int, toChapter int) ([]storyarc.ArcNode, error) {
-	nodes, err := a.storyarc.ListNodesByChapterRange(a.ctx, novelID, fromChapter, toChapter)
+// GetArcNodes 返回指定小说的全部弧线节点，供前端列表和关系图渲染。
+// 4b: 改调 ListNodesByNovel(Size=-1) 全量（废弃 ListNodesByChapterRange）。
+func (a *App) GetArcNodes(novelID int64) ([]storyarc.ArcNode, error) {
+	result, err := a.storyarc.ListNodesByNovel(a.ctx, novelID, storyarc.ListNodesOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
 	if err != nil {
 		return nil, err
 	}
-	if nodes == nil {
+	if result.Items == nil {
 		return []storyarc.ArcNode{}, nil
 	}
-	return nodes, nil
+	return result.Items, nil
 }
 
 // ── StoryArc CRUD ──────────────────────────────────────

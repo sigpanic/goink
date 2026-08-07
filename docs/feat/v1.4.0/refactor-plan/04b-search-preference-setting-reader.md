@@ -318,27 +318,35 @@ className={`... ${highlightedId === item.id ? "ring-2 ring-primary" : ""}`}
 
 ### Commit 3：storyarc 领域纵切
 
-**目标**：store 加 Search + 修复 Size:100 截断 bug。
+**目标**：store 加 Search + 修复 Size:100 截断 bug + 新增 node 搜索 + focusStore type 改造。
 
 **改动**：
 - store 层：`storyarc.ListByNovel` 加 Search + Order option（保持 ArcType/Status）
-- App 层：`GetStoryArcs` 改调 `ListByNovel(Size=-1, Order="updated_at DESC")`（修复 Size:100 截断 bug）
-- searchEntities：storyarc 从 `SearchByNovel` 改为 `ListByNovel(Search, Size:EntityLimit)`，废弃 `SearchByNovel`
-- 前端 SearchPanel：storyarc 已配置，保持
-- 前端 View 定位：ArcListView 补 focusId useEffect（如未实现）
+- store 层：新增 `ListNodesByNovel(ctx, novelID, opts ListNodesOptions)`（搜 node title+description，含 PageParams+Order）
+- 废弃 `SearchByNovel`（arc 搜索改走 ListByNovel(Search)）+ `ListNodesByChapterRange`（当前无调用方需要章节范围查，死代码；per-arc 窗口切分保留 ListNodesBefore/After/PendingByArc）
+- App 层：`GetStoryArcs` 改调 `ListByNovel(Size=-1, Order="importance DESC, created_at ASC")`（修复 Size:100 截断 bug，保持原排序）
+- App 层：`GetArcNodes` 改调 `ListNodesByNovel(Size=-1)`，签名从 `(novelID, from, to)` 改为 `(novelID)`
+- MCP：executeFull 加 `Order: "updated_at DESC"`
+- searchEntities：storyarc arc 从 `SearchByNovel` 改为 `ListByNovel(Search, Size:EntityLimit)`；新增 node 分支 `ListNodesByNovel(Search, Size:EntityLimit)`，Type="arc_node"
+- 前端 focusStore：FocusEntry 加 `type?: "arc"|"node"` 字段，focusEntity 签名加 type 可选参数
+- 前端 ArcList：换 SearchInput + 拉 nodes + 搜 arc+node + 列表项 onClick focusEntity(type)
+- 前端 ArcListView：新增 soloArc（只看目标 arc）+ highlightedNodeId（声明式高亮）+ focus useEffect 按 type 分流（arc→过滤+窗口对齐maxChapter+展开首节点；node→过滤+高亮+窗口对齐node章节+展开）+ swimlane 渲染加 data-node-id
+- 前端 SearchPanel：TYPE_CONFIG + GROUP_ORDER 加 arc_node
+- i18n：加 search.arcNode
 
 **验证**：
 - `go build ./...` && `go test ./internal/storyarc/... ./app/...`
-- 手测：storyarc >100 条场景，确认全量加载 + 搜索可用
+- `npm run build` && `npm run lint` && `npm run test`
+- 手测：storyarc 全量加载 + arc 搜索 + node 搜索 + 点击 arc 过滤只看这条 + 点击 node 高亮+滚动
 
 ### Commit 4：timeline 领域纵切（核心争议）
 
-**目标**：合并 ListByChapterRange + SearchByNovel 到 ListByNovel opts。
+**目标**：合并 SearchByNovel 到 ListByNovel opts，废弃 ListByChapterRange（死代码）。
 
 **改动**：
-- store 层：`timeline.ListByNovel` 加 Search + FromChapter + ToChapter + Order 四个 option（合并 `ListByChapterRange` + `SearchByNovel`，opts 放 range 符合 Go 惯例，等价 SQL BETWEEN AND）
-- 废弃 `ListByChapterRange` + `SearchByNovel`
-- App 层：`GetTimelineEntries(from,to)` 改调 `ListByNovel(Size=-1, FromChapter=from, ToChapter=to, Order="target_chapter ASC")`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价）
+- store 层：`timeline.ListByNovel` 加 Search + Order（**不加 FromChapter/ToChapter**——YAGNI，前端传 0,0 全量，窗口能力实际未用；MCP 用 ListBefore/After/PendingBefore 不受影响）
+- 废弃 `ListByChapterRange`（死代码，前端传 0,0 全量等价 ListByNovel(Size=-1)）+ `SearchByNovel`
+- App 层：`GetTimelineEntries(from,to)` 改调 `ListByNovel(Size=-1, Order="target_chapter ASC")`（前端 useTimelineEntries 传 0,0 全量 + 内存切窗口，行为等价；from/to 参数废弃，签名改为 `GetTimelineEntries(novelID)`）
 - searchEntities：timeline 从 `SearchByNovel` 改为 `ListByNovel(Search, Size:EntityLimit)`
 - 前端 SearchPanel：timeline 已配置，保持
 - 前端 View 定位：TimelineView 已接入 focusStore（windowCenter 对齐），改依赖加 nonce

@@ -4,11 +4,12 @@ import type { PanelId } from "@/types/panel";
 interface FocusEntry {
   id: number;
   nonce: number;
+  type?: "arc" | "node"; // 4b: storyarc 区分 arc/node 跳转（其他领域不传，undefined）
 }
 
 interface FocusState {
   focusMap: Partial<Record<PanelId, FocusEntry>>;
-  focusEntity: (panelId: PanelId, id: number) => void;
+  focusEntity: (panelId: PanelId, id: number, type?: "arc" | "node") => void;
   clearFocus: (panelId: PanelId) => void;
 }
 
@@ -19,10 +20,10 @@ interface FocusState {
 // 避免切走再切回 remount 时 focusId 残留触发不期望的重新定位。
 export const useFocusStore = create<FocusState>((set) => ({
   focusMap: {},
-  focusEntity: (panelId, id) =>
+  focusEntity: (panelId, id, type) =>
     set({
       focusMap: {
-        [panelId]: { id, nonce: Date.now() },
+        [panelId]: { id, nonce: Date.now(), type },
       } as Partial<Record<PanelId, FocusEntry>>,
     }),
   clearFocus: (panelId) =>

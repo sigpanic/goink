@@ -8,6 +8,8 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 func openArcDB(t *testing.T) *gorm.DB {
@@ -86,7 +88,7 @@ func TestArcListByArcs(t *testing.T) {
 	}
 }
 
-func TestArcNodesByChapterRange(t *testing.T) {
+func TestArcListNodesByNovel(t *testing.T) {
 	db := openArcDB(t)
 	s := NewStore(db, testArcLogger())
 	ctx := context.Background()
@@ -94,10 +96,13 @@ func TestArcNodesByChapterRange(t *testing.T) {
 	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "早", TargetChapter: 5, Status: "pending"})
 	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "中", TargetChapter: 10, Status: "pending"})
 	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "晚", TargetChapter: 15, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 2, StoryArcID: 1, Title: "其他小说", TargetChapter: 1, Status: "pending"})
 
-	result, _ := s.ListNodesByChapterRange(ctx, 1, 8, 12)
-	if len(result) != 1 {
-		t.Errorf("range [8,12]: expected 1, got %d", len(result))
+	result, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if result.Total != 3 {
+		t.Errorf("expected 3 nodes for novel 1, got %d", result.Total)
 	}
 }
 
@@ -321,5 +326,117 @@ func TestArcNodeDelete(t *testing.T) {
 	var found ArcNode
 	if db.First(&found, node.ID).Error == nil {
 		t.Error("node should be deleted")
+	}
+}
+
+// ── 4b: Search / Order ─────────────────────────────────
+
+func TestArcListByNovel_Search(t *testing.T) {
+	db := openArcDB(t)
+	s := NewStore(db, testArcLogger())
+	ctx := context.Background()
+
+	db.Create(&StoryArc{NovelID: 1, Name: "复仇之路", ArcType: "main", Status: "active", Importance: 5})
+	db.Create(&StoryArc{NovelID: 1, Name: "爱情线", ArcType: "sub", Status: "active", Importance: 3, Description: "副线发展"})
+	db.Create(&StoryArc{NovelID: 1, Name: "背景线", ArcType: "background", Status: "active", Importance: 1})
+
+	// 搜 name（只匹配 name，description 不含"复仇"）
+	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "复仇"})
+	if r.Total != 1 {
+		t.Errorf("search name 复仇: expected 1, got %d", r.Total)
+	}
+
+	// 搜 description
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "副线"})
+	if r.Total != 1 {
+		t.Errorf("search description 副线: expected 1, got %d", r.Total)
+	}
+
+	// 无命中
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "不存在"})
+	if r.Total != 0 {
+		t.Errorf("search no match: expected 0, got %d", r.Total)
+	}
+}
+
+func TestArcListByNovel_Order(t *testing.T) {
+	db := openArcDB(t)
+	s := NewStore(db, testArcLogger())
+	ctx := context.Background()
+
+	db.Create(&StoryArc{NovelID: 1, Name: "B", ArcType: "main", Status: "active", Importance: 3})
+	db.Create(&StoryArc{NovelID: 1, Name: "A", ArcType: "main", Status: "active", Importance: 5})
+	db.Create(&StoryArc{NovelID: 1, Name: "C", ArcType: "main", Status: "active", Importance: 1})
+
+	// 默认排序：importance DESC
+	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if r.Items[0].Name != "A" || r.Items[2].Name != "C" {
+		t.Errorf("default order importance DESC: expected A,C, got %s,%s", r.Items[0].Name, r.Items[2].Name)
+	}
+
+	// 显式 Order: name ASC
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "name ASC",
+	})
+	if r.Items[0].Name != "A" || r.Items[1].Name != "B" || r.Items[2].Name != "C" {
+		t.Errorf("order name ASC: expected A,B,C, got %s,%s,%s", r.Items[0].Name, r.Items[1].Name, r.Items[2].Name)
+	}
+}
+
+func TestArcListNodesByNovel_Search(t *testing.T) {
+	db := openArcDB(t)
+	s := NewStore(db, testArcLogger())
+	ctx := context.Background()
+
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "发现真相", TargetChapter: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "决战", TargetChapter: 10, Status: "pending", Description: "最终对决"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "尾声", TargetChapter: 15, Status: "pending"})
+
+	// 搜 title（只匹配 title，description 不含"真相"）
+	r, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{Search: "真相"})
+	if r.Total != 1 {
+		t.Errorf("search title 真相: expected 1, got %d", r.Total)
+	}
+
+	// 搜 description
+	r, _ = s.ListNodesByNovel(ctx, 1, ListNodesOptions{Search: "对决"})
+	if r.Total != 1 {
+		t.Errorf("search description 对决: expected 1, got %d", r.Total)
+	}
+
+	// 无命中
+	r, _ = s.ListNodesByNovel(ctx, 1, ListNodesOptions{Search: "不存在"})
+	if r.Total != 0 {
+		t.Errorf("search no match: expected 0, got %d", r.Total)
+	}
+}
+
+func TestArcListNodesByNovel_Order(t *testing.T) {
+	db := openArcDB(t)
+	s := NewStore(db, testArcLogger())
+	ctx := context.Background()
+
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "C", TargetChapter: 15, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "A", TargetChapter: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "B", TargetChapter: 10, Status: "pending"})
+
+	// 默认排序：target_chapter ASC
+	r, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if r.Items[0].Title != "A" || r.Items[2].Title != "C" {
+		t.Errorf("default order target_chapter ASC: expected A,C, got %s,%s", r.Items[0].Title, r.Items[2].Title)
+	}
+
+	// 显式 Order: title DESC
+	r, _ = s.ListNodesByNovel(ctx, 1, ListNodesOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "title DESC",
+	})
+	if r.Items[0].Title != "C" || r.Items[2].Title != "A" {
+		t.Errorf("order title DESC: expected C,A, got %s,%s", r.Items[0].Title, r.Items[2].Title)
 	}
 }

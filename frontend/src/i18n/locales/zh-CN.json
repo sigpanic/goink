@@ -751,6 +751,7 @@
     "location": "地点",
     "timeline": "时间线",
     "storyArc": "故事弧",
+    "arcNode": "弧线节点",
     "chapter": "章节",
     "semanticMatch": "语义匹配",
     "inputKeyword": "输入关键词搜索",

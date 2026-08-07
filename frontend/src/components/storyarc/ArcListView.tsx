@@ -92,7 +92,8 @@ const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
 
 export default function ArcListView({ novelId }: Props) {
   const focus = useFocusWithNonce("storyarcs");
-  const focusArcId = focus?.id ?? 0;
+  const focusId = focus?.id ?? 0;
+  const focusType = focus?.type; // "arc" | "node" | undefined
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -139,6 +140,10 @@ export default function ArcListView({ novelId }: Props) {
     kind: "arc" | "node";
     id: number;
   } | null>(null);
+  // 4b: node 高亮声明式——focus type=node 触发后由 state 驱动 className（参考 CharacterListView highlightedId）。
+  const [highlightedNodeId, setHighlightedNodeId] = useState<number | null>(
+    null,
+  );
 
   // 4.3.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
@@ -146,9 +151,56 @@ export default function ArcListView({ novelId }: Props) {
     if (max > 0) setWindowCenter(Math.max(1, max));
   }, [maxChQuery.data]);
 
+  // 4b: soloArc——只看目标 arc，隐藏其他所有 arc（等价用户手动逐条 toggleArc 隐藏其他）。
+  // 点击搜索结果 arc/node 都会触发，过滤只看这一条弧线的 node。
+  function soloArc(arcId: number) {
+    setHiddenArcIds(new Set(arcs.filter((a) => a.id !== arcId).map((a) => a.id)));
+  }
+
+  // 4b: focus 按 type 分流定位（arc→过滤+窗口右边界对齐 arc 末节点章节+展开首节点；node→过滤+高亮+窗口对齐node章节+展开）。
   useEffect(() => {
-    if (focusArcId && focusArcId > 0 && allNodes.length > 0) {
-      const arcNodes = allNodes.filter((n) => n.story_arc_id === focusArcId);
+    if (!focus || focusId <= 0) return;
+
+    if (focusType === "arc") {
+      // 点击 arc 条目 → soloArc 只看这条弧线 + 窗口右边界对齐到 arc 末节点章节 + 展开首节点
+      // 注：右边界=windowCenter+WINDOW，故 windowCenter = maxChapterOfArc - WINDOW；
+      // arc 没节点才 fallback 到全书 maxChapter。
+      soloArc(focusId);
+      const arcNodes = allNodes.filter((n) => n.story_arc_id === focusId);
+      if (arcNodes.length > 0) {
+        const maxChapterOfArc = arcNodes.reduce(
+          (m, n) => Math.max(m, n.target_chapter || 0),
+          0,
+        );
+        setWindowCenter(Math.max(1, maxChapterOfArc - WINDOW));
+        setExpandedId(arcNodes[0].id);
+      } else if (maxChQuery.data && maxChQuery.data > 0) {
+        setWindowCenter(Math.max(1, maxChQuery.data));
+      }
+      setHighlightedNodeId(null);
+      return;
+    }
+
+    if (focusType === "node") {
+      // 点击 node 条目 → soloArc(所属弧线) + 窗口对齐到 node 章节 + 展开 + 高亮该 node
+      const node = allNodes.find((n) => n.id === focusId);
+      if (!node) return;
+      soloArc(node.story_arc_id);
+      setWindowCenter(node.target_chapter || node.actual_chapter || 1);
+      setExpandedId(node.id);
+      setHighlightedNodeId(node.id);
+      // 滚动到 node 卡片（DOM API 留 useEffect）
+      const el = document.querySelector<HTMLElement>(
+        `[data-node-id="${node.id}"]`,
+      );
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+      const timer = setTimeout(() => setHighlightedNodeId(null), 2000);
+      return () => clearTimeout(timer);
+    }
+
+    // 兼容无 type 的旧 focus（按 arc 处理，但不 soloArc，避免无谓过滤）
+    if (allNodes.length > 0) {
+      const arcNodes = allNodes.filter((n) => n.story_arc_id === focusId);
       if (arcNodes.length > 0) {
         const firstNode = arcNodes[0];
         setWindowCenter(
@@ -157,7 +209,7 @@ export default function ArcListView({ novelId }: Props) {
         setExpandedId(firstNode.id);
       }
     }
-  }, [focusArcId, allNodes, focus?.nonce]);
+  }, [focusId, focusType, focus?.nonce, allNodes, arcs, maxChQuery.data]);
 
   const windowFrom = Math.max(1, windowCenter - WINDOW);
   const windowTo = windowCenter + WINDOW;
@@ -1015,7 +1067,8 @@ export default function ArcListView({ novelId }: Props) {
                         return (
                           <div
                             key={node.id}
-                            className={`rounded-lg border bg-card transition-shadow group ${isExpanded ? "border-border shadow-sm" : "border-border hover:border-border hover:shadow-sm"}`}
+                            data-node-id={node.id}
+                            className={`rounded-lg border bg-card transition-shadow group ${isExpanded ? "border-border shadow-sm" : "border-border hover:border-border hover:shadow-sm"} ${highlightedNodeId === node.id ? "ring-2 ring-primary" : ""}`}
                           >
                             <div className="flex items-center gap-3 px-4 py-3">
                               <span

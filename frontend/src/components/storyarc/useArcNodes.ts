@@ -3,16 +3,15 @@ import { GetArcNodes } from "@/lib/wailsjs/go/app/App";
 import { arcNodeKeys } from "@/lib/queryKeys";
 
 // useArcNodes: 弧线节点全量列表 query。
-// queryFn 直接 import wailsjs GetArcNodes(novelId, 0, 0)（不用 useApp）。
-// 第二三参数 fromChapter/toChapter 传 0 = 不限章节窗口（全量），与改造前 load() 行为一致。
+// 4b: GetArcNodes 签名改为单参数（废弃 fromChapter/toChapter，后端改调 ListNodesByNovel(Size=-1) 全量）。
 // enabled: !!novelId 守卫，novelId=0 时不 fetch（数据兜底空数组）。
-// 消费方：ArcListView / StoryArcGraph 共享缓存，
+// 消费方：ArcListView / StoryArcGraph / ArcList 共享缓存，
 // CRUD 后由 mutation 的 invalidateQueries 同步（commit 2/3 抽 mutation）。
 export function useArcNodes(novelId: number) {
   return useQuery({
     queryKey: arcNodeKeys.list(novelId),
     queryFn: async () => {
-      const list = await GetArcNodes(novelId, 0, 0);
+      const list = await GetArcNodes(novelId);
       return list ?? [];
     },
     enabled: !!novelId,

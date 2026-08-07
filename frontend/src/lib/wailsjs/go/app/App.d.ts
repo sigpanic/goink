@@ -100,7 +100,7 @@ export function ExtractStyle(arg1:app.ExtractStyleInput):Promise<style.ExtractRe
 
 export function GetAppConfig():Promise<Record<string, any>>;
 
-export function GetArcNodes(arg1:number,arg2:number,arg3:number):Promise<Array<storyarc.ArcNode>>;
+export function GetArcNodes(arg1:number):Promise<Array<storyarc.ArcNode>>;
 
 export function GetChapterPlans(arg1:number):Promise<Array<timeline.ChapterPlan>>;
 

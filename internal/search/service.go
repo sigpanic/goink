@@ -143,17 +143,49 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	}
 
 	// 故事弧
-	arcs, err := s.arcStore.SearchByNovel(ctx, novelID, query, EntityLimit)
+	arcsResult, err := s.arcStore.ListByNovel(ctx, novelID, storyarc.ListByNovelOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+	})
 	if err != nil {
 		s.logger.Warn("story arc search failed", "err", err)
-	} else {
-		for _, arc := range arcs {
+	} else if arcsResult != nil {
+		for _, arc := range arcsResult.Items {
 			results = append(results, Result{
 				Type:     "storyarc",
 				ID:       arc.ID,
 				Title:    arc.Name,
 				Subtitle: arc.ArcType,
 				PanelID:  "storyarcs",
+			})
+		}
+	}
+
+	// 弧线节点（4b: 新增 node 搜索分支，独立 Type="arc_node"）
+	nodesResult, err := s.arcStore.ListNodesByNovel(ctx, novelID, storyarc.ListNodesOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+	})
+	if err != nil {
+		s.logger.Warn("arc node search failed", "err", err)
+	} else if nodesResult != nil {
+		// 构建 arcID→name 映射，用于显示所属弧线名称（先从已搜到的 arcs 取，未命中不额外查询）
+		// nil 守卫：arc 搜索失败时 arcsResult 为 nil，此处降级为空 map（subtitle 留空，不 panic）。
+		arcNameMap := make(map[int64]string)
+		if arcsResult != nil {
+			for _, arc := range arcsResult.Items {
+				arcNameMap[arc.ID] = arc.Name
+			}
+		}
+		for _, node := range nodesResult.Items {
+			subtitle := arcNameMap[node.StoryArcID]
+			results = append(results, Result{
+				Type:       "arc_node",
+				ID:         node.ID,
+				Title:      node.Title,
+				Subtitle:   subtitle,
+				ChapterNum: node.TargetChapter,
+				PanelID:    "storyarcs",
 			})
 		}
 	}

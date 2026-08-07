@@ -154,8 +154,8 @@ export function GetAppConfig() {
   return window['go']['app']['App']['GetAppConfig']();
 }
 
-export function GetArcNodes(arg1, arg2, arg3) {
-  return window['go']['app']['App']['GetArcNodes'](arg1, arg2, arg3);
+export function GetArcNodes(arg1) {
+  return window['go']['app']['App']['GetArcNodes'](arg1);
 }
 
 export function GetChapterPlans(arg1) {

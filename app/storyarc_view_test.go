@@ -107,7 +107,7 @@ func TestDeleteStoryArc(t *testing.T) {
 	assert.Empty(t, arcs)
 
 	// Associated nodes should also be gone
-	nodes, err := app.GetArcNodes(novelID, 0, 0)
+	nodes, err := app.GetArcNodes(novelID)
 	require.NoError(t, err)
 	assert.Empty(t, nodes)
 }
@@ -195,7 +195,7 @@ func TestUpdateArcNode(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	nodes, err := app.GetArcNodes(novelID, 0, 0)
+	nodes, err := app.GetArcNodes(novelID)
 	require.NoError(t, err)
 	require.Len(t, nodes, 1)
 	assert.Equal(t, "Updated node", nodes[0].Title)
@@ -224,7 +224,7 @@ func TestDeleteArcNode(t *testing.T) {
 	err = app.DeleteArcNode(novelID, node.ID)
 	require.NoError(t, err)
 
-	nodes, err := app.GetArcNodes(novelID, 0, 0)
+	nodes, err := app.GetArcNodes(novelID)
 	require.NoError(t, err)
 	assert.Empty(t, nodes)
 
@@ -234,7 +234,7 @@ func TestDeleteArcNode(t *testing.T) {
 	assert.Len(t, arcs, 1)
 }
 
-func TestGetArcNodes_ByChapterRange(t *testing.T) {
+func TestGetArcNodes_All(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
@@ -266,19 +266,8 @@ func TestGetArcNodes_ByChapterRange(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Query chapter range 1-5
-	nodes, err := app.GetArcNodes(novelID, 1, 5)
-	require.NoError(t, err)
-	assert.Len(t, nodes, 2)
-
-	// Query chapter range 6-10
-	nodes, err = app.GetArcNodes(novelID, 6, 10)
-	require.NoError(t, err)
-	assert.Len(t, nodes, 1)
-	assert.Equal(t, "Late node", nodes[0].Title)
-
-	// Full range
-	nodes, err = app.GetArcNodes(novelID, 0, 0)
+	// 4b: GetArcNodes 改为全量查询（废弃 ListNodesByChapterRange，不再支持章节范围查）
+	nodes, err := app.GetArcNodes(novelID)
 	require.NoError(t, err)
 	assert.Len(t, nodes, 3)
 }
