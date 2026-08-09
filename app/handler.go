@@ -226,7 +226,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	go func() {
 		emb, err := rag.GetEmbedder()
 		svc := search.NewService(a.logger, a.character, a.location,
-			a.timeline, a.storyarc, a.chapter, a.reader, a.preference, nil)
+			a.timeline, a.storyarc, a.chapter, a.reader, a.preference, a.setting, nil)
 		a.searchService.Store(svc)
 		a.agent.SetSearchService(svc)
 		if err != nil {
@@ -244,7 +244,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 
 		// 初始化搜索服务
 		svc = search.NewService(a.logger, a.character, a.location,
-			a.timeline, a.storyarc, a.chapter, a.reader, a.preference, a.vectorStore)
+			a.timeline, a.storyarc, a.chapter, a.reader, a.preference, a.setting, a.vectorStore)
 		a.searchService.Store(svc)
 		a.agent.SetSearchService(svc)
 

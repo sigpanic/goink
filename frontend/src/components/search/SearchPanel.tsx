@@ -8,6 +8,7 @@ import {
   FileText,
   Eye,
   Settings,
+  Globe,
   Sparkles,
   Loader2,
 } from "lucide-react";
@@ -53,6 +54,7 @@ const TYPE_CONFIG: Record<string, {
   arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
   reader: { icon: Eye, labelKey: "search.reader", subtitlePrefix: "reader." },
   preference: { icon: Settings, labelKey: "search.preference" },
+  setting: { icon: Globe, labelKey: "search.setting" },
   chapter: { icon: FileText, labelKey: "search.chapter", subtitlePrefix: "chapter." },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
@@ -67,6 +69,7 @@ const GROUP_ORDER = [
   "arc_node",
   "reader",
   "preference",
+  "setting",
   "rag",
 ];
 

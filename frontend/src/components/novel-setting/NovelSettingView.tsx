@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Plus, Globe, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { setting } from "@/hooks/useApp";
@@ -6,6 +6,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { useNovelSettings } from "./useNovelSettings";
 import { useDeleteNovelSetting } from "./useDeleteNovelSetting";
 import { useCreateNovelSetting } from "./useCreateNovelSetting";
@@ -36,6 +37,23 @@ export default function NovelSettingView({ novelId }: Props) {
   const overBudget = settingsQuery.data?.over_budget ?? false;
   const loading = settingsQuery.isLoading;
   const loadFailed = settingsQuery.isError;
+
+  // 4b: focus 定位——全局搜索/侧边栏点击触发 focusEntity("novel-settings", id)，
+  // NovelSettingView useEffect 定位 + 声明式高亮（setting 单组，不需要跨组 querySelector）。
+  const focus = useFocusWithNonce("novel-settings");
+  const focusId = focus?.id ?? 0;
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!focusId || focusId <= 0) return;
+    if (!items.some((e) => e.id === focusId)) return;
+    setHighlightedId(focusId);
+    document
+      .querySelector(`[data-setting-id="${focusId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
+    return () => clearTimeout(timer);
+  }, [focusId, items, focus?.nonce]);
 
   // 4.7.2/4.7.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
   // onSuccess 失效对应 query（entry CRUD 失效 novel-settings，NovelSettingView + NovelSettingList 共享缓存）。
@@ -281,7 +299,10 @@ export default function NovelSettingView({ novelId }: Props) {
                   ) : (
                     <div
                       key={item.id}
-                      className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                      data-setting-id={item.id}
+                      className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${
+                        highlightedId === item.id ? "ring-2 ring-primary" : ""
+                      }`}
                     >
                       <div className="flex items-start gap-3 px-4 py-3">
                         <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-muted-foreground">

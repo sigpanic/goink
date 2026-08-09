@@ -18,6 +18,7 @@ import (
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
@@ -39,6 +40,7 @@ func openSearchDB(t *testing.T) *gorm.DB {
 		&location.Location{},
 		&reader.ReaderPerspective{},
 		&preference.PreferenceItem{},
+		&setting.SettingItem{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},
@@ -64,6 +66,7 @@ func newTestService(db *gorm.DB) *Service {
 		chapter.NewStore(db, logger),
 		reader.NewStore(db, logger),
 		preference.NewStore(db, logger),
+		setting.NewStore(db, logger),
 		nil, // vectorStore
 	)
 }

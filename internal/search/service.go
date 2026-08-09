@@ -15,6 +15,7 @@ import (
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
@@ -23,15 +24,16 @@ import (
 // Service 协调全局搜索：实体 LIKE + 正文精确 + RAG 语义。
 // 缓存章节正文在内存中，避免重复读文件。
 type Service struct {
-	logger      *slog.Logger
-	charStore   *character.Store
-	locStore    *location.Store
-	tlStore     *timeline.Store
-	arcStore    *storyarc.Store
-	chapStore   *chapter.Store
-	readerStore *reader.Store
-	prefStore   *preference.Store
-	vectorStore *rag.VectorStore
+	logger       *slog.Logger
+	charStore    *character.Store
+	locStore     *location.Store
+	tlStore      *timeline.Store
+	arcStore     *storyarc.Store
+	chapStore    *chapter.Store
+	readerStore  *reader.Store
+	prefStore    *preference.Store
+	settingStore *setting.Store
+	vectorStore  *rag.VectorStore
 
 	mu    sync.RWMutex
 	cache map[int64]map[int]string // novelID → chapterNum → content
@@ -40,18 +42,20 @@ type Service struct {
 // NewService 创建搜索服务。
 func NewService(logger *slog.Logger, charStore *character.Store, locStore *location.Store,
 	tlStore *timeline.Store, arcStore *storyarc.Store, chapStore *chapter.Store,
-	readerStore *reader.Store, prefStore *preference.Store, vecStore *rag.VectorStore) *Service {
+	readerStore *reader.Store, prefStore *preference.Store, settingStore *setting.Store,
+	vecStore *rag.VectorStore) *Service {
 	return &Service{
-		logger:      logger,
-		charStore:   charStore,
-		locStore:    locStore,
-		tlStore:     tlStore,
-		arcStore:    arcStore,
-		chapStore:   chapStore,
-		readerStore: readerStore,
-		prefStore:   prefStore,
-		vectorStore: vecStore,
-		cache:       make(map[int64]map[int]string),
+		logger:       logger,
+		charStore:    charStore,
+		locStore:     locStore,
+		tlStore:      tlStore,
+		arcStore:     arcStore,
+		chapStore:    chapStore,
+		readerStore:  readerStore,
+		prefStore:    prefStore,
+		settingStore: settingStore,
+		vectorStore:  vecStore,
+		cache:        make(map[int64]map[int]string),
 	}
 }
 
@@ -257,6 +261,32 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 			Subtitle: pref.Category, // 自由文本，原样显示
 			PanelID:  "preferences",
 		})
+	}
+
+	// 设定（4b: 新增 setting 搜索分支，subtitle=category 自由文本原样显示）
+	settingsResult, sErr := s.settingStore.ListByNovel(ctx, novelID, setting.ListOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "created_at ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
+	})
+	if sErr != nil {
+		s.logger.Warn("setting search failed", "err", sErr)
+		settingsResult = nil
+	}
+	if settingsResult != nil {
+		for _, st := range settingsResult.Items {
+			title := st.Content
+			if runes := []rune(title); len(runes) > 40 {
+				title = string(runes[:40]) + "…"
+			}
+			results = append(results, Result{
+				Type:     "setting",
+				ID:       st.ID,
+				Title:    title,
+				Subtitle: st.Category, // 自由文本，原样显示
+				PanelID:  "novel-settings",
+			})
+		}
 	}
 
 	// 章节

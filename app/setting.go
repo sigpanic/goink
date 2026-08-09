@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/sigpanic/goink/internal/setting"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── 小说设定 ──────────────────────────────────────────────
@@ -22,10 +23,15 @@ type SettingResult struct {
 // 注入给 agent 的 NovelState 会按 created_at DESC 截断到 8k 内，与此处 token_count 是两套口径：
 // 这里是"全量实际多少"，agent 注入是"截断后剩多少"。
 func (a *App) GetNovelSettings(novelID int64) (*SettingResult, error) {
-	items, err := a.setting.ListSettings(a.ctx, novelID)
+	// 4b: 改调 ListByNovel 显式传 Order 保持原 created_at ASC 排序，Size=-1 全量拉取。
+	result, err := a.setting.ListByNovel(a.ctx, novelID, setting.ListOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "created_at ASC",
+	})
 	if err != nil {
 		return nil, err
 	}
+	items := result.Items
 	tokenCount, _ := setting.CountSettingsTokens(items)
 	return &SettingResult{
 		Items:      items,

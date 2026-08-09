@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
 )
@@ -36,6 +37,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		&location.Location{},
 		&reader.ReaderPerspective{},
 		&preference.PreferenceItem{},
+		&setting.SettingItem{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&chapter.Chapter{},
@@ -49,6 +51,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		chapter.NewStore(db, logger),
 		reader.NewStore(db, logger),
 		preference.NewStore(db, logger),
+		setting.NewStore(db, logger),
 		nil,
 	)
 
