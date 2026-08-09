@@ -1037,6 +1037,7 @@
     }
   },
   "content": {
+    "loadFailed": "Content load failed",
     "loadFailedCloseTab": "Load failed, please close the tab and retry",
     "storyStatus": "Story Status",
     "skillLabel": "Skill: ",

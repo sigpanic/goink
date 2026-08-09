@@ -1,7 +1,20 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, act } from "@testing-library/react";
+import { render as originalRender, screen, fireEvent, act } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";
 import { toastError } from "@/utils/toast";
+
+// 5.2 commit 1: useFileContent 引入 useQueryClient，render 需包 QueryClientProvider。
+// 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
+function render(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return originalRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 // Mock toastError
 vi.mock("@/utils/toast", async (importOriginal) => {
@@ -104,13 +117,24 @@ vi.mock("@/lib/wailsjs/runtime/runtime", () => ({
   Quit: vi.fn(),
 }));
 
-// Mock useApp
-const mockGetContent = vi.fn();
+// 5.2 commit 1: ContentPanel 直接 import GetContent（file:changed handler，commit 3 改 invalidateQueries）
+vi.mock("@/lib/wailsjs/go/app/App", () => ({
+  GetContent: vi.fn(),
+}));
+
+// 5.2 commit 1: useFileContent mock（GetContent 走 query 缓存通道，直接 import wailsjs 不经 useApp）
+const { mockFetchContent } = vi.hoisted(() => ({
+  mockFetchContent: vi.fn(),
+}));
+vi.mock("./useFileContent", () => ({
+  useFileContent: () => ({ fetchContent: mockFetchContent }),
+}));
+
+// Mock useApp（SaveContent 仍走 useApp，commit 2 迁 useSaveContent mutation）
 const mockSaveContent = vi.fn();
 
 vi.mock("@/hooks/useApp", () => ({
   useApp: () => ({
-    GetContent: mockGetContent,
     SaveContent: mockSaveContent,
   }),
 }));
@@ -126,7 +150,8 @@ describe("ContentPanel", () => {
     mockTabsState = [];
     mockActiveTabIdState = null;
     mockInitRefValue = true;
-    mockGetContent.mockResolvedValue("file content");
+    // 5.2 commit 1: GetContent 走 useFileContent.fetchContent（query 缓存通道）
+    mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
   });
 
@@ -176,7 +201,8 @@ describe("ContentPanel", () => {
   });
 
   it("calls GetContent when opening a file via ref", async () => {
-    mockGetContent.mockResolvedValue("# Chapter 1");
+    // 5.2 commit 1: GetContent 走 useFileContent.fetchContent
+    mockFetchContent.mockResolvedValue("# Chapter 1");
     mockOpenTab.mockImplementation((tab: any) => {
       mockTabsState = [{ ...tab, id: "f1" }];
       mockActiveTabIdState = "f1";
@@ -189,11 +215,12 @@ describe("ContentPanel", () => {
       ref.current?.openFile("chapters/001.md", "Chapter 1");
     });
 
-    expect(mockGetContent).toHaveBeenCalledWith(1, "chapters/001.md");
+    expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/001.md");
   });
 
   it("opens file with empty content on GetContent failure", async () => {
-    mockGetContent.mockRejectedValue(new Error("not found"));
+    // 5.2 commit 1: fetchContent 失败时 tab 塞空内容（保留原 behavior）
+    mockFetchContent.mockRejectedValue(new Error("not found"));
     mockOpenTab.mockImplementation((tab: any) => {
       mockTabsState = [{ ...tab, id: "f1" }];
       mockActiveTabIdState = "f1";

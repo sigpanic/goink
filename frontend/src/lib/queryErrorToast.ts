@@ -29,9 +29,11 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   session: "chat.sessionLoadFailed",
   "session-messages": "chat.messagesLoadFailed",
   "slash-commands": "chat.slashCommandsLoadFailed",
+  // 5.2 commit 1：content 领域 GET 端点
+  chapters: "chapter.loadFailed",
+  content: "content.loadFailed",
   // "style-samples": "styleSample.loadFailed",
   // skills: "skill.loadFailed",
-  // chapters: "chapter.loadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。

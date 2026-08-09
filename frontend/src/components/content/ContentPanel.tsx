@@ -16,10 +16,12 @@ import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { GetContent } from "@/lib/wailsjs/go/app/App";
 import TabBar from "./TabBar";
 import ContentEditor from "./ContentEditor";
 import OutlineViewer from "./OutlineViewer";
 import SkillPreview from "./SkillPreview";
+import { useFileContent } from "./useFileContent";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
@@ -75,6 +77,9 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
     // 3.8: novelId 从 useNovelStore 订阅（替代 prop）。切小说时 store 变化触发 re-render，行为等价。
     const novelId = useNovelStore((s) => s.activeNovelId);
     const { t } = useTranslation();
+    // 5.2 commit 1: GetContent 走 query 缓存通道（fetchContent），直接 import wailsjs 不经 useApp。
+    // SaveContent 仍走 useApp，commit 2 迁 useSaveContent mutation。
+    const { fetchContent } = useFileContent();
     const {
       tabs,
       activeTab,
@@ -145,8 +150,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
       if (needsLoad.length === 0) return;
       for (const tab of needsLoad) {
         loadedRef.current.add(tab.id);
-        app
-          .GetContent(novelId, tab.path)
+        fetchContent(novelId, tab.path)
           .then((content) => {
             updateTab(tab.id, { content: content ?? "" });
           })
@@ -155,7 +159,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           });
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- initRef.current is mutable and not a valid dependency; effect should only re-run when tabs/novelId change
-    }, [tabs, novelId, app, t, updateTab]);
+    }, [tabs, novelId, fetchContent, t, updateTab]);
 
     // Ctrl+Shift+V 切换技能预览
     useEffect(() => {
@@ -194,8 +198,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
                 )
               : null;
           if (derivedOutline) {
-            app
-              .GetContent(novelId, derivedOutline)
+            fetchContent(novelId, derivedOutline)
               .then((oc) => {
                 updateTab(tabId, { outlineContent: oc || "" });
               })
@@ -205,7 +208,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           }
         }
       },
-      [novelId, tabs, app, updateTab],
+      [novelId, tabs, fetchContent, updateTab],
     );
 
     // ── 保存逻辑 ────────────────────────────────────────────
@@ -379,7 +382,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
 
           if (needRefresh) {
             try {
-              const fresh = await app.GetContent(data.novel_id, data.path);
+              // 5.2 commit 1: 直接 import GetContent（不经 useApp），commit 3 改 qc.invalidateQueries
+              const fresh = await GetContent(data.novel_id, data.path);
               const patch: Partial<EditorTab> = { [refreshKey]: fresh };
               if (refreshKey === "content") patch.isDirty = false;
               updateTab(tab.id, patch);
@@ -390,7 +394,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
         }
       });
       return () => unsub();
-    }, [app, updateTab]);
+    }, [updateTab]);
 
     // ── 打开/激活文件 tab ──────────────────────────────────
 
@@ -434,8 +438,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           (skReadOnly ? "preview" : isSkillPath(path) ? "preview" : "content");
 
         setIsLoading(true);
-        app
-          .GetContent(novelId, path)
+        fetchContent(novelId, path)
           .then((content) => {
             const c = content ?? "";
             openTab({
@@ -466,7 +469,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
       [
         novelId,
         tabs,
-        app,
+        fetchContent,
         openTab,
         setActiveTabId,
         onContentChange,
@@ -564,7 +567,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
 
         if (ft) {
           try {
-            const fresh = await app.GetContent(novelId, dt.path);
+            const fresh = await fetchContent(novelId, dt.path);
             const patch: Partial<EditorTab> = { viewMode };
             if (viewMode === "outline") {
               patch.outlineContent = fresh;
@@ -581,7 +584,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
         closeTab(dt.id);
         doOpenFile(filePath);
       },
-      [novelId, tabs, app, updateTab, closeTab, doOpenFile],
+      [novelId, tabs, fetchContent, updateTab, closeTab, doOpenFile],
     );
 
     const handleDiffReject = useCallback(

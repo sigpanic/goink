@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import type { novel, chapter } from "@/hooks/useApp";
 import NovelList from "./NovelList";
-import ChapterList from "./ChapterList";
+import ChapterList from "@/components/chapter/ChapterList";
 import CharacterList from "@/components/character/CharacterList";
 import LocationList from "@/components/location/LocationList";
 import SkillList from "@/components/skill/SkillList";

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
 import { toastError } from "@/utils/toast";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useApp } from "@/hooks/useApp";
 import type { chapter } from "@/hooks/useApp";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { useChapters } from "./useChapters";
 
 interface Props {
   novelId: number;
@@ -28,34 +29,20 @@ export default function ChapterList({
   const { t } = useTranslation();
   const app = useApp();
 
-  const [chapters, setChapters] = useState<chapter.Chapter[]>([]);
+  // 5.2 commit 1: GetChapters 走 query（直接 import wailsjs，不用 useApp）。
+  // query 错误走全局中间件，组件加 isError 内连显示 + retry（对齐 ReaderList/PreferenceList）。
+  // CreateChapter/UpdateChapterTitle 仍走 useApp，commit 2 迁 mutation。
+  const { data: chapters = [], isError, refetch } = useChapters(novelId);
   const [chapterTitle, setChapterTitle] = useState("");
   const [showCreateChapter, setShowCreateChapter] = useState(false);
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set());
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  const [loadError, setLoadError] = useState("");
   const [createError, setCreateError] = useState("");
 
-  const loadChapters = useCallback(async () => {
-    if (!novelId) {
-      setChapters([]);
-      return;
-    }
-    try {
-      const list = await app.GetChapters(novelId);
-      setChapters(list ?? []);
-      setLoadError("");
-    } catch (err) {
-      setLoadError(toErrorMessage(err));
-    }
-  }, [novelId, app]);
-
-  useEffect(() => {
-    loadChapters();
-  }, [loadChapters]);
-
   // file:changed 时刷新章节列表（字数统计、新章等）
+  // 5.2 commit 1: loadChapters 删除，改用 query refetch。
+  // commit 3 改 qc.invalidateQueries（含 max-chapter 失效收尾）。
   useEffect(() => {
     const unsub = EventsOn("file:changed", (data: any) => {
       if (data.novel_id !== novelId) return;
@@ -65,11 +52,11 @@ export default function ChapterList({
           data.path.startsWith("outlines/") ||
           data.path === "goink.md")
       ) {
-        loadChapters();
+        refetch();
       }
     });
     return () => unsub();
-  }, [novelId, loadChapters]);
+  }, [novelId, refetch]);
 
   // ── 章节分块 ────────────────────────────────────────────
 
@@ -115,7 +102,8 @@ export default function ChapterList({
       setChapterTitle("");
       setShowCreateChapter(false);
       setCreateError("");
-      loadChapters();
+      // 5.2 commit 1: 临时 refetch 刷新列表（commit 2 改 useCreateChapter mutation onSuccess invalidate）
+      refetch();
     } catch (err) {
       setCreateError(toErrorMessage(err));
     }
@@ -134,7 +122,8 @@ export default function ChapterList({
     if (newTitle && newTitle !== ch.title) {
       try {
         await app.UpdateChapterTitle(novelId, ch.chapter_number, newTitle);
-        loadChapters();
+        // 5.2 commit 1: 临时 refetch 刷新列表（commit 2 改 useUpdateChapterTitle mutation onSuccess invalidate）
+        refetch();
       } catch (err) {
         toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
         console.error(err);
@@ -221,30 +210,29 @@ export default function ChapterList({
       </button>
 
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {chapters.length === 0 ? (
+        {isError ? (
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              {loadError ? (
-                <>
-                  <p className="text-xs text-destructive">{loadError}</p>
-                  <button
-                    onClick={() => loadChapters()}
-                    className="text-xs text-primary underline mt-1"
-                  >
-                    {t("common.retry")}
-                  </button>
-                </>
-              ) : (
-                <>
-                  <p className="text-xs text-muted-foreground">
-                    {t("sidebar.noChapters")}
-                  </p>
-                  <p className="text-xs text-muted-foreground/60 mt-0.5">
-                    {t("sidebar.createFirstChapter")}
-                  </p>
-                </>
-              )}
+              <p className="text-xs text-destructive">{t("chapter.loadFailed")}</p>
+              <button
+                onClick={() => refetch()}
+                className="text-xs text-primary underline mt-1"
+              >
+                {t("common.retry")}
+              </button>
+            </div>
+          </div>
+        ) : chapters.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <div className="text-center">
+              <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-xs text-muted-foreground">
+                {t("sidebar.noChapters")}
+              </p>
+              <p className="text-xs text-muted-foreground/60 mt-0.5">
+                {t("sidebar.createFirstChapter")}
+              </p>
             </div>
           </div>
         ) : (

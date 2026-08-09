@@ -1001,6 +1001,7 @@
     }
   },
   "content": {
+    "loadFailed": "内容加载失败",
     "loadFailedCloseTab": "加载失败，请关闭标签页后重试",
     "storyStatus": "故事状态",
     "skillLabel": "技能: ",

@@ -1,8 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as originalRender, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import ChapterList from "./ChapterList";
 import { toastError } from "@/utils/toast";
+
+// 5.2 commit 1: useChapters 引入 useQuery，render 需包 QueryClientProvider。
+// 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
+function render(ui: ReactElement) {
+  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return originalRender(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 // Mock toastError
 vi.mock("@/utils/toast", async (importOriginal) => {
@@ -13,14 +26,20 @@ vi.mock("@/utils/toast", async (importOriginal) => {
   };
 });
 
-// Mock useApp
-const mockGetChapters = vi.fn();
+// 5.2 commit 1: useChapters mock（query 部分，直接 import wailsjs 不经 useApp）。
+const { mockUseChapters } = vi.hoisted(() => ({
+  mockUseChapters: vi.fn(),
+}));
+vi.mock("./useChapters", () => ({
+  useChapters: mockUseChapters,
+}));
+
+// Mock useApp（CreateChapter/UpdateChapterTitle 仍走 useApp，commit 2 迁 mutation）
 const mockCreateChapter = vi.fn();
 const mockUpdateChapterTitle = vi.fn();
 
 vi.mock("@/hooks/useApp", () => ({
   useApp: () => ({
-    GetChapters: mockGetChapters,
     CreateChapter: mockCreateChapter,
     UpdateChapterTitle: mockUpdateChapterTitle,
   }),
@@ -42,7 +61,13 @@ describe("ChapterList", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetChapters.mockResolvedValue([]);
+    // 5.2 commit 1: 默认返回空数组（query data 兜底）
+    mockUseChapters.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
   });
 
   it("renders empty state when no chapters", async () => {
@@ -50,10 +75,16 @@ describe("ChapterList", () => {
     expect(await screen.findByText("sidebar.noChapters")).toBeInTheDocument();
   });
 
-  it("shows load error when GetChapters fails", async () => {
-    mockGetChapters.mockRejectedValue(new Error("db error"));
+  it("shows loadFailed when query errors", async () => {
+    // 5.2 commit 1: query 错误走中间件 toast，组件 isError 内连显示固定文案（对齐 ReaderList）
+    mockUseChapters.mockReturnValue({
+      data: [],
+      isLoading: false,
+      isError: true,
+      refetch: vi.fn(),
+    });
     render(<ChapterList {...defaultProps} />);
-    expect(await screen.findByText("db error")).toBeInTheDocument();
+    expect(await screen.findByText("chapter.loadFailed")).toBeInTheDocument();
   });
 
   it("shows toastError when rename fails", async () => {
@@ -67,7 +98,12 @@ describe("ChapterList", () => {
         word_count: 0,
       },
     ];
-    mockGetChapters.mockResolvedValue(chapters);
+    mockUseChapters.mockReturnValue({
+      data: chapters,
+      isLoading: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
     mockUpdateChapterTitle.mockRejectedValue(new Error("rename failed"));
 
     render(<ChapterList {...defaultProps} />);
@@ -101,7 +137,7 @@ describe("ChapterList", () => {
 
   it("creates a chapter successfully", async () => {
     const user = userEvent.setup();
-    mockGetChapters.mockResolvedValue([]);
+    // 5.2 commit 1: data 走 useChapters mock（beforeEach 已默认空数组）
     mockCreateChapter.mockResolvedValue(undefined);
 
     render(<ChapterList {...defaultProps} />);
