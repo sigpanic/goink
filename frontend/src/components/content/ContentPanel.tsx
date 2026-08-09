@@ -9,13 +9,14 @@ import {
 import { type OnMount, DiffEditor } from "@monaco-editor/react";
 import { FileText, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
-import { GetContent } from "@/lib/wailsjs/go/app/App";
+import { contentKeys } from "@/lib/queryKeys";
 import TabBar from "./TabBar";
 import ContentEditor from "./ContentEditor";
 import OutlineViewer from "./OutlineViewer";
@@ -76,6 +77,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
     // 3.8: novelId 从 useNovelStore 订阅（替代 prop）。切小说时 store 变化触发 re-render，行为等价。
     const novelId = useNovelStore((s) => s.activeNovelId);
     const { t } = useTranslation();
+    const qc = useQueryClient();
     // 5.2 commit 1: GetContent 走 query 缓存通道（fetchContent），直接 import wailsjs 不经 useApp。
     // 5.2 commit 2: SaveContent 走 useSaveContent mutation（onSuccess 失效 contentKeys.detail），useApp 清零。
     const { fetchContent } = useFileContent();
@@ -384,8 +386,12 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
 
           if (needRefresh) {
             try {
-              // 5.2 commit 1: 直接 import GetContent（不经 useApp），commit 3 改 qc.invalidateQueries
-              const fresh = await GetContent(data.novel_id, data.path);
+              // 5.2 commit 3: 改 qc.invalidateQueries + fetchContent（走 query 缓存通道，不经 useApp）。
+              // 先 invalidate 标 stale，再 fetchContent 才会重新拉取（否则 fetchQuery 返回旧缓存）。
+              qc.invalidateQueries({
+                queryKey: contentKeys.detail(data.novel_id, data.path),
+              });
+              const fresh = await fetchContent(data.novel_id, data.path);
               const patch: Partial<EditorTab> = { [refreshKey]: fresh };
               if (refreshKey === "content") patch.isDirty = false;
               updateTab(tab.id, patch);
@@ -396,7 +402,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
         }
       });
       return () => unsub();
-    }, [updateTab]);
+    }, [qc, fetchContent, updateTab]);
 
     // ── 打开/激活文件 tab ──────────────────────────────────
 

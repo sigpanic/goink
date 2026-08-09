@@ -117,12 +117,10 @@ vi.mock("@/lib/wailsjs/runtime/runtime", () => ({
   Quit: vi.fn(),
 }));
 
-// 5.2 commit 1: ContentPanel 直接 import GetContent（file:changed handler，commit 3 改 invalidateQueries）
-vi.mock("@/lib/wailsjs/go/app/App", () => ({
-  GetContent: vi.fn(),
-}));
+// 5.2 commit 3: ContentPanel 不再直接 import GetContent，file:changed handler 改走
+// qc.invalidateQueries + fetchContent（query 缓存通道）。GetContent mock 不再需要。
 
-// 5.2 commit 1: useFileContent mock（GetContent 走 query 缓存通道，直接 import wailsjs 不经 useApp）
+// 5.2 commit 1: useFileContent mock（fetchContent 走 query 缓存通道，不经 useApp）
 const { mockFetchContent } = vi.hoisted(() => ({
   mockFetchContent: vi.fn(),
 }));

@@ -1,11 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { Button } from "@/components/ui/button";
 import type { chapter } from "@/lib/wailsjs/go/models";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { chapterKeys, maxChapterKeys } from "@/lib/queryKeys";
 import { useChapters } from "./useChapters";
 import { useCreateChapter } from "./useCreateChapter";
 import { useUpdateChapterTitle } from "./useUpdateChapterTitle";
@@ -28,6 +30,7 @@ export default function ChapterList({
   onExportNovel,
 }: Props) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
 
   // 5.2 commit 1: GetChapters 走 query（直接 import wailsjs，不用 useApp）。
   // query 错误走全局中间件，组件加 isError 内连显示 + retry（对齐 ReaderList/PreferenceList）。
@@ -43,8 +46,9 @@ export default function ChapterList({
   const [createError, setCreateError] = useState("");
 
   // file:changed 时刷新章节列表（字数统计、新章等）
-  // 5.2 commit 1: loadChapters 删除，改用 query refetch。
-  // commit 3 改 qc.invalidateQueries（含 max-chapter 失效收尾）。
+  // 5.2 commit 3: 改 qc.invalidateQueries（chapterKeys.list 活跃 query 自动 refetch）。
+  // path 属 chapters/ 时同时失效 maxChapterKeys（storyarc windowCenter 跟随，补 AI 写章场景）。
+  // refetch 保留给 isError retry 按钮（立即重拉语义，与 invalidate 标 stale 不同用途）。
   useEffect(() => {
     const unsub = EventsOn("file:changed", (data: any) => {
       if (data.novel_id !== novelId) return;
@@ -54,11 +58,14 @@ export default function ChapterList({
           data.path.startsWith("outlines/") ||
           data.path === "goink.md")
       ) {
-        refetch();
+        qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
+        if (data.path.startsWith("chapters/")) {
+          qc.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+        }
       }
     });
     return () => unsub();
-  }, [novelId, refetch]);
+  }, [novelId, qc]);
 
   // ── 章节分块 ────────────────────────────────────────────
 
