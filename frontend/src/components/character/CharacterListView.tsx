@@ -24,9 +24,7 @@ interface Props {
 type ViewTab = "list" | "graph";
 
 type EditMode =
-  | { type: "create" }
-  | { type: "edit"; item: character.Character }
-  | null;
+  { type: "create" } | { type: "edit"; item: character.Character } | null;
 
 type CharForm = {
   name: string;

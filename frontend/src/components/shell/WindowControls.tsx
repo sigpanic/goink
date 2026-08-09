@@ -50,9 +50,7 @@ export default function WindowControls({
           setIsMaximised((prev) => !prev);
         }}
         className={winBtn}
-        title={
-          isMaximised ? t("workspace.restore") : t("workspace.maximize")
-        }
+        title={isMaximised ? t("workspace.restore") : t("workspace.maximize")}
       >
         {isMaximised ? (
           <svg width="12" height="12" viewBox="0 0 12 12">
@@ -92,11 +90,7 @@ export default function WindowControls({
           </svg>
         )}
       </button>
-      <button
-        onClick={Quit}
-        className={closeBtn}
-        title={t("workspace.close")}
-      >
+      <button onClick={Quit} className={closeBtn} title={t("workspace.close")}>
         <svg width="12" height="12" viewBox="0 0 12 12">
           <path
             d="M2.5 2.5l7 7M9.5 2.5l-7 7"

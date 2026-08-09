@@ -59,9 +59,7 @@ export default function SidebarReaderList({ novelId }: Props) {
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {isError ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs text-destructive">
-              {t("reader.loadFailed")}
-            </p>
+            <p className="text-xs text-destructive">{t("reader.loadFailed")}</p>
           </div>
         ) : filtered.length === 0 ? (
           <div className="flex items-center justify-center h-full">

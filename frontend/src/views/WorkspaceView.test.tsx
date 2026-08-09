@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as originalRender, screen, fireEvent } from "@testing-library/react";
+import {
+  render as originalRender,
+  screen,
+  fireEvent,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import WorkspaceView from "./WorkspaceView";
@@ -33,7 +37,14 @@ beforeEach(() => {
 // 覆盖 setup.ts 的 Proxy mock（多 vi.mock 交互时 Proxy 会报错），改普通对象
 // 3.1 useNovels / 3.3 useCreateNovel / 3.4 useUpdateNovel / 3.5 useDeleteNovel 直接 import wailsjs（绕过 useApp），这里要 mock。
 // mockGetNovels/mockCreateNovel/mockUpdateNovel/mockDeleteNovel 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
-const { mockGetNovels, mockCreateNovel, mockUpdateNovel, mockDeleteNovel, mockExportNovel, mockSetActiveNovel } = vi.hoisted(() => ({
+const {
+  mockGetNovels,
+  mockCreateNovel,
+  mockUpdateNovel,
+  mockDeleteNovel,
+  mockExportNovel,
+  mockSetActiveNovel,
+} = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
   mockUpdateNovel: vi.fn(),
@@ -148,10 +159,7 @@ vi.mock("@/components/shell/StatusBar", () => ({
 vi.mock("@/components/sidebar/SidePanel", () => ({
   default: (props: {
     onSelectNovel?: (n: { id: number; title: string }) => void;
-    onSearchNavigateEntity?: (
-      panelId: string,
-      entityId: number,
-    ) => void;
+    onSearchNavigateEntity?: (panelId: string, entityId: number) => void;
     onSearchNavigateChapter?: (
       filePath: string,
       title: string,
@@ -161,24 +169,16 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
     ) => void;
   }) => (
     <div data-testid="side-panel">
-      <button
-        onClick={() => props.onSearchNavigateEntity?.("characters", 5)}
-      >
+      <button onClick={() => props.onSearchNavigateEntity?.("characters", 5)}>
         nav-entity-characters
       </button>
-      <button
-        onClick={() => props.onSearchNavigateEntity?.("locations", 7)}
-      >
+      <button onClick={() => props.onSearchNavigateEntity?.("locations", 7)}>
         nav-entity-locations
       </button>
-      <button
-        onClick={() => props.onSearchNavigateEntity?.("timeline", 9)}
-      >
+      <button onClick={() => props.onSearchNavigateEntity?.("timeline", 9)}>
         nav-entity-timeline
       </button>
-      <button
-        onClick={() => props.onSearchNavigateEntity?.("storyarcs", 11)}
-      >
+      <button onClick={() => props.onSearchNavigateEntity?.("storyarcs", 11)}>
         nav-entity-storyarcs
       </button>
       <button onClick={() => props.onSearchNavigateEntity?.("reader", 13)}>
@@ -279,11 +279,17 @@ vi.mock("@/components/novel/BookshelfView", () => ({
     const setShowCreateDialog = useNovelStore((s) => s.setShowCreateDialog);
     return (
       <div data-testid="bookshelf">
-        <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
+        <button
+          onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}
+        >
           shelf-select-novel
         </button>
-        <button onClick={() => setShowCreateDialog(true)}>shelf-create-novel</button>
-        <button onClick={() => props.onImportNovel?.()}>shelf-import-novel</button>
+        <button onClick={() => setShowCreateDialog(true)}>
+          shelf-create-novel
+        </button>
+        <button onClick={() => props.onImportNovel?.()}>
+          shelf-import-novel
+        </button>
       </div>
     );
   },
@@ -313,12 +319,18 @@ vi.mock("@/components/extract/ExtractWorkspaceView", () => ({
   default: () => <div data-testid="extract">extract</div>,
 }));
 vi.mock("@/components/shell/GitHubLink", () => ({ default: () => null }));
-vi.mock("@/components/settings/SettingsDialog", () => ({ default: () => null }));
+vi.mock("@/components/settings/SettingsDialog", () => ({
+  default: () => null,
+}));
 vi.mock("@/components/help/HelpDialog", () => ({ default: () => null }));
 vi.mock("@/components/novel/NovelEditDialog", () => ({
   default: (props: {
     open?: boolean;
-    onSave?: (input: { title: string; description: string; genre: string }) => void;
+    onSave?: (input: {
+      title: string;
+      description: string;
+      genre: string;
+    }) => void;
   }) =>
     props.open ? (
       <div data-testid="novel-edit-dialog">
@@ -332,8 +344,12 @@ vi.mock("@/components/novel/NovelEditDialog", () => ({
       </div>
     ) : null,
 }));
-vi.mock("@/components/novel/NovelDeleteDialog", () => ({ default: () => null }));
-vi.mock("@/components/novel/ImportProgressDialog", () => ({ default: () => null }));
+vi.mock("@/components/novel/NovelDeleteDialog", () => ({
+  default: () => null,
+}));
+vi.mock("@/components/novel/ImportProgressDialog", () => ({
+  default: () => null,
+}));
 vi.mock("@/components/export/ExportDialog", () => ({ default: () => null }));
 vi.mock("@/components/update/UpdateDialog", () => ({ default: () => null }));
 vi.mock("@/components/Logo", () => ({ default: () => null }));
@@ -495,7 +511,11 @@ describe("WorkspaceView approval bridge", () => {
     await screen.findByTestId("content-panel");
     fireEvent.click(screen.getByText("approve-btn"));
     await vi.waitFor(() => {
-      expect(mockApproveTool).toHaveBeenCalledWith("tool-1", true, "looks good");
+      expect(mockApproveTool).toHaveBeenCalledWith(
+        "tool-1",
+        true,
+        "looks good",
+      );
     });
     expect(contentRefSpies.handleDiffApprove).toHaveBeenCalledWith("tool-1");
   });
@@ -505,7 +525,11 @@ describe("WorkspaceView approval bridge", () => {
     await screen.findByTestId("content-panel");
     fireEvent.click(screen.getByText("reject-btn"));
     await vi.waitFor(() => {
-      expect(mockApproveTool).toHaveBeenCalledWith("tool-2", false, "needs rework");
+      expect(mockApproveTool).toHaveBeenCalledWith(
+        "tool-2",
+        false,
+        "needs rework",
+      );
     });
     expect(contentRefSpies.handleDiffReject).toHaveBeenCalledWith("tool-2");
   });

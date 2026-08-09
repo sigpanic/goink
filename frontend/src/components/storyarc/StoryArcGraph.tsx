@@ -564,9 +564,15 @@ export default function StoryArcGraph({ novelId }: Props) {
             type="button"
             onClick={() => {
               // 4.3.1: refresh 按钮 invalidate 三个 query（替代原 load()）。
-              queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
-              queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
-              queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+              queryClient.invalidateQueries({
+                queryKey: storyarcKeys.list(novelId),
+              });
+              queryClient.invalidateQueries({
+                queryKey: arcNodeKeys.list(novelId),
+              });
+              queryClient.invalidateQueries({
+                queryKey: maxChapterKeys.detail(novelId),
+              });
             }}
             className="flex h-7 w-7 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-secondary hover:text-foreground"
             title={t("storyarc.refresh")}

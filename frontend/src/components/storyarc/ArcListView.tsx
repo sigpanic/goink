@@ -150,7 +150,9 @@ export default function ArcListView({ novelId }: Props) {
   // 4b: soloArc——只看目标 arc，隐藏其他所有 arc（等价用户手动逐条 toggleArc 隐藏其他）。
   // 点击搜索结果 arc/node 都会触发，过滤只看这一条弧线的 node。
   function soloArc(arcId: number) {
-    setHiddenArcIds(new Set(arcs.filter((a) => a.id !== arcId).map((a) => a.id)));
+    setHiddenArcIds(
+      new Set(arcs.filter((a) => a.id !== arcId).map((a) => a.id)),
+    );
   }
 
   // 4b: focus 按 type 分流定位（arc→过滤+窗口右边界对齐 arc 末节点章节+展开首节点；node→过滤+高亮+窗口对齐node章节+展开）。
@@ -792,9 +794,15 @@ export default function ArcListView({ novelId }: Props) {
                 <button
                   onClick={() => {
                     // 4.3.1: refresh 按钮 invalidate 三个 query（替代原 load()）。
-                    queryClient.invalidateQueries({ queryKey: storyarcKeys.list(novelId) });
-                    queryClient.invalidateQueries({ queryKey: arcNodeKeys.list(novelId) });
-                    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+                    queryClient.invalidateQueries({
+                      queryKey: storyarcKeys.list(novelId),
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: arcNodeKeys.list(novelId),
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: maxChapterKeys.detail(novelId),
+                    });
                   }}
                   className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
                 >

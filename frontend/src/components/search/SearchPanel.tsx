@@ -40,22 +40,37 @@ interface Props {
   ) => void;
 }
 
-const TYPE_CONFIG: Record<string, {
-  icon: typeof Search;
-  labelKey: string;
-  // 4b: 有此字段的领域，subtitle 走 i18n（t(prefix + subtitle)）；无则原样显示。
-  subtitlePrefix?: string;
-}> = {
+const TYPE_CONFIG: Record<
+  string,
+  {
+    icon: typeof Search;
+    labelKey: string;
+    // 4b: 有此字段的领域，subtitle 走 i18n（t(prefix + subtitle)）；无则原样显示。
+    subtitlePrefix?: string;
+  }
+> = {
   content: { icon: FileText, labelKey: "search.textMatch" },
   character: { icon: User, labelKey: "search.character" },
   location: { icon: MapPin, labelKey: "search.location" },
-  timeline: { icon: History, labelKey: "search.timeline", subtitlePrefix: "timeline." },
-  storyarc: { icon: GitBranch, labelKey: "search.storyArc", subtitlePrefix: "storyarc." },
+  timeline: {
+    icon: History,
+    labelKey: "search.timeline",
+    subtitlePrefix: "timeline.",
+  },
+  storyarc: {
+    icon: GitBranch,
+    labelKey: "search.storyArc",
+    subtitlePrefix: "storyarc.",
+  },
   arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
   reader: { icon: Eye, labelKey: "search.reader", subtitlePrefix: "reader." },
   preference: { icon: Settings, labelKey: "search.preference" },
   setting: { icon: Globe, labelKey: "search.setting" },
-  chapter: { icon: FileText, labelKey: "search.chapter", subtitlePrefix: "chapter." },
+  chapter: {
+    icon: FileText,
+    labelKey: "search.chapter",
+    subtitlePrefix: "chapter.",
+  },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
 

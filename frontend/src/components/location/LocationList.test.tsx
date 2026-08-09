@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as originalRender, screen, fireEvent } from "@testing-library/react";
+import {
+  render as originalRender,
+  screen,
+  fireEvent,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import LocationList from "./LocationList";
@@ -29,8 +33,11 @@ vi.mock("@/components/location/useLocations", () => ({
 // 4.2.2: 删除合并 —— LocationList 只 dispatch setDeletingLocationId，
 // ConfirmDialog + 执行集中在 LocationListView。mock store 的 selector 取 setter 断言被调。
 vi.mock("@/components/location/useLocationStore", () => ({
-  useLocationStore: (selector: (s: { setDeletingLocationId: ReturnType<typeof vi.fn> }) => unknown) =>
-    selector({ setDeletingLocationId: mockSetDeletingLocationId }),
+  useLocationStore: (
+    selector: (s: {
+      setDeletingLocationId: ReturnType<typeof vi.fn>;
+    }) => unknown,
+  ) => selector({ setDeletingLocationId: mockSetDeletingLocationId }),
 }));
 
 describe("LocationList", () => {
@@ -47,9 +54,7 @@ describe("LocationList", () => {
   it("renders empty state when no locations", async () => {
     render(<LocationList novelId={1} />);
     // useLocations mock 同步返回 data，但 render 仍需 await 等待 React 完成
-    expect(
-      await screen.findByText("location.noLocations"),
-    ).toBeInTheDocument();
+    expect(await screen.findByText("location.noLocations")).toBeInTheDocument();
   });
 
   it("shows locationsLoadFailed when isError", async () => {

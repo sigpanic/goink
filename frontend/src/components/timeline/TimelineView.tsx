@@ -625,9 +625,15 @@ export default function TimelineView({ novelId }: Props) {
                 <button
                   onClick={() => {
                     // 4.4.1: refresh 按钮 invalidate 三个 query（替代原 bumpRefresh）。
-                    queryClient.invalidateQueries({ queryKey: timelineKeys.list(novelId) });
-                    queryClient.invalidateQueries({ queryKey: chapterPlanKeys.list(novelId) });
-                    queryClient.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+                    queryClient.invalidateQueries({
+                      queryKey: timelineKeys.list(novelId),
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: chapterPlanKeys.list(novelId),
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: maxChapterKeys.detail(novelId),
+                    });
                   }}
                   className="text-xs text-muted-foreground hover:text-muted-foreground transition-colors"
                 >

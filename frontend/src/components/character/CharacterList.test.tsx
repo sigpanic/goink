@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as originalRender, screen, fireEvent } from "@testing-library/react";
+import {
+  render as originalRender,
+  screen,
+  fireEvent,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
@@ -30,8 +34,11 @@ vi.mock("@/components/character/useCharacters", () => ({
 // 4.1.2: 删除合并 —— CharacterList 只 dispatch setDeletingCharacterId，
 // ConfirmDialog + 执行集中在 CharacterListView。mock store 的 selector 取 setter 断言被调。
 vi.mock("@/components/character/useCharacterStore", () => ({
-  useCharacterStore: (selector: (s: { setDeletingCharacterId: ReturnType<typeof vi.fn> }) => unknown) =>
-    selector({ setDeletingCharacterId: mockSetDeletingCharacterId }),
+  useCharacterStore: (
+    selector: (s: {
+      setDeletingCharacterId: ReturnType<typeof vi.fn>;
+    }) => unknown,
+  ) => selector({ setDeletingCharacterId: mockSetDeletingCharacterId }),
 }));
 
 describe("CharacterList", () => {

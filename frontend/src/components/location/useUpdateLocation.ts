@@ -13,8 +13,13 @@ import { locationKeys } from "@/lib/queryKeys";
 export function useUpdateLocation(novelId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: app.UpdateLocationInput }) =>
-      UpdateLocation(novelId, id, input),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number;
+      input: app.UpdateLocationInput;
+    }) => UpdateLocation(novelId, id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: locationKeys.list(novelId) });
     },

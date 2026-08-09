@@ -1076,8 +1076,8 @@ func TestChapterPatterns_NumericDot(t *testing.T) {
 		{"梦境", false},
 		{"第1章", false},
 		{"", false},
-		{"1.", false},      // 无标题
-		{"1. ", false},     // 无标题（只有空格）
+		{"1.", false},       // 无标题
+		{"1. ", false},      // 无标题（只有空格）
 		{"12345.标题", false}, // 超过4位
 	}
 	for _, tc := range tests {

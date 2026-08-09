@@ -20,10 +20,9 @@ describe("splitModelKey", () => {
   });
 
   it("handles model ID with multiple slashes", () => {
-    expect(splitModelKey("openrouter/meta-llama/llama-3.1-70b-instruct")).toEqual([
-      "openrouter",
-      "meta-llama/llama-3.1-70b-instruct",
-    ]);
+    expect(
+      splitModelKey("openrouter/meta-llama/llama-3.1-70b-instruct"),
+    ).toEqual(["openrouter", "meta-llama/llama-3.1-70b-instruct"]);
   });
 
   it("returns empty modelID when key has no slash", () => {

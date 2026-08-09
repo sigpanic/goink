@@ -13,8 +13,13 @@ import { characterKeys } from "@/lib/queryKeys";
 export function useUpdateCharacter(novelId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, input }: { id: number; input: app.UpdateCharacterInput }) =>
-      UpdateCharacter(novelId, id, input),
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: number;
+      input: app.UpdateCharacterInput;
+    }) => UpdateCharacter(novelId, id, input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: characterKeys.list(novelId) });
     },

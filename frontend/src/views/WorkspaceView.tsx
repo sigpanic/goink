@@ -1,4 +1,10 @@
-import { useState, useEffect, useLayoutEffect, useCallback, useRef } from "react";
+import {
+  useState,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useRef,
+} from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
@@ -182,13 +188,16 @@ export default function WorkspaceView({
   // 切小说瘦 wrapper（3.7）：switchNovel action 管 activeNovelId + SetActiveNovel 后端；
   // 本地重置 panel/tabTarget/activeContent/selectedGitFile（喂 SidePanel/StatusBar/GitCommitView）。
   // tab 切换由 useEditorTabs 的 novelId effect 接管，不再命令式调 closeAllTabs。
-  const switchToNovel = useCallback(async (id: number) => {
-    await switchNovel(id);
-    setActivePanel("chapters");
-    setTabTarget(null);
-    setActiveContent("");
-    setSelectedGitFile(null);
-  }, [switchNovel, setActivePanel]);
+  const switchToNovel = useCallback(
+    async (id: number) => {
+      await switchNovel(id);
+      setActivePanel("chapters");
+      setTabTarget(null);
+      setActiveContent("");
+      setSelectedGitFile(null);
+    },
+    [switchNovel, setActivePanel],
+  );
 
   const handleImportedNovel = useCallback(
     async (res: imp.ImportResult) => {

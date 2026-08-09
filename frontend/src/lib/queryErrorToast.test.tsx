@@ -1,6 +1,10 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import {
+  QueryClient,
+  QueryClientProvider,
+  useQuery,
+} from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
 // Mock toastError 捕获调用（用 vi.hoisted 提升，让 vi.mock 工厂能引用）
@@ -148,7 +152,9 @@ describe("installQueryErrorToast", () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
     // i18n.exists 查 unknown-prefix.loadFailed，返回 false → fallback 到 "unknown-prefix load failed"
     expect(mockI18n.exists).toHaveBeenCalledWith("unknown-prefix.loadFailed");
-    expect(mockToastError).toHaveBeenCalledWith("unknown-prefix load failed: err");
+    expect(mockToastError).toHaveBeenCalledWith(
+      "unknown-prefix load failed: err",
+    );
 
     unsub();
   });

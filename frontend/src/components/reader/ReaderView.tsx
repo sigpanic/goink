@@ -41,7 +41,11 @@ const TYPE_FILTERS: {
   { key: "all", icon: BookOpen, color: "text-muted-foreground" },
   { key: "known", icon: BookOpen, color: "text-tag-green-foreground" },
   { key: "suspense", icon: Clock, color: "text-tag-amber-foreground" },
-  { key: "misconception", icon: AlertTriangle, color: "text-tag-rose-foreground" },
+  {
+    key: "misconception",
+    icon: AlertTriangle,
+    color: "text-tag-rose-foreground",
+  },
 ];
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
