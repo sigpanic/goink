@@ -34,34 +34,14 @@ const WINDOW = 20;
 
 const TYPE_FILTERS: {
   key: TypeFilter;
-  label: string;
+  // 4b: label 由 t("reader." + key) 动态拼接（与搜索 subtitle 同机制）。
   icon: typeof BookOpen;
   color: string;
 }[] = [
-  {
-    key: "all",
-    label: "reader.all",
-    icon: BookOpen,
-    color: "text-muted-foreground",
-  },
-  {
-    key: "known",
-    label: "reader.known",
-    icon: BookOpen,
-    color: "text-tag-green-foreground",
-  },
-  {
-    key: "suspense",
-    label: "reader.suspense",
-    icon: Clock,
-    color: "text-tag-amber-foreground",
-  },
-  {
-    key: "misconception",
-    label: "reader.misunderstanding",
-    icon: AlertTriangle,
-    color: "text-tag-rose-foreground",
-  },
+  { key: "all", icon: BookOpen, color: "text-muted-foreground" },
+  { key: "known", icon: BookOpen, color: "text-tag-green-foreground" },
+  { key: "suspense", icon: Clock, color: "text-tag-amber-foreground" },
+  { key: "misconception", icon: AlertTriangle, color: "text-tag-rose-foreground" },
 ];
 
 const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
@@ -70,11 +50,8 @@ const STATUS_FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "revealed", label: "reader.recovered" },
 ];
 
-const TYPES = [
-  { value: "known", label: "reader.known" },
-  { value: "suspense", label: "reader.suspense" },
-  { value: "misconception", label: "reader.misunderstanding" },
-];
+// 4b: TYPES 只存数据值，label 由 t("reader." + value) 动态拼接（与搜索 subtitle 同机制）。
+const TYPES = ["known", "suspense", "misconception"];
 
 type EditMode =
   { type: "create" } | { type: "edit"; item: reader.ReaderPerspective } | null;
@@ -102,21 +79,21 @@ function typeMeta(type: string, t: (key: string) => string) {
         icon: BookOpen,
         color: "text-tag-green-foreground",
         bg: "bg-tag-green",
-        label: t("reader.known"),
+        label: t(`reader.${type}`),
       };
     case "suspense":
       return {
         icon: Clock,
         color: "text-tag-amber-foreground",
         bg: "bg-tag-amber",
-        label: t("reader.suspense"),
+        label: t(`reader.${type}`),
       };
     case "misconception":
       return {
         icon: AlertTriangle,
         color: "text-tag-rose-foreground",
         bg: "bg-tag-rose",
-        label: t("reader.misunderstanding"),
+        label: t(`reader.${type}`),
       };
     default:
       return {
@@ -348,9 +325,9 @@ export default function ReaderView({ novelId }: Props) {
             onChange={(e) => setForm((f) => ({ ...f, type: e.target.value }))}
             className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            {TYPES.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {t(opt.label)}
+            {TYPES.map((v) => (
+              <option key={v} value={v}>
+                {t(`reader.${v}`)}
               </option>
             ))}
           </select>
@@ -490,7 +467,7 @@ export default function ReaderView({ novelId }: Props) {
                   <Icon
                     className={`h-3 w-3 ${typeFilter === f.key ? f.color : ""}`}
                   />
-                  {t(f.label)}
+                  {t(`reader.${f.key}`)}
                   {f.key !== "all" && (
                     <span className="text-muted-foreground">
                       ({entries.filter((e) => e.type === f.key).length})

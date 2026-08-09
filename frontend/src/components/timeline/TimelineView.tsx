@@ -50,10 +50,8 @@ const PLAN_LABELS: Record<Tab, string> = {
   near: "timeline.nearTerm",
   far: "timeline.farTerm",
 };
-const CATEGORIES = [
-  { value: "foreshadowing", label: "timeline.foreshadowing" },
-  { value: "user_directive", label: "timeline.userInstruction" },
-];
+// 4b: CATEGORIES 只存数据值，label 由 t("timeline." + value) 动态拼接（与搜索 subtitle 同机制）。
+const CATEGORIES = ["foreshadowing", "user_directive"];
 const STATUSES = [
   { value: "pending", label: "timeline.inProgress" },
   { value: "resolved", label: "timeline.recovered" },
@@ -238,14 +236,14 @@ export default function TimelineView({ novelId }: Props) {
           icon: Target,
           color: "text-tag-amber-foreground",
           bg: "bg-tag-amber",
-          label: t("timeline.foreshadowing"),
+          label: t(`timeline.${category}`),
         };
       case "user_directive":
         return {
           icon: Lightbulb,
           color: "text-tag-purple-foreground",
           bg: "bg-tag-purple",
-          label: t("timeline.userInstruction"),
+          label: t(`timeline.${category}`),
         };
       default:
         return {
@@ -414,8 +412,8 @@ export default function TimelineView({ novelId }: Props) {
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               {CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {t(c.label)}
+                <option key={c} value={c}>
+                  {t(`timeline.${c}`)}
                 </option>
               ))}
             </select>

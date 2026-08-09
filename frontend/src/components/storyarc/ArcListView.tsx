@@ -38,12 +38,8 @@ const FILTERS: { key: Filter; label: string }[] = [
   { key: "abandoned", label: "storyarc.abandoned" },
 ];
 
-const ARC_TYPES = [
-  { value: "main", label: "storyarc.mainline" },
-  { value: "sub", label: "storyarc.subplot" },
-  { value: "character", label: "storyarc.characterLine" },
-  { value: "background", label: "storyarc.backgroundLine" },
-];
+// 4b: ARC_TYPES 只存数据值，label 由 t("storyarc." + value) 动态拼接（与搜索 subtitle 同机制）。
+const ARC_TYPES = ["main", "sub", "character", "background"];
 
 const ARC_STATUSES = [
   { value: "active", label: "storyarc.active" },
@@ -540,9 +536,9 @@ export default function ArcListView({ novelId }: Props) {
               }
               className="w-full rounded-md border border-border bg-background px-2.5 py-1.5 text-xs text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {ARC_TYPES.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {t(opt.label)}
+              {ARC_TYPES.map((v) => (
+                <option key={v} value={v}>
+                  {t(`storyarc.${v}`)}
                 </option>
               ))}
             </select>

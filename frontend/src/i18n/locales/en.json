@@ -512,10 +512,10 @@
     "inProgress": "In Progress",
     "completed": "Completed",
     "abandoned": "Abandoned",
-    "mainline": "Main",
-    "subplot": "Subplot",
-    "characterLine": "Character Line",
-    "backgroundLine": "Background Line",
+    "main": "Main",
+    "sub": "Subplot",
+    "character": "Character Line",
+    "background": "Background Line",
     "active": "Active",
     "paused": "Paused",
     "list": "List",
@@ -599,7 +599,7 @@
     "nearTerm": "Near Term",
     "farTerm": "Far Term",
     "foreshadowing": "Foreshadowing",
-    "userInstruction": "User Instruction",
+    "user_directive": "User Instruction",
     "inProgress": "In Progress",
     "recovered": "Recovered",
     "abandoned": "Abandoned",
@@ -656,7 +656,7 @@
     "all": "All",
     "known": "Known",
     "suspense": "Suspense",
-    "misunderstanding": "Misunderstanding",
+    "misconception": "Misunderstanding",
     "unrecovered": "Unrecovered",
     "recovered": "Recovered",
     "loading": "Loading...",
@@ -701,6 +701,9 @@
     "searchEntries": "Search entries...",
     "noMatchingEntries2": "No matching entries",
     "noEntries": "No entries yet"
+  },
+  "chapter": {
+    "titleMatch": "Title Match"
   },
   "novelSetting": {
     "title": "Novel Settings",

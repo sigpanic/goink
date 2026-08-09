@@ -133,18 +133,11 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 		s.logger.Warn("timeline search failed", "err", err)
 	} else if tlResult != nil {
 		for _, e := range tlResult.Items {
-			subtitle := e.Category
-			switch e.Category {
-			case "foreshadowing":
-				subtitle = "伏笔"
-			case "user_directive":
-				subtitle = "用户指令"
-			}
 			results = append(results, Result{
 				Type:       "timeline",
 				ID:         e.ID,
 				Title:      e.Title,
-				Subtitle:   subtitle,
+				Subtitle:   e.Category, // 英文原值，前端 t("timeline."+subtitle) 翻译
 				ChapterNum: e.TargetChapter,
 				PanelID:    "timeline",
 			})
@@ -236,7 +229,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 				Type:       "chapter",
 				ID:         ch.ID,
 				Title:      ch.Title,
-				Subtitle:   "标题匹配",
+				Subtitle:   "titleMatch", // 4b: i18n key 后缀，前端 t("chapter."+subtitle) 翻译
 				ChapterNum: ch.ChapterNumber,
 				FilePath:   ch.FilePath,
 				PanelID:    "chapters",

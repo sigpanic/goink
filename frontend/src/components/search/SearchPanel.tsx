@@ -47,11 +47,11 @@ const TYPE_CONFIG: Record<string, {
   content: { icon: FileText, labelKey: "search.textMatch" },
   character: { icon: User, labelKey: "search.character" },
   location: { icon: MapPin, labelKey: "search.location" },
-  timeline: { icon: History, labelKey: "search.timeline" },
-  storyarc: { icon: GitBranch, labelKey: "search.storyArc" },
+  timeline: { icon: History, labelKey: "search.timeline", subtitlePrefix: "timeline." },
+  storyarc: { icon: GitBranch, labelKey: "search.storyArc", subtitlePrefix: "storyarc." },
   arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
   reader: { icon: Eye, labelKey: "search.reader", subtitlePrefix: "reader." },
-  chapter: { icon: FileText, labelKey: "search.chapter" },
+  chapter: { icon: FileText, labelKey: "search.chapter", subtitlePrefix: "chapter." },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
 

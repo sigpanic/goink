@@ -493,10 +493,10 @@
     "inProgress": "进行中",
     "completed": "已完成",
     "abandoned": "已废弃",
-    "mainline": "主线",
-    "subplot": "支线",
-    "characterLine": "角色线",
-    "backgroundLine": "背景线",
+    "main": "主线",
+    "sub": "支线",
+    "character": "角色线",
+    "background": "背景线",
     "active": "活跃",
     "paused": "暂停",
     "list": "列表",
@@ -576,7 +576,7 @@
     "nearTerm": "近期",
     "farTerm": "远期",
     "foreshadowing": "伏笔",
-    "userInstruction": "用户指令",
+    "user_directive": "用户指令",
     "inProgress": "进行中",
     "recovered": "已回收",
     "abandoned": "已废弃",
@@ -633,7 +633,7 @@
     "all": "全部",
     "known": "已知",
     "suspense": "悬念",
-    "misunderstanding": "误解",
+    "misconception": "误解",
     "unrecovered": "未回收",
     "recovered": "已回收",
     "loading": "加载中...",
@@ -678,6 +678,9 @@
     "searchEntries": "搜索条目...",
     "noMatchingEntries2": "无匹配条目",
     "noEntries": "暂无条目"
+  },
+  "chapter": {
+    "titleMatch": "标题匹配"
   },
   "novelSetting": {
     "title": "小说设定",

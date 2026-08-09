@@ -167,8 +167,9 @@ func TestSearchEntities_Timeline(t *testing.T) {
 	if results[0].Type != "timeline" {
 		t.Errorf("expected type timeline, got %s", results[0].Type)
 	}
-	if results[0].Subtitle != "伏笔" {
-		t.Errorf("expected 伏笔 subtitle, got %s", results[0].Subtitle)
+	// 4b: 后端传 Category 英文原值（前端 t("timeline."+subtitle) 翻译），不再硬编码中文。
+	if results[0].Subtitle != "foreshadowing" {
+		t.Errorf("expected foreshadowing subtitle, got %s", results[0].Subtitle)
 	}
 }
 
@@ -696,7 +697,8 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 		}
 		foundTimeline := false
 		for _, r := range results {
-			if r.Type == "timeline" && r.Subtitle == "用户指令" {
+			// 4b: 后端传 Category 英文原值 user_directive（前端翻译）。
+			if r.Type == "timeline" && r.Subtitle == "user_directive" {
 				foundTimeline = true
 			}
 		}
