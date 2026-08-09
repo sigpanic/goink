@@ -2,8 +2,16 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquare, Loader2, History, Plus } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
-import type { llm, app } from "@/hooks/useApp";
+import { GetSession } from "@/lib/wailsjs/go/app/App";
+import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
+import { useModels } from "./useModels";
+import { useSettings } from "./useSettings";
+import { useSessions } from "./useSessions";
+import { useSession } from "./useSession";
+import { useSessionMessages } from "./useSessionMessages";
+import { useSlashCommands } from "./useSlashCommands";
 import type { AgentEvent, Turn } from "./types";
 import {
   AgentEventType,
@@ -68,13 +76,22 @@ export default function ChatPanel({
 }: Props) {
   const { t } = useTranslation();
   const app = useApp();
+  const qc = useQueryClient();
+  const modelsQuery = useModels();
+  const settingsQuery = useSettings();
+  const sessionsQuery = useSessions({
+    novelId,
+    page: 1,
+    size: 5,
+    search: "",
+  });
+  const slashCommandsQuery = useSlashCommands(novelId);
   const [isDragging, setIsDragging] = useState(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(chatPanelWidth);
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [models, setModels] = useState<llm.AvailableModel[]>([]);
   const [selectedKey, setSelectedKey] = useState("");
   const [reasoningEffort, setReasoningEffort] = useState("");
   const [approvalMode, setApprovalMode] = useState<"manual" | "auto">("manual");
@@ -86,15 +103,7 @@ export default function ChatPanel({
   const [activeSessionId, setActiveSessionId] = useState<
     string | null | undefined
   >(undefined);
-  const [sessions, setSessions] = useState<app.SessionMeta[]>([]);
-  const [sessionsTotal, setSessionsTotal] = useState(0);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
-  const [initLoadError, setInitLoadError] = useState(false);
-  const [initLoadRetry, setInitLoadRetry] = useState(0);
-  const [historyLoadError, setHistoryLoadError] = useState(false);
-  const [historyLoadRetry, setHistoryLoadRetry] = useState(0);
-  const [slashCommands, setSlashCommands] = useState<app.SlashCommand[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isNearBottomRef = useRef(true);
@@ -107,73 +116,80 @@ export default function ChatPanel({
     onApprovalFileEditRef.current = onApprovalFileEdit;
   }, [onApprovalFileEdit]);
   const lastSessionIdRef = useRef("");
+  const restoredRef = useRef(false);
 
-  // 加载模型列表并恢复持久化设置
+  // 选中态恢复：依赖 useModels + useSettings 两个 query data 都 ready。
+  // restoredRef 保证只恢复一次（避免 query refetch 时重置用户手动选择）。
+  // 替代原 Promise.all([GetModels, GetSettings]) + setInitLoadError 逻辑。
   useEffect(() => {
-    setInitLoadError(false);
-    Promise.all([app.GetModels(), app.GetSettings()])
-      .then(([modelList, settings]) => {
-        if (modelList && modelList.length > 0) {
-          setModels(modelList);
+    if (restoredRef.current) return;
+    const modelList = modelsQuery.data;
+    const settings = settingsQuery.data;
+    if (!modelList || modelList.length === 0 || !settings) return;
+    restoredRef.current = true;
 
-          // 恢复模型选择（验证 key 仍存在）
-          let key = settings?.selected_model_key || "";
-          let model = modelList.find((m) => m.Key === key);
-          if (!model) {
-            model = modelList[0];
-            key = model.Key;
-          }
-          setSelectedKey(key);
+    // 恢复模型选择（验证 key 仍存在）
+    let key = settings.selected_model_key || "";
+    let model = modelList.find((m) => m.Key === key);
+    if (!model) {
+      model = modelList[0];
+      key = model.Key;
+    }
+    setSelectedKey(key);
 
-          // 恢复推理程度（验证级别仍合法）
-          let effort = settings?.reasoning_effort || "";
-          if (!effort || !model.ReasoningLevels?.includes(effort)) {
-            effort = model.ReasoningLevels?.[0] || "";
-          }
-          setReasoningEffort(effort);
-        }
+    // 恢复推理程度（验证级别仍合法）
+    let effort = settings.reasoning_effort || "";
+    if (!effort || !model.ReasoningLevels?.includes(effort)) {
+      effort = model.ReasoningLevels?.[0] || "";
+    }
+    setReasoningEffort(effort);
 
-        // 恢复审批模式
-        const mode = settings?.approval_mode;
-        if (mode === "manual" || mode === "auto") {
-          setApprovalMode(mode);
-        }
+    // 恢复审批模式
+    const mode = settings.approval_mode;
+    if (mode === "manual" || mode === "auto") {
+      setApprovalMode(mode);
+    }
 
-        // 暂存上次会话 ID，等 novelId 加载后恢复
-        if (settings?.last_session_id) {
-          lastSessionIdRef.current = settings.last_session_id;
-        }
-      })
-      .catch((err) => {
-        console.error("Load models/settings failed", err);
-        setInitLoadError(true);
-      });
-  }, [app, initLoadRetry]);
+    // 暂存上次会话 ID，等 novelId 加载后恢复
+    if (settings.last_session_id) {
+      lastSessionIdRef.current = settings.last_session_id;
+    }
+  }, [modelsQuery.data, settingsQuery.data]);
 
-  // 加载会话列表
+  // models query refetch 后（如 SettingsDialog 保存触发 invalidate）：
+  // 检查当前 selectedKey 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    const modelList = modelsQuery.data;
+    if (!modelList || modelList.length === 0) return;
+    if (!selectedKey || !modelList.find((m) => m.Key === selectedKey)) {
+      const first = modelList[0];
+      setSelectedKey(first.Key);
+      if (first.ReasoningLevels?.length) {
+        setReasoningEffort(first.ReasoningLevels[0]);
+      }
+    }
+  }, [modelsQuery.data, selectedKey]);
+
+  // 活跃会话详情 + 历史消息：useSession / useSessionMessages query。
+  // activeSid 为空（新对话/未选中）时 enabled false 不 fetch。
+  const activeSid = activeSessionId ?? "";
+  const sessionQuery = useSession(activeSid);
+  const messagesQuery = useSessionMessages(activeSid);
+
+  // novelId 变化时重置会话视图 + 恢复上次活跃会话。
+  // 会话列表由 useSessions query 自动 fetch（novelId 变化 → queryKey 变化 → refetch）。
   useEffect(() => {
     if (!novelId) return;
     setActiveSessionId(undefined);
     setTurns([]);
     setSessionId("");
-    app
-      .GetSessions({ novel_id: novelId, page: 1, size: 5, search: "" })
-      .then((r) => {
-        if (r) {
-          setSessions(r.items);
-          setSessionsTotal(r.total);
-        }
-      })
-      .catch((err) => {
-        console.error("Load sessions failed", err);
-      });
 
     // 尝试恢复上次活跃会话（仅恢复一次，通过 ref 标记）
     const sid = lastSessionIdRef.current;
     if (sid && novelId) {
       lastSessionIdRef.current = "";
-      app
-        .GetSession(sid)
+      GetSession(sid)
         .then((detail) => {
           if (detail && detail.novel_id === novelId) {
             setActiveSessionId(sid);
@@ -183,27 +199,31 @@ export default function ChatPanel({
           app.SetLastSession("").catch(() => {});
         });
     }
-  }, [app, novelId]);
+  }, [novelId, app]);
 
-  // 加载历史消息
+  // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
+  // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
   useEffect(() => {
-    if (!activeSessionId || !novelId) return;
+    if (!activeSessionId) {
+      setSessionId("");
+      return;
+    }
     setSessionId(activeSessionId);
-    setHistoryLoadError(false);
-    setIsLoadingHistory(true);
-    app
-      .GetSessionMessages(activeSessionId)
-      .then((msgs) => {
-        if (msgs) {
-          setTurns(rebuildTurns(msgs));
-        }
-      })
-      .catch((err) => {
-        console.error("Load messages failed", err);
-        setHistoryLoadError(true);
-      })
-      .finally(() => setIsLoadingHistory(false));
-  }, [app, activeSessionId, novelId, historyLoadRetry]);
+    const msgs = messagesQuery.data;
+    if (msgs) {
+      setTurns(rebuildTurns(msgs));
+    }
+  }, [activeSessionId, messagesQuery.data]);
+
+  // lastUsage 从 useSession data 的 usage 字段恢复（替代原 handleSelectSession 内 GetSession）。
+  useEffect(() => {
+    if (!activeSessionId) return;
+    if (sessionQuery.data?.usage) {
+      setLastUsage(sessionQuery.data.usage as unknown as UsageInfo);
+    } else if (sessionQuery.isError) {
+      setLastUsage(null);
+    }
+  }, [sessionQuery.data, sessionQuery.isError, activeSessionId]);
 
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
@@ -261,16 +281,7 @@ export default function ChatPanel({
     (sid: string) => {
       setActiveSessionId(sid);
       app.SetLastSession(sid).catch(() => {});
-      app
-        .GetSession(sid)
-        .then((detail) => {
-          if (detail?.usage) {
-            setLastUsage(detail.usage as unknown as UsageInfo);
-          } else {
-            setLastUsage(null);
-          }
-        })
-        .catch(() => setLastUsage(null));
+      // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
     [app],
   );
@@ -280,32 +291,21 @@ export default function ChatPanel({
     setTurns([]);
     setSessionId("");
     setLastUsage(null);
-    app
-      .GetSessions({ novel_id: novelId, page: 1, size: 5, search: "" })
-      .then((r) => {
-        if (r) {
-          setSessions(r.items);
-          setSessionsTotal(r.total);
-        }
-      })
-      .catch((err) => {
-        console.error("Refresh sessions failed", err);
-      });
-  }, [novelId, app]);
+    qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
+  }, [novelId, qc]);
 
-  // 会话删除后同步视图：从最近会话列表移除并更新总数；
+  // 会话删除后同步视图：列表刷新靠 invalidate（commit 3 mutation onSuccess 接管后同语义）；
   // 若删除的正是当前正在查看的 session，清空活跃会话/消息，避免界面仍停留在已删除内容上。
   const handleSessionDeleted = useCallback(
     (sessionId: string) => {
-      setSessions((prev) => prev.filter((s) => s.session_id !== sessionId));
-      setSessionsTotal((prev) => Math.max(0, prev - 1));
+      qc.invalidateQueries({ queryKey: ["sessions"] });
       if (activeSessionId === sessionId) {
         setActiveSessionId(null);
         setTurns([]);
         setSessionId("");
       }
     },
-    [activeSessionId],
+    [activeSessionId, qc],
   );
 
   const handleOpenHistory = useCallback(() => {
@@ -316,22 +316,10 @@ export default function ChatPanel({
     setShowHistoryPanel(false);
   }, []);
 
-  const loadSlash = useCallback(async () => {
-    if (!novelId) {
-      setSlashCommands([]);
-      return;
-    }
-    try {
-      const list = await app.ListSlashCommands({ novel_id: novelId });
-      setSlashCommands(list ?? []);
-    } catch (err) {
-      console.error("Load slash commands failed", err);
-    }
-  }, [app, novelId]);
-
-  useEffect(() => {
-    loadSlash();
-  }, [loadSlash]);
+  // slash 命令由 useSlashCommands query 自动 fetch；onListSlash 时 invalidate 触发 refetch。
+  const refreshSlashCommands = useCallback(() => {
+    qc.invalidateQueries({ queryKey: slashCommandKeys.list(novelId) });
+  }, [qc, novelId]);
 
   const applyAgentEvent = useCallback(
     (turnId: number, event: AgentEvent) => {
@@ -952,19 +940,15 @@ export default function ChatPanel({
 
   const handleConfigModel = useCallback(() => setShowSettings(true), []);
 
+  // 模型刷新：invalidate 触发 useModels refetch；选中态由下方 effect 自动修正。
   const refreshModels = useCallback(() => {
-    app
-      .GetModels()
-      .then((list) => {
-        if (list && list.length > 0) setModels(list);
-      })
-      .catch(() => {});
-  }, [app]);
+    qc.invalidateQueries({ queryKey: modelKeys.all });
+  }, [qc]);
 
   const handleSelectModel = useCallback(
     (key: string) => {
       setSelectedKey(key);
-      const m = models.find((x) => x.Key === key);
+      const m = modelsQuery.data?.find((x) => x.Key === key);
       let effort = "";
       if (m?.ReasoningLevels?.length) {
         effort = m.ReasoningLevels[0];
@@ -972,7 +956,7 @@ export default function ChatPanel({
       }
       app.SetSelectedModel(key, effort).catch(() => {});
     },
-    [models, app],
+    [modelsQuery.data, app],
   );
 
   const handleSelectEffort = useCallback(
@@ -1110,18 +1094,8 @@ export default function ChatPanel({
           model_id: m,
           reasoning_effort: reasoningEffort,
         });
-        // 刷新会话列表
-        app
-          .GetSessions({ novel_id: novelId, page: 1, size: 5, search: "" })
-          .then((r) => {
-            if (r) {
-              setSessions(r.items);
-              setSessionsTotal(r.total);
-            }
-          })
-          .catch((err) => {
-            console.error("Post-send refresh sessions failed", err);
-          });
+        // 刷新会话列表（invalidate 触发 useSessions refetch）
+        qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
       } catch (err) {
         setTurns((prev) =>
           prev.map((t) => {
@@ -1181,6 +1155,7 @@ export default function ChatPanel({
       handleAgentEvent,
       applyAgentEvent,
       activeSessionId,
+      qc,
     ],
   );
 
@@ -1227,18 +1202,6 @@ export default function ChatPanel({
         </div>
       </div>
 
-      {initLoadError && (
-        <div className="px-4 py-2 bg-danger-bg border-b border-danger-border text-xs text-red-600 flex items-center justify-between shrink-0">
-          <span>{t("chat.loadSettingsFailed")}</span>
-          <button
-            onClick={() => setInitLoadRetry((n) => n + 1)}
-            className="underline hover:text-destructive cursor-pointer"
-          >
-            {t("chat.retry")}
-          </button>
-        </div>
-      )}
-
       <div className="absolute left-0 right-0 top-[41px] bottom-0 pointer-events-none z-30">
         <SessionHistory
           open={showHistoryPanel}
@@ -1265,27 +1228,27 @@ export default function ChatPanel({
           </div>
         ) : showRecent ? (
           <RecentSessions
-            sessions={sessions}
-            total={sessionsTotal}
+            sessions={sessionsQuery.data?.items ?? []}
+            total={sessionsQuery.data?.total ?? 0}
             onSelectSession={handleSelectSession}
             onViewAll={handleOpenHistory}
             onDeleteSession={handleSessionDeleted}
           />
-        ) : isLoadingHistory ? (
+        ) : messagesQuery.isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <>
             {/* 消息列表 */}
-            {historyLoadError ? (
+            {messagesQuery.isError ? (
               <div className="flex items-center justify-center h-full">
                 <div className="text-center">
                   <p className="text-sm text-red-500 mb-2">
                     {t("chat.loadMessagesFailed")}
                   </p>
                   <button
-                    onClick={() => setHistoryLoadRetry((n) => n + 1)}
+                    onClick={() => messagesQuery.refetch()}
                     className="text-xs text-primary underline cursor-pointer"
                   >
                     {t("chat.retry")}
@@ -1470,9 +1433,9 @@ export default function ChatPanel({
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading}
         placeholder={inputPlaceholder}
-        slashItems={slashCommands}
+        slashItems={slashCommandsQuery.data ?? []}
         onSend={handleSend}
-        onListSlash={loadSlash}
+        onListSlash={refreshSlashCommands}
         onStop={() => {
           setTurns((prev) =>
             prev.map((t) =>
@@ -1488,7 +1451,7 @@ export default function ChatPanel({
       <div className="border-t mx-4" />
 
       <ChatControls
-        models={models}
+        models={modelsQuery.data ?? []}
         selectedKey={selectedKey}
         onSelectModel={handleSelectModel}
         onRefreshModels={refreshModels}
@@ -1511,20 +1474,8 @@ export default function ChatPanel({
         open={showSettings}
         onClose={() => setShowSettings(false)}
         onSaved={() => {
-          app
-            .GetModels()
-            .then((list) => {
-              if (list && list.length > 0) {
-                setModels(list);
-                if (!list.find((m) => m.Key === selectedKey)) {
-                  setSelectedKey(list[0].Key);
-                  if (list[0].ReasoningLevels?.length) {
-                    setReasoningEffort(list[0].ReasoningLevels[0]);
-                  }
-                }
-              }
-            })
-            .catch(() => {});
+          // invalidate 触发 useModels refetch；选中态由 modelsQuery effect 自动修正。
+          qc.invalidateQueries({ queryKey: modelKeys.all });
         }}
         initialTab="model"
       />

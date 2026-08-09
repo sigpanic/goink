@@ -76,7 +76,38 @@ export const skillKeys = {
   detail: (name: string) => ["skill", name] as const,
 };
 
+// chat 领域 GET 端点 query key（5.1 commit 1）。
+// models/settings 是全局配置，但首个消费方是 ChatPanel，hook 暂放 components/chat/，
+// 后续全局配置领域迁移时共享缓存。
+export const modelKeys = {
+  all: ["models"] as const,
+};
+
+export const settingsKeys = {
+  all: ["settings"] as const,
+};
+
+export const slashCommandKeys = {
+  list: (novelId: number) => ["slash-commands", novelId] as const,
+};
+
+export const sessionMessagesKeys = {
+  detail: (sessionId: string) => ["session-messages", sessionId] as const,
+};
+
 export const sessionKeys = {
-  list: (novelId: number) => ["sessions", novelId] as const,
-  detail: (id: number) => ["session", id] as const,
+  // list: 单页查询（ChatPanel 最近会话 page=1 size=5）。queryKey 含分页/搜索参数，
+  // 与 SessionHistory 的 infiniteList 区分缓存（size/search 不同则不共享）。
+  list: (
+    novelId: number,
+    page: number,
+    size: number,
+    search: string,
+  ) => ["sessions", novelId, page, size, search] as const,
+  // infiniteList: SessionHistory 无限滚动序列（size=20 + search）。
+  // page 由 useInfiniteQuery 的 pageParam 管理，不进 key；search 变化触发新 query。
+  infiniteList: (novelId: number, size: number, search: string) =>
+    ["sessions", "infinite", novelId, size, search] as const,
+  // detail: session_id 是 string（修原 number 类型 bug）。
+  detail: (id: string) => ["session", id] as const,
 };

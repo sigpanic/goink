@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { MessageSquare, Loader2, History, Trash2 } from "lucide-react";
-import type { app } from "@/hooks/useApp";
-import { useApp } from "@/hooks/useApp";
+import { useQueryClient } from "@tanstack/react-query";
 import { useDeleteSession } from "@/hooks/useDeleteSession";
 import { useTimeAgo } from "@/hooks/useTimeAgo";
+import { sessionKeys } from "@/lib/queryKeys";
+import { useInfiniteSessions } from "./useInfiniteSessions";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -23,51 +24,31 @@ export default function SessionHistory({
   onSessionDeleted,
 }: Props) {
   const { t } = useTranslation();
-  const app = useApp();
+  const qc = useQueryClient();
   const [mounted, setMounted] = useState(false);
   // 相对时间：面板打开时每分钟自动刷新，关闭时停掉定时器
   const timeAgo = useTimeAgo(open);
   const [visible, setVisible] = useState(false);
-  const [sessions, setSessions] = useState<app.SessionMeta[]>([]);
-  const [total, setTotal] = useState(0);
-  const [page, setPage] = useState(1);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
-  const loadingRef = useRef(false);
-  const searchRef = useRef("");
 
-  const loadPageRef = useRef<((p: number) => void) | null>(null);
+  // 无限滚动 query：page 由 pageParam 管理（不进 queryKey）；
+  // submittedSearch 变化 → queryKey 变化 → 自动重新从第一页 fetch。
+  // enabled: open && !!novelId（面板关闭时不 fetch）。
+  const sessionsQuery = useInfiniteSessions({
+    novelId,
+    size: 20,
+    search: submittedSearch,
+    enabled: open,
+  });
 
-  useEffect(() => {
-    loadPageRef.current = async (p: number) => {
-      if (loadingRef.current) return;
-      loadingRef.current = true;
-      setIsLoading(true);
-      try {
-        const result = await app.GetSessions({
-          novel_id: novelId,
-          page: p,
-          size: 20,
-          search: searchRef.current,
-        });
-        if (result?.items) {
-          setSessions((prev) =>
-            p === 1 ? result.items : [...prev, ...result.items],
-          );
-          setTotal(result.total);
-          setHasMore(result.page < result.total_pages);
-        }
-      } catch {
-        // ignore
-      } finally {
-        setIsLoading(false);
-        loadingRef.current = false;
-      }
-    };
-  }, [app, novelId]);
+  const sessions =
+    sessionsQuery.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+  const total = sessionsQuery.data?.pages[0]?.total ?? 0;
+  const hasMore = sessionsQuery.hasNextPage;
+  const isLoading = sessionsQuery.isLoading;
+  const isFetchingMore = sessionsQuery.isFetchingNextPage;
 
   useEffect(() => {
     if (open) {
@@ -80,49 +61,29 @@ export default function SessionHistory({
     }
   }, [open]);
 
-  // 搜索防抖 300ms
+  // 搜索防抖 300ms：search 输入 → submittedSearch 更新 → queryKey 变化 → refetch
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchRef.current !== search) {
-        searchRef.current = search;
-        setSubmittedSearch(search);
-        setSessions([]);
-        setPage(1);
-        setHasMore(true);
-        loadPageRef.current?.(1);
-      }
+      setSubmittedSearch(search);
     }, 300);
     return () => clearTimeout(timer);
   }, [search]);
 
-  useEffect(() => {
-    if (!open) return;
-    setSearch("");
-    setSubmittedSearch("");
-    searchRef.current = "";
-    setSessions([]);
-    setPage(1);
-    setHasMore(true);
-    loadPageRef.current?.(1);
-  }, [open, novelId]);
-
   const handleScroll = useCallback(() => {
-    if (!listRef.current || !hasMore || isLoading) return;
+    if (!listRef.current || !hasMore || isFetchingMore) return;
     const { scrollTop, scrollHeight, clientHeight } = listRef.current;
     if (scrollHeight - scrollTop - clientHeight < 80) {
-      const next = page + 1;
-      setPage(next);
-      loadPageRef.current?.(next);
+      sessionsQuery.fetchNextPage();
     }
-  }, [hasMore, isLoading, page]);
+  }, [hasMore, isFetchingMore, sessionsQuery]);
 
-  // 删除会话：复用 useDeleteSession hook（统一 deleteTarget/deleting/错误提示）。
-  // 删除成功后既更新本地分页 state（SessionHistory 自管列表），又通过 onSessionDeleted
-  // 通知父组件 ChatPanel 更新最近会话列表 / 清空当前活跃 session 视图。
+  // 删除会话：invalidate 触发 infinite query refetch（刷新所有已加载页）。
+  // 同时通过 onSessionDeleted 通知父组件 ChatPanel 更新最近会话 / 清空当前活跃 session 视图。
   const { deleteTarget, deleting, setDeleteTarget, handleDeleteSession } =
     useDeleteSession((sid) => {
-      setSessions((prev) => prev.filter((s) => s.session_id !== sid));
-      setTotal((prev) => Math.max(0, prev - 1));
+      qc.invalidateQueries({
+        queryKey: sessionKeys.infiniteList(novelId, 20, submittedSearch),
+      });
       onSessionDeleted(sid);
     });
 
@@ -212,7 +173,7 @@ export default function SessionHistory({
                     </button>
                   </div>
                 ))}
-                {isLoading && (
+                {isFetchingMore && (
                   <div className="flex justify-center py-3">
                     <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
                   </div>

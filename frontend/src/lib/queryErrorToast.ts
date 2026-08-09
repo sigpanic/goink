@@ -4,8 +4,7 @@ import { toErrorMessage } from "@/utils/error";
 import i18n from "@/i18n";
 
 // queryKey 前缀 → i18n key 映射表。
-// 后续领域 query 化时在此补：locations / storyarcs / timeline / reader / preferences /
-// novel-settings / style-samples / skills / sessions / chapters 等。
+// 后续领域 query 化时在此补：style-samples / skills / chapters 等。
 // 漏配时 fallback 用 `${prefix}.loadFailed`，i18n 不存在时再 fallback 到
 // `${prefix} load failed`，保证不静默。
 const QUERY_ERROR_I18N: Record<string, string> = {
@@ -23,9 +22,15 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   reader: "reader.loadFailed",
   preferences: "preference.loadFailed",
   "novel-settings": "novelSetting.loadFailed",
+  // chat 领域 GET 端点（5.1 commit 1）：
+  models: "chat.modelsLoadFailed",
+  settings: "chat.settingsLoadFailed",
+  sessions: "chat.sessionsLoadFailed",
+  session: "chat.sessionLoadFailed",
+  "session-messages": "chat.messagesLoadFailed",
+  "slash-commands": "chat.slashCommandsLoadFailed",
   // "style-samples": "styleSample.loadFailed",
   // skills: "skill.loadFailed",
-  // sessions: "session.loadFailed",
   // chapters: "chapter.loadFailed",
 };
 
