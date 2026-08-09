@@ -16,6 +16,7 @@ import (
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
@@ -35,6 +36,7 @@ func openSearchDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(
 		&character.Character{},
 		&location.Location{},
+		&reader.ReaderPerspective{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},
@@ -58,6 +60,7 @@ func newTestService(db *gorm.DB) *Service {
 		timeline.NewStore(db, logger),
 		storyarc.NewStore(db, logger),
 		chapter.NewStore(db, logger),
+		reader.NewStore(db, logger),
 		nil, // vectorStore
 	)
 }

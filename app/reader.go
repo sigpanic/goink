@@ -25,24 +25,20 @@ type UpdateReaderPerspectiveInput struct {
 	RevealedChapter int    `json:"revealed_chapter,omitempty"`
 }
 
-// GetReaderPerspectives 返回指定小说的全部读者认知条目，按 planted_chapter 升序排列。
+// GetReaderPerspectives 返回指定小说的全部读者认知条目，按 type, planted_chapter ASC 排列。
+// 4b: 改调 ListByNovel(Size=-1) 一次拉全（废弃循环翻页拉全）。显式传 Order 保持原排序。
 func (a *App) GetReaderPerspectives(novelID int64) ([]reader.ReaderPerspective, error) {
-	var all []reader.ReaderPerspective
-	page := 1
-	for {
-		result, err := a.reader.ListByNovel(a.ctx, novelID, reader.ListByNovelOptions{
-			PageParams: storage.PageParams{Page: page, Size: 100},
-		})
-		if err != nil {
-			return nil, err
-		}
-		all = append(all, result.Items...)
-		if page >= result.TotalPages {
-			break
-		}
-		page++
+	result, err := a.reader.ListByNovel(a.ctx, novelID, reader.ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "type, planted_chapter ASC",
+	})
+	if err != nil {
+		return nil, err
 	}
-	return all, nil
+	if result.Items == nil {
+		return []reader.ReaderPerspective{}, nil
+	}
+	return result.Items, nil
 }
 
 // CreateReaderPerspective 创建一条读者认知条目。

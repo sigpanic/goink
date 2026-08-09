@@ -13,6 +13,7 @@ import (
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/rag"
+	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
@@ -27,6 +28,7 @@ type Service struct {
 	tlStore     *timeline.Store
 	arcStore    *storyarc.Store
 	chapStore   *chapter.Store
+	readerStore *reader.Store
 	vectorStore *rag.VectorStore
 
 	mu    sync.RWMutex
@@ -36,7 +38,7 @@ type Service struct {
 // NewService 创建搜索服务。
 func NewService(logger *slog.Logger, charStore *character.Store, locStore *location.Store,
 	tlStore *timeline.Store, arcStore *storyarc.Store, chapStore *chapter.Store,
-	vecStore *rag.VectorStore) *Service {
+	readerStore *reader.Store, vecStore *rag.VectorStore) *Service {
 	return &Service{
 		logger:      logger,
 		charStore:   charStore,
@@ -44,6 +46,7 @@ func NewService(logger *slog.Logger, charStore *character.Store, locStore *locat
 		tlStore:     tlStore,
 		arcStore:    arcStore,
 		chapStore:   chapStore,
+		readerStore: readerStore,
 		vectorStore: vecStore,
 		cache:       make(map[int64]map[int]string),
 	}
@@ -194,6 +197,31 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 				Subtitle:   subtitle,
 				ChapterNum: node.TargetChapter,
 				PanelID:    "storyarcs",
+			})
+		}
+	}
+
+	// 读者视角（4b: 新增 reader 搜索分支，subtitle 传英文 type 原值，前端 t("reader."+subtitle) 翻译）
+	readersResult, err := s.readerStore.ListByNovel(ctx, novelID, reader.ListByNovelOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "type, planted_chapter ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
+	})
+	if err != nil {
+		s.logger.Warn("reader search failed", "err", err)
+	} else if readersResult != nil {
+		for _, r := range readersResult.Items {
+			title := r.Content
+			if runes := []rune(title); len(runes) > 40 {
+				title = string(runes[:40]) + "…"
+			}
+			results = append(results, Result{
+				Type:       "reader",
+				ID:         r.ID,
+				Title:      title,
+				Subtitle:   r.Type, // 英文原值，前端 t("reader."+subtitle) 翻译
+				ChapterNum: r.PlantedChapter,
+				PanelID:    "reader",
 			})
 		}
 	}

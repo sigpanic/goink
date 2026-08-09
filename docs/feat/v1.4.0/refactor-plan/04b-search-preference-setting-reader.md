@@ -265,6 +265,36 @@ className={`... ${highlightedId === item.id ? "ring-2 ring-primary" : ""}`}
 
 **对中文项目影响极小**（中文不含 `%`/`_`），可接受。
 
+## 领域纵切强制清单（统一要求，不只看 commitX 内容）
+
+> **重要**：每个领域纵切（不论 Commit X 是否写明）都必须完成下列前后端搜索链路的全改造。Commit 各节只按领域列**领域专属差异**（如 reader 的 type 中文映射、preference 的 is_global 拆分），下列通用要求**不重复写在每个 commit 里**，但都必须执行。
+
+### 后端必做
+
+1. **store 层**：`ListByNovel` 加 `Search` option（按领域 LIKE 字段，见 L85-L93）+ `Order` option（raw string，空=领域默认值）；默认值必须等于重构前该路径的硬编码 Order（**Order 保留约束，参 064363f 教训**）
+2. **App 层**：`GetXxx` 改调 `ListByNovel(Size=-1, Order=原硬编码值)` 全量；显式传 Order，不依赖默认值；废弃 `ListAllByNovel` / `ListByChapterRange` / `SearchByNovel` 等冗余方法
+3. **MCP 层**：分页浏览类工具的 `executeFull` 显式传 Order（保持原路径 Order）；摘要类工具（如 `get_reader_perspective`）不调 ListByNovel 则不改
+4. **searchEntities**：该领域必须有搜索分支（`Type`/`PanelID`/`Title`/`Subtitle`/`ChapterNum` 按领域配置）；Service struct 加对应 store 字段；`NewService` 多接参数；`app/handler.go` 两处调用补传
+
+### 前端必做
+
+1. **侧边栏 List 组件**（如 `CharacterList` / `ArcList` / `TimelineList` / `ReaderList`）：
+   - 原生 input → `SearchInput` 抽象组件（参 `ArcList.tsx`）
+   - `useState + useMemo filter`，filter 字段与后端 Search 字段一致
+   - 列表项加 `onClick → focusEntity(panelId, id)`
+2. **主 View 组件**（如 `CharacterListView` / `ArcListView` / `TimelineView` / `ReaderView`）：
+   - 加 `highlightedId` state（**声明式高亮**，state 驱动 className，不命令式 classList.add/remove，参 L210-L226 高亮规范）
+   - 列表项加 `data-xxx-id={entry.id}` 属性（如 `data-entry-id` / `data-node-id`）
+   - focus useEffect 内：领域专属定位（如 `setWindowCenter` / `setExpandedId` / `soloArc`）+ `setHighlightedId(focus.id)` + `scrollIntoView({ behavior: "smooth", block: "center" })` + `setTimeout(() => setHighlightedId(null), 2000)` + cleanup `clearTimeout`
+   - 列表项 className 加 `${highlightedId === entry.id ? "ring-2 ring-primary" : ""}`
+3. **SearchPanel**：`TYPE_CONFIG` 加该领域（图标 + labelKey）；`GROUP_ORDER` 加该领域；i18n 加 `search.xxx="中文名"`
+
+### 不在通用清单内（领域专属差异，写在各 Commit 里）
+
+- 领域有多层结构（如 storyarc 的 arc/node）→ 需要 `FocusEntry.type` 字段 + type 透传链路 + `ListNodesByNovel` 节点搜索
+- 领域有 is_global 区分（如 preference）→ 拆 ListGlobal/ListNovel 两个 API
+- 领域有特殊查询（如 timeline 的 ListBefore/After/PendingBefore）→ 保留独立方法
+
 ## 分阶段 commit 计划
 
 **纵切策略**：按领域推进，每个领域完整走 store + App + searchEntities + 前端 View 定位，一个领域一个 commit。参考阶段 4 推进顺序：character → location → storyarc → timeline → reader → preference → novel-setting。

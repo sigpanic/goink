@@ -151,6 +151,8 @@ export default function ReaderView({ novelId }: Props) {
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  // 4b: 声明式高亮（state 驱动 className，不命令式 classList.add/remove）。
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
   const [windowCenter, setWindowCenter] = useState(0);
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
@@ -165,11 +167,19 @@ export default function ReaderView({ novelId }: Props) {
     }
   }, [entries]);
 
+  // 4b: focus 定位——窗口对齐 + 自动展开 + 声明式高亮 + 滚动。
   useEffect(() => {
-    if (focusId && focusId > 0 && entries.length > 0) {
-      const entry = entries.find((e) => e.id === focusId);
-      if (entry) setWindowCenter(entry.planted_chapter);
-    }
+    if (!focusId || focusId <= 0 || entries.length === 0) return;
+    const entry = entries.find((e) => e.id === focusId);
+    if (!entry) return;
+    setWindowCenter(entry.planted_chapter);
+    setExpandedId(focusId);
+    setHighlightedId(focusId);
+    document
+      .querySelector(`[data-reader-id="${focusId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
+    return () => clearTimeout(timer);
   }, [focusId, entries, focus?.nonce]);
 
   const filtered = useMemo(() => {
@@ -656,6 +666,7 @@ export default function ReaderView({ novelId }: Props) {
                       ) : (
                         <div
                           key={entry.id}
+                          data-reader-id={entry.id}
                           onClick={() =>
                             setExpandedId(isExpanded ? null : entry.id)
                           }
@@ -663,7 +674,7 @@ export default function ReaderView({ novelId }: Props) {
                             isExpanded
                               ? "border-border shadow-sm"
                               : "border-border hover:border-border hover:shadow-sm"
-                          } group`}
+                          } ${highlightedId === entry.id ? "ring-2 ring-primary" : ""} group`}
                         >
                           <div className="flex items-center gap-3 px-4 py-3">
                             <span

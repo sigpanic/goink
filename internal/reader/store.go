@@ -24,16 +24,22 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 // ListByNovelOptions 是 ListByNovel 的可选参数。
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
+	Search     string // 空字符串=不过滤，按 content LIKE OR related_truth LIKE 模糊匹配
 	Type       string // 空字符串=不过滤，"known"/"suspense"/"misconception"
+	Order      string // 空字符串=默认 type, planted_chapter ASC
 }
 
-// ListByNovel 分页列出某小说的读者认知条目，支持按类型过滤。前端管理页用。
+// ListByNovel 分页列出某小说的读者认知条目，支持搜索和按类型过滤。
+// 前端全量拉取（Size=-1）和全局搜索复用。
 func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovelOptions) (*storage.PageResult[ReaderPerspective], error) {
 	pp := opts.PageParams
 	pp.Normalize()
 
 	q := s.DB.WithContext(ctx).Model(&ReaderPerspective{}).Where("novel_id = ?", novelID)
 
+	if opts.Search != "" {
+		q = q.Where("content LIKE ? OR related_truth LIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
+	}
 	if opts.Type != "" {
 		q = q.Where("type = ?", opts.Type)
 	}
@@ -43,8 +49,12 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 		return nil, fmt.Errorf("reader store: count: %w", err)
 	}
 
+	order := opts.Order
+	if order == "" {
+		order = "type, planted_chapter ASC"
+	}
 	var items []ReaderPerspective
-	if err := q.Order("type, planted_chapter ASC").Offset(pp.Offset()).Limit(pp.Size).Find(&items).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("reader store: list: %w", err)
 	}
 

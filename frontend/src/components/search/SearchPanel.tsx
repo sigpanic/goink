@@ -6,6 +6,7 @@ import {
   History,
   GitBranch,
   FileText,
+  Eye,
   Sparkles,
   Loader2,
 } from "lucide-react";
@@ -37,13 +38,19 @@ interface Props {
   ) => void;
 }
 
-const TYPE_CONFIG: Record<string, { icon: typeof Search; labelKey: string }> = {
+const TYPE_CONFIG: Record<string, {
+  icon: typeof Search;
+  labelKey: string;
+  // 4b: 有此字段的领域，subtitle 走 i18n（t(prefix + subtitle)）；无则原样显示。
+  subtitlePrefix?: string;
+}> = {
   content: { icon: FileText, labelKey: "search.textMatch" },
   character: { icon: User, labelKey: "search.character" },
   location: { icon: MapPin, labelKey: "search.location" },
   timeline: { icon: History, labelKey: "search.timeline" },
   storyarc: { icon: GitBranch, labelKey: "search.storyArc" },
   arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
+  reader: { icon: Eye, labelKey: "search.reader", subtitlePrefix: "reader." },
   chapter: { icon: FileText, labelKey: "search.chapter" },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
@@ -56,6 +63,7 @@ const GROUP_ORDER = [
   "timeline",
   "storyarc",
   "arc_node",
+  "reader",
   "rag",
 ];
 
@@ -252,7 +260,12 @@ export default function SearchPanel({
                           </span>
                           {r.subtitle ? (
                             <span className="text-[10px] text-muted-foreground shrink-0">
-                              {r.subtitle}
+                              {(() => {
+                                const cfg = TYPE_CONFIG[r.type];
+                                return cfg?.subtitlePrefix
+                                  ? t(`${cfg.subtitlePrefix}${r.subtitle}`)
+                                  : r.subtitle;
+                              })()}
                             </span>
                           ) : null}
                           {r.relevance > 0 && r.type === "rag" ? (
