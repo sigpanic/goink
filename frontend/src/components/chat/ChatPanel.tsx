@@ -21,6 +21,7 @@ import {
 } from "./types";
 import ChatInput from "./ChatInput";
 import ChatControls from "./ChatControls";
+import DeleteSessionDialog from "./DeleteSessionDialog";
 import MessageBubble from "./MessageBubble";
 import ThinkingBlock from "./ThinkingBlock";
 import ToolCallCard from "./ToolCallCard";
@@ -299,20 +300,6 @@ export default function ChatPanel({
     setLastUsage(null);
     qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
   }, [novelId, qc]);
-
-  // 会话删除后同步视图：列表刷新靠 invalidate（commit 3 mutation onSuccess 接管后同语义）；
-  // 若删除的正是当前正在查看的 session，清空活跃会话/消息，避免界面仍停留在已删除内容上。
-  const handleSessionDeleted = useCallback(
-    (sessionId: string) => {
-      qc.invalidateQueries({ queryKey: ["sessions"] });
-      if (activeSessionId === sessionId) {
-        setActiveSessionId(null);
-        setTurns([]);
-        setSessionId("");
-      }
-    },
-    [activeSessionId, qc],
-  );
 
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true);
@@ -1216,7 +1203,6 @@ export default function ChatPanel({
           novelId={novelId}
           onClose={handleCloseHistory}
           onSelectSession={handleSelectSession}
-          onSessionDeleted={handleSessionDeleted}
         />
       </div>
 
@@ -1240,7 +1226,6 @@ export default function ChatPanel({
             total={sessionsQuery.data?.total ?? 0}
             onSelectSession={handleSelectSession}
             onViewAll={handleOpenHistory}
-            onDeleteSession={handleSessionDeleted}
           />
         ) : messagesQuery.isLoading ? (
           <div className="flex items-center justify-center h-full">
@@ -1482,6 +1467,15 @@ export default function ChatPanel({
           qc.invalidateQueries({ queryKey: modelKeys.all });
         }}
         initialTab="model"
+      />
+
+      <DeleteSessionDialog
+        activeSessionId={activeSessionId}
+        onActiveSessionDeleted={() => {
+          setActiveSessionId(null);
+          setTurns([]);
+          setSessionId("");
+        }}
       />
     </aside>
   );
