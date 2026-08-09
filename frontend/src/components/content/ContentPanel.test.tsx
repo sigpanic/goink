@@ -130,13 +130,13 @@ vi.mock("./useFileContent", () => ({
   useFileContent: () => ({ fetchContent: mockFetchContent }),
 }));
 
-// Mock useApp（SaveContent 仍走 useApp，commit 2 迁 useSaveContent mutation）
-const mockSaveContent = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    SaveContent: mockSaveContent,
-  }),
+// 5.2 commit 2: useSaveContent mutation mock（替代 useApp.SaveContent）。
+// mutateAsync 单参 input（含 novel_id + path + content），对齐 doSave 调用。
+const { mockSaveContent } = vi.hoisted(() => ({
+  mockSaveContent: vi.fn(),
+}));
+vi.mock("./useSaveContent", () => ({
+  useSaveContent: () => ({ mutateAsync: mockSaveContent }),
 }));
 
 // 3.8: ContentPanel 从 useNovelStore 订阅 activeNovelId（替代 prop）。mock 提供固定值 1。

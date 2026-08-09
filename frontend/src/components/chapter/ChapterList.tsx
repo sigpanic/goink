@@ -4,10 +4,11 @@ import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { Button } from "@/components/ui/button";
-import { useApp } from "@/hooks/useApp";
-import type { chapter } from "@/hooks/useApp";
+import type { chapter } from "@/lib/wailsjs/go/models";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useChapters } from "./useChapters";
+import { useCreateChapter } from "./useCreateChapter";
+import { useUpdateChapterTitle } from "./useUpdateChapterTitle";
 
 interface Props {
   novelId: number;
@@ -27,12 +28,13 @@ export default function ChapterList({
   onExportNovel,
 }: Props) {
   const { t } = useTranslation();
-  const app = useApp();
 
   // 5.2 commit 1: GetChapters 走 query（直接 import wailsjs，不用 useApp）。
   // query 错误走全局中间件，组件加 isError 内连显示 + retry（对齐 ReaderList/PreferenceList）。
-  // CreateChapter/UpdateChapterTitle 仍走 useApp，commit 2 迁 mutation。
+  // 5.2 commit 2: CreateChapter/UpdateChapterTitle 走 mutation（onSuccess invalidate 接管 refetch）。
   const { data: chapters = [], isError, refetch } = useChapters(novelId);
+  const createChapterMutation = useCreateChapter(novelId);
+  const updateChapterTitleMutation = useUpdateChapterTitle(novelId);
   const [chapterTitle, setChapterTitle] = useState("");
   const [showCreateChapter, setShowCreateChapter] = useState(false);
   const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set());
@@ -95,15 +97,14 @@ export default function ChapterList({
   async function handleCreateChapter() {
     if (!chapterTitle.trim()) return;
     try {
-      await app.CreateChapter({
+      await createChapterMutation.mutateAsync({
         novel_id: novelId,
         title: chapterTitle.trim(),
       });
       setChapterTitle("");
       setShowCreateChapter(false);
       setCreateError("");
-      // 5.2 commit 1: 临时 refetch 刷新列表（commit 2 改 useCreateChapter mutation onSuccess invalidate）
-      refetch();
+      // 5.2 commit 2: onSuccess invalidate chapterKeys.list + maxChapterKeys，不需要 refetch
     } catch (err) {
       setCreateError(toErrorMessage(err));
     }
@@ -121,9 +122,11 @@ export default function ChapterList({
     const newTitle = editTitle.trim();
     if (newTitle && newTitle !== ch.title) {
       try {
-        await app.UpdateChapterTitle(novelId, ch.chapter_number, newTitle);
-        // 5.2 commit 1: 临时 refetch 刷新列表（commit 2 改 useUpdateChapterTitle mutation onSuccess invalidate）
-        refetch();
+        await updateChapterTitleMutation.mutateAsync({
+          chapterNumber: ch.chapter_number,
+          title: newTitle,
+        });
+        // 5.2 commit 2: onSuccess invalidate chapterKeys.list，不需要 refetch
       } catch (err) {
         toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
         console.error(err);

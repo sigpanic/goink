@@ -34,15 +34,17 @@ vi.mock("./useChapters", () => ({
   useChapters: mockUseChapters,
 }));
 
-// Mock useApp（CreateChapter/UpdateChapterTitle 仍走 useApp，commit 2 迁 mutation）
-const mockCreateChapter = vi.fn();
-const mockUpdateChapterTitle = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    CreateChapter: mockCreateChapter,
-    UpdateChapterTitle: mockUpdateChapterTitle,
-  }),
+// 5.2 commit 2: useCreateChapter / useUpdateChapterTitle mutation mock（替代 useApp）。
+// mutateAsync 单参 input，对齐 handleCreateChapter / commitEdit 调用。
+const { mockCreateChapter, mockUpdateChapterTitle } = vi.hoisted(() => ({
+  mockCreateChapter: vi.fn(),
+  mockUpdateChapterTitle: vi.fn(),
+}));
+vi.mock("./useCreateChapter", () => ({
+  useCreateChapter: () => ({ mutateAsync: mockCreateChapter }),
+}));
+vi.mock("./useUpdateChapterTitle", () => ({
+  useUpdateChapterTitle: () => ({ mutateAsync: mockUpdateChapterTitle }),
 }));
 
 // Mock EventsOn

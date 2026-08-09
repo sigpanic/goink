@@ -11,7 +11,6 @@ import { FileText, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { useApp } from "@/hooks/useApp";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useTheme, type Theme } from "@/hooks/useTheme";
@@ -22,6 +21,7 @@ import ContentEditor from "./ContentEditor";
 import OutlineViewer from "./OutlineViewer";
 import SkillPreview from "./SkillPreview";
 import { useFileContent } from "./useFileContent";
+import { useSaveContent } from "./useSaveContent";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
@@ -73,13 +73,13 @@ interface Props {
 
 const ContentPanel = forwardRef<ContentPanelHandle, Props>(
   function ContentPanel({ onContentChange, onDirtyChange }, ref) {
-    const app = useApp();
     // 3.8: novelId 从 useNovelStore 订阅（替代 prop）。切小说时 store 变化触发 re-render，行为等价。
     const novelId = useNovelStore((s) => s.activeNovelId);
     const { t } = useTranslation();
     // 5.2 commit 1: GetContent 走 query 缓存通道（fetchContent），直接 import wailsjs 不经 useApp。
-    // SaveContent 仍走 useApp，commit 2 迁 useSaveContent mutation。
+    // 5.2 commit 2: SaveContent 走 useSaveContent mutation（onSuccess 失效 contentKeys.detail），useApp 清零。
     const { fetchContent } = useFileContent();
+    const saveContentMutation = useSaveContent();
     const {
       tabs,
       activeTab,
@@ -217,7 +217,9 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
       async (tabId: string, path: string, content: string) => {
         if (!novelIdRef.current) return;
         try {
-          await app.SaveContent({
+          // 5.2 commit 2: SaveContent 走 mutation（onSuccess 失效 contentKeys.detail），
+          // 调用方负责 updateTab(isDirty:false) + toastError（tab 是本地 state，不进 query cache）。
+          await saveContentMutation.mutateAsync({
             novel_id: novelIdRef.current,
             path,
             content,
@@ -228,7 +230,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           console.error(err);
         }
       },
-      [app, updateTab, t],
+      [saveContentMutation, updateTab, t],
     );
 
     // Ctrl+S 立即保存
