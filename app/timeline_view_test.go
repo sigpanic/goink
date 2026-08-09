@@ -101,7 +101,8 @@ func TestCreateTimelineEntry_MissingFields(t *testing.T) {
 	assert.Contains(t, err.Error(), "标题、类型、目标章节不能为空")
 }
 
-func TestGetTimelineEntries(t *testing.T) {
+// TestGetTimelineEntries_All 验证全量查询（4b: 废弃 from/to 章节窗口，签名改单参）。
+func TestGetTimelineEntries_All(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
@@ -127,16 +128,10 @@ func TestGetTimelineEntries(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	// Query range [1, 5] — should only return entry with target_chapter=3
-	entries, err := app.GetTimelineEntries(novelID, 1, 5)
+	// 4b: GetTimelineEntries 改为全量查询（废弃章节窗口，前端内存切窗口）
+	entries, err := app.GetTimelineEntries(novelID)
 	require.NoError(t, err)
-	require.Len(t, entries, 1)
-	assert.Equal(t, "伏笔A", entries[0].Title)
-
-	// Query all (0, 0 means no filter)
-	all, err := app.GetTimelineEntries(novelID, 0, 0)
-	require.NoError(t, err)
-	assert.Len(t, all, 3)
+	assert.Len(t, entries, 3)
 }
 
 func TestUpdateTimelineEntry(t *testing.T) {
@@ -160,7 +155,7 @@ func TestUpdateTimelineEntry(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	entries, err := app.GetTimelineEntries(novelID, 0, 0)
+	entries, err := app.GetTimelineEntries(novelID)
 	require.NoError(t, err)
 	require.Len(t, entries, 1)
 	assert.Equal(t, "伏笔A-更新", entries[0].Title)
@@ -184,7 +179,7 @@ func TestDeleteTimelineEntry(t *testing.T) {
 	err = app.DeleteTimelineEntry(novelID, entry.ID)
 	require.NoError(t, err)
 
-	entries, err := app.GetTimelineEntries(novelID, 0, 0)
+	entries, err := app.GetTimelineEntries(novelID)
 	require.NoError(t, err)
 	assert.Empty(t, entries)
 }

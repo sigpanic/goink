@@ -121,11 +121,15 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	}
 
 	// 时间线
-	timelineEntries, err := s.tlStore.SearchByNovel(ctx, novelID, query, EntityLimit)
+	tlResult, err := s.tlStore.ListByNovel(ctx, novelID, timeline.ListByNovelOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "importance DESC", // 保持原 SearchByNovel 排序
+	})
 	if err != nil {
 		s.logger.Warn("timeline search failed", "err", err)
-	} else {
-		for _, e := range timelineEntries {
+	} else if tlResult != nil {
+		for _, e := range tlResult.Items {
 			subtitle := e.Category
 			switch e.Category {
 			case "foreshadowing":

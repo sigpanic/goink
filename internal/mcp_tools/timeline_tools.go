@@ -19,6 +19,7 @@ type GetTimelineArgs struct {
 	CurrentChapter int    `json:"current_chapter" jsonschema:"description=当前章节号。传入时自动收集附近条目并检测异常。写新章时必填" validate:"omitempty,min=1"`
 	Category       string `json:"category" jsonschema:"description=按分类筛选,enum=foreshadowing,enum=user_directive" validate:"omitempty,oneof=foreshadowing user_directive"`
 	Status         string `json:"status" jsonschema:"description=按状态筛选,enum=pending,enum=resolved,enum=abandoned" validate:"omitempty,oneof=pending resolved abandoned"`
+	Search         string `json:"search" jsonschema:"description=按标题或内容模糊搜索（仅不传 current_chapter 时生效）"`
 	PageArgs              // 嵌入分页参数（仅不传 current_chapter 时生效）
 }
 
@@ -91,8 +92,10 @@ func (t *GetTimelineTool) executeContext(ctx context.Context, a *GetTimelineArgs
 func (t *GetTimelineTool) executeFull(ctx context.Context, a *GetTimelineArgs, tc ToolContext, store *timeline.Store) (*ToolResult, error) {
 	result, err := store.ListByNovel(ctx, tc.NovelID, timeline.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
+		Search:     a.Search,
 		Category:   a.Category,
 		Status:     a.Status,
+		Order:      "target_chapter ASC, importance DESC",
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list timeline: %w", err)

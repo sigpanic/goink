@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
-import { Search, Target, Lightbulb } from "lucide-react";
+import { Target, Lightbulb } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useFocusStore } from "@/stores/useFocusStore";
+import SearchInput from "@/components/shared/SearchInput";
 import { useTimelineEntries } from "./useTimelineEntries";
 
 interface Props {
@@ -10,12 +12,19 @@ interface Props {
 export default function SidebarTimelineList({ novelId }: Props) {
   const { t } = useTranslation();
   const { data: entries = [], isError } = useTimelineEntries(novelId);
+  // 4b: 点击条目触发 focusEntity，TimelineView 的 useEffect 滑窗对齐到 entry 章节。
+  const focusEntity = useFocusStore((s) => s.focusEntity);
   const [search, setSearch] = useState("");
 
+  // 搜 title + content（与后端 ListByNovel(Search) 字段一致）
   const filtered = useMemo(() => {
     if (!search.trim()) return entries;
     const q = search.toLowerCase();
-    return entries.filter((e) => e.title.toLowerCase().includes(q));
+    return entries.filter(
+      (e) =>
+        e.title.toLowerCase().includes(q) ||
+        (e.content || "").toLowerCase().includes(q),
+    );
   }, [entries, search]);
 
   const catIcon = (cat: string) => {
@@ -52,16 +61,11 @@ export default function SidebarTimelineList({ novelId }: Props) {
         </span>
       </div>
       <div className="px-2 py-1.5 border-b">
-        <div className="relative">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t("timeline.searchTimeline")}
-            className="w-full h-7 rounded-md border bg-background pl-7 pr-2 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-        </div>
+        <SearchInput
+          value={search}
+          onChange={setSearch}
+          placeholder={t("timeline.searchTimeline")}
+        />
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
         {isError ? (
@@ -82,7 +86,8 @@ export default function SidebarTimelineList({ novelId }: Props) {
           filtered.map((e) => (
             <div
               key={e.id}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors"
+              onClick={() => focusEntity("timeline", e.id)}
+              className="w-full flex items-center gap-2 px-3 py-1.5 text-left cursor-pointer hover:bg-muted transition-colors group"
             >
               {catIcon(e.category)}
               <div className="flex-1 min-w-0">

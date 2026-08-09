@@ -19,16 +19,21 @@ func (a *App) GetChapterPlans(novelID int64) ([]timeline.ChapterPlan, error) {
 	return plans, nil
 }
 
-// GetTimelineEntries 按章节窗口返回伏笔/用户指令。from/to 为 0 表示不限。
-func (a *App) GetTimelineEntries(novelID int64, fromChapter int, toChapter int) ([]timeline.TimelineEntry, error) {
-	entries, err := a.timeline.ListByChapterRange(a.ctx, novelID, fromChapter, toChapter)
+// GetTimelineEntries 返回指定小说的全部伏笔/用户指令，供前端列表渲染。
+// 4b: 改调 ListByNovel(Size=-1) 全量（废弃 ListByChapterRange，前端 useTimelineEntries
+// 传 0,0 全量 + 内存切窗口，行为等价）。显式传 Order 保持原排序。
+func (a *App) GetTimelineEntries(novelID int64) ([]timeline.TimelineEntry, error) {
+	result, err := a.timeline.ListByNovel(a.ctx, novelID, timeline.ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "target_chapter ASC, importance DESC",
+	})
 	if err != nil {
 		return nil, err
 	}
-	if entries == nil {
+	if result.Items == nil {
 		return []timeline.TimelineEntry{}, nil
 	}
-	return entries, nil
+	return result.Items, nil
 }
 
 // ── Chapter Plan CRUD ──────────────────────────────────

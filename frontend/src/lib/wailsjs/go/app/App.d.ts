@@ -152,7 +152,7 @@ export function GetStoryArcs(arg1:number):Promise<Array<storyarc.StoryArc>>;
 
 export function GetStyleSample(arg1:number):Promise<style.Sample>;
 
-export function GetTimelineEntries(arg1:number,arg2:number,arg3:number):Promise<Array<timeline.TimelineEntry>>;
+export function GetTimelineEntries(arg1:number):Promise<Array<timeline.TimelineEntry>>;
 
 export function GetVersion():Promise<string>;
 

@@ -131,6 +131,8 @@ export default function TimelineView({ novelId }: Props) {
   const [form, setForm] = useState<EditForm>(EDIT_FORM_EMPTY);
   const [createCat, setCreateCat] = useState("foreshadowing");
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
+  // 4b: 高亮声明式——focus 触发后由 state 驱动 className（参考 CharacterListView highlightedId）。
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
   // 4.4.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
@@ -138,13 +140,20 @@ export default function TimelineView({ novelId }: Props) {
     if (max > 0) setWindowCenter(Math.max(1, max));
   }, [maxChQuery.data]);
 
+  // 4b: focus 触发后——滑窗对齐到 entry 章节 + 高亮该 entry + 滚动到卡片。
+  // 高亮走 state 驱动 className（声明式），不命令式 classList.add/remove（易漏 cleanup）。
   useEffect(() => {
-    if (focusEntryId && focusEntryId > 0 && entries.length > 0) {
-      const entry = entries.find((e) => e.id === focusEntryId);
-      if (entry) {
-        setWindowCenter(entry.target_chapter || entry.source_chapter || 1);
-      }
-    }
+    if (!focusEntryId || focusEntryId <= 0 || entries.length === 0) return;
+    const entry = entries.find((e) => e.id === focusEntryId);
+    if (!entry) return;
+    setWindowCenter(entry.target_chapter || entry.source_chapter || 1);
+    setHighlightedId(focusEntryId);
+    const el = document.querySelector<HTMLElement>(
+      `[data-entry-id="${focusEntryId}"]`,
+    );
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
+    return () => clearTimeout(timer);
   }, [focusEntryId, entries, focus?.nonce]);
 
   const windowFrom = Math.max(1, windowCenter - ENTRY_WINDOW);
@@ -803,7 +812,8 @@ export default function TimelineView({ novelId }: Props) {
                         ) : (
                           <div
                             key={entry.id}
-                            className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                            data-entry-id={entry.id}
+                            className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${highlightedId === entry.id ? "ring-2 ring-primary" : ""}`}
                           >
                             <div className="flex items-center gap-3 px-4 py-3">
                               <span

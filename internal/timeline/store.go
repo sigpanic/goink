@@ -55,33 +55,24 @@ func (s *Store) SavePlan(ctx context.Context, plan *ChapterPlan) error {
 // ListByNovelOptions 是 ListByNovel 的可选参数。
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
+	Search     string // 空字符串=不过滤，按 title LIKE OR content LIKE 模糊匹配
 	Category   string // 空字符串=不过滤，"foreshadowing"/"user_directive"
 	Status     string // 空字符串=不过滤，"pending"/"resolved"/"abandoned"
+	Order      string // 空字符串=默认 target_chapter ASC, importance DESC
 }
 
-// ListByChapterRange 按章节窗口获取伏笔/用户指令。from/to 为 0 表示不限。
-func (s *Store) ListByChapterRange(ctx context.Context, novelID int64, fromChapter, toChapter int) ([]TimelineEntry, error) {
-	q := s.DB.WithContext(ctx).Where("novel_id = ?", novelID)
-	if fromChapter > 0 {
-		q = q.Where("target_chapter >= ?", fromChapter)
-	}
-	if toChapter > 0 {
-		q = q.Where("target_chapter <= ?", toChapter)
-	}
-	var entries []TimelineEntry
-	if err := q.Order("target_chapter ASC, importance DESC").Find(&entries).Error; err != nil {
-		return nil, fmt.Errorf("timeline store: list by chapter range: %w", err)
-	}
-	return entries, nil
-}
-
-// ListByNovel 分页列出某小说的伏笔/用户指令，支持分类和状态过滤。前端管理页用。
+// ListByNovel 分页列出某小说的伏笔/用户指令，支持搜索、分类和状态过滤。
+// 前端全量拉取（Size=-1）和全局搜索复用。废弃 ListByChapterRange（前端传 0,0 全量等价）
+// 和 SearchByNovel（搜索改走 ListByNovel(Search)）。
 func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovelOptions) (*storage.PageResult[TimelineEntry], error) {
 	pp := opts.PageParams
 	pp.Normalize()
 
 	q := s.DB.WithContext(ctx).Model(&TimelineEntry{}).Where("novel_id = ?", novelID)
 
+	if opts.Search != "" {
+		q = q.Where("title LIKE ? OR content LIKE ?", "%"+opts.Search+"%", "%"+opts.Search+"%")
+	}
 	if opts.Category != "" {
 		q = q.Where("category = ?", opts.Category)
 	}
@@ -94,8 +85,12 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 		return nil, fmt.Errorf("timeline store: count: %w", err)
 	}
 
+	order := opts.Order
+	if order == "" {
+		order = "target_chapter ASC, importance DESC"
+	}
 	var entries []TimelineEntry
-	if err := q.Order("target_chapter ASC, importance DESC").Offset(pp.Offset()).Limit(pp.Size).Find(&entries).Error; err != nil {
+	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("timeline store: list: %w", err)
 	}
 
@@ -146,16 +141,3 @@ func (s *Store) ListAfter(ctx context.Context, novelID int64, chapterNum int) ([
 //具体来说 构造上下文的时候拿到前10条历史+未来100条，以及前边的所有pending的（状态异常了，也可以不给，等review的时候再传递），未来如果有显示已经完成的，也算作状态异常，状态异常的
 //需要提醒llm进行修正，确保之前的全部结束，之后的全部pending，targetchapter是用来作为一个大概的锚点的，llm根据章节进度，实时维护，后续提供reviewagent一个专属
 //工具。专门用来查询各种异常状态的，用以提醒
-
-// SearchByNovel 按关键词搜索某小说的伏笔/用户指令，匹配标题和内容。
-func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, limit int) ([]TimelineEntry, error) {
-	var entries []TimelineEntry
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND (title LIKE ? OR content LIKE ?)", novelID, "%"+query+"%", "%"+query+"%").
-		Order("importance DESC").
-		Limit(limit).
-		Find(&entries).Error; err != nil {
-		return nil, fmt.Errorf("timeline store: search: %w", err)
-	}
-	return entries, nil
-}

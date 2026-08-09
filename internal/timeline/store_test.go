@@ -28,7 +28,9 @@ func testTlLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-func TestTlListByChapterRange(t *testing.T) {
+// TestTlListByNovel_All 验证 Size=-1 全量拉取（替代废弃的 ListByChapterRange(0,0)）。
+// 排序按默认 target_chapter ASC, importance DESC。
+func TestTlListByNovel_All(t *testing.T) {
 	db := openTlDB(t)
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
@@ -36,27 +38,18 @@ func TestTlListByChapterRange(t *testing.T) {
 	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔A", TargetChapter: 10, Category: "foreshadowing", Status: "pending", Importance: 3})
 	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔B", TargetChapter: 20, Category: "foreshadowing", Status: "pending", Importance: 5})
 	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔C", TargetChapter: 30, Category: "foreshadowing", Status: "pending", Importance: 1})
+	db.Create(&TimelineEntry{NovelID: 2, Title: "其他小说", TargetChapter: 1, Status: "pending"})
 
-	result, _ := s.ListByChapterRange(ctx, 1, 5, 15)
-	if len(result) != 1 {
-		t.Fatalf("range [5,15] should return 1, got %d", len(result))
+	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if result.Total != 3 {
+		t.Fatalf("expected 3 entries for novel 1, got %d", result.Total)
 	}
-	if result[0].Title != "伏笔A" {
-		t.Errorf("expected 伏笔A, got %s", result[0].Title)
-	}
-}
-
-func TestTlListByChapterRange_NoFilter(t *testing.T) {
-	db := openTlDB(t)
-	s := NewStore(db, testTlLogger())
-	ctx := context.Background()
-
-	db.Create(&TimelineEntry{NovelID: 1, Title: "A", TargetChapter: 10, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "B", TargetChapter: 20, Status: "pending"})
-
-	result, _ := s.ListByChapterRange(ctx, 1, 0, 0)
-	if len(result) != 2 {
-		t.Errorf("no filter should return all, got %d", len(result))
+	// 默认排序 target_chapter ASC
+	if result.Items[0].Title != "伏笔A" || result.Items[2].Title != "伏笔C" {
+		t.Errorf("default order target_chapter ASC: expected 伏笔A,伏笔C, got %s,%s",
+			result.Items[0].Title, result.Items[2].Title)
 	}
 }
 
@@ -218,5 +211,62 @@ func TestTlDeleteEntry(t *testing.T) {
 	var found TimelineEntry
 	if db.First(&found, entry.ID).Error == nil {
 		t.Error("entry should be deleted")
+	}
+}
+
+// ── 4b: Search / Order ─────────────────────────────────
+
+func TestTlListByNovel_Search(t *testing.T) {
+	db := openTlDB(t)
+	s := NewStore(db, testTlLogger())
+	ctx := context.Background()
+
+	db.Create(&TimelineEntry{NovelID: 1, Title: "复仇", TargetChapter: 5, Category: "foreshadowing", Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "决战", Content: "复仇的高潮", TargetChapter: 10, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "尾声", TargetChapter: 15, Status: "pending"})
+
+	// 搜 title（"复仇"命中 title 字段一次）
+	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "复仇"})
+	if r.Total != 2 {
+		t.Errorf("search 复仇: expected 2 (title+content), got %d", r.Total)
+	}
+
+	// 搜 content
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "高潮"})
+	if r.Total != 1 {
+		t.Errorf("search content 高潮: expected 1, got %d", r.Total)
+	}
+
+	// 无命中
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "不存在"})
+	if r.Total != 0 {
+		t.Errorf("search no match: expected 0, got %d", r.Total)
+	}
+}
+
+func TestTlListByNovel_Order(t *testing.T) {
+	db := openTlDB(t)
+	s := NewStore(db, testTlLogger())
+	ctx := context.Background()
+
+	db.Create(&TimelineEntry{NovelID: 1, Title: "C", TargetChapter: 15, Importance: 1, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "A", TargetChapter: 5, Importance: 5, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "B", TargetChapter: 10, Importance: 3, Status: "pending"})
+
+	// 默认排序：target_chapter ASC, importance DESC
+	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+	})
+	if r.Items[0].Title != "A" || r.Items[2].Title != "C" {
+		t.Errorf("default order: expected A,C, got %s,%s", r.Items[0].Title, r.Items[2].Title)
+	}
+
+	// 显式 Order: title DESC
+	r, _ = s.ListByNovel(ctx, 1, ListByNovelOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "title DESC",
+	})
+	if r.Items[0].Title != "C" || r.Items[2].Title != "A" {
+		t.Errorf("order title DESC: expected C,A, got %s,%s", r.Items[0].Title, r.Items[2].Title)
 	}
 }
