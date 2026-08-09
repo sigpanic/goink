@@ -12,6 +12,7 @@ import (
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/storage"
@@ -29,6 +30,7 @@ type Service struct {
 	arcStore    *storyarc.Store
 	chapStore   *chapter.Store
 	readerStore *reader.Store
+	prefStore   *preference.Store
 	vectorStore *rag.VectorStore
 
 	mu    sync.RWMutex
@@ -38,7 +40,7 @@ type Service struct {
 // NewService 创建搜索服务。
 func NewService(logger *slog.Logger, charStore *character.Store, locStore *location.Store,
 	tlStore *timeline.Store, arcStore *storyarc.Store, chapStore *chapter.Store,
-	readerStore *reader.Store, vecStore *rag.VectorStore) *Service {
+	readerStore *reader.Store, prefStore *preference.Store, vecStore *rag.VectorStore) *Service {
 	return &Service{
 		logger:      logger,
 		charStore:   charStore,
@@ -47,6 +49,7 @@ func NewService(logger *slog.Logger, charStore *character.Store, locStore *locat
 		arcStore:    arcStore,
 		chapStore:   chapStore,
 		readerStore: readerStore,
+		prefStore:   prefStore,
 		vectorStore: vecStore,
 		cache:       make(map[int64]map[int]string),
 	}
@@ -217,6 +220,43 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 				PanelID:    "reader",
 			})
 		}
+	}
+
+	// 偏好（4b: 新增 preference 搜索分支，调 global + novel 两次合并，subtitle=category 自由文本原样显示）
+	prefOpts := preference.ListOptions{
+		Search:     query,
+		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "created_at ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
+	}
+	globalPrefs, gErr := s.prefStore.ListGlobalPreferences(ctx, prefOpts)
+	if gErr != nil {
+		s.logger.Warn("global preference search failed", "err", gErr)
+		globalPrefs = nil
+	}
+	novelPrefs, nErr := s.prefStore.ListNovelPreferences(ctx, novelID, prefOpts)
+	if nErr != nil {
+		s.logger.Warn("novel preference search failed", "err", nErr)
+		novelPrefs = nil
+	}
+	var prefItems []preference.PreferenceItem
+	if globalPrefs != nil {
+		prefItems = append(prefItems, globalPrefs.Items...)
+	}
+	if novelPrefs != nil {
+		prefItems = append(prefItems, novelPrefs.Items...)
+	}
+	for _, pref := range prefItems {
+		title := pref.Content
+		if runes := []rune(title); len(runes) > 40 {
+			title = string(runes[:40]) + "…"
+		}
+		results = append(results, Result{
+			Type:     "preference",
+			ID:       pref.ID,
+			Title:    title,
+			Subtitle: pref.Category, // 自由文本，原样显示
+			PanelID:  "preferences",
+		})
 	}
 
 	// 章节

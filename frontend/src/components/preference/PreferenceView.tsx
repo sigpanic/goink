@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Pencil, Plus, Settings, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { preference } from "@/hooks/useApp";
@@ -6,6 +6,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import { useFocusWithNonce } from "@/hooks/useFocusWithNonce";
 import { usePreferences } from "./usePreferences";
 import { useDeletePreference } from "./useDeletePreference";
 import { useCreatePreference } from "./useCreatePreference";
@@ -40,6 +41,26 @@ export default function PreferenceView({ novelId }: Props) {
   const overBudget = preferencesQuery.data?.over_budget ?? false;
   const loading = preferencesQuery.isLoading;
   const loadFailed = preferencesQuery.isError;
+
+  // 4b: focus 定位——全局搜索/侧边栏点击触发 focusEntity("preferences", id)，
+  // PreferenceView useEffect 跨组（global/novel）定位 + 声明式高亮。
+  const focus = useFocusWithNonce("preferences");
+  const focusId = focus?.id ?? 0;
+  const [highlightedId, setHighlightedId] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!focusId || focusId <= 0) return;
+    const exists =
+      global.some((e) => e.id === focusId) ||
+      novelPrefs.some((e) => e.id === focusId);
+    if (!exists) return;
+    setHighlightedId(focusId);
+    document
+      .querySelector(`[data-preference-id="${focusId}"]`)
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    const timer = setTimeout(() => setHighlightedId(null), 2000);
+    return () => clearTimeout(timer);
+  }, [focusId, global, novelPrefs, focus?.nonce]);
 
   // 4.6.2/4.6.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
   // onSuccess 失效对应 query（entry CRUD 失效 preferences，PreferenceView + PreferenceList 共享缓存）。
@@ -240,7 +261,10 @@ export default function PreferenceView({ novelId }: Props) {
               ) : (
                 <div
                   key={item.id}
-                  className="rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group"
+                  data-preference-id={item.id}
+                  className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${
+                    highlightedId === item.id ? "ring-2 ring-primary" : ""
+                  }`}
                 >
                   <div className="flex items-start gap-3 px-4 py-3">
                     <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-secondary text-muted-foreground">

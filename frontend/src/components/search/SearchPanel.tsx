@@ -7,6 +7,7 @@ import {
   GitBranch,
   FileText,
   Eye,
+  Settings,
   Sparkles,
   Loader2,
 } from "lucide-react";
@@ -51,6 +52,7 @@ const TYPE_CONFIG: Record<string, {
   storyarc: { icon: GitBranch, labelKey: "search.storyArc", subtitlePrefix: "storyarc." },
   arc_node: { icon: GitBranch, labelKey: "search.arcNode" },
   reader: { icon: Eye, labelKey: "search.reader", subtitlePrefix: "reader." },
+  preference: { icon: Settings, labelKey: "search.preference" },
   chapter: { icon: FileText, labelKey: "search.chapter", subtitlePrefix: "chapter." },
   rag: { icon: Sparkles, labelKey: "search.semanticMatch" },
 };
@@ -64,6 +66,7 @@ const GROUP_ORDER = [
   "storyarc",
   "arc_node",
   "reader",
+  "preference",
   "rag",
 ];
 

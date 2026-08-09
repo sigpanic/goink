@@ -2,7 +2,9 @@ package app
 
 import (
 	"fmt"
+
 	"github.com/sigpanic/goink/internal/preference"
+	"github.com/sigpanic/goink/internal/storage"
 )
 
 // ── 创作偏好 ──────────────────────────────────────────────
@@ -20,14 +22,23 @@ type PreferenceResult struct {
 // 注入给 agent 的 NovelProfile 会按 created_at DESC 截断到 4k 内，与此处 token_count 是两套口径：
 // 这里是"全量实际多少"，agent 注入是"截断后剩多少"。
 func (a *App) GetPreferences(novelID int64) (*PreferenceResult, error) {
-	global, err := a.preference.ListGlobalPreferences(a.ctx)
+	// 4b: 改调 ListGlobal/ListNovel 显式传 Order 保持原 created_at ASC 排序，Size=-1 全量拉取。
+	globalResult, err := a.preference.ListGlobalPreferences(a.ctx, preference.ListOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "created_at ASC",
+	})
 	if err != nil {
 		return nil, err
 	}
-	novelPrefs, err := a.preference.ListNovelPreferences(a.ctx, novelID)
+	novelResult, err := a.preference.ListNovelPreferences(a.ctx, novelID, preference.ListOptions{
+		PageParams: storage.PageParams{Size: -1},
+		Order:      "created_at ASC",
+	})
 	if err != nil {
 		return nil, err
 	}
+	global := globalResult.Items
+	novelPrefs := novelResult.Items
 	all := make([]preference.PreferenceItem, 0, len(global)+len(novelPrefs))
 	all = append(all, global...)
 	all = append(all, novelPrefs...)

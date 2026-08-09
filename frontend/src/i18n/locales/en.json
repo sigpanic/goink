@@ -779,6 +779,7 @@
     "storyArc": "Story Arc",
     "arcNode": "Arc Node",
     "reader": "Reader Perspective",
+    "preference": "Preference",
     "chapter": "Chapter",
     "semanticMatch": "Semantic Match",
     "inputKeyword": "Enter keywords to search",
