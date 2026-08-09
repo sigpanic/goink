@@ -85,6 +85,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	chars, err := s.charStore.ListByNovel(ctx, novelID, character.ListByNovelOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "updated_at DESC", // 显式锚定默认排序，避免依赖 store 隐式默认
 	})
 	if err != nil {
 		s.logger.Warn("character search failed", "err", err)
@@ -103,6 +104,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	locs, err := s.locStore.ListByNovel(ctx, novelID, location.ListByNovelOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "name ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
 	})
 	if err != nil {
 		s.logger.Warn("location search failed", "err", err)
@@ -146,6 +148,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	arcsResult, err := s.arcStore.ListByNovel(ctx, novelID, storyarc.ListByNovelOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "importance DESC, created_at ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
 	})
 	if err != nil {
 		s.logger.Warn("story arc search failed", "err", err)
@@ -165,6 +168,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	nodesResult, err := s.arcStore.ListNodesByNovel(ctx, novelID, storyarc.ListNodesOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
+		Order:      "story_arc_id, target_chapter ASC, id ASC", // 显式锚定 + 补 story_arc_id 前缀，避免同弧线节点被打散
 	})
 	if err != nil {
 		s.logger.Warn("arc node search failed", "err", err)

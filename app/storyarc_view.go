@@ -27,9 +27,11 @@ func (a *App) GetStoryArcs(novelID int64) ([]storyarc.StoryArc, error) {
 
 // GetArcNodes 返回指定小说的全部弧线节点，供前端列表和关系图渲染。
 // 4b: 改调 ListNodesByNovel(Size=-1) 全量（废弃 ListNodesByChapterRange）。
+// 显式传 Order 补回 story_arc_id 前缀：同一条弧线的节点聚簇连续，避免被跨弧线打散。
 func (a *App) GetArcNodes(novelID int64) ([]storyarc.ArcNode, error) {
 	result, err := a.storyarc.ListNodesByNovel(a.ctx, novelID, storyarc.ListNodesOptions{
 		PageParams: storage.PageParams{Size: -1},
+		Order:      "story_arc_id, target_chapter ASC, id ASC",
 	})
 	if err != nil {
 		return nil, err

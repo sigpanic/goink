@@ -15,6 +15,8 @@
 
 **所有领域 ListByNovel 同步加 Order 字段**（raw string，GORM 惯例，代码传参无注入面），调用方显式传入排序，不依赖默认值。
 
+> **Order 保留约束（重要）**：重构加 Order 字段时，store 默认值（`opts.Order==""` 走的值）与所有调用方显式传入值，都必须等于重构前该路径实际采用的 Order（原硬编码值或调用方原传值）。重构是「显式化」而非「改方向」。本文档各 Commit 里写的 Order 字符串（如「MCP 传 `updated_at DESC`」）可能不准确或与最终代码不符——**以 git 基线代码中实际采用的 Order 为准**。若需改变某领域排序方向，必须先与用户讨论确认，不得在重构过程中顺手改。
+
 **不在 ListByNovel 边界内的特殊查询**（保留独立方法）：
 - 窗口切分（timeline.ListBefore / ListAfter / ListPendingBefore；storyarc.ListNodesBefore/After/PendingByArc / GetBreakpoint）
 - 节点查询（storyarc.ListByArcs / ListNodesByChapterRange）

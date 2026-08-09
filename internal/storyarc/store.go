@@ -109,7 +109,7 @@ func (s *Store) ListByArcs(ctx context.Context, arcIDs []int64) ([]ArcNode, erro
 type ListNodesOptions struct {
 	PageParams storage.PageParams
 	Search     string // 空字符串=不过滤，按 title LIKE OR description LIKE 模糊匹配
-	Order      string // 空字符串=默认 target_chapter ASC, id ASC
+	Order      string // 空字符串=默认 story_arc_id, target_chapter ASC, id ASC
 }
 
 // ListNodesByNovel 分页列出某小说的全部弧线节点，支持名称搜索。
@@ -132,7 +132,7 @@ func (s *Store) ListNodesByNovel(ctx context.Context, novelID int64, opts ListNo
 
 	order := opts.Order
 	if order == "" {
-		order = "target_chapter ASC, id ASC"
+		order = "story_arc_id, target_chapter ASC, id ASC" // 与废弃的 ListNodesByChapterRange 一致，同弧线节点聚簇连续
 	}
 	var nodes []ArcNode
 	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&nodes).Error; err != nil {

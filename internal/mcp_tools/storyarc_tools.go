@@ -119,7 +119,7 @@ func (t *GetStoryArcsTool) executeFull(ctx context.Context, a *GetStoryArcsArgs,
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		ArcType:    a.ArcType,
 		Status:     a.Status,
-		Order:      "updated_at DESC", // MCP 按最近编辑排序，截断时保留活跃弧线
+		Order:      "importance DESC, created_at ASC", // 按重要性排序，与 executeContext 一致
 	})
 	if err != nil {
 		return nil, fmt.Errorf("list arcs: %w", err)
