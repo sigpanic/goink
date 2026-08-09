@@ -1310,6 +1310,7 @@ export namespace llm {
 	
 	export class AvailableModel {
 	    Key: string;
+	    ModelID: string;
 	    ProviderName: string;
 	    ModelName: string;
 	    ContextWindow: number;
@@ -1325,6 +1326,7 @@ export namespace llm {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Key = source["Key"];
+	        this.ModelID = source["ModelID"];
 	        this.ProviderName = source["ProviderName"];
 	        this.ModelName = source["ModelName"];
 	        this.ContextWindow = source["ContextWindow"];

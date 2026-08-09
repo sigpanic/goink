@@ -1,17 +1,14 @@
-import type { llm } from "@/hooks/useApp";
 import { useTranslation } from "react-i18next";
 import PopSelect from "./PopSelect";
 import ContextRing from "./ContextRing";
 import type { UsageInfo } from "./ContextRing";
+import { useModels } from "./useModels";
+import { useChatStore } from "./useChatStore";
 
 interface Props {
-  models: llm.AvailableModel[];
-  selectedKey: string;
   onSelectModel: (key: string) => void;
   onRefreshModels?: () => void;
-  reasoningEffort: string;
   onSelectEffort: (effort: string) => void;
-  approvalMode: "manual" | "auto";
   onToggleApproval: () => void;
   onConfigModel: () => void;
   usage: UsageInfo | null;
@@ -20,14 +17,13 @@ interface Props {
   isCompressing?: boolean;
 }
 
+// ChatControls: 模型/推理/审批控件。
+// models 列表走 useModels query 订阅；selectedModel/reasoningEffort/approvalMode
+// 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。回调仍由 props 传入（mutation commit 4 迁）。
 export default function ChatControls({
-  models,
-  selectedKey,
   onSelectModel,
   onRefreshModels,
-  reasoningEffort,
   onSelectEffort,
-  approvalMode,
   onToggleApproval,
   onConfigModel,
   usage,
@@ -36,16 +32,22 @@ export default function ChatControls({
   isCompressing,
 }: Props) {
   const { t } = useTranslation();
-  const selected = models.find((m) => m.Key === selectedKey);
+  const modelsQuery = useModels();
+  const models = modelsQuery.data ?? [];
+  const selectedModel = useChatStore((s) => s.selectedModel);
+  const reasoningEffort = useChatStore((s) => s.reasoningEffort);
+  const approvalMode = useChatStore((s) => s.approvalMode);
+
+  const selectedKey = selectedModel?.Key ?? "";
   const supportsReasoning =
-    selected?.ReasoningLevels && selected.ReasoningLevels.length > 0;
+    !!selectedModel?.ReasoningLevels && selectedModel.ReasoningLevels.length > 0;
 
   const modelOptions = models.map((m) => ({
     value: m.Key,
     label: m.ModelName,
   }));
   const reasoningOptions = supportsReasoning
-    ? selected.ReasoningLevels.map((level) => ({
+    ? selectedModel!.ReasoningLevels.map((level) => ({
         value: level,
         label:
           level === "high" ? t("chat.highReasoning") : t("chat.maxReasoning"),

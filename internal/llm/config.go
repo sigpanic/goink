@@ -13,6 +13,7 @@ type UserLLMConfig struct {
 // AvailableModel 是前端下拉列表的模型选项。
 type AvailableModel struct {
 	Key              string // "deepseek/deepseek-v4-pro"
+	ModelID          string // "deepseek-v4-pro"（独立字段，不依赖 Key 拆分）
 	ProviderName     string // "DeepSeek"
 	ModelName        string // "DeepSeek V4 Pro"
 	ContextWindow    int
@@ -182,6 +183,7 @@ func Models(providers map[string]Provider) []AvailableModel {
 		for _, m := range p.Models {
 			list = append(list, AvailableModel{
 				Key:              name + "/" + m.ID,
+				ModelID:          m.ID,
 				ProviderName:     p.Name,
 				ModelName:        m.Name,
 				ContextWindow:    m.ContextWindow,

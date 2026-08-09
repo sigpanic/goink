@@ -34,7 +34,7 @@ import RecentSessions from "./RecentSessions";
 import SessionHistory from "./SessionHistory";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { splitModelKey } from "@/utils/modelKey";
+import { useChatStore } from "./useChatStore";
 
 interface Props {
   novelId: number;
@@ -92,9 +92,14 @@ export default function ChatPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedKey, setSelectedKey] = useState("");
-  const [reasoningEffort, setReasoningEffort] = useState("");
-  const [approvalMode, setApprovalMode] = useState<"manual" | "auto">("manual");
+  // selectedModel/reasoningEffort/approvalMode 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。
+  const selectedModel = useChatStore((s) => s.selectedModel);
+  const setSelectedModel = useChatStore((s) => s.setSelectedModel);
+  const reasoningEffort = useChatStore((s) => s.reasoningEffort);
+  const setReasoningEffort = useChatStore((s) => s.setReasoningEffort);
+  const approvalMode = useChatStore((s) => s.approvalMode);
+  const setApprovalMode = useChatStore((s) => s.setApprovalMode);
+  const selectedKey = selectedModel?.Key ?? "";
   const [lastUsage, setLastUsage] = useState<UsageInfo | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const compressingRef = useRef(false);
@@ -121,6 +126,7 @@ export default function ChatPanel({
   // 选中态恢复：依赖 useModels + useSettings 两个 query data 都 ready。
   // restoredRef 保证只恢复一次（避免 query refetch 时重置用户手动选择）。
   // 替代原 Promise.all([GetModels, GetSettings]) + setInitLoadError 逻辑。
+  // selectedModel 存结构化对象（含 ModelID/ProviderName），废弃拼接 key + splitModelKey。
   useEffect(() => {
     if (restoredRef.current) return;
     const modelList = modelsQuery.data;
@@ -128,14 +134,13 @@ export default function ChatPanel({
     if (!modelList || modelList.length === 0 || !settings) return;
     restoredRef.current = true;
 
-    // 恢复模型选择（验证 key 仍存在）
-    let key = settings.selected_model_key || "";
+    // 恢复模型选择（验证 key 仍存在）→ 设结构化 selectedModel
+    const key = settings.selected_model_key || "";
     let model = modelList.find((m) => m.Key === key);
     if (!model) {
       model = modelList[0];
-      key = model.Key;
     }
-    setSelectedKey(key);
+    setSelectedModel(model);
 
     // 恢复推理程度（验证级别仍合法）
     let effort = settings.reasoning_effort || "";
@@ -154,22 +159,23 @@ export default function ChatPanel({
     if (settings.last_session_id) {
       lastSessionIdRef.current = settings.last_session_id;
     }
-  }, [modelsQuery.data, settingsQuery.data]);
+  }, [modelsQuery.data, settingsQuery.data, setSelectedModel, setReasoningEffort, setApprovalMode]);
 
   // models query refetch 后（如 SettingsDialog 保存触发 invalidate）：
-  // 检查当前 selectedKey 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
+  // 检查当前 selectedModel 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
   useEffect(() => {
     if (!restoredRef.current) return;
     const modelList = modelsQuery.data;
     if (!modelList || modelList.length === 0) return;
-    if (!selectedKey || !modelList.find((m) => m.Key === selectedKey)) {
+    const currentKey = selectedModel?.Key;
+    if (!currentKey || !modelList.find((m) => m.Key === currentKey)) {
       const first = modelList[0];
-      setSelectedKey(first.Key);
+      setSelectedModel(first);
       if (first.ReasoningLevels?.length) {
         setReasoningEffort(first.ReasoningLevels[0]);
       }
     }
-  }, [modelsQuery.data, selectedKey]);
+  }, [modelsQuery.data, selectedModel, setSelectedModel, setReasoningEffort]);
 
   // 活跃会话详情 + 历史消息：useSession / useSessionMessages query。
   // activeSid 为空（新对话/未选中）时 enabled false 不 fetch。
@@ -947,16 +953,17 @@ export default function ChatPanel({
 
   const handleSelectModel = useCallback(
     (key: string) => {
-      setSelectedKey(key);
       const m = modelsQuery.data?.find((x) => x.Key === key);
+      if (!m) return;
+      setSelectedModel(m);
       let effort = "";
-      if (m?.ReasoningLevels?.length) {
+      if (m.ReasoningLevels?.length) {
         effort = m.ReasoningLevels[0];
         setReasoningEffort(effort);
       }
       app.SetSelectedModel(key, effort).catch(() => {});
     },
-    [modelsQuery.data, app],
+    [modelsQuery.data, app, setSelectedModel, setReasoningEffort],
   );
 
   const handleSelectEffort = useCallback(
@@ -964,19 +971,19 @@ export default function ChatPanel({
       setReasoningEffort(effort);
       app.SetReasoningEffort(effort).catch(() => {});
     },
-    [app],
+    [app, setReasoningEffort],
   );
 
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
     app.SetApprovalMode(next).catch(() => {});
-  }, [approvalMode, app]);
+  }, [approvalMode, app, setApprovalMode]);
 
   const handleCompress = useCallback(async () => {
-    if (!sessionId || !selectedKey || compressingRef.current) return;
-    const [providerName, modelID] = splitModelKey(selectedKey);
-    if (!providerName || !modelID) return;
+    if (!sessionId || !selectedModel || compressingRef.current) return;
+    const providerName = selectedModel.ProviderName;
+    const modelID = selectedModel.ModelID;
 
     compressingRef.current = true;
     setIsCompressing(true);
@@ -1029,12 +1036,13 @@ export default function ChatPanel({
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, selectedKey, app, t]);
+  }, [sessionId, selectedModel, app, t]);
 
   const handleSend = useCallback(
     async (content: string) => {
-      if (!selectedKey) return;
-      const [p, m] = splitModelKey(selectedKey);
+      if (!selectedModel) return;
+      const p = selectedModel.ProviderName;
+      const m = selectedModel.ModelID;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
         app.CancelChat(sessionId);
@@ -1149,7 +1157,7 @@ export default function ChatPanel({
     [
       sessionId,
       novelId,
-      selectedKey,
+      selectedModel,
       reasoningEffort,
       app,
       handleAgentEvent,
@@ -1451,13 +1459,9 @@ export default function ChatPanel({
       <div className="border-t mx-4" />
 
       <ChatControls
-        models={modelsQuery.data ?? []}
-        selectedKey={selectedKey}
         onSelectModel={handleSelectModel}
         onRefreshModels={refreshModels}
-        reasoningEffort={reasoningEffort}
         onSelectEffort={handleSelectEffort}
-        approvalMode={approvalMode}
         onToggleApproval={handleToggleApproval}
         onConfigModel={handleConfigModel}
         usage={lastUsage}
