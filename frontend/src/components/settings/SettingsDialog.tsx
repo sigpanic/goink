@@ -9,14 +9,12 @@ type Tab = "general" | "model";
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSaved?: () => void;
   initialTab?: Tab;
 }
 
 export default function SettingsDialog({
   open,
   onClose,
-  onSaved,
   initialTab = "model",
 }: Props) {
   const { t } = useTranslation();
@@ -76,7 +74,7 @@ export default function SettingsDialog({
           </button>
 
           {activeTab === "model" ? (
-            <ModelConfigTab onSaved={onSaved} />
+            <ModelConfigTab />
           ) : (
             <GeneralConfigTab />
           )}

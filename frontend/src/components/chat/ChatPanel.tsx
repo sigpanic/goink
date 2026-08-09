@@ -3,8 +3,15 @@ import { useTranslation } from "react-i18next";
 import { MessageSquare, Loader2, History, Plus } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
-import { GetSession } from "@/lib/wailsjs/go/app/App";
+import {
+  GetSession,
+  SetLastSession,
+  SetSelectedModel,
+  SetReasoningEffort,
+  SetApprovalMode,
+  CancelChat,
+  Chat,
+} from "@/lib/wailsjs/go/app/App";
 import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
 import { useModels } from "./useModels";
 import { useSettings } from "./useSettings";
@@ -36,6 +43,7 @@ import SessionHistory from "./SessionHistory";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useChatStore } from "./useChatStore";
+import { useCompressContext } from "./useCompressContext";
 
 interface Props {
   novelId: number;
@@ -76,8 +84,8 @@ export default function ChatPanel({
   onChatPanelResize,
 }: Props) {
   const { t } = useTranslation();
-  const app = useApp();
   const qc = useQueryClient();
+  const compressMutation = useCompressContext();
   const modelsQuery = useModels();
   const settingsQuery = useSettings();
   const sessionsQuery = useSessions({
@@ -203,10 +211,10 @@ export default function ChatPanel({
           }
         })
         .catch(() => {
-          app.SetLastSession("").catch(() => {});
+          SetLastSession("").catch(() => {});
         });
     }
-  }, [novelId, app]);
+  }, [novelId]);
 
   // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
   // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
@@ -287,10 +295,10 @@ export default function ChatPanel({
   const handleSelectSession = useCallback(
     (sid: string) => {
       setActiveSessionId(sid);
-      app.SetLastSession(sid).catch(() => {});
+      SetLastSession(sid).catch(() => {});
       // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
-    [app],
+    [],
   );
 
   const handleNewChat = useCallback(() => {
@@ -948,24 +956,24 @@ export default function ChatPanel({
         effort = m.ReasoningLevels[0];
         setReasoningEffort(effort);
       }
-      app.SetSelectedModel(key, effort).catch(() => {});
+      SetSelectedModel(key, effort).catch(() => {});
     },
-    [modelsQuery.data, app, setSelectedModel, setReasoningEffort],
+    [modelsQuery.data, setSelectedModel, setReasoningEffort],
   );
 
   const handleSelectEffort = useCallback(
     (effort: string) => {
       setReasoningEffort(effort);
-      app.SetReasoningEffort(effort).catch(() => {});
+      SetReasoningEffort(effort).catch(() => {});
     },
-    [app, setReasoningEffort],
+    [setReasoningEffort],
   );
 
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
-    app.SetApprovalMode(next).catch(() => {});
-  }, [approvalMode, app, setApprovalMode]);
+    SetApprovalMode(next).catch(() => {});
+  }, [approvalMode, setApprovalMode]);
 
   const handleCompress = useCallback(async () => {
     if (!sessionId || !selectedModel || compressingRef.current) return;
@@ -993,7 +1001,7 @@ export default function ChatPanel({
     setTurns((prev) => [...prev, compressingTurn]);
 
     try {
-      const result = await app.CompressContext({
+      const result = await compressMutation.mutateAsync({
         session_id: sessionId,
         provider_name: providerName,
         model_id: modelID,
@@ -1023,7 +1031,7 @@ export default function ChatPanel({
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, selectedModel, app, t]);
+  }, [sessionId, selectedModel, compressMutation, t]);
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -1032,7 +1040,7 @@ export default function ChatPanel({
       const m = selectedModel.ModelID;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
-        app.CancelChat(sessionId);
+        CancelChat(sessionId);
       }
       setIsLoading(true);
 
@@ -1060,7 +1068,7 @@ export default function ChatPanel({
           if (data.session_id) {
             setSessionId(data.session_id);
             setActiveSessionId(data.session_id);
-            app.SetLastSession(data.session_id).catch(() => {});
+            SetLastSession(data.session_id).catch(() => {});
           }
 
           // 更新 turn 的 turnId 为后端分配的真实值
@@ -1081,7 +1089,7 @@ export default function ChatPanel({
       startedUnsubRef.current = startedCleanup;
 
       try {
-        await app.Chat({
+        await Chat({
           session_id: sessionId,
           novel_id: novelId,
           message: content,
@@ -1146,7 +1154,6 @@ export default function ChatPanel({
       novelId,
       selectedModel,
       reasoningEffort,
-      app,
       handleAgentEvent,
       applyAgentEvent,
       activeSessionId,
@@ -1437,7 +1444,7 @@ export default function ChatPanel({
                 : t,
             ),
           );
-          app.CancelChat(sessionId);
+          CancelChat(sessionId);
         }}
       />
 
@@ -1462,10 +1469,6 @@ export default function ChatPanel({
       <SettingsDialog
         open={showSettings}
         onClose={() => setShowSettings(false)}
-        onSaved={() => {
-          // invalidate 触发 useModels refetch；选中态由 modelsQuery effect 自动修正。
-          qc.invalidateQueries({ queryKey: modelKeys.all });
-        }}
         initialTab="model"
       />
 

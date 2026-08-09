@@ -4,18 +4,16 @@ import { useTranslation } from "react-i18next";
 import { useApp } from "@/hooks/useApp";
 import type { llm } from "@/hooks/useApp";
 import { toastSuccess } from "@/utils/toast";
+import { useSaveLLMConfig } from "./useSaveLLMConfig";
 import BuiltinProviderPane from "./BuiltinProviderPane";
 import CustomProviderPane from "./CustomProviderPane";
 
 type SubNav = "builtin" | "custom";
 
-interface Props {
-  onSaved?: () => void;
-}
-
-export default function ModelConfigTab({ onSaved }: Props) {
+export default function ModelConfigTab() {
   const { t } = useTranslation();
   const app = useApp();
+  const saveMutation = useSaveLLMConfig();
   const [providers, setProviders] = useState<llm.ProviderView[]>([]);
   const [subNav, setSubNav] = useState<SubNav>("builtin");
   const [isLoading, setIsLoading] = useState(true);
@@ -232,7 +230,7 @@ export default function ModelConfigTab({ onSaved }: Props) {
           ? ({ ...p, chat_url: resolved } as unknown as llm.ProviderView)
           : p;
       });
-      await app.SaveLLMConfig({
+      await saveMutation.mutateAsync({
         providers: providersToSave,
       } as unknown as llm.LLMConfigView);
       const keys: Record<string, string> = {};
@@ -241,14 +239,13 @@ export default function ModelConfigTab({ onSaved }: Props) {
       }
       savedKeysRef.current = keys;
       setSaveMsg(t("settings.configSaved"));
-      onSaved?.();
       setTimeout(() => setSaveMsg(""), 2000);
     } catch (err) {
       setSaveMsg(`${t("settings.saveFailed")}: ${String(err)}`);
     } finally {
       setIsSaving(false);
     }
-  }, [providers, app, testResults, handleTest, t, onSaved]);
+  }, [providers, saveMutation, testResults, handleTest, t]);
 
   if (isLoading) {
     return (
