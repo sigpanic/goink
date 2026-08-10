@@ -75,7 +75,20 @@ export const novelSettingKeys = {
 };
 
 export const styleSampleKeys = {
-  list: (novelId: number) => ["style-samples", novelId] as const,
+  // all: 前缀失效用（invalidateQueries 失效 list + infiniteList 全部缓存）。
+  all: ["style-samples"] as const,
+  // list: StyleView 单页分页（page 进 key，page 变化触发新 query）。
+  // 与 infiniteList 区分缓存（StyleSampleList 无限滚动用 infiniteList）。
+  list: (
+    novelId: number,
+    page: number,
+    size: number,
+    search: string,
+  ) => ["style-samples", novelId, page, size, search] as const,
+  // infiniteList: StyleSampleList 无限滚动（page 由 pageParam 管理，不进 key）。
+  // search 变化触发新 query。对齐 sessionKeys.infiniteList 模式。
+  infiniteList: (novelId: number, size: number, search: string) =>
+    ["style-samples", "infinite", novelId, size, search] as const,
   detail: (id: number) => ["style-sample", id] as const,
 };
 

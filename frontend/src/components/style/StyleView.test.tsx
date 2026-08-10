@@ -1,10 +1,13 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { ReactElement } from "react";
 import StyleView from "./StyleView";
 import { toastError } from "@/utils/toast";
+import { installQueryErrorToast } from "@/lib/queryErrorToast";
 
-// Mock toastError
+// Mock toastError（捕获调用）
 vi.mock("@/utils/toast", async (importOriginal) => {
   const mod = await importOriginal<typeof import("@/utils/toast")>();
   return {
@@ -48,31 +51,78 @@ vi.mock("@/components/shared/TagInput", () => ({
   default: () => null,
 }));
 
-// Mock useApp
-const mockListStyleSamples = vi.fn();
-const mockGetStyleSample = vi.fn();
-const mockDeleteStyleSample = vi.fn();
-const mockCreateStyleSample = vi.fn();
-const mockGetNovels = vi.fn();
-const mockGetModels = vi.fn();
-const mockGetSettings = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    ListStyleSamples: mockListStyleSamples,
-    GetStyleSample: mockGetStyleSample,
-    DeleteStyleSample: mockDeleteStyleSample,
-    CreateStyleSample: mockCreateStyleSample,
-    GetNovels: mockGetNovels,
-    GetModels: mockGetModels,
-    GetSettings: mockGetSettings,
-  }),
-}));
-
 // 3.9: StyleView 改用 useNovels query（不再走 useApp.GetNovels）。mock 返回空数组。
 vi.mock("@/components/novel/useNovels", () => ({
   useNovels: () => ({ data: [] }),
 }));
+
+// 5.3 commit 1: query 化后 mock wailsjs 函数（ListStyleSamples/GetStyleSample）+ useApp（未迁的 mutation/models/settings）。
+// 用 vi.hoisted 提升，让 vi.mock 工厂能引用。
+const {
+  mockListStyleSamples,
+  mockGetStyleSample,
+  mockCreateStyleSample,
+  mockDeleteStyleSample,
+  mockUpdateStyleSample,
+  mockGetModels,
+  mockGetSettings,
+  mockI18n,
+} = vi.hoisted(() => ({
+  mockListStyleSamples: vi.fn(),
+  mockGetStyleSample: vi.fn(),
+  mockCreateStyleSample: vi.fn(),
+  mockDeleteStyleSample: vi.fn(),
+  mockUpdateStyleSample: vi.fn(),
+  mockGetModels: vi.fn(),
+  mockGetSettings: vi.fn(),
+  // 中间件用 i18n.exists/t，mock 让 exists 返回 true + t 返回 key 本身（对齐现有断言文案）。
+  mockI18n: {
+    exists: vi.fn().mockReturnValue(true),
+    t: vi.fn().mockImplementation((key: string) => key),
+  },
+}));
+
+// mock wailsjs App：只覆盖 ListStyleSamples/GetStyleSample（query 用），其他保留原模块。
+vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
+  const mod =
+    await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
+  return {
+    ...mod,
+    ListStyleSamples: mockListStyleSamples,
+    GetStyleSample: mockGetStyleSample,
+  };
+});
+
+// mock useApp：提供未迁的 mutation（Create/Update/DeleteStyleSample）+ GetModels/GetSettings + 流式操作占位。
+vi.mock("@/hooks/useApp", () => ({
+  useApp: () => ({
+    CreateStyleSample: mockCreateStyleSample,
+    DeleteStyleSample: mockDeleteStyleSample,
+    UpdateStyleSample: mockUpdateStyleSample,
+    GetModels: mockGetModels,
+    GetSettings: mockGetSettings,
+    ExtractStyle: vi.fn(),
+    CancelExtract: vi.fn(),
+    SaveContent: vi.fn(),
+  }),
+}));
+
+// mock @/i18n：中间件 import i18n，让 exists/t 可控（返回 key 本身，对齐组件 t 的 fallback 文案）。
+vi.mock("@/i18n", () => ({ default: mockI18n }));
+
+let qc: QueryClient;
+let unsub: () => void;
+
+// 每个测试用独立 QueryClient（retry:false 避免重试延迟）+ 安装中间件让 GET 错误真实触发 toastError。
+function renderWithProvider(ui: ReactElement) {
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  unsub = installQueryErrorToast(qc);
+  return render(ui, {
+    wrapper: ({ children }) => (
+      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 describe("StyleView", () => {
   beforeEach(() => {
@@ -82,13 +132,17 @@ describe("StyleView", () => {
       total: 0,
       total_pages: 0,
     });
-    mockGetNovels.mockResolvedValue([]);
     mockGetModels.mockResolvedValue([]);
     mockGetSettings.mockResolvedValue({ selected_model_key: "" });
   });
 
+  afterEach(() => {
+    unsub();
+    qc.clear();
+  });
+
   it("renders empty state when no samples", async () => {
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     expect(
       await screen.findByText("styleSample.noStyleSamples"),
     ).toBeInTheDocument();
@@ -117,14 +171,15 @@ describe("StyleView", () => {
       total: 2,
       total_pages: 1,
     });
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     expect(await screen.findByText("Suspense")).toBeInTheDocument();
     expect(screen.getByText("Dialogue")).toBeInTheDocument();
   });
 
   it("shows toastError when load fails", async () => {
+    // GET 错误由中间件接管：ListStyleSamples 抛错 → QueryCache error 事件 → 中间件 fire toastError。
     mockListStyleSamples.mockRejectedValue(new Error("network timeout"));
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
         "styleSample.loadFailed: network timeout",
@@ -147,9 +202,10 @@ describe("StyleView", () => {
       total: 1,
       total_pages: 1,
     });
+    // mutation 错误由调用方 try/catch + toastError（未迁 mutation，保留组件级 toastError）。
     mockDeleteStyleSample.mockRejectedValue(new Error("db error"));
 
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     expect(await screen.findByText("Suspense")).toBeInTheDocument();
 
     const deleteBtn = screen.getByText("delete");
@@ -168,7 +224,7 @@ describe("StyleView", () => {
 
   it("switches to adding phase when add button clicked", async () => {
     const user = userEvent.setup();
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     expect(
       await screen.findByText("styleSample.noStyleSamples"),
     ).toBeInTheDocument();
@@ -197,15 +253,14 @@ describe("StyleView", () => {
       total: 1,
       total_pages: 1,
     });
+    // detail query 抛错 → 中间件 fire toastError（不再组件级 try/catch）。
     mockGetStyleSample.mockRejectedValue(new Error("not found"));
 
-    render(<StyleView />);
+    renderWithProvider(<StyleView />);
     expect(await screen.findByText("Suspense")).toBeInTheDocument();
 
-    // StyleSampleCard's onClick triggers openDetail
-    // Since our mock card doesn't have onClick prop wired to openDetail,
-    // test openDetail via focusId prop
-    render(<StyleView focusId={1} onFocusHandled={vi.fn()} />);
+    // focusId 触发 openDetail → setDetailId → useStyleSample fetch → error → 中间件 fire
+    renderWithProvider(<StyleView focusId={1} onFocusHandled={vi.fn()} />);
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
         "styleSample.loadFailed: not found",

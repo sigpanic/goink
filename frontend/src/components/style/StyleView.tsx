@@ -8,12 +8,15 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { splitModelKey } from "@/utils/modelKey";
 import { useApp } from "@/hooks/useApp";
 import { useNovels } from "@/components/novel/useNovels";
-import type { style } from "@/lib/wailsjs/go/models";
+import { styleSampleKeys } from "@/lib/queryKeys";
+import { useStyleSamples } from "./useStyleSamples";
+import { useStyleSample } from "./useStyleSample";
 import StyleSampleCard from "./StyleSampleCard";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
@@ -40,11 +43,9 @@ export default function StyleView({
 }: Props) {
   const app = useApp();
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const runningTaskIdRef = useRef<string | null>(null);
 
-  const [samples, setSamples] = useState<style.Sample[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [phase, setPhase] = useState<Phase>("browse");
@@ -74,6 +75,23 @@ export default function StyleView({
   // 3.9: novels 走 useNovels query（与 WorkspaceView/GeneralConfigTab/PatternExtractView 共享缓存）。
   const { data: novels = [] } = useNovels();
 
+  // 5.3 commit 1: samples 走 useStyleSamples query（不再 useApp.ListStyleSamples + loadRef 三件套）。
+  // queryKey 含 page/size/search，page 变化触发新 query；novelId 变化自动 refetch（queryKey 含 novelId）。
+  // GET 错误由全局中间件接管（queryErrorToast.ts），组件不挂 toastError。
+  // CRUD 后由 mutation 的 invalidateQueries 同步（commit 2 抽 mutation；本 commit 过渡用 qc.invalidateQueries）。
+  const samplesQuery = useStyleSamples({
+    novelId,
+    page,
+    size: PAGE_SIZE,
+    search: "",
+  });
+  const samples = useMemo(
+    () => samplesQuery.data?.items ?? [],
+    [samplesQuery.data],
+  );
+  const total = samplesQuery.data?.total ?? 0;
+  const totalPages = samplesQuery.data?.total_pages ?? 0;
+
   const novelOptions = useMemo(
     () => [
       { value: "0", label: t("styleSample.global") },
@@ -81,44 +99,6 @@ export default function StyleView({
     ],
     [novels, t],
   );
-
-  const novelIdRef = useRef(novelId);
-  const loadRef = useRef<(p: number) => void>(null as any);
-
-  // eslint-disable-next-line react-hooks/refs
-  loadRef.current = async (p: number) => {
-    try {
-      const res = await app.ListStyleSamples({
-        novel_id: novelId,
-        page: p,
-        size: PAGE_SIZE,
-        search: "",
-      });
-      setSamples(res?.items ?? []);
-      setTotal(res?.total ?? 0);
-      setTotalPages(res?.total_pages ?? 0);
-      setPage(p);
-    } catch (err) {
-      toastError(t("styleSample.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    }
-  };
-
-  const load = useCallback((p: number) => {
-    loadRef.current?.(p);
-  }, []);
-
-  useEffect(() => {
-    load(1);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // novelId 变化时重新加载
-  useEffect(() => {
-    if (novelIdRef.current !== novelId) {
-      novelIdRef.current = novelId;
-      load(1);
-    }
-  }, [novelId, load]);
 
   // detail/edit dialog
   const [detailId, setDetailId] = useState<number | null>(null);
@@ -128,24 +108,23 @@ export default function StyleView({
   const [editNovelId, setEditNovelId] = useState(0);
   const [editSaving, setEditSaving] = useState(false);
 
-  const openDetail = useCallback(
-    async (id: number) => {
-      try {
-        const s = await app.GetStyleSample(id);
-        if (s) {
-          setDetailId(id);
-          setEditName(s.name);
-          setEditContent(s.content);
-          setEditTags(s.tags || []);
-          setEditNovelId(s.is_global ? 0 : s.novel_id);
-        }
-      } catch (err) {
-        toastError(t("styleSample.loadFailed") + ": " + toErrorMessage(err));
-        console.error(err);
-      }
-    },
-    [app, t],
-  );
+  // 5.3 commit 1: detail 走 useStyleSample query（不再 useApp.GetStyleSample 手动 fetch）。
+  // openDetail 只 setDetailId 触发 query，useEffect 监听 query.data ready 回填编辑字段。
+  // GET 错误由中间件接管，弹窗内 inline 显示错误文案（三分支）。
+  const sampleQuery = useStyleSample(detailId);
+
+  useEffect(() => {
+    if (sampleQuery.data) {
+      setEditName(sampleQuery.data.name);
+      setEditContent(sampleQuery.data.content);
+      setEditTags(sampleQuery.data.tags || []);
+      setEditNovelId(sampleQuery.data.is_global ? 0 : sampleQuery.data.novel_id);
+    }
+  }, [sampleQuery.data]);
+
+  const openDetail = useCallback((id: number) => {
+    setDetailId(id);
+  }, []);
 
   useEffect(() => {
     if (focusId) {
@@ -211,13 +190,14 @@ export default function StyleView({
       setNewNovelId(0);
       setNewTags([]);
       setPhase("browse");
-      await load(1);
+      setPage(1);
+      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.addFailed")));
     } finally {
       setLoading(false);
     }
-  }, [newName, newContent, newNovelId, newTags, app, load, t]);
+  }, [newName, newContent, newNovelId, newTags, app, queryClient, t]);
 
   const handleDelete = useCallback((id: number, name: string) => {
     setDeleteTarget({ id, name });
@@ -234,14 +214,14 @@ export default function StyleView({
         return n;
       });
       setDeleteTarget(null);
-      await load(page);
+      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
     } catch (err) {
       toastError(t("styleSample.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     } finally {
       setDeleting(false);
     }
-  }, [deleteTarget, app, load, page, t]);
+  }, [deleteTarget, app, queryClient, t]);
 
   const handleExtract = useCallback(async () => {
     if (selected.size === 0 || !modelKey) return;
@@ -327,8 +307,11 @@ export default function StyleView({
         is_global: isGlobal,
         novel_id: editNovelId,
       });
+      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: styleSampleKeys.detail(detailId),
+      });
       setDetailId(null);
-      await load(page);
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.saveFailed")));
     } finally {
@@ -341,8 +324,7 @@ export default function StyleView({
     editTags,
     editNovelId,
     app,
-    load,
-    page,
+    queryClient,
     t,
   ]);
 
@@ -576,7 +558,18 @@ export default function StyleView({
       {(phase === "browse" || phase === "extracting") && (
         <div className="flex-1 flex flex-col min-h-0">
           <div className="flex-1 overflow-y-auto overscroll-contain px-6 py-6">
-            {samples.length === 0 ? (
+            {samplesQuery.isLoading ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="w-6 h-6 animate-spin" />
+              </div>
+            ) : samplesQuery.isError ? (
+              <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+                <BarChart3 className="w-12 h-12 opacity-20" />
+                <p className="text-sm text-destructive">
+                  {t("styleSample.loadFailed")}
+                </p>
+              </div>
+            ) : samples.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
                 <BarChart3 className="w-12 h-12 opacity-20" />
                 <p className="text-sm">{t("styleSample.noStyleSamples")}</p>
@@ -601,7 +594,7 @@ export default function StyleView({
           {totalPages > 1 && (
             <div className="flex items-center justify-center gap-2 px-6 py-3 border-t shrink-0">
               <button
-                onClick={() => load(page - 1)}
+                onClick={() => setPage(page - 1)}
                 disabled={page <= 1}
                 className="h-7 w-7 flex items-center justify-center rounded-md border border-border hover:bg-muted disabled:opacity-30 transition-colors"
               >
@@ -611,7 +604,7 @@ export default function StyleView({
                 {page} / {totalPages}
               </span>
               <button
-                onClick={() => load(page + 1)}
+                onClick={() => setPage(page + 1)}
                 disabled={page >= totalPages}
                 className="h-7 w-7 flex items-center justify-center rounded-md border border-border hover:bg-muted disabled:opacity-30 transition-colors"
               >
@@ -645,51 +638,65 @@ export default function StyleView({
               </button>
             </div>
             <div className="flex-1 min-h-0 flex flex-col px-5 py-4 gap-3">
-              <div className="flex gap-3">
-                <div className="flex-1">
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    {t("styleSample.name")}
-                  </label>
-                  <input
-                    value={editName}
-                    onChange={(e) => setEditName(e.target.value)}
-                    className="w-full px-3 py-2 text-sm rounded-lg border bg-background outline-none focus:ring-2 focus:ring-ring"
-                  />
+              {sampleQuery.isLoading ? (
+                <div className="flex-1 flex items-center justify-center text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin" />
                 </div>
-                <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">
-                    {t("styleSample.belongTo")}
-                  </label>
-                  <PopSelect
-                    value={String(editNovelId)}
-                    options={novelOptions}
-                    onChange={(v: string) => setEditNovelId(Number(v))}
-                    minWidth="120px"
-                    dropUp={false}
-                  />
+              ) : sampleQuery.isError ? (
+                <div className="flex-1 flex items-center justify-center">
+                  <p className="text-sm text-destructive">
+                    {t("styleSample.loadFailed")}
+                  </p>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs text-muted-foreground mb-1 block">
-                  {t("styleSample.tags")}
-                </label>
-                <TagInput
-                  tags={editTags}
-                  onChange={setEditTags}
-                  placeholder={t("styleSample.tagPlaceholder")}
-                  size="md"
-                />
-              </div>
-              <div className="flex-1 flex flex-col min-h-0">
-                <label className="text-xs text-muted-foreground mb-1 block shrink-0">
-                  {t("styleSample.body")}
-                </label>
-                <textarea
-                  value={editContent}
-                  onChange={(e) => setEditContent(e.target.value)}
-                  className="w-full flex-1 px-3 py-2.5 text-sm rounded-lg border bg-background resize-none outline-none focus:ring-2 focus:ring-ring font-mono leading-relaxed"
-                />
-              </div>
+              ) : (
+                <>
+                  <div className="flex gap-3">
+                    <div className="flex-1">
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        {t("styleSample.name")}
+                      </label>
+                      <input
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        className="w-full px-3 py-2 text-sm rounded-lg border bg-background outline-none focus:ring-2 focus:ring-ring"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs text-muted-foreground mb-1 block">
+                        {t("styleSample.belongTo")}
+                      </label>
+                      <PopSelect
+                        value={String(editNovelId)}
+                        options={novelOptions}
+                        onChange={(v: string) => setEditNovelId(Number(v))}
+                        minWidth="120px"
+                        dropUp={false}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs text-muted-foreground mb-1 block">
+                      {t("styleSample.tags")}
+                    </label>
+                    <TagInput
+                      tags={editTags}
+                      onChange={setEditTags}
+                      placeholder={t("styleSample.tagPlaceholder")}
+                      size="md"
+                    />
+                  </div>
+                  <div className="flex-1 flex flex-col min-h-0">
+                    <label className="text-xs text-muted-foreground mb-1 block shrink-0">
+                      {t("styleSample.body")}
+                    </label>
+                    <textarea
+                      value={editContent}
+                      onChange={(e) => setEditContent(e.target.value)}
+                      className="w-full flex-1 px-3 py-2.5 text-sm rounded-lg border bg-background resize-none outline-none focus:ring-2 focus:ring-ring font-mono leading-relaxed"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <div className="flex justify-end gap-2 px-5 py-3.5 border-t shrink-0">
               <button
@@ -700,7 +707,7 @@ export default function StyleView({
               </button>
               <button
                 onClick={handleUpdate}
-                disabled={editSaving}
+                disabled={editSaving || !sampleQuery.data}
                 className="h-9 px-5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
                 {editSaving ? t("styleSample.saving") : t("common.save")}

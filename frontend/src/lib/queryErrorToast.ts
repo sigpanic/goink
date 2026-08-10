@@ -32,7 +32,9 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // 5.2 commit 1：content 领域 GET 端点
   chapters: "chapter.loadFailed",
   content: "content.loadFailed",
-  // "style-samples": "styleSample.loadFailed",
+  // 5.3 commit 1：style 领域 GET 端点（list + infiniteList 共用 style-samples 前缀，detail 用 style-sample）
+  "style-samples": "styleSample.loadFailed",
+  "style-sample": "styleSample.loadFailed",
   // skills: "skill.loadFailed",
 };
 
