@@ -11,7 +11,13 @@ import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { splitModelKey } from "@/utils/modelKey";
-import { useApp } from "@/hooks/useApp";
+import {
+  GetModels,
+  GetSettings,
+  ExtractStyle,
+  CancelExtract,
+  SaveContent,
+} from "@/lib/wailsjs/go/app/App";
 import { useNovels } from "@/components/novel/useNovels";
 import { useStyleSamples } from "./useStyleSamples";
 import { useStyleSample } from "./useStyleSample";
@@ -42,11 +48,14 @@ export default function StyleView({
   embedded = false,
   novelId = 0,
 }: Props) {
-  const app = useApp();
+  // 5.3 收尾：StyleView 不再依赖 useApp，所有 wailsjs 函数直接 import 调用。
+  //   流式/命令/非本领域调用（不迁 query/mutation，但已改直接 import）：
+  //     GetModels/GetSettings（全局配置领域）+ ExtractStyle/CancelExtract（流式）+ SaveContent（content 5.2）
+  //   已迁 query + mutation：List/Get/Create/Update/DeleteStyleSample
   const { t } = useTranslation();
   const runningTaskIdRef = useRef<string | null>(null);
 
-  // 5.3 commit 2: CRUD 走 mutation（onSuccess 内部 invalidateQueries，组件不再手动 qc.invalidate + setLoading 三件套）。
+  // CRUD 走 mutation（onSuccess 内部 invalidateQueries，组件不再手动 qc.invalidate + setLoading 三件套）。
   const createMutation = useCreateStyleSample();
   const updateMutation = useUpdateStyleSample();
   const deleteMutation = useDeleteStyleSample();
@@ -79,10 +88,10 @@ export default function StyleView({
   // 3.9: novels 走 useNovels query（与 WorkspaceView/GeneralConfigTab/PatternExtractView 共享缓存）。
   const { data: novels = [] } = useNovels();
 
-  // 5.3 commit 1: samples 走 useStyleSamples query（不再 useApp.ListStyleSamples + loadRef 三件套）。
+  // samples 走 useStyleSamples query（不再 useApp.ListStyleSamples + loadRef 三件套）。
   // queryKey 含 page/size/search，page 变化触发新 query；novelId 变化自动 refetch（queryKey 含 novelId）。
   // GET 错误由全局中间件接管（queryErrorToast.ts），组件不挂 toastError。
-  // CRUD 后由 mutation 的 invalidateQueries 同步（commit 2 已抽 mutation，handler 直接 mutateAsync）。
+  // CRUD 后由 mutation 的 onSuccess invalidateQueries 同步缓存。
   const samplesQuery = useStyleSamples({
     novelId,
     page,
@@ -111,7 +120,7 @@ export default function StyleView({
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editNovelId, setEditNovelId] = useState(0);
 
-  // 5.3 commit 1: detail 走 useStyleSample query（不再 useApp.GetStyleSample 手动 fetch）。
+  // detail 走 useStyleSample query（不再 useApp.GetStyleSample 手动 fetch）。
   // openDetail 只 setDetailId 触发 query，useEffect 监听 query.data ready 回填编辑字段。
   // GET 错误由中间件接管，弹窗内 inline 显示错误文案（三分支）。
   const sampleQuery = useStyleSample(detailId);
@@ -139,13 +148,12 @@ export default function StyleView({
   // 加载模型
   useEffect(() => {
     let cancelled = false;
-    app
-      .GetModels()
+    GetModels()
       .then((list) => {
         if (cancelled) return;
         if (list?.length) {
           setModels(list);
-          app.GetSettings().then((s) => {
+          GetSettings().then((s) => {
             if (cancelled) return;
             let key = s?.selected_model_key || "";
             if (!list.find((m) => m.Key === key)) key = list[0].Key;
@@ -157,7 +165,7 @@ export default function StyleView({
     return () => {
       cancelled = true;
     };
-  }, [app]);
+  }, []);
 
   const toggleSelect = useCallback((id: number) => {
     setSelected((prev) => {
@@ -223,7 +231,7 @@ export default function StyleView({
 
     if (phase === "extracting") {
       const runningTaskId = runningTaskIdRef.current;
-      if (runningTaskId !== null) app.CancelExtract(runningTaskId);
+      if (runningTaskId !== null) CancelExtract(runningTaskId);
       runningTaskIdRef.current = null;
       setPhase("browse");
       return;
@@ -242,7 +250,7 @@ export default function StyleView({
     runningTaskIdRef.current = taskId;
 
     try {
-      const res = await app.ExtractStyle({
+      const res = await ExtractStyle({
         task_id: taskId,
         sample_ids: [...selected],
         provider_name: providerName,
@@ -268,13 +276,13 @@ export default function StyleView({
         runningTaskIdRef.current = null;
       }
     }
-  }, [selected, modelKey, phase, app, t]);
+  }, [selected, modelKey, phase, t]);
 
   const handleSave = useCallback(async () => {
     if (!result) return;
     setLoading(true);
     try {
-      await app.SaveContent({
+      await SaveContent({
         novel_id: novelId,
         path: result.filePath,
         content: result.rawContent,
@@ -287,7 +295,7 @@ export default function StyleView({
     } finally {
       setLoading(false);
     }
-  }, [result, app, t, novelId]);
+  }, [result, t, novelId]);
 
   const handleUpdate = useCallback(async () => {
     if (!detailId) return;

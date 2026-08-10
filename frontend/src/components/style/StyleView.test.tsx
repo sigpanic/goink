@@ -56,7 +56,8 @@ vi.mock("@/components/novel/useNovels", () => ({
   useNovels: () => ({ data: [] }),
 }));
 
-// 5.3 commit 2: query + mutation 化后 mock wailsjs 函数（List/Get/Create/Update/DeleteStyleSample）+ useApp（GetModels/GetSettings + 流式操作占位）。
+// 5.3 commit 3: StyleView 不再依赖 useApp，所有 wailsjs 函数直接 import。
+// mock wailsjs App：覆盖 query（List/GetStyleSample）+ mutation（Create/Update/Delete）+ 直接调用（GetModels/GetSettings/ExtractStyle/CancelExtract/SaveContent）。
 // 用 vi.hoisted 提升，让 vi.mock 工厂能引用。
 const {
   mockListStyleSamples,
@@ -82,8 +83,8 @@ const {
   },
 }));
 
-// mock wailsjs App：覆盖 query（ListStyleSamples/GetStyleSample）+ mutation（Create/Update/DeleteStyleSample）。
-// mutation hooks 直接 import wailsjs 函数，不走 useApp，故此处必须 mock。
+// mock wailsjs App：覆盖所有 StyleView 直接 import 的函数。
+// query + mutation + 流式/命令/非本领域调用全走 wailsjs，useApp 已移除。
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
   const mod =
     await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
@@ -94,20 +95,13 @@ vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
     CreateStyleSample: mockCreateStyleSample,
     UpdateStyleSample: mockUpdateStyleSample,
     DeleteStyleSample: mockDeleteStyleSample,
-  };
-});
-
-// mock useApp：仅保留未迁的 GetModels/GetSettings + 流式操作占位（ExtractStyle/CancelExtract/SaveContent）。
-// CRUD 已迁 mutation，不再走 useApp.Create/Update/DeleteStyleSample。
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
     GetModels: mockGetModels,
     GetSettings: mockGetSettings,
     ExtractStyle: vi.fn(),
     CancelExtract: vi.fn(),
     SaveContent: vi.fn(),
-  }),
-}));
+  };
+});
 
 // mock @/i18n：中间件 import i18n，让 exists/t 可控（返回 key 本身，对齐组件 t 的 fallback 文案）。
 vi.mock("@/i18n", () => ({ default: mockI18n }));

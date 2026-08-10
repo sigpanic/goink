@@ -36,9 +36,9 @@
 - [ ] commit 3: file:changed 改 qc.invalidateQueries + 删 useApp + max-chapter 失效收尾
 
 ### 5.3 pattern / style / extract（3 commit）
-- [ ] commit 1: useStyleSamples + useStyleSample query
-- [ ] commit 2: useCreate/Update/DeleteStyleSample mutation
-- [ ] commit 3: 收尾（确认 useApp 残留仅剩流式/命令/非本领域调用）
+- [x] commit 1: useStyleSamples + useStyleSample query
+- [x] commit 2: useCreate/Update/DeleteStyleSample mutation
+- [x] commit 3: 收尾（确认 useApp 残留仅剩流式/命令/非本领域调用）
 
 ### 5.4 skill / git（4 commit + 1 可选）
 - [ ] commit 1: wailsResult util + useSkills query
