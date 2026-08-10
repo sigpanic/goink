@@ -8,15 +8,16 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { splitModelKey } from "@/utils/modelKey";
 import { useApp } from "@/hooks/useApp";
 import { useNovels } from "@/components/novel/useNovels";
-import { styleSampleKeys } from "@/lib/queryKeys";
 import { useStyleSamples } from "./useStyleSamples";
 import { useStyleSample } from "./useStyleSample";
+import { useCreateStyleSample } from "./useCreateStyleSample";
+import { useUpdateStyleSample } from "./useUpdateStyleSample";
+import { useDeleteStyleSample } from "./useDeleteStyleSample";
 import StyleSampleCard from "./StyleSampleCard";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
@@ -43,8 +44,12 @@ export default function StyleView({
 }: Props) {
   const app = useApp();
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const runningTaskIdRef = useRef<string | null>(null);
+
+  // 5.3 commit 2: CRUD 走 mutation（onSuccess 内部 invalidateQueries，组件不再手动 qc.invalidate + setLoading 三件套）。
+  const createMutation = useCreateStyleSample();
+  const updateMutation = useUpdateStyleSample();
+  const deleteMutation = useDeleteStyleSample();
 
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -54,7 +59,6 @@ export default function StyleView({
     id: number;
     name: string;
   } | null>(null);
-  const [deleting, setDeleting] = useState(false);
 
   // add form
   const [newName, setNewName] = useState("");
@@ -78,7 +82,7 @@ export default function StyleView({
   // 5.3 commit 1: samples 走 useStyleSamples query（不再 useApp.ListStyleSamples + loadRef 三件套）。
   // queryKey 含 page/size/search，page 变化触发新 query；novelId 变化自动 refetch（queryKey 含 novelId）。
   // GET 错误由全局中间件接管（queryErrorToast.ts），组件不挂 toastError。
-  // CRUD 后由 mutation 的 invalidateQueries 同步（commit 2 抽 mutation；本 commit 过渡用 qc.invalidateQueries）。
+  // CRUD 后由 mutation 的 invalidateQueries 同步（commit 2 已抽 mutation，handler 直接 mutateAsync）。
   const samplesQuery = useStyleSamples({
     novelId,
     page,
@@ -106,7 +110,6 @@ export default function StyleView({
   const [editContent, setEditContent] = useState("");
   const [editTags, setEditTags] = useState<string[]>([]);
   const [editNovelId, setEditNovelId] = useState(0);
-  const [editSaving, setEditSaving] = useState(false);
 
   // 5.3 commit 1: detail 走 useStyleSample query（不再 useApp.GetStyleSample 手动 fetch）。
   // openDetail 只 setDetailId 触发 query，useEffect 监听 query.data ready 回填编辑字段。
@@ -175,10 +178,9 @@ export default function StyleView({
 
   const handleAdd = useCallback(async () => {
     if (!newName.trim() || !newContent.trim()) return;
-    setLoading(true);
     try {
       const isGlobal = newNovelId === 0;
-      await app.CreateStyleSample({
+      await createMutation.mutateAsync({
         novel_id: newNovelId,
         is_global: isGlobal,
         name: newName.trim(),
@@ -191,13 +193,10 @@ export default function StyleView({
       setNewTags([]);
       setPhase("browse");
       setPage(1);
-      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.addFailed")));
-    } finally {
-      setLoading(false);
     }
-  }, [newName, newContent, newNovelId, newTags, app, queryClient, t]);
+  }, [newName, newContent, newNovelId, newTags, createMutation, t]);
 
   const handleDelete = useCallback((id: number, name: string) => {
     setDeleteTarget({ id, name });
@@ -205,23 +204,19 @@ export default function StyleView({
 
   const confirmDelete = useCallback(async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
     try {
-      await app.DeleteStyleSample({ id: deleteTarget.id });
+      await deleteMutation.mutateAsync({ id: deleteTarget.id });
       setSelected((prev) => {
         const n = new Set(prev);
         n.delete(deleteTarget.id);
         return n;
       });
       setDeleteTarget(null);
-      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
     } catch (err) {
       toastError(t("styleSample.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
-  }, [deleteTarget, app, queryClient, t]);
+  }, [deleteTarget, deleteMutation, t]);
 
   const handleExtract = useCallback(async () => {
     if (selected.size === 0 || !modelKey) return;
@@ -296,10 +291,9 @@ export default function StyleView({
 
   const handleUpdate = useCallback(async () => {
     if (!detailId) return;
-    setEditSaving(true);
     try {
       const isGlobal = editNovelId === 0;
-      await app.UpdateStyleSample({
+      await updateMutation.mutateAsync({
         id: detailId,
         name: editName,
         content: editContent,
@@ -307,15 +301,9 @@ export default function StyleView({
         is_global: isGlobal,
         novel_id: editNovelId,
       });
-      await queryClient.invalidateQueries({ queryKey: styleSampleKeys.all });
-      queryClient.invalidateQueries({
-        queryKey: styleSampleKeys.detail(detailId),
-      });
       setDetailId(null);
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.saveFailed")));
-    } finally {
-      setEditSaving(false);
     }
   }, [
     detailId,
@@ -323,8 +311,7 @@ export default function StyleView({
     editContent,
     editTags,
     editNovelId,
-    app,
-    queryClient,
+    updateMutation,
     t,
   ]);
 
@@ -496,10 +483,10 @@ export default function StyleView({
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newName.trim() || !newContent.trim() || loading}
+              disabled={!newName.trim() || !newContent.trim() || createMutation.isPending}
               className="h-9 px-4 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              {loading ? t("styleSample.saving") : t("styleSample.addSample")}
+              {createMutation.isPending ? t("styleSample.saving") : t("styleSample.addSample")}
             </button>
           </div>
           <div className="mt-2">
@@ -707,10 +694,10 @@ export default function StyleView({
               </button>
               <button
                 onClick={handleUpdate}
-                disabled={editSaving || !sampleQuery.data}
+                disabled={updateMutation.isPending || !sampleQuery.data}
                 className="h-9 px-5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
-                {editSaving ? t("styleSample.saving") : t("common.save")}
+                {updateMutation.isPending ? t("styleSample.saving") : t("common.save")}
               </button>
             </div>
           </div>
@@ -726,7 +713,7 @@ export default function StyleView({
             : ""
         }
         danger
-        loading={deleting}
+        loading={deleteMutation.isPending}
         confirmText={t("common.delete")}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}

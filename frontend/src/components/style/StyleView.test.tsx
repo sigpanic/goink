@@ -56,7 +56,7 @@ vi.mock("@/components/novel/useNovels", () => ({
   useNovels: () => ({ data: [] }),
 }));
 
-// 5.3 commit 1: query 化后 mock wailsjs 函数（ListStyleSamples/GetStyleSample）+ useApp（未迁的 mutation/models/settings）。
+// 5.3 commit 2: query + mutation 化后 mock wailsjs 函数（List/Get/Create/Update/DeleteStyleSample）+ useApp（GetModels/GetSettings + 流式操作占位）。
 // 用 vi.hoisted 提升，让 vi.mock 工厂能引用。
 const {
   mockListStyleSamples,
@@ -82,7 +82,8 @@ const {
   },
 }));
 
-// mock wailsjs App：只覆盖 ListStyleSamples/GetStyleSample（query 用），其他保留原模块。
+// mock wailsjs App：覆盖 query（ListStyleSamples/GetStyleSample）+ mutation（Create/Update/DeleteStyleSample）。
+// mutation hooks 直接 import wailsjs 函数，不走 useApp，故此处必须 mock。
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
   const mod =
     await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
@@ -90,15 +91,16 @@ vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
     ...mod,
     ListStyleSamples: mockListStyleSamples,
     GetStyleSample: mockGetStyleSample,
+    CreateStyleSample: mockCreateStyleSample,
+    UpdateStyleSample: mockUpdateStyleSample,
+    DeleteStyleSample: mockDeleteStyleSample,
   };
 });
 
-// mock useApp：提供未迁的 mutation（Create/Update/DeleteStyleSample）+ GetModels/GetSettings + 流式操作占位。
+// mock useApp：仅保留未迁的 GetModels/GetSettings + 流式操作占位（ExtractStyle/CancelExtract/SaveContent）。
+// CRUD 已迁 mutation，不再走 useApp.Create/Update/DeleteStyleSample。
 vi.mock("@/hooks/useApp", () => ({
   useApp: () => ({
-    CreateStyleSample: mockCreateStyleSample,
-    DeleteStyleSample: mockDeleteStyleSample,
-    UpdateStyleSample: mockUpdateStyleSample,
     GetModels: mockGetModels,
     GetSettings: mockGetSettings,
     ExtractStyle: vi.fn(),
@@ -202,7 +204,7 @@ describe("StyleView", () => {
       total: 1,
       total_pages: 1,
     });
-    // mutation 错误由调用方 try/catch + toastError（未迁 mutation，保留组件级 toastError）。
+    // mutation 错误由 confirmDelete 的 try/catch + toastError（组件级，不走全局中间件）。
     mockDeleteStyleSample.mockRejectedValue(new Error("db error"));
 
     renderWithProvider(<StyleView />);
