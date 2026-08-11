@@ -14,8 +14,8 @@ import {
   ExtractStyle,
   CancelExtract,
 } from "@/lib/wailsjs/go/app/App";
-import { useModels } from "@/components/chat/useModels";
-import { useSettings } from "@/components/chat/useSettings";
+import { useModels } from "@/components/settings/useModels";
+import { useSettings } from "@/components/settings/useSettings";
 import { useSaveContent } from "@/components/content/useSaveContent";
 import type { llm } from "@/lib/wailsjs/go/models";
 import { useNovels } from "@/components/novel/useNovels";

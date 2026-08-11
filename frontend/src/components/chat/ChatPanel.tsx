@@ -13,8 +13,8 @@ import {
   Chat,
 } from "@/lib/wailsjs/go/app/App";
 import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
-import { useModels } from "./useModels";
-import { useSettings } from "./useSettings";
+import { useModels } from "@/components/settings/useModels";
+import { useSettings } from "@/components/settings/useSettings";
 import { useSessions } from "./useSessions";
 import { useSession } from "./useSession";
 import { useSessionMessages } from "./useSessionMessages";

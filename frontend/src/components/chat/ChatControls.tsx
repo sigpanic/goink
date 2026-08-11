@@ -2,7 +2,7 @@ import { useTranslation } from "react-i18next";
 import PopSelect from "./PopSelect";
 import ContextRing from "./ContextRing";
 import type { UsageInfo } from "./ContextRing";
-import { useModels } from "./useModels";
+import { useModels } from "@/components/settings/useModels";
 import { useChatStore } from "./useChatStore";
 
 interface Props {
