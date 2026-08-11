@@ -10,14 +10,14 @@ import {
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { splitModelKey } from "@/utils/modelKey";
 import {
-  GetModels,
-  GetSettings,
   ExtractStyle,
   CancelExtract,
-  SaveContent,
 } from "@/lib/wailsjs/go/app/App";
+import { useModels } from "@/components/chat/useModels";
+import { useSettings } from "@/components/chat/useSettings";
+import { useSaveContent } from "@/components/content/useSaveContent";
+import type { llm } from "@/lib/wailsjs/go/models";
 import { useNovels } from "@/components/novel/useNovels";
 import { useStyleSamples } from "./useStyleSamples";
 import { useStyleSample } from "./useStyleSample";
@@ -48,10 +48,9 @@ export default function StyleView({
   embedded = false,
   novelId = 0,
 }: Props) {
-  // 5.3 收尾：StyleView 不再依赖 useApp，所有 wailsjs 函数直接 import 调用。
-  //   流式/命令/非本领域调用（不迁 query/mutation，但已改直接 import）：
-  //     GetModels/GetSettings（全局配置领域）+ ExtractStyle/CancelExtract（流式）+ SaveContent（content 5.2）
-  //   已迁 query + mutation：List/Get/Create/Update/DeleteStyleSample
+  // 5.3 commit 4: model 走 useModels/useSettings query（共享 5.1 chat 缓存）+ SaveContent 走 useSaveContent mutation（5.2），废弃 splitModelKey。
+  //   流式/命令调用仍直接 import wailsjs：ExtractStyle/CancelExtract（流式）
+  //   已迁 query + mutation：List/Get/Create/Update/DeleteStyleSample + GetModels/GetSettings + SaveContent
   const { t } = useTranslation();
   const runningTaskIdRef = useRef<string | null>(null);
 
@@ -59,11 +58,12 @@ export default function StyleView({
   const createMutation = useCreateStyleSample();
   const updateMutation = useUpdateStyleSample();
   const deleteMutation = useDeleteStyleSample();
+  // SaveContent 走 content 领域 mutation（5.2 建，onSuccess 失效 contentKeys.detail 保持缓存一致）。
+  const saveMutation = useSaveContent();
 
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [phase, setPhase] = useState<Phase>("browse");
-  const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<{
     id: number;
     name: string;
@@ -75,9 +75,15 @@ export default function StyleView({
   const [newNovelId, setNewNovelId] = useState(0);
   const [newTags, setNewTags] = useState<string[]>([]);
 
-  // extract
+  // extract: models/settings 走 query（共享 5.1 chat 缓存），废弃手动 fetch + splitModelKey。
+  const modelsQuery = useModels();
+  const settingsQuery = useSettings();
+  const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
   const [modelKey, setModelKey] = useState("");
-  const [models, setModels] = useState<any[]>([]);
+  const selectedModel = useMemo<llm.AvailableModel | null>(
+    () => models.find((m) => m.Key === modelKey) ?? null,
+    [models, modelKey],
+  );
   const [error, setError] = useState("");
   const [result, setResult] = useState<{
     name: string;
@@ -145,27 +151,14 @@ export default function StyleView({
     }
   }, [focusId, openDetail, onFocusHandled]);
 
-  // 加载模型
+  // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetSettings fetch）。
   useEffect(() => {
-    let cancelled = false;
-    GetModels()
-      .then((list) => {
-        if (cancelled) return;
-        if (list?.length) {
-          setModels(list);
-          GetSettings().then((s) => {
-            if (cancelled) return;
-            let key = s?.selected_model_key || "";
-            if (!list.find((m) => m.Key === key)) key = list[0].Key;
-            setModelKey(key);
-          });
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!modelKey && models.length > 0 && settingsQuery.data) {
+      const key = settingsQuery.data.selected_model_key || "";
+      const found = models.find((m) => m.Key === key);
+      setModelKey(found ? key : models[0].Key);
+    }
+  }, [models, settingsQuery.data, modelKey]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelected((prev) => {
@@ -227,7 +220,7 @@ export default function StyleView({
   }, [deleteTarget, deleteMutation, t]);
 
   const handleExtract = useCallback(async () => {
-    if (selected.size === 0 || !modelKey) return;
+    if (selected.size === 0 || !selectedModel) return;
 
     if (phase === "extracting") {
       const runningTaskId = runningTaskIdRef.current;
@@ -236,9 +229,6 @@ export default function StyleView({
       setPhase("browse");
       return;
     }
-
-    const [providerName, modelID] = splitModelKey(modelKey);
-    if (!providerName || !modelID) return;
 
     const taskId =
       typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -253,8 +243,8 @@ export default function StyleView({
       const res = await ExtractStyle({
         task_id: taskId,
         sample_ids: [...selected],
-        provider_name: providerName,
-        model_id: modelID,
+        provider_name: selectedModel.ProviderName,
+        model_id: selectedModel.ModelID,
         reasoning_effort: "",
       });
       if (runningTaskIdRef.current !== taskId) return;
@@ -276,13 +266,12 @@ export default function StyleView({
         runningTaskIdRef.current = null;
       }
     }
-  }, [selected, modelKey, phase, t]);
+  }, [selected, selectedModel, phase, t]);
 
   const handleSave = useCallback(async () => {
     if (!result) return;
-    setLoading(true);
     try {
-      await SaveContent({
+      await saveMutation.mutateAsync({
         novel_id: novelId,
         path: result.filePath,
         content: result.rawContent,
@@ -292,10 +281,8 @@ export default function StyleView({
       setSelected(new Set());
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.saveFailed")));
-    } finally {
-      setLoading(false);
     }
-  }, [result, t, novelId]);
+  }, [result, saveMutation, t, novelId]);
 
   const handleUpdate = useCallback(async () => {
     if (!detailId) return;
@@ -367,10 +354,10 @@ export default function StyleView({
               </button>
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={saveMutation.isPending}
                 className="h-8 px-5 rounded-lg text-sm font-medium bg-action-save text-action-save-foreground hover:bg-action-save/80 disabled:opacity-50 transition-colors"
               >
-                {loading
+                {saveMutation.isPending
                   ? t("styleSample.saving")
                   : t("styleSample.saveToUserSkill")}
               </button>

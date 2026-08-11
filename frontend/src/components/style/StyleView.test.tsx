@@ -56,8 +56,8 @@ vi.mock("@/components/novel/useNovels", () => ({
   useNovels: () => ({ data: [] }),
 }));
 
-// 5.3 commit 3: StyleView 不再依赖 useApp，所有 wailsjs 函数直接 import。
-// mock wailsjs App：覆盖 query（List/GetStyleSample）+ mutation（Create/Update/Delete）+ 直接调用（GetModels/GetSettings/ExtractStyle/CancelExtract/SaveContent）。
+// 5.3 commit 4: model 走 useModels/useSettings query（共享 5.1 chat 缓存）+ SaveContent 走 useSaveContent mutation（5.2），废弃 splitModelKey。
+// mock wailsjs App：覆盖 query（List/GetStyleSample + GetModels/GetSettings 供 useModels/useSettings 调用）+ mutation（Create/Update/Delete + SaveContent 供 useSaveContent 调用）+ 直接调用（ExtractStyle/CancelExtract）。
 // 用 vi.hoisted 提升，让 vi.mock 工厂能引用。
 const {
   mockListStyleSamples,
@@ -83,8 +83,9 @@ const {
   },
 }));
 
-// mock wailsjs App：覆盖所有 StyleView 直接 import 的函数。
-// query + mutation + 流式/命令/非本领域调用全走 wailsjs，useApp 已移除。
+// mock wailsjs App：覆盖所有 StyleView 使用的 wailsjs 函数。
+// query（List/GetStyleSample/GetModels/GetSettings）+ mutation（Create/Update/Delete/SaveContent）+ 直接调用（ExtractStyle/CancelExtract）。
+// useModels/useSettings/useSaveContent hook 内部 import wailsjs 函数，mock 后 hook 自动调到。
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
   const mod =
     await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
