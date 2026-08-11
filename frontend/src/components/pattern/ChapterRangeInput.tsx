@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Plus, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { chapter } from "@/hooks/useApp";
+import type { chapter } from "@/lib/wailsjs/go/models";
 
 interface Props {
   chapters: chapter.Chapter[];

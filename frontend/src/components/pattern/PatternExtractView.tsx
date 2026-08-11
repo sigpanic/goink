@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { BookOpen, CheckSquare, Sparkle, Square } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
 import { useNovels } from "@/components/novel/useNovels";
-import type { chapter } from "@/hooks/useApp";
+import { useChapters } from "@/components/chapter/useChapters";
+import { useModels } from "@/components/chat/useModels";
+import { useSettings } from "@/components/chat/useSettings";
 import { createPatternTaskID } from "@/hooks/usePatternProgress";
 import PopSelect from "@/components/chat/PopSelect";
 import ChapterRangeInput from "./ChapterRangeInput";
@@ -16,11 +17,6 @@ interface Props {
 type View = "select" | "session";
 type Scope = "all" | "selected";
 
-interface ModelOption {
-  Key: string;
-  ModelName: string;
-}
-
 interface SessionParams {
   taskId: string;
   novelId: number;
@@ -31,7 +27,6 @@ interface SessionParams {
 }
 
 export default function PatternExtractView({ currentNovelId }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
   const userSelectedNovelRef = useRef(false);
   const [view, setView] = useState<View>("select");
@@ -41,11 +36,16 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   const [targetNovelId, setTargetNovelId] = useState(currentNovelId);
   // 3.9: novels 走 useNovels query（共享缓存）。refetchNovels 供 PopSelect onOpen 强制刷新。
   const { data: novels = [], refetch: refetchNovels } = useNovels();
-  const [chapters, setChapters] = useState<chapter.Chapter[]>([]);
+  // 5.3 pattern commit 1: chapters/models/settings 走 query（共享 5.1/5.2 缓存），废弃 useApp + load 三件套。
+  //   targetNovelId 变化时 useChapters 自动 refetch（queryKey 含 novelId）；novelId=0 时 enabled 守卫不 fetch，chapters 兜底空数组。
+  //   GET 错误由全局中间件接管（queryErrorToast.ts），组件不挂 console.error。
+  const { data: chapters = [] } = useChapters(targetNovelId);
+  const modelsQuery = useModels();
+  const settingsQuery = useSettings();
+  const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [scope, setScope] = useState<Scope>("all");
   const [modelKey, setModelKey] = useState("");
-  const [models, setModels] = useState<ModelOption[]>([]);
 
   useEffect(() => {
     if (!userSelectedNovelRef.current) {
@@ -53,46 +53,19 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     }
   }, [currentNovelId]);
 
+  // targetNovelId 变化时清空 selected（替代原 loadChapters useEffect 内的 setSelected(new Set())）。
   useEffect(() => {
-    let cancelled = false;
-    const chaptersPromise = targetNovelId
-      ? app.GetChapters(targetNovelId)
-      : Promise.resolve([]);
-    chaptersPromise
-      .then((list) => {
-        if (cancelled) return;
-        setChapters(list ?? []);
-        setSelected(new Set());
-      })
-      .catch((e) => {
-        if (!cancelled) console.error("Load chapters failed", e);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [app, targetNovelId]);
+    setSelected(new Set());
+  }, [targetNovelId]);
 
+  // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetModels/GetSettings fetch）。
   useEffect(() => {
-    let cancelled = false;
-    app
-      .GetModels()
-      .then((list) => {
-        if (cancelled) return;
-        if (list?.length) {
-          setModels(list);
-          app.GetSettings().then((s) => {
-            if (cancelled) return;
-            let key = s?.selected_model_key || "";
-            if (!list.find((m) => m.Key === key)) key = list[0].Key;
-            setModelKey(key);
-          });
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [app]);
+    if (!modelKey && models.length > 0 && settingsQuery.data) {
+      const key = settingsQuery.data.selected_model_key || "";
+      const found = models.find((m) => m.Key === key);
+      setModelKey(found ? key : models[0].Key);
+    }
+  }, [models, settingsQuery.data, modelKey]);
 
   const modelOptions = useMemo(
     () => models.map((m) => ({ value: m.Key, label: m.ModelName })),
