@@ -1,10 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { imp, llm, config } from "@/lib/wailsjs/go/models";
-import type { app } from "@/lib/wailsjs/go/models";
+import type { imp } from "@/lib/wailsjs/go/models";
+import {
+  ImportNovel,
+  PickAndImportNovel,
+  ImportWithLLM,
+} from "@/lib/wailsjs/go/app/App";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { toErrorMessage } from "@/utils/error";
 import { splitModelKey } from "@/utils/modelKey";
+import { useModels } from "@/components/settings/useModels";
+import { useSettings } from "@/components/settings/useSettings";
 
 export type ImportProgressStage =
   | "idle"
@@ -36,18 +42,10 @@ const INITIAL_IMPORT_PROGRESS: ImportProgressState = {
 };
 
 interface UseImportNovelOptions {
-  app: {
-    ImportNovel: (input: app.ImportNovelInput) => Promise<imp.ImportResult>;
-    PickAndImportNovel: () => Promise<imp.ImportResult>;
-    ImportWithLLM: (input: app.ImportWithLLMInput) => Promise<imp.ImportResult>;
-    GetModels: () => Promise<llm.AvailableModel[]>;
-    GetSettings: () => Promise<config.AppSettings>;
-    [key: string]: unknown;
-  };
   onImported: (result: imp.ImportResult) => Promise<void>;
 }
 
-export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
+export function useImportNovel({ onImported }: UseImportNovelOptions) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [progress, setProgress] = useState<ImportProgressState>({
@@ -62,8 +60,14 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
 
   // LLM 兜底相关状态
   const [filePath, setFilePath] = useState("");
+  // modelKey 是可变 state（用户可手动切换模型），需本地一份；
+  // models 列表只读，直接用 useModels query data，不再同步到本地 state。
   const [modelKey, setModelKey] = useState("");
-  const [models, setModels] = useState<llm.AvailableModel[]>([]);
+
+  // 5.9: 模型列表 + 当前选中模型走 query hook（useModels 5.1 / useSettings 5.8），
+  // 替代原 useEffect 命令式 app.GetModels + app.GetSettings。删 app 参数后不再依赖 useApp。
+  const { data: modelsData = [] } = useModels();
+  const { data: settingsData } = useSettings();
 
   useEffect(() => {
     const unsubscribe = EventsOn(
@@ -85,28 +89,14 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
     return unsubscribe;
   }, []);
 
-  // 加载模型列表
+  // modelKey 选中态：query data ready 后从 settings 回填。
+  // 原命令式 app.GetModels().then + app.GetSettings().then 改用 query 缓存，
+  // 30s staleTime 内命中缓存不重复 fetch。
   useEffect(() => {
-    let cancelled = false;
-    app
-      .GetModels()
-      .then((list) => {
-        if (cancelled) return;
-        if (list?.length) {
-          setModels(list);
-          app.GetSettings().then((s) => {
-            if (cancelled) return;
-            let key = s?.selected_model_key || "";
-            if (!list.find((m) => m.Key === key)) key = list[0].Key;
-            setModelKey(key);
-          });
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [app]);
+    if (!modelsData?.length) return;
+    const key = settingsData?.selected_model_key || "";
+    setModelKey(modelsData.find((m) => m.Key === key) ? key : modelsData[0].Key);
+  }, [modelsData, settingsData]);
 
   const reset = useCallback(() => {
     setOpen(false);
@@ -133,8 +123,8 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
       let result: imp.ImportResult | null;
       try {
         result = fp
-          ? await app.ImportNovel({ file_path: fp })
-          : await app.PickAndImportNovel();
+          ? await ImportNovel({ file_path: fp })
+          : await PickAndImportNovel();
       } catch (err: unknown) {
         setProgress((prev) => ({
           ...prev,
@@ -175,7 +165,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
         setError(toErrorMessage(err, t("novel.importFailedRetry")));
       }
     },
-    [app, onImported, reset, t],
+    [onImported, reset, t],
   );
 
   // 用户点"AI 分析"→ 调 ImportWithLLM，LLM 分析后直接导入
@@ -193,7 +183,7 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
     }));
 
     try {
-      const result = await app.ImportWithLLM({
+      const result = await ImportWithLLM({
         file_path: filePath,
         provider_name: providerName,
         model_id: modelID,
@@ -214,9 +204,10 @@ export function useImportNovel({ app, onImported }: UseImportNovelOptions) {
       }));
       setError(toErrorMessage(err, t("novel.importFailedRetry")));
     }
-  }, [app, filePath, modelKey, onImported, t]);
+  }, [filePath, modelKey, onImported, t]);
 
-  const modelOptions = models.map((m) => ({
+  // modelOptions 直接用 query data（modelsData），不再同步到本地 state。
+  const modelOptions = modelsData.map((m) => ({
     value: m.Key,
     label: m.ModelName,
   }));

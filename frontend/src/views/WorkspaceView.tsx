@@ -210,7 +210,7 @@ export default function WorkspaceView({
     [queryClient, switchToNovel],
   );
 
-  const importNovel = useImportNovel({ app, onImported: handleImportedNovel });
+  const importNovel = useImportNovel({ onImported: handleImportedNovel });
 
   // ── SidePanel → ContentPanel 桥接 ─────────────────────────
 
