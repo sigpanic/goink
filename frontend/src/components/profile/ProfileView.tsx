@@ -1,20 +1,20 @@
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
-import { useApp } from "@/hooks/useApp";
 import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
 import { toErrorMessage } from "@/utils/error";
 import { useWritingActivity } from "./useWritingActivity";
 import { useWritingStats } from "./useWritingStats";
 import { useProfileSettings } from "./useProfileSettings";
-import { settingsKeys } from "@/lib/queryKeys";
+import { useSaveAvatar } from "./useSaveAvatar";
+import { useSaveUserName } from "./useSaveUserName";
 
 export default function ProfileView() {
-  // 5.7 commit 2 会删 useApp（SaveAvatar/SaveUserName 改 mutation 后清零）
-  const app = useApp();
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
+  // 5.7 commit 2: SaveAvatar/SaveUserName 改 mutation（删 useApp）。
+  // invalidate settingsKeys.all 由 useSaveUserName onSuccess 接管。
+  const saveAvatar = useSaveAvatar();
+  const saveUserName = useSaveUserName();
 
   // 5.7 commit 1: 3 GET query 化（删 load 三件套 + useEffect + Promise.all）。
   // activity/stats/settings 各自独立 query，isLoading/isError 合并三态。
@@ -62,7 +62,7 @@ export default function ProfileView() {
     e.target.value = "";
     try {
       const buf = await file.arrayBuffer();
-      await app.SaveAvatar(Array.from(new Uint8Array(buf)));
+      await saveAvatar.mutateAsync(Array.from(new Uint8Array(buf)));
       setAvatarErrored(false);
       setAvatarKey((prev) => prev + 1);
       setAvatarError("");
@@ -75,11 +75,9 @@ export default function ProfileView() {
     const name = nameDraft.trim();
     if (name && name !== settings?.user_name) {
       try {
-        await app.SaveUserName(name);
-        // 5.7 commit 1: invalidate settingsKeys.all 让 useProfileSettings refetch
-        // 拿新 user_name（替代原 setSettings 局部更新；settingsKeys.all 与 chat
-        // 共享缓存，一起刷新，chat 不读 user_name 不受影响）。
-        queryClient.invalidateQueries({ queryKey: settingsKeys.all });
+        await saveUserName.mutateAsync(name);
+        // invalidate settingsKeys.all 由 useSaveUserName onSuccess 接管
+        // （useProfileSettings 自动 refetch 拿新 user_name）。
         setNameError("");
       } catch (err) {
         setNameError(toErrorMessage(err));
