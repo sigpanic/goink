@@ -24,8 +24,11 @@
 ### 5.8 settings 收尾（1 commit）
 - [ ] commit 1: useSaveGitConfig + useRebuildNovelIndex + useTestConnection mutation + 删 useApp
 
-### 5.9 命令式调用收尾（1 commit）
-- [ ] commit 1: WorkspaceView/App/InitView 命令式调用改直接 import wailsjs + SaveCover mutation 化
+### 5.9 命令式调用收尾（4 commit）
+- [ ] commit 1: useSaveCover mutation + WorkspaceView SaveCover 改 mutation
+- [ ] commit 2: App.tsx + InitView.tsx 删 useApp（启动入口命令改直接 import）
+- [ ] commit 3: useImportNovel 删 app 参数（命令改直接 import + GetModels/GetSettings 改用现成 query hook）
+- [ ] commit 4: WorkspaceView 删 useApp（GetPlatform/ApproveTool/SetActiveNovel + switchNovel + 测试 mock 迁移）
 
 ### 5.10 类型 import 迁移 + 删 useApp.ts（1 commit）
 - [ ] commit 1: 类型 import 全量迁移 `@/hooks/useApp` → `@/lib/wailsjs/go/models` + 删 useApp.ts
@@ -169,10 +172,11 @@
 
 ## 5.9 命令式调用收尾
 
-**现状调研**（2026-08-11 核对）：
-- `App.tsx`：useApp 调 GetSettings（启动检查）
+**现状调研**（2026-08-11 核对，5.9 执行前复核）：
+- `App.tsx`：useApp 调 IsInitialized（启动检查）+ 2× GetSettings（启动 effect L25 + onInitialized 回调 L67，后者无 try/catch）
 - `InitView.tsx`：useApp 调 GetPlatform / Initialize
-- `WorkspaceView.tsx`：useApp 调 GetPlatform / ApproveTool / SetActiveNovel / SaveCover
+- `WorkspaceView.tsx`：useApp 调 GetPlatform / 2× ApproveTool（handleApprove+handleReject，均无 try/catch）/ SetActiveNovel（L257 自动选小说 effect 冗余调用）/ SaveCover（L347 无 try/catch 且无 invalidate）
+- `useImportNovel.ts`：接收 `app` 参数（L38-48 结构化接口），内部用 app.ImportNovel / PickAndImportNovel / ImportWithLLM（命令操作，无 query hook）+ app.GetModels / GetSettings（已有现成 query hook：useModels 5.1 / useSettings 5.8，应改用 hook）。WorkspaceView L208 `useImportNovel({ app, onImported })` 是唯一消费方，删 useApp 前必须先处理此依赖
 - `NovelDialogs.tsx`：直接 import ExportNovel（命令，已不走 useApp）✅
 - `UpdateDialog.tsx`：直接 import DismissUpdate（命令）✅
 
@@ -183,11 +187,14 @@
 4. **ApproveTool 是命令操作**：保留 try/catch + toastError，直接 import wailsjs
 
 **改动文件**：
-- `frontend/src/App.tsx`（删 useApp，GetSettings 改直接 import wailsjs）
-- `frontend/src/views/InitView.tsx`（删 useApp，GetPlatform/Initialize 改直接 import wailsjs）
-- `frontend/src/views/WorkspaceView.tsx`（删 useApp，GetPlatform/ApproveTool/SetActiveNovel 改直接 import wailsjs 或 switchNovel；SaveCover mutation 化）
-- 新增 `frontend/src/components/novel/useSaveCover.ts`（mutation）
+- `frontend/src/App.tsx`（删 useApp，IsInitialized/GetSettings 改直接 import wailsjs；L67 onInitialized 回调补 try/catch + toastError）
+- `frontend/src/views/InitView.tsx`（删 useApp，GetPlatform/Initialize 改直接 import wailsjs，保持现有错误处理）
+- `frontend/src/views/WorkspaceView.tsx`（删 useApp，GetPlatform/ApproveTool 改直接 import wailsjs + 补 try/catch+toastError；SetActiveNovel 改 switchNovel；SaveCover 改 useSaveCover mutateAsync；L208 useImportNovel 调用删 app 参数）
+- `frontend/src/hooks/useImportNovel.ts`（删 app 参数，ImportNovel/PickAndImportNovel/ImportWithLLM 改直接 import wailsjs；GetModels/GetSettings 改用 useModels/useSettings query hook）
+- 新增 `frontend/src/components/novel/useSaveCover.ts`（mutation，onSuccess invalidate novelKeys.all）
 - `frontend/src/lib/queryKeys.ts`（无新增，novelKeys 已存在）
+- `frontend/src/i18n/locales/zh-CN.json` + `en.json`（新增 approval 命名空间：approveFailed/rejectFailed；novel.coverSaveFailed 已存在；chat.settingsLoadFailed 已存在复用）
+- `frontend/src/views/WorkspaceView.test.tsx`（mock 迁移：mockGetPlatform/mockApproveTool 移到 wailsjs mock，删 useApp mock 整块，18 用例断言不变）
 
 **改造要求清单**：
 
@@ -195,11 +202,13 @@
 
 | 类别 | API | 文件 | 处理 |
 |---|---|---|---|
-| 保留命令式（直接 import） | GetSettings | App.tsx | 启动检查，直接 import wailsjs |
-| 保留命令式（直接 import） | GetPlatform / Initialize | InitView.tsx | 启动逻辑，直接 import wailsjs |
-| 保留命令式（直接 import） | GetPlatform / ApproveTool | WorkspaceView.tsx | 命令操作，直接 import wailsjs + try/catch |
+| 保留命令式（直接 import） | IsInitialized / GetSettings | App.tsx | 启动检查，直接 import wailsjs；L67 GetSettings 补 try/catch + toastError（chat.settingsLoadFailed） |
+| 保留命令式（直接 import） | GetPlatform / Initialize | InitView.tsx | 启动逻辑，直接 import wailsjs（保持现有错误处理） |
+| 保留命令式（直接 import） | GetPlatform / ApproveTool | WorkspaceView.tsx | 命令操作，直接 import wailsjs + 补 try/catch + toastError（approval 命名空间） |
 | 改用 store action | SetActiveNovel | WorkspaceView.tsx | 改用 useNovelStore.switchNovel（已封装 SetActiveNovel） |
-| 迁 mutation | SaveCover | WorkspaceView.tsx | useSaveCover；onSuccess invalidate novelKeys |
+| 迁 mutation | SaveCover | WorkspaceView.tsx | useSaveCover；onSuccess invalidate novelKeys；调用方 try/catch + toastError（novel.coverSaveFailed） |
+| 保留命令式（直接 import） | ImportNovel / PickAndImportNovel / ImportWithLLM | useImportNovel.ts | 命令操作，直接 import wailsjs |
+| 改用 query hook | GetModels / GetSettings | useImportNovel.ts | 改用 useModels / useSettings（5.1/5.8 已有，替代 useEffect 命令式加载） |
 
 ### B. 错误处理
 
@@ -218,10 +227,25 @@
 
 ### commit 拆分
 
-**commit 1: 命令式调用改直接 import wailsjs + SaveCover mutation + 删 useApp**
-- `refactor(core): switch remaining commands to direct wailsjs imports and drop useApp`
-- App/InitView/WorkspaceView 删 useApp + GetPlatform/ApproveTool/Initialize/GetSettings 改直接 import wailsjs + SetActiveNovel 改 switchNovel + SaveCover mutation 化 + useSaveCover 新增
-- 风险：WorkspaceView 启动时序；SaveCover invalidate novelKeys 与自动选小说 effect 的交互
+**commit 1: useSaveCover mutation + WorkspaceView SaveCover 改 mutation**
+- `feat(novel): add useSaveCover mutation and migrate SaveCover call`
+- 新增 useSaveCover.ts（{novelId, cover} 解构，onSuccess invalidate novelKeys.all）+ WorkspaceView handleSaveCover 改 mutateAsync + 补 try/catch + toastError（novel.coverSaveFailed 已存在）+ 保留 arrayBuffer 转 number[] 逻辑
+- 风险：低。SaveCover invalidate novelKeys 让 useNovels refetch，需确认与自动选小说 effect 不循环（novels 已含当前小说，find 成功不触发 SetActiveNovel）
+
+**commit 2: App.tsx + InitView.tsx 删 useApp（启动入口）**
+- `refactor(core): switch App and InitView startup commands to direct wailsjs imports`
+- App.tsx 删 useApp + IsInitialized/2×GetSettings 改直接 import wailsjs + L67 onInitialized 回调补 try/catch + toastError（复用 chat.settingsLoadFailed）+ InitView.tsx 删 useApp + GetPlatform/Initialize 改直接 import wailsjs（保持现有错误处理：GetPlatform 静默、Initialize setError）
+- 风险：低。启动一次性命令，无缓存复用需求；L67 补 try/catch 是行为增强（原裸 await 异常冒泡，现 toast 提示）
+
+**commit 3: useImportNovel 删 app 参数**
+- `refactor(novel): drop app parameter from useImportNovel and use query hooks`
+- useImportNovel.ts 删 app 参数 + ImportNovel/PickAndImportNovel/ImportWithLLM 改直接 import wailsjs + GetModels/GetSettings 改用 useModels/useSettings query hook（替代 useEffect 命令式加载）+ WorkspaceView L208 调用点删 app 参数
+- 风险：中。useModels/useSettings 是 query hook，data ready 时机与原命令式 .then 不同（query 有 30s staleTime 缓存命中可能立即 ready，首次加载需等 fetch）；需确认 modelKey 设置逻辑在 query data ready 后触发，不丢失
+
+**commit 4: WorkspaceView 删 useApp（GetPlatform/ApproveTool/SetActiveNovel）**
+- `refactor(core): drop useApp from WorkspaceView and migrate remaining commands`
+- WorkspaceView 删 useApp import + const app + GetPlatform/2×ApproveTool 改直接 import wailsjs + 补 try/catch + toastError（新增 approval 命名空间 approveFailed/rejectFailed）+ L257 SetActiveNovel 改 switchNovel + WorkspaceView.test.tsx mock 迁移（mockGetPlatform/mockApproveTool 移到 wailsjs mock，删 useApp mock 整块）
+- 风险：中。L257 改 switchNovel 后 effect 内调用变 await（原裸调用未 await），需确认 effect 依赖数组不变（仍 [novels]）不引入循环；测试 18 用例 mock 迁移后断言不变
 
 ---
 

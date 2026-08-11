@@ -51,8 +51,11 @@ import { useFocusStore } from "@/stores/useFocusStore";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useCreateNovel } from "@/components/novel/useCreateNovel";
+import { useSaveCover } from "@/components/novel/useSaveCover";
 import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
+import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -96,6 +99,8 @@ export default function WorkspaceView({
   // 3.3: 创建小说 mutation。onSuccess 失效 novelKeys.all；
   // handleCreateNovel（SidePanel 内联表单）专用，dialog 路径的 createNovel 实例在 NovelDialogs。
   const createNovel = useCreateNovel();
+  // 5.9: 保存封面 mutation。onSuccess invalidate novelKeys.all 让 useNovels refetch 拿新封面。
+  const saveCover = useSaveCover();
   // activePanel/sidebarPanel/sidebarClosed 外置到 usePanelStore（2.7）。
   // 用 selector 订阅（而非整体解构）：actions 引用稳定不触发 re-render；
   // activePanel 等值变化才 re-render，避免同值 set 引发的循环。
@@ -344,7 +349,14 @@ export default function WorkspaceView({
 
   async function handleSaveCover(novelID: number, file: File) {
     const buf = await file.arrayBuffer();
-    await app.SaveCover(novelID, Array.from(new Uint8Array(buf)));
+    try {
+      await saveCover.mutateAsync({
+        novelId: novelID,
+        cover: Array.from(new Uint8Array(buf)),
+      });
+    } catch (err) {
+      toastError(toErrorMessage(err, t("novel.coverSaveFailed")));
+    }
   }
 
   const activeNovel = novels.find((n) => n.id === activeNovelId);
