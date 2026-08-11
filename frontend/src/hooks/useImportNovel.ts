@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import type { imp } from "@/lib/wailsjs/go/models";
+import type { imp, llm } from "@/lib/wailsjs/go/models";
 import {
   ImportNovel,
   PickAndImportNovel,
@@ -8,7 +8,6 @@ import {
 } from "@/lib/wailsjs/go/app/App";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { toErrorMessage } from "@/utils/error";
-import { splitModelKey } from "@/utils/modelKey";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 
@@ -60,9 +59,11 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
 
   // LLM 兜底相关状态
   const [filePath, setFilePath] = useState("");
-  // modelKey 是可变 state（用户可手动切换模型），需本地一份；
-  // models 列表只读，直接用 useModels query data，不再同步到本地 state。
-  const [modelKey, setModelKey] = useState("");
+  // selectedModel 存结构化 AvailableModel 对象（含 ProviderName/ModelID），
+  // 替代原 modelKey 字符串 + splitModelKey 拆串。models 列表只读走 query data。
+  const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
+    null,
+  );
 
   // 5.9: 模型列表 + 当前选中模型走 query hook（useModels 5.1 / useSettings 5.8），
   // 替代原 useEffect 命令式 app.GetModels + app.GetSettings。删 app 参数后不再依赖 useApp。
@@ -89,13 +90,15 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
     return unsubscribe;
   }, []);
 
-  // modelKey 选中态：query data ready 后从 settings 回填。
+  // selectedModel 选中态：query data ready 后从 settings 回填。
   // 原命令式 app.GetModels().then + app.GetSettings().then 改用 query 缓存，
   // 30s staleTime 内命中缓存不重复 fetch。
   useEffect(() => {
     if (!modelsData?.length) return;
     const key = settingsData?.selected_model_key || "";
-    setModelKey(modelsData.find((m) => m.Key === key) ? key : modelsData[0].Key);
+    setSelectedModel(
+      modelsData.find((m) => m.Key === key) ?? modelsData[0] ?? null,
+    );
   }, [modelsData, settingsData]);
 
   const reset = useCallback(() => {
@@ -169,9 +172,10 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
   );
 
   // 用户点"AI 分析"→ 调 ImportWithLLM，LLM 分析后直接导入
+  // 结构化入参：直接取 selectedModel.ProviderName/ModelID，不再 splitModelKey 拆串。
   const startLLMImport = useCallback(async () => {
-    if (!filePath || !modelKey) return;
-    const [providerName, modelID] = splitModelKey(modelKey);
+    if (!filePath || !selectedModel) return;
+    const { ProviderName: providerName, ModelID: modelID } = selectedModel;
     if (!providerName || !modelID) return;
 
     setError("");
@@ -204,20 +208,16 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
       }));
       setError(toErrorMessage(err, t("novel.importFailedRetry")));
     }
-  }, [filePath, modelKey, onImported, t]);
+  }, [filePath, selectedModel, onImported, t]);
 
-  // modelOptions 直接用 query data（modelsData），不再同步到本地 state。
-  const modelOptions = modelsData.map((m) => ({
-    value: m.Key,
-    label: m.ModelName,
-  }));
-
+  // 对外暴露结构化 selectedModel + models 列表 + onModelChange，
+  // ImportProgressDialog 用 models 构建下拉、onChange 内部 find 转 onModelChange。
   return {
     startImport,
     startLLMImport,
-    modelKey,
-    setModelKey,
-    modelOptions,
+    selectedModel,
+    models: modelsData,
+    onModelChange: (model: llm.AvailableModel) => setSelectedModel(model),
     dialogProps: {
       open,
       progress,

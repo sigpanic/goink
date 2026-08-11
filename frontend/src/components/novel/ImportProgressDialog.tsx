@@ -10,12 +10,8 @@ import type {
   ImportProgressStage,
   ImportProgressState,
 } from "@/hooks/useImportNovel";
+import type { llm } from "@/lib/wailsjs/go/models";
 import PopSelect from "@/components/chat/PopSelect";
-
-interface ModelOption {
-  value: string;
-  label: string;
-}
 
 interface Props {
   open: boolean;
@@ -23,9 +19,9 @@ interface Props {
   error: string;
   skippedCount: number;
   skippedChapters: { title: string; reason: string }[];
-  modelKey: string;
-  setModelKey: (key: string) => void;
-  modelOptions: ModelOption[];
+  selectedModel: llm.AvailableModel | null;
+  models: llm.AvailableModel[];
+  onModelChange: (model: llm.AvailableModel) => void;
   onStartLLM: () => void;
   onClose: () => void;
 }
@@ -36,9 +32,9 @@ export default function ImportProgressDialog({
   error,
   skippedCount,
   skippedChapters,
-  modelKey,
-  setModelKey,
-  modelOptions,
+  selectedModel,
+  models,
+  onModelChange,
   onStartLLM,
   onClose,
 }: Props) {
@@ -159,9 +155,15 @@ export default function ImportProgressDialog({
                 {t("novel.importModel")}
               </span>
               <PopSelect
-                value={modelKey}
-                options={modelOptions}
-                onChange={setModelKey}
+                value={selectedModel?.Key ?? ""}
+                options={models.map((m) => ({
+                  value: m.Key,
+                  label: m.ModelName,
+                }))}
+                onChange={(key) => {
+                  const model = models.find((m) => m.Key === key);
+                  if (model) onModelChange(model);
+                }}
                 minWidth="180px"
                 dropUp={false}
               />
@@ -175,7 +177,7 @@ export default function ImportProgressDialog({
               </button>
               <button
                 onClick={onStartLLM}
-                disabled={!modelKey}
+                disabled={!selectedModel}
                 className="h-9 rounded-md bg-primary px-4 text-sm text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
               >
                 {t("novel.importAnalyzeBtn")}

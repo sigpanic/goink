@@ -568,9 +568,9 @@ export default function WorkspaceView({
 
         <ImportProgressDialog
           {...importNovel.dialogProps}
-          modelKey={importNovel.modelKey}
-          setModelKey={importNovel.setModelKey}
-          modelOptions={importNovel.modelOptions}
+          selectedModel={importNovel.selectedModel}
+          models={importNovel.models}
+          onModelChange={importNovel.onModelChange}
           onStartLLM={importNovel.startLLMImport}
         />
 
