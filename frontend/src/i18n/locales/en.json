@@ -821,7 +821,10 @@
     "filesChanged_one": "{{count}} file changed",
     "filesChanged_other": "{{count}} files changed",
     "expandCommitFailed": "Failed to expand commit details",
-    "loadDiffFailed": "Failed to load diff"
+    "loadDiffFailed": "Failed to load diff",
+    "commitsLoadFailed": "Failed to load commit history",
+    "commitFilesLoadFailed": "Failed to load commit files",
+    "fileDiffLoadFailed": "Failed to load file diff"
   },
   "skill": {
     "skills": "Skills",

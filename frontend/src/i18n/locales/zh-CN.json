@@ -797,7 +797,10 @@
     "noCommitMessage": "（无提交信息）",
     "filesChanged": "{{count}} 个文件变更",
     "expandCommitFailed": "展开提交详情失败",
-    "loadDiffFailed": "加载差异失败"
+    "loadDiffFailed": "加载差异失败",
+    "commitsLoadFailed": "提交历史加载失败",
+    "commitFilesLoadFailed": "提交文件列表加载失败",
+    "fileDiffLoadFailed": "文件差异加载失败"
   },
   "skill": {
     "skills": "技能",

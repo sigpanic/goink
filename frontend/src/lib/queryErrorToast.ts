@@ -40,6 +40,10 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // 5.4 commit 3：SkillMarketplace 远程技能（apperr 新 API，unwrapResult throw 触发中间件）
   "remote-skills": "skill.marketplace.loadFailed",
   "remote-skill-content": "skill.marketplace.contentLoadFailed",
+  // 5.4 commit 5：git 领域 GET 端点（GetCommitLog/GetCommitFileList/GetFileDiff）
+  "git-commits": "git.commitsLoadFailed",
+  "commit-files": "git.commitFilesLoadFailed",
+  "file-diff": "git.fileDiffLoadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。

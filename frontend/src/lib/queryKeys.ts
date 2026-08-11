@@ -141,3 +141,25 @@ export const sessionKeys = {
   // detail: session_id 是 string（修原 number 类型 bug）。
   detail: (id: string) => ["session", id] as const,
 };
+
+// 5.4 commit 5：git 领域 query key。
+// git 提交历史走游标分页（afterHash），不进 key；commitFiles/fileDiff 按 hash+filePath 拉取。
+export const gitCommitKeys = {
+  // infiniteList: GetCommitLog 游标分页（GitHistoryList size=50）。
+  // pageParam 是 afterHash 字符串（git log 天然分页方式），不进 key；
+  // size 进 key 以区分不同分页大小的缓存。
+  infiniteList: (novelId: number, size: number) =>
+    ["git-commits", novelId, size] as const,
+};
+
+export const commitFileKeys = {
+  // list: GetCommitFileList(novelId, hash)，展开 commit 时按需拉取文件列表。
+  list: (novelId: number, hash: string) =>
+    ["commit-files", novelId, hash] as const,
+};
+
+export const fileDiffKeys = {
+  // detail: GetFileDiff(novelId, hash, filePath)，选中文件时按需拉取 diff。
+  detail: (novelId: number, hash: string, filePath: string) =>
+    ["file-diff", novelId, hash, filePath] as const,
+};
