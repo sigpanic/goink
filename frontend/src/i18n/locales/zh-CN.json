@@ -245,6 +245,7 @@
     "nickname": "昵称",
     "email": "邮箱",
     "saveFailed": "保存失败",
+    "loadFailed": "加载配置失败",
     "llmConfigLoadFailed": "加载模型配置失败",
     "maintenance": "维护",
     "rebuildIndexDesc": "搜索异常时，可重建指定小说的向量索引。",

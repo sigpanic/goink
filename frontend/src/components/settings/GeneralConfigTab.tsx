@@ -10,24 +10,25 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import {
-  SaveGitConfig,
-  GetVersion,
-  CheckUpdate,
-} from "@/lib/wailsjs/go/app/App";
+import { GetVersion, CheckUpdate, GetAppConfig } from "@/lib/wailsjs/go/app/App";
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
-import { useApp } from "@/hooks/useApp";
 import { useNovels } from "@/components/novel/useNovels";
+import { useSettings } from "@/components/settings/useSettings";
+import { useSaveGitConfig } from "./useSaveGitConfig";
+import { useRebuildNovelIndex } from "./useRebuildNovelIndex";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 
 export default function GeneralConfigTab() {
-  const app = useApp();
   const { t, i18n } = useTranslation();
   const [dataDir, setDataDir] = useState("");
   // 3.9: novels 走 useNovels query（共享缓存）。
   const { data: novels = [] } = useNovels();
+  // 5.8: settings 走 useSettings query（与 chat/profile 共享 settingsKeys.all 缓存）。
+  const settingsQuery = useSettings();
+  const saveGitMutation = useSaveGitConfig();
+  const rebuildMutation = useRebuildNovelIndex();
   const [selectedID, setSelectedID] = useState<number>(0);
   const [rebuilding, setRebuilding] = useState(false);
   const [gitName, setGitName] = useState("");
@@ -42,32 +43,39 @@ export default function GeneralConfigTab() {
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [showUpdateDialog, setShowUpdateDialog] = useState(false);
 
+  // GetAppConfig: 直接 import wailsjs（无结构化类型，启动读一次，query 化收益低）。
+  // 失败时 toast 提示（原静默吞错违反规则 9），dataDir 保持空字符串 UI 正常渲染。
+  // GetVersion: 直接 import wailsjs，低频 GET，保留命令式。
   useEffect(() => {
-    app
-      .GetAppConfig()
+    GetAppConfig()
       .then((cfg) => {
         setDataDir((cfg?.data_dir as string) || "");
       })
-      .catch(() => {});
-    app
-      .GetSettings()
-      .then((s) => {
-        if (s?.last_novel_id) setSelectedID(s.last_novel_id);
-        if (s?.git_name) setGitName(s.git_name);
-        if (s?.git_email) setGitEmail(s.git_email);
-      })
-      .catch(() => {});
+      .catch((err) => {
+        toastError(toErrorMessage(err, t("settings.loadFailed")));
+      });
     GetVersion()
       .then((v) => setAppVersion(v || "dev"))
       .catch(() => {});
-  }, [app]);
+  }, [t]);
+
+  // GetSettings: 复用 useSettings query（与 chat/profile 共享 settingsKeys.all 缓存）。
+  // query data ready 后回填 selectedID/gitName/gitEmail。
+  // GET 错误由全局中间件接管（settings 前缀 → chat.settingsLoadFailed），不在此处理。
+  useEffect(() => {
+    const s = settingsQuery.data;
+    if (!s) return;
+    if (s.last_novel_id) setSelectedID(s.last_novel_id);
+    if (s.git_name) setGitName(s.git_name);
+    if (s.git_email) setGitEmail(s.git_email);
+  }, [settingsQuery.data]);
 
   async function handleSaveGit() {
     setGitSaving(true);
     setGitSaved(false);
     setGitError(null);
     try {
-      await SaveGitConfig(gitName, gitEmail);
+      await saveGitMutation.mutateAsync({ gitName, gitEmail });
       setGitSaved(true);
       setTimeout(() => setGitSaved(false), 2000);
     } catch (err) {
@@ -81,7 +89,7 @@ export default function GeneralConfigTab() {
     if (!selectedID) return;
     setRebuilding(true);
     try {
-      await app.RebuildNovelIndex(selectedID);
+      await rebuildMutation.mutateAsync(selectedID);
     } catch (err) {
       console.error("Rebuild failed:", err);
       toastError(toErrorMessage(err, t("settings.rebuildFailed")));
