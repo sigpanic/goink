@@ -1,6 +1,7 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useInView } from "react-intersection-observer";
 import SearchInput from "@/components/shared/SearchInput";
 import { useInfiniteStyleSamples } from "./useInfiniteStyleSamples";
 
@@ -20,7 +21,8 @@ export default function StyleSampleList({
   const { t } = useTranslation();
   const [search, setSearch] = useState("");
   const [submittedSearch, setSubmittedSearch] = useState("");
-  const listRef = useRef<HTMLDivElement>(null);
+  // 无限滚动：sentinel 进入视口时拉下一页（react-intersection-observer useInView）
+  const { ref: sentinelRef, inView } = useInView({ rootMargin: "100px" });
 
   // 5.3 commit 1: samples 走 useInfiniteStyleSamples query（不再 useApp.ListStyleSamples + loadPageRef 三件套）。
   // page 由 useInfiniteQuery 的 pageParam 管理（不进 queryKey）；submittedSearch 变化触发新 query。
@@ -53,13 +55,12 @@ export default function StyleSampleList({
     return () => clearTimeout(timer);
   }, [search]);
 
-  const handleScroll = useCallback(() => {
-    if (!listRef.current || !hasMore || isFetchingMore) return;
-    const { scrollTop, scrollHeight, clientHeight } = listRef.current;
-    if (scrollHeight - scrollTop - clientHeight < 80) {
+  // 无限滚动：sentinel 进入视口时拉下一页（替代原手写 scroll 事件 + 距离判断）
+  useEffect(() => {
+    if (inView && hasMore && !isFetchingMore) {
       samplesQuery.fetchNextPage();
     }
-  }, [hasMore, isFetchingMore, samplesQuery]);
+  }, [inView, hasMore, isFetchingMore, samplesQuery]);
 
   return (
     <>
@@ -75,11 +76,7 @@ export default function StyleSampleList({
           placeholder={t("styleSample.searchPlaceholder")}
         />
       </div>
-      <div
-        ref={listRef}
-        onScroll={handleScroll}
-        className="flex-1 overflow-y-auto overscroll-contain"
-      >
+      <div className="flex-1 overflow-y-auto overscroll-contain">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
             {t("styleSample.loading")}
@@ -116,6 +113,8 @@ export default function StyleSampleList({
                 <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
               </div>
             )}
+            {/* 无限滚动 sentinel：进入视口时触发 fetchNextPage */}
+            <div ref={sentinelRef} className="h-4" />
           </>
         )}
       </div>
