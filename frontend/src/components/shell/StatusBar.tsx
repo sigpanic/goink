@@ -1,10 +1,8 @@
 import { useMemo, useState, useRef } from "react";
 import { useTranslation } from "react-i18next";
+import { useEditorStore } from "@/stores/useEditorStore";
 
-interface Props {
-  content: string;
-  isDirty?: boolean;
-}
+// 3.8 后续：content/isDirty 迁 useEditorStore，StatusBar 自己订阅（原由 WorkspaceView 透传 props）。
 
 interface DetailedStats {
   wordCount: number;
@@ -72,8 +70,10 @@ function computeStats(text: string): DetailedStats {
   };
 }
 
-export default function StatusBar({ content, isDirty }: Props) {
+export default function StatusBar() {
   const { t } = useTranslation();
+  const content = useEditorStore((s) => s.activeContent);
+  const isDirty = useEditorStore((s) => s.isDirty);
   const stats = useMemo(() => computeStats(content), [content]);
   const [showDetail, setShowDetail] = useState(false);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | null>(null);

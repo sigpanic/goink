@@ -11,10 +11,10 @@ import { chapterKeys, maxChapterKeys } from "@/lib/queryKeys";
 import { useChapters } from "./useChapters";
 import { useCreateChapter } from "./useCreateChapter";
 import { useUpdateChapterTitle } from "./useUpdateChapterTitle";
+import { useEditorStore } from "@/stores/useEditorStore";
 
 interface Props {
   novelId: number;
-  target: { path: string; title: string } | null;
   onSelectChapter: (ch: chapter.Chapter) => void;
   onSelectGoink: () => void;
   onExportNovel: () => void;
@@ -24,13 +24,14 @@ const BLOCK_SIZE = 100;
 
 export default function ChapterList({
   novelId,
-  target,
   onSelectChapter,
   onSelectGoink,
   onExportNovel,
 }: Props) {
   const { t } = useTranslation();
   const qc = useQueryClient();
+  // 3.8 后续：target 迁 useEditorStore，ChapterList 自己订阅 tabTarget（高亮选中章节/goink）。
+  const target = useEditorStore((s) => s.tabTarget);
 
   // 5.2 commit 1: GetChapters 走 query（直接 import wailsjs，不用 useApp）。
   // query 错误走全局中间件，组件加 isError 内连显示 + retry（对齐 ReaderList/PreferenceList）。

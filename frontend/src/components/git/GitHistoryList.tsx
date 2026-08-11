@@ -16,15 +16,15 @@ import GitCommitTooltip from "./GitCommitTooltip";
 import { useInfiniteCommitLog } from "./useInfiniteCommitLog";
 import { useCommitFiles } from "./useCommitFiles";
 import { useFileDiff } from "./useFileDiff";
+import { useGitStore } from "./useGitStore";
 
 interface Props {
   novelId: number;
-  onSelectFile: (file: git.FileDiff) => void;
 }
 
 const PAGE_SIZE = 50;
 
-export default function GitHistoryList({ novelId, onSelectFile }: Props) {
+export default function GitHistoryList({ novelId }: Props) {
   const { t, i18n } = useTranslation();
   // 相对时间：每分钟自动刷新
   const timeAgo = useTimeAgo();
@@ -44,12 +44,8 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
   // 无限滚动：sentinel 进入视口时拉下一页（react-intersection-observer useInView）
   const { ref: sentinelRef, inView } = useInView({ rootMargin: "100px" });
 
-  // 父组件 handleSelectGitFile 未 useCallback 包装，引用每次 render 都变，
-  // 用 ref 包避免 useEffect 依赖 onSelectFile 重复触发（Dan Abramov 推荐模式）。
-  const onSelectFileRef = useRef(onSelectFile);
-  useEffect(() => {
-    onSelectFileRef.current = onSelectFile;
-  });
+  // 3.8 后续：selectedGitFile 迁 useGitStore，直接调 getState().setSelectedGitFile，
+  // 无需 ref 包（getState 引用稳定），GitCommitView 自己订阅。
 
   // 提交历史无限滚动 query（游标分页：afterHash）
   const commitsQuery = useInfiniteCommitLog({
@@ -77,10 +73,11 @@ export default function GitHistoryList({ novelId, onSelectFile }: Props) {
     }
   }, [expandedHash, commitFilesQuery.data]);
 
-  // diff 数据返回后上传父组件 GitCommitView（用 ref 包避免 onSelectFile 引用变化重复触发）
+  // diff 数据返回后写 useGitStore（GitCommitView 订阅渲染，3.8 后续迁 store）
   useEffect(() => {
     if (fileDiffQuery.data && expandedHash && selectedFilePath) {
-      onSelectFileRef.current(fileDiffQuery.data);
+      // 3.8 后续：selectedGitFile 迁 useGitStore，GitCommitView 自己订阅。
+      useGitStore.getState().setSelectedGitFile(fileDiffQuery.data);
     }
   }, [fileDiffQuery.data, expandedHash, selectedFilePath]);
 

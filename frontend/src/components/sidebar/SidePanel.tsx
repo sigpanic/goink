@@ -13,7 +13,7 @@ import PreferenceList from "@/components/preference/PreferenceList";
 import NovelSettingList from "@/components/novel-setting/NovelSettingList";
 import StyleSampleList from "@/components/style/StyleSampleList";
 import GitHistoryList from "@/components/git/GitHistoryList";
-import type { git, novel, chapter } from "@/lib/wailsjs/go/models";
+import type { novel, chapter } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
 
@@ -24,7 +24,6 @@ interface Props {
   onSelectChapter: (ch: chapter.Chapter) => void;
   onSelectGoink: () => void;
   onExportNovel: (novelId: number) => void;
-  target: { path: string; title: string } | null;
   showCreate: boolean;
   setShowCreate: (v: boolean) => void;
   title: string;
@@ -49,7 +48,6 @@ interface Props {
     matchPos: number,
     matchLen: number,
   ) => void;
-  onSelectGitFile: (file: git.FileDiff) => void;
   onSelectStyleSample: (id: number) => void;
   sidePanelWidth: number;
   onSidePanelResize: (w: number) => void;
@@ -62,7 +60,6 @@ export default function SidePanel({
   onSelectChapter,
   onSelectGoink,
   onExportNovel,
-  target,
   showCreate,
   setShowCreate,
   title,
@@ -76,7 +73,6 @@ export default function SidePanel({
   onNewSkill,
   onSearchNavigateEntity,
   onSearchNavigateChapter,
-  onSelectGitFile,
   onSelectStyleSample,
   sidePanelWidth,
   onSidePanelResize,
@@ -150,7 +146,6 @@ export default function SidePanel({
       ) : activePanel === "chapters" ? (
         <ChapterList
           novelId={novelId}
-          target={target}
           onSelectChapter={onSelectChapter}
           onSelectGoink={onSelectGoink}
           onExportNovel={() => onExportNovel(novelId)}
@@ -170,7 +165,7 @@ export default function SidePanel({
       ) : activePanel === "novel-settings" ? (
         <NovelSettingList novelId={novelId} />
       ) : activePanel === "git" ? (
-        <GitHistoryList novelId={novelId} onSelectFile={onSelectGitFile} />
+        <GitHistoryList novelId={novelId} />
       ) : activePanel === "style-samples" ? (
         <StyleSampleList
           onSelectSample={onSelectStyleSample}

@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import GitHistoryList from "./GitHistoryList";
+import { useGitStore } from "./useGitStore";
 import { toastError } from "@/utils/toast";
 import { installQueryErrorToast } from "@/lib/queryErrorToast";
 
@@ -107,6 +108,8 @@ const commit2 = {
 describe("GitHistoryList", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 3.8 后续：useGitStore 是全局单例，重置避免跨用例残留。
+    useGitStore.setState({ selectedGitFile: null });
     mockGetCommitLog.mockResolvedValue([commit1, commit2]);
     mockGetCommitFileList.mockResolvedValue({
       commit: commit1,
@@ -125,14 +128,14 @@ describe("GitHistoryList", () => {
   });
 
   it("renders commits list after load", async () => {
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     expect(await screen.findByText("first commit")).toBeInTheDocument();
     expect(screen.getByText("second commit")).toBeInTheDocument();
   });
 
   it("shows inline error + retry button when GetCommitLog fails", async () => {
     mockGetCommitLog.mockRejectedValueOnce(new Error("network timeout"));
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     // 中间件触发 toast
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
@@ -149,7 +152,7 @@ describe("GitHistoryList", () => {
 
   it("shows noCommits when commit list is empty", async () => {
     mockGetCommitLog.mockResolvedValueOnce([]);
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     expect(await screen.findByText("git.noCommits")).toBeInTheDocument();
   });
 
@@ -164,7 +167,7 @@ describe("GitHistoryList", () => {
         },
       ],
     });
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     const item = await screen.findByText("first commit");
     fireEvent.click(item);
     expect(await screen.findByText("chapters/001.md")).toBeInTheDocument();
@@ -172,7 +175,7 @@ describe("GitHistoryList", () => {
 
   it("shows expandCommitFailed inline when GetCommitFileList fails", async () => {
     mockGetCommitFileList.mockRejectedValueOnce(new Error("git error"));
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     const item = await screen.findByText("first commit");
     fireEvent.click(item);
     expect(
@@ -180,8 +183,7 @@ describe("GitHistoryList", () => {
     ).toBeInTheDocument();
   });
 
-  it("loads file diff and calls onSelectFile when file selected", async () => {
-    const onSelectFile = vi.fn();
+  it("loads file diff and writes useGitStore when file selected", async () => {
     mockGetCommitFileList.mockResolvedValueOnce({
       commit: commit1,
       files: [
@@ -198,14 +200,12 @@ describe("GitHistoryList", () => {
       hunks: [],
     };
     mockGetFileDiff.mockResolvedValueOnce(diff as any);
-    renderWithProvider(
-      <GitHistoryList novelId={1} onSelectFile={onSelectFile} />,
-    );
+    renderWithProvider(<GitHistoryList novelId={1} />);
     const item = await screen.findByText("first commit");
     fireEvent.click(item);
-    // 自动选第一个文件，触发 useFileDiff refetch → onSelectFile
+    // 3.8 后续：自动选第一个文件，触发 useFileDiff refetch → 写 useGitStore（GitCommitView 订阅）
     await vi.waitFor(() => {
-      expect(onSelectFile).toHaveBeenCalledWith(
+      expect(useGitStore.getState().selectedGitFile).toEqual(
         expect.objectContaining({ newPath: "chapters/001.md" }),
       );
     });
@@ -223,7 +223,7 @@ describe("GitHistoryList", () => {
       ],
     });
     mockGetFileDiff.mockRejectedValueOnce(new Error("diff fetch failed"));
-    renderWithProvider(<GitHistoryList novelId={1} onSelectFile={vi.fn()} />);
+    renderWithProvider(<GitHistoryList novelId={1} />);
     const item = await screen.findByText("first commit");
     fireEvent.click(item);
     // 中间件接管 file-diff 错误
@@ -236,7 +236,7 @@ describe("GitHistoryList", () => {
 
   it("refetches commits when novelId changes", async () => {
     const { rerender } = renderWithProvider(
-      <GitHistoryList novelId={1} onSelectFile={vi.fn()} />,
+      <GitHistoryList novelId={1} />,
     );
     await screen.findByText("first commit");
     expect(mockGetCommitLog).toHaveBeenCalledWith(1, 50, "");
@@ -244,7 +244,7 @@ describe("GitHistoryList", () => {
     mockGetCommitLog.mockResolvedValueOnce([commit2]);
     rerender(
       <QueryClientProvider client={qc}>
-        <GitHistoryList novelId={2} onSelectFile={vi.fn()} />
+        <GitHistoryList novelId={2} />
       </QueryClientProvider>,
     );
     await vi.waitFor(() => {

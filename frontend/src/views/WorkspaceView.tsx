@@ -7,7 +7,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { git, imp, novel, chapter } from "@/lib/wailsjs/go/models";
+import type { imp, novel, chapter } from "@/lib/wailsjs/go/models";
 import ActivityBar from "@/components/shell/ActivityBar";
 import StatusBar from "@/components/shell/StatusBar";
 import WindowControls from "@/components/shell/WindowControls";
@@ -46,6 +46,8 @@ import { useImportNovel } from "@/hooks/useImportNovel";
 import type { PanelId, SidebarPanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { useEditorStore } from "@/stores/useEditorStore";
+import { useGitStore } from "@/components/git/useGitStore";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useCreateNovel } from "@/components/novel/useCreateNovel";
@@ -118,16 +120,10 @@ export default function WorkspaceView({
   const [description, setDescription] = useState("");
   const [showSettings, setShowSettings] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
-  const [tabTarget, setTabTarget] = useState<{
-    path: string;
-    title: string;
-  } | null>(null);
-  const [activeContent, setActiveContent] = useState("");
-  const [isDirty, setIsDirty] = useState(false);
   const [activeSkillName, setActiveSkillName] = useState<string | null>(null);
-  const [selectedGitFile, setSelectedGitFile] = useState<git.FileDiff | null>(
-    null,
-  );
+  // 3.8 后续：tabTarget/activeContent/isDirty → useEditorStore；
+  // selectedGitFile → useGitStore。写方调 getState().setXxx，读方组件自己订阅。
+  // reset 由下方 effect 监听 activeNovelId 变化自动调，等价原 switchToNovel wrapper 的 3 行 setState。
   const [platformOS, setPlatformOS] = useState("");
   const { theme, toggle: toggleTheme } = useTheme();
   const { isMaximised, setIsMaximised } = useWindowState();
@@ -184,27 +180,27 @@ export default function WorkspaceView({
     return () => clearTimeout(timer);
   }, []);
 
-  // 切小说瘦 wrapper（3.7）：switchNovel action 管 activeNovelId + SetActiveNovel 后端；
-  // 本地重置 panel/tabTarget/activeContent/selectedGitFile（喂 SidePanel/StatusBar/GitCommitView）。
-  // tab 切换由 useEditorTabs 的 novelId effect 接管，不再命令式调 closeAllTabs。
-  const switchToNovel = useCallback(
-    async (id: number) => {
-      await switchNovel(id);
-      setActivePanel("chapters");
-      setTabTarget(null);
-      setActiveContent("");
-      setSelectedGitFile(null);
-    },
-    [switchNovel, setActivePanel],
-  );
+  // 3.8 后续：删 switchToNovel wrapper。切 novel 的 reset 改由下方 effect 监听
+  // activeNovelId 变化自动调 useEditorStore/useGitStore 的 reset()——响应式而非命令式。
+  // 调用方（handleImportedNovel/handleSelectNovel/handleCreateNovel/NovelDialogs）直接调
+  // switchNovel(id) + setActivePanel("chapters")，tab 切换仍由 useEditorTabs 的 novelId effect 接管。
+  // 用 useLayoutEffect 而非 useEffect：reset 须在 paint 前执行，否则 StatusBar 切小说时
+  // 会多显一帧旧字数（useEffect 在 paint 后才跑，store 旧值多停留一帧）。
+  useLayoutEffect(() => {
+    useEditorStore.getState().reset();
+    useGitStore.getState().reset();
+  }, [activeNovelId]);
 
   const handleImportedNovel = useCallback(
     async (res: imp.ImportResult) => {
       // 临时：invalidateQueries 触发 useNovels refetch；3.3 mutation 建好后由 onSuccess 接管。
       await queryClient.invalidateQueries({ queryKey: novelKeys.all });
-      await switchToNovel(res.novel_id);
+      // 3.8 后续：删 switchToNovel wrapper，直接调 switchNovel + setActivePanel。
+      // reset 由 effect 监听 activeNovelId 变化自动调。
+      await switchNovel(res.novel_id);
+      setActivePanel("chapters");
     },
-    [queryClient, switchToNovel],
+    [queryClient, switchNovel, setActivePanel],
   );
 
   const importNovel = useImportNovel({ onImported: handleImportedNovel });
@@ -213,12 +209,16 @@ export default function WorkspaceView({
 
   function handleSelectChapter(ch: chapter.Chapter) {
     const chTitle = `${t("sidebar.chapterN", { n: ch.chapter_number })} ${ch.title}`;
-    setTabTarget({ path: ch.file_path, title: chTitle });
+    // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
+    useEditorStore.getState().setTabTarget({ path: ch.file_path, title: chTitle });
     contentRef.current?.openFile(ch.file_path, chTitle);
   }
 
   function handleSelectGoink() {
-    setTabTarget({ path: "goink.md", title: t("workspace.storyStatus") });
+    useEditorStore.getState().setTabTarget({
+      path: "goink.md",
+      title: t("workspace.storyStatus"),
+    });
     contentRef.current?.openFile("goink.md", t("workspace.storyStatus"));
   }
 
@@ -294,10 +294,7 @@ export default function WorkspaceView({
     }
   }
 
-  function handleSelectGitFile(file: git.FileDiff) {
-    setSelectedGitFile(file);
-  }
-
+  // 3.8 后续：selectedGitFile 迁 useGitStore，GitHistoryList 自己写 store，不再透传 onSelectGitFile。
   // 4b: 接 type 透传给 focusEntity（storyarc 全局搜索区分 arc/node 跳转，其他领域 undefined）。
   function handleSearchNavigateEntity(
     panelId: PanelId,
@@ -330,7 +327,9 @@ export default function WorkspaceView({
 
   async function handleSelectNovel(n: novel.Novel) {
     try {
-      await switchToNovel(n.id);
+      // 3.8 后续：删 switchToNovel wrapper，直接调 switchNovel + setActivePanel。
+      await switchNovel(n.id);
+      setActivePanel("chapters");
     } catch (err) {
       console.error(err);
     }
@@ -339,7 +338,7 @@ export default function WorkspaceView({
   async function handleCreateNovel() {
     try {
       if (!title.trim()) return;
-      // 3.3: 改用 mutation，invalidate 由 onSuccess 接管；switchToNovel + 清表单留 handler。
+      // 3.3: 改用 mutation，invalidate 由 onSuccess 接管；switchNovel + 清表单留 handler。
       const n = await createNovel.mutateAsync({
         title: title.trim(),
         description: description.trim(),
@@ -347,14 +346,16 @@ export default function WorkspaceView({
       setTitle("");
       setDescription("");
       setShowCreate(false);
-      await switchToNovel(n.id);
+      // 3.8 后续：删 switchToNovel wrapper，直接调 switchNovel + setActivePanel。
+      await switchNovel(n.id);
+      setActivePanel("chapters");
     } catch (err) {
       console.error(err);
     }
   }
 
   // 3.6: 4 个对话框 handler（create-dialog/update/delete/export）已移到 NovelDialogs。
-  // handleCreateNovel（SidePanel 内联表单）留此——它不走 dialog，直接 mutateAsync + switchToNovel。
+  // handleCreateNovel（SidePanel 内联表单）留此——它不走 dialog，直接 mutateAsync + switchNovel。
 
   async function handleSaveCover(novelID: number, file: File) {
     const buf = await file.arrayBuffer();
@@ -437,7 +438,6 @@ export default function WorkspaceView({
               onSelectChapter={handleSelectChapter}
               onSelectGoink={handleSelectGoink}
               onExportNovel={(id) => setExportNovelId(id)}
-              target={tabTarget}
               showCreate={showCreate}
               setShowCreate={setShowCreate}
               title={title}
@@ -465,7 +465,6 @@ export default function WorkspaceView({
               }}
               onSearchNavigateEntity={handleSearchNavigateEntity}
               onSearchNavigateChapter={handleSearchNavigateChapter}
-              onSelectGitFile={handleSelectGitFile}
               onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
               sidePanelWidth={sidePanelWidth}
               onSidePanelResize={setSidePanelWidth}
@@ -480,11 +479,7 @@ export default function WorkspaceView({
             />
           ) : (
             CONTENT_PANEL_IDS.has(activePanel) && (
-              <ContentPanel
-                ref={contentRef}
-                onContentChange={setActiveContent}
-                onDirtyChange={setIsDirty}
-              />
+              <ContentPanel ref={contentRef} />
             )
           )}
 
@@ -534,7 +529,7 @@ export default function WorkspaceView({
             </ErrorBoundary>
           ) : activePanel === "git" ? (
             <ErrorBoundary>
-              <GitCommitView file={selectedGitFile} />
+              <GitCommitView />
             </ErrorBoundary>
           ) : activePanel === "profile" ? (
             <ErrorBoundary>
@@ -554,7 +549,7 @@ export default function WorkspaceView({
           )}
         </div>
 
-        <StatusBar content={activeContent} isDirty={isDirty} />
+        <StatusBar />
 
         <SettingsDialog
           open={showSettings}
@@ -564,7 +559,7 @@ export default function WorkspaceView({
 
         <HelpDialog open={showHelp} onClose={() => setShowHelp(false)} />
 
-        <NovelDialogs switchToNovel={switchToNovel} />
+        <NovelDialogs />
 
         <ImportProgressDialog
           {...importNovel.dialogProps}

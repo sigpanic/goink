@@ -14,6 +14,7 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
+import { useEditorStore } from "@/stores/useEditorStore";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { contentKeys } from "@/lib/queryKeys";
@@ -67,13 +68,10 @@ export interface ContentPanelHandle {
   handleDiffReject: (toolId: string) => void;
 }
 
-interface Props {
-  onContentChange?: (content: string) => void;
-  onDirtyChange?: (isDirty: boolean) => void;
-}
-
-const ContentPanel = forwardRef<ContentPanelHandle, Props>(
-  function ContentPanel({ onContentChange, onDirtyChange }, ref) {
+// 3.8 后续：onContentChange/onDirtyChange 删，activeContent/isDirty 迁 useEditorStore。
+// ContentPanel 直接调 useEditorStore.getState().setActiveContent/setIsDirty，StatusBar 自己订阅。
+const ContentPanel = forwardRef<ContentPanelHandle>(
+  function ContentPanel(_props, ref) {
     // 3.8: novelId 从 useNovelStore 订阅（替代 prop）。切小说时 store 变化触发 re-render，行为等价。
     const novelId = useNovelStore((s) => s.activeNovelId);
     const { t } = useTranslation();
@@ -127,13 +125,15 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
 
     useEffect(() => {
       if (activeTab?.type === "file") {
-        onContentChange?.(activeTab.content ?? "");
+        // 3.8 后续：activeContent 迁 useEditorStore，StatusBar 自己订阅。
+        useEditorStore.getState().setActiveContent(activeTab.content ?? "");
       }
-    }, [activeTab, onContentChange]);
+    }, [activeTab]);
 
     useEffect(() => {
-      onDirtyChange?.(activeTab?.isDirty ?? false);
-    }, [activeTab?.isDirty, onDirtyChange]);
+      // 3.8 后续：isDirty 迁 useEditorStore，StatusBar 自己订阅。
+      useEditorStore.getState().setIsDirty(activeTab?.isDirty ?? false);
+    }, [activeTab?.isDirty]);
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
     const loadedRef = useRef<Set<string>>(new Set());
@@ -253,7 +253,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
         updateTab(tabId, { content, isDirty: true });
-        onContentChange?.(content);
+        // 3.8 后续：activeContent 迁 useEditorStore。
+        useEditorStore.getState().setActiveContent(content);
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         const tab = tabs.find((t) => t.id === tabId);
@@ -265,7 +266,7 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
           doSave(s.id, s.path, s.content);
         }, 500);
       },
-      [tabs, updateTab, doSave, onContentChange],
+      [tabs, updateTab, doSave],
     );
 
     const monacoRef = useRef<any>(null);
@@ -436,7 +437,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
             });
           }
           setActiveTabId(existing.id);
-          onContentChange?.(existing.content ?? "");
+          // 3.8 后续：activeContent 迁 useEditorStore。
+          useEditorStore.getState().setActiveContent(existing.content ?? "");
           return;
         }
 
@@ -458,7 +460,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
               viewMode: initialMode,
               readOnly: skReadOnly,
             });
-            onContentChange?.(c);
+            // 3.8 后续：activeContent 迁 useEditorStore。
+            useEditorStore.getState().setActiveContent(c);
           })
           .catch(() => {
             openTab({
@@ -470,7 +473,8 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
               viewMode: initialMode,
               readOnly: skReadOnly,
             });
-            onContentChange?.("");
+            // 3.8 后续：activeContent 迁 useEditorStore。
+            useEditorStore.getState().setActiveContent("");
           })
           .finally(() => setIsLoading(false));
       },
@@ -480,7 +484,6 @@ const ContentPanel = forwardRef<ContentPanelHandle, Props>(
         fetchContent,
         openTab,
         setActiveTabId,
-        onContentChange,
         titleFromPath,
         updateTab,
       ],
