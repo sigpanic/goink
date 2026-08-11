@@ -138,8 +138,9 @@ describe("SkillList", () => {
     fireEvent.click(confirmBtn);
 
     await vi.waitFor(() => {
-      // 5.4 commit 2: mutateAsync 入参 {name, source}，novel_id 在 hook 内部拼
+      // useDeleteSkill 模式 B：调用方传完整后端结构体 app.DeleteSkillInput（含 novel_id）
       expect(mockMutateAsync).toHaveBeenCalledWith({
+        novel_id: 1,
         name: "Writer",
         source: "novel",
       });

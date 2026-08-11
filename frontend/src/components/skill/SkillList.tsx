@@ -84,6 +84,7 @@ export default function SkillList({
     if (!deleteTarget) return;
     try {
       await deleteMutation.mutateAsync({
+        novel_id: novelId,
         name: deleteTarget.name,
         source: deleteTarget.source,
       });
