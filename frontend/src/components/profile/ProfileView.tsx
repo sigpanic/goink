@@ -1,29 +1,48 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { useApp } from "@/hooks/useApp";
 import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
-import type { config } from "@/lib/wailsjs/go/models";
-import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-
-interface WritingStats {
-  total_words: number;
-  total_days_active: number;
-  current_streak: number;
-  longest_streak: number;
-  total_novels: number;
-  total_chapters: number;
-}
+import { useWritingActivity } from "./useWritingActivity";
+import { useWritingStats } from "./useWritingStats";
+import { useProfileSettings } from "./useProfileSettings";
+import { settingsKeys } from "@/lib/queryKeys";
 
 export default function ProfileView() {
+  // 5.7 commit 2 会删 useApp（SaveAvatar/SaveUserName 改 mutation 后清零）
   const app = useApp();
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(true);
-  const [loadFailed, setLoadFailed] = useState(false);
-  const [activity, setActivity] = useState<Record<string, number>>({});
-  const [stats, setStats] = useState<WritingStats | null>(null);
-  const [settings, setSettings] = useState<config.AppSettings | null>(null);
+  const queryClient = useQueryClient();
+
+  // 5.7 commit 1: 3 GET query 化（删 load 三件套 + useEffect + Promise.all）。
+  // activity/stats/settings 各自独立 query，isLoading/isError 合并三态。
+  // GET 错误由全局中间件接管（queryErrorToast.ts），组件不挂 toastError。
+  const activityQuery = useWritingActivity(12);
+  const statsQuery = useWritingStats();
+  const settingsQuery = useProfileSettings();
+
+  const isLoading =
+    activityQuery.isLoading ||
+    statsQuery.isLoading ||
+    settingsQuery.isLoading;
+  const isError =
+    activityQuery.isError || statsQuery.isError || settingsQuery.isError;
+
+  // activity 数组转 dict（绿格子按 date 取 words）
+  const activity = useMemo(() => {
+    const dict: Record<string, number> = {};
+    for (const d of activityQuery.data ?? []) {
+      dict[d.date] = d.words;
+    }
+    return dict;
+  }, [activityQuery.data]);
+
+  const stats = statsQuery.data ?? null;
+  const settings = settingsQuery.data ?? null;
+
+  // 组件内 UI state（规则 10，不进 store）
   const [avatarKey, setAvatarKey] = useState(0);
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
@@ -32,37 +51,6 @@ export default function ProfileView() {
   const [nameError, setNameError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentYear] = useState(() => new Date().getFullYear());
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setLoadFailed(false);
-    try {
-      const [act, st, cfg] = await Promise.all([
-        app.GetWritingActivity(12),
-        app.GetWritingStats(),
-        app.GetSettings(),
-      ]);
-      const dict: Record<string, number> = {};
-      if (act) {
-        for (const d of act as Array<{ date: string; words: number }>) {
-          dict[d.date] = d.words;
-        }
-      }
-      setActivity(dict);
-      setStats(st as WritingStats);
-      setSettings(cfg as config.AppSettings);
-    } catch (err) {
-      setLoadFailed(true);
-      toastError(t("profile.loadFailed") + ": " + toErrorMessage(err));
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, t]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
 
   function handleAvatarClick() {
     fileInputRef.current?.click();
@@ -88,7 +76,10 @@ export default function ProfileView() {
     if (name && name !== settings?.user_name) {
       try {
         await app.SaveUserName(name);
-        setSettings((prev) => (prev ? { ...prev, user_name: name } : null));
+        // 5.7 commit 1: invalidate settingsKeys.all 让 useProfileSettings refetch
+        // 拿新 user_name（替代原 setSettings 局部更新；settingsKeys.all 与 chat
+        // 共享缓存，一起刷新，chat 不读 user_name 不受影响）。
+        queryClient.invalidateQueries({ queryKey: settingsKeys.all });
         setNameError("");
       } catch (err) {
         setNameError(toErrorMessage(err));
@@ -103,7 +94,7 @@ export default function ProfileView() {
     setEditingName(true);
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <main className="flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
         <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -123,7 +114,7 @@ export default function ProfileView() {
         onChange={handleFileChange}
       />
       <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        {loadFailed && (
+        {isError && (
           <p className="text-xs text-destructive py-4">
             {t("profile.loadFailed")}
           </p>

@@ -172,3 +172,15 @@ export const searchKeys = {
   list: (novelId: number, query: string) =>
     ["search", novelId, query] as const,
 };
+
+// 5.7 commit 1：profile 领域 query key。
+// writingActivity: GetWritingActivity(months) 过去 N 个月写作日历（绿格子数据）。
+// writingStats: GetWritingStats() 全局写作统计（无入参，单例缓存）。
+// settings 复用 settingsKeys.all（与 chat 共享缓存，profile 读 user_name/avatar 字段）。
+export const writingActivityKeys = {
+  detail: (months: number) => ["writing-activity", months] as const,
+};
+
+export const writingStatsKeys = {
+  all: ["writing-stats"] as const,
+};

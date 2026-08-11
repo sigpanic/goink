@@ -1211,6 +1211,8 @@
   },
   "profile": {
     "loadFailed": "加载失败",
+    "activityLoadFailed": "加载写作日历失败",
+    "statsLoadFailed": "加载写作统计失败",
     "loading": "加载中...",
     "noNickname": "未设置昵称",
     "pastYearStats": "过去一年 · {{count}} 天有写作记录",

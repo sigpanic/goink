@@ -1247,6 +1247,8 @@
   },
   "profile": {
     "loadFailed": "Load failed",
+    "activityLoadFailed": "Failed to load writing activity",
+    "statsLoadFailed": "Failed to load writing stats",
     "loading": "Loading...",
     "noNickname": "No nickname set",
     "pastYearStats_one": "Past year · {{count}} day with writing records",

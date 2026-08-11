@@ -46,6 +46,10 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "file-diff": "git.fileDiffLoadFailed",
   // 5.5 commit 1：search 领域 GET 端点（SearchAll 全局跨实体搜索）
   search: "search.loadFailed",
+  // 5.7 commit 1：profile 领域 GET 端点（GetWritingActivity/GetWritingStats）
+  // settings 复用 chat.settingsLoadFailed（GetSettings 共享缓存，文案通用）
+  "writing-activity": "profile.activityLoadFailed",
+  "writing-stats": "profile.statsLoadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。
