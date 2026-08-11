@@ -79,10 +79,9 @@ export default function StyleView({
   const modelsQuery = useModels();
   const settingsQuery = useSettings();
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
-  const [modelKey, setModelKey] = useState("");
-  const selectedModel = useMemo<llm.AvailableModel | null>(
-    () => models.find((m) => m.Key === modelKey) ?? null,
-    [models, modelKey],
+  // 结构化选中模型（含 ProviderName/ModelID），替代 modelKey 字符串 + useMemo find。
+  const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
+    null,
   );
   const [error, setError] = useState("");
   const [result, setResult] = useState<{
@@ -153,12 +152,11 @@ export default function StyleView({
 
   // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetSettings fetch）。
   useEffect(() => {
-    if (!modelKey && models.length > 0 && settingsQuery.data) {
+    if (!selectedModel && models.length > 0 && settingsQuery.data) {
       const key = settingsQuery.data.selected_model_key || "";
-      const found = models.find((m) => m.Key === key);
-      setModelKey(found ? key : models[0].Key);
+      setSelectedModel(models.find((m) => m.Key === key) ?? models[0] ?? null);
     }
-  }, [models, settingsQuery.data, modelKey]);
+  }, [models, settingsQuery.data, selectedModel]);
 
   const toggleSelect = useCallback((id: number) => {
     setSelected((prev) => {
@@ -310,11 +308,6 @@ export default function StyleView({
     t,
   ]);
 
-  const modelOptions = models.map((m) => ({
-    value: m.Key,
-    label: m.ModelName,
-  }));
-
   const { meta, body } = result
     ? splitFrontmatter(result.rawContent)
     : { meta: {}, body: "" };
@@ -393,9 +386,15 @@ export default function StyleView({
               {phase !== "adding" && selected.size > 0 && (
                 <>
                   <PopSelect
-                    value={modelKey}
-                    options={modelOptions}
-                    onChange={setModelKey}
+                    value={selectedModel?.Key ?? ""}
+                    options={models.map((m) => ({
+                      value: m.Key,
+                      label: m.ModelName,
+                    }))}
+                    onChange={(key) => {
+                      const m = models.find((item) => item.Key === key);
+                      if (m) setSelectedModel(m);
+                    }}
                     minWidth="140px"
                     dropUp={false}
                   />

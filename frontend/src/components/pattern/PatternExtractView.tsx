@@ -5,6 +5,7 @@ import { useNovels } from "@/components/novel/useNovels";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
+import type { llm } from "@/lib/wailsjs/go/models";
 import { createPatternTaskID } from "@/hooks/usePatternProgress";
 import PopSelect from "@/components/chat/PopSelect";
 import ChapterRangeInput from "./ChapterRangeInput";
@@ -46,7 +47,10 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   const models = useMemo(() => modelsQuery.data ?? [], [modelsQuery.data]);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [scope, setScope] = useState<Scope>("all");
-  const [modelKey, setModelKey] = useState("");
+  // 结构化选中模型（含 ProviderName/ModelID），替代 modelKey 字符串 + find。
+  const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
+    null,
+  );
 
   useEffect(() => {
     if (!userSelectedNovelRef.current) {
@@ -61,17 +65,11 @@ export default function PatternExtractView({ currentNovelId }: Props) {
 
   // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetModels/GetSettings fetch）。
   useEffect(() => {
-    if (!modelKey && models.length > 0 && settingsQuery.data) {
+    if (!selectedModel && models.length > 0 && settingsQuery.data) {
       const key = settingsQuery.data.selected_model_key || "";
-      const found = models.find((m) => m.Key === key);
-      setModelKey(found ? key : models[0].Key);
+      setSelectedModel(models.find((m) => m.Key === key) ?? models[0] ?? null);
     }
-  }, [models, settingsQuery.data, modelKey]);
-
-  const modelOptions = useMemo(
-    () => models.map((m) => ({ value: m.Key, label: m.ModelName })),
-    [models],
-  );
+  }, [models, settingsQuery.data, selectedModel]);
   const novelOptions = useMemo(
     () => novels.map((n) => ({ value: String(n.id), label: n.title })),
     [novels],
@@ -84,7 +82,8 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     [chapters, scope, selected],
   );
   const activeChapterCount = scope === "all" ? chapters.length : selected.size;
-  const canExtract = targetNovelId > 0 && activeChapterCount >= 5 && !!modelKey;
+  const canExtract =
+    targetNovelId > 0 && activeChapterCount >= 5 && !!selectedModel;
   const allSelected =
     (scope === "all" && chapters.length > 0) ||
     (scope === "selected" &&
@@ -126,10 +125,8 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   }, []);
 
   const handleExtract = useCallback(() => {
-    if (!canExtract) return;
-    // 5.3 pattern commit 2: 从 models 取结构化 ProviderName/ModelID 传入 sessionParams（废弃拼接 modelKey + splitModelKey）。
-    const selectedModel = models.find((m) => m.Key === modelKey);
-    if (!selectedModel) return;
+    if (!canExtract || !selectedModel) return;
+    // 结构化入参：直接取 selectedModel.ProviderName/ModelID（不再 find + splitModelKey）。
     const taskId = createPatternTaskID();
     setSessionParams({
       taskId,
@@ -145,8 +142,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     activeChapterCount,
     activeChapterIds,
     canExtract,
-    models,
-    modelKey,
+    selectedModel,
     t,
     targetNovelId,
     targetNovelTitle,
@@ -214,9 +210,15 @@ export default function PatternExtractView({ currentNovelId }: Props) {
             </button>
           </div>
           <PopSelect
-            value={modelKey}
-            options={modelOptions}
-            onChange={setModelKey}
+            value={selectedModel?.Key ?? ""}
+            options={models.map((m) => ({
+              value: m.Key,
+              label: m.ModelName,
+            }))}
+            onChange={(key) => {
+              const m = models.find((item) => item.Key === key);
+              if (m) setSelectedModel(m);
+            }}
             minWidth="140px"
             dropUp={false}
           />
