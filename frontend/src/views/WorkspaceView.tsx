@@ -7,7 +7,6 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
 import type { imp, novel, chapter } from "@/hooks/useApp";
 import type { git } from "@/lib/wailsjs/go/models";
 import ActivityBar from "@/components/shell/ActivityBar";
@@ -37,7 +36,7 @@ import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
-import { CheckUpdate } from "@/lib/wailsjs/go/app/App";
+import { CheckUpdate, GetPlatform, ApproveTool } from "@/lib/wailsjs/go/app/App";
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
 import { WindowToggleMaximise } from "@/lib/wailsjs/runtime/runtime";
 import Logo from "@/components/Logo";
@@ -80,7 +79,6 @@ export default function WorkspaceView({
     light: t("workspace.darkMode"),
     dark: t("workspace.lightMode"),
   };
-  const app = useApp();
   const contentRef = useRef<ContentPanelHandle>(null);
 
   // novels 走 useNovels query（3.1）：替换原 novels state + loadNovels + useEffect。
@@ -159,10 +157,10 @@ export default function WorkspaceView({
   // ── 窗口状态 ────────────────────────────────────────────
 
   useEffect(() => {
-    app.GetPlatform().then((info) => {
+    GetPlatform().then((info) => {
       if (info.os) setPlatformOS(info.os as string);
     });
-  }, [app]);
+  }, []);
 
   // ── 首次进入自动弹帮助 ──────────────────────────────────
 
@@ -228,12 +226,22 @@ export default function WorkspaceView({
   // ── Approval ────────────────────────────────────────────
 
   async function handleApprove(toolId: string, feedback: string) {
-    await app.ApproveTool(toolId, true, feedback);
+    try {
+      await ApproveTool(toolId, true, feedback);
+    } catch (err) {
+      toastError(toErrorMessage(err, t("approval.approveFailed")));
+      return;
+    }
     await contentRef.current?.handleDiffApprove(toolId);
   }
 
   async function handleReject(toolId: string, feedback: string) {
-    await app.ApproveTool(toolId, false, feedback);
+    try {
+      await ApproveTool(toolId, false, feedback);
+    } catch (err) {
+      toastError(toErrorMessage(err, t("approval.rejectFailed")));
+      return;
+    }
     contentRef.current?.handleDiffReject(toolId);
   }
 
@@ -259,7 +267,9 @@ export default function WorkspaceView({
       const first = novels[0];
       setActiveNovelId(first.id);
       setActivePanel("chapters");
-      app.SetActiveNovel({ novel_id: first.id });
+      // 5.9: 改用 switchNovel（已封装 setActiveNovelId + SetActiveNovel 后端），替代 app.SetActiveNovel。
+      // effect 内不 await（void 标记故意不等待），避免 effect 变 async。
+      void switchNovel(first.id);
     } else if (novels.length === 0) {
       setActivePanel("novels");
     }
@@ -267,7 +277,7 @@ export default function WorkspaceView({
     // 否则新建小说时 switchToNovel 设 activeNovelId=新小说，但 useNovels refetch 未完，
     // novels 旧列表不含新小说 → find 失败 → 误选 novels[0]（旧小说）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [app, novels]);
+  }, [novels]);
 
   function handleActivitySelect(id: SidebarPanelId) {
     const currentPanel = sidebarPanel ?? activePanel;

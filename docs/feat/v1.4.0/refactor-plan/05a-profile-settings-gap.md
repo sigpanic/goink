@@ -25,10 +25,10 @@
 - [ ] commit 1: useSaveGitConfig + useRebuildNovelIndex + useTestConnection mutation + 删 useApp
 
 ### 5.9 命令式调用收尾（4 commit）
-- [ ] commit 1: useSaveCover mutation + WorkspaceView SaveCover 改 mutation
-- [ ] commit 2: App.tsx + InitView.tsx 删 useApp（启动入口命令改直接 import）
-- [ ] commit 3: useImportNovel 删 app 参数（命令改直接 import + GetModels/GetSettings 改用现成 query hook）
-- [ ] commit 4: WorkspaceView 删 useApp（GetPlatform/ApproveTool/SetActiveNovel + switchNovel + 测试 mock 迁移）
+- [x] commit 1: useSaveCover mutation + WorkspaceView SaveCover 改 mutation
+- [x] commit 2: App.tsx + InitView.tsx 删 useApp（启动入口命令改直接 import）
+- [x] commit 3: useImportNovel 删 app 参数（命令改直接 import + GetModels/GetSettings 改用现成 query hook）
+- [x] commit 4: WorkspaceView 删 useApp（GetPlatform/ApproveTool/SetActiveNovel + switchNovel + 测试 mock 迁移）
 
 ### 5.10 类型 import 迁移 + 删 useApp.ts（1 commit）
 - [ ] commit 1: 类型 import 全量迁移 `@/hooks/useApp` → `@/lib/wailsjs/go/models` + 删 useApp.ts

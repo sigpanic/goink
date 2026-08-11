@@ -239,6 +239,10 @@
     "diffStoryStatus": "故事状态",
     "diffChapterOutline": "第{{n}}章大纲"
   },
+  "approval": {
+    "approveFailed": "审批通过失败",
+    "rejectFailed": "驳回失败"
+  },
   "settings": {
     "title": "设置",
     "general": "基础设置",

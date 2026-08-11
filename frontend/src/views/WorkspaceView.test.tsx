@@ -44,6 +44,8 @@ const {
   mockDeleteNovel,
   mockExportNovel,
   mockSetActiveNovel,
+  mockGetPlatform,
+  mockApproveTool,
 } = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
@@ -51,6 +53,8 @@ const {
   mockDeleteNovel: vi.fn(),
   mockExportNovel: vi.fn(),
   mockSetActiveNovel: vi.fn(),
+  mockGetPlatform: vi.fn(),
+  mockApproveTool: vi.fn(),
 }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
@@ -63,25 +67,9 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   ExportNovel: mockExportNovel,
   // 3.7: useNovelStore.switchNovel 直接 import SetActiveNovel（绕过 useApp），需在 wailsjs mock 覆盖。
   SetActiveNovel: mockSetActiveNovel,
-}));
-
-// ── Mock useApp（关键异步方法返回 Promise，避免 .then 报错）──────────
-// mockSetActiveNovel 提升到 wailsjs hoisted 块（3.7 switchNovel 直接 import SetActiveNovel，useApp 复用同一 mock）。
-const mockGetPlatform = vi.fn();
-const mockApproveTool = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    GetNovels: mockGetNovels,
-    SetActiveNovel: mockSetActiveNovel,
-    GetPlatform: mockGetPlatform,
-    ApproveTool: mockApproveTool,
-    CreateNovel: mockCreateNovel,
-    UpdateNovel: mockUpdateNovel,
-    DeleteNovel: mockDeleteNovel,
-    ExportNovel: vi.fn(),
-    SaveCover: vi.fn(),
-  }),
+  // 5.9: WorkspaceView 直接 import GetPlatform/ApproveTool（绕过 useApp），需在 wailsjs mock 覆盖。
+  GetPlatform: mockGetPlatform,
+  ApproveTool: mockApproveTool,
 }));
 
 vi.mock("@/hooks/useTheme", () => ({

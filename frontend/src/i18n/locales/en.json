@@ -248,6 +248,10 @@
     "diffStoryStatus": "Story Status",
     "diffChapterOutline": "Ch.{{n}} Outline"
   },
+  "approval": {
+    "approveFailed": "Approval failed",
+    "rejectFailed": "Rejection failed"
+  },
   "settings": {
     "title": "Settings",
     "general": "General",
