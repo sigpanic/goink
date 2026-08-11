@@ -884,6 +884,8 @@
       "search": "Search skills...",
       "refresh": "Refresh",
       "loading": "Loading...",
+      "loadFailed": "Load failed",
+      "contentLoadFailed": "Content load failed",
       "empty": "No skills yet",
       "repoLink": "Open GitHub repo",
       "pagination_one": "{{total}} item · Page {{page}}/{{totalPages}}",

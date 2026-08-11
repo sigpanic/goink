@@ -860,6 +860,8 @@
       "search": "搜索 skill...",
       "refresh": "刷新",
       "loading": "加载中...",
+      "loadFailed": "加载失败",
+      "contentLoadFailed": "内容加载失败",
       "empty": "暂无 skill",
       "repoLink": "访问 GitHub 仓库",
       "pagination": "共 {{total}} 条 · 第 {{page}}/{{totalPages}} 页",

@@ -37,6 +37,9 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "style-sample": "styleSample.loadFailed",
   // 5.4 commit 1：skill 领域 GET 端点（ListSkills）
   skills: "skill.loadFailed",
+  // 5.4 commit 3：SkillMarketplace 远程技能（apperr 新 API，unwrapResult throw 触发中间件）
+  "remote-skills": "skill.marketplace.loadFailed",
+  "remote-skill-content": "skill.marketplace.contentLoadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。

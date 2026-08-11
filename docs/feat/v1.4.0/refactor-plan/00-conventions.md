@@ -30,6 +30,8 @@
 ["novel-settings", novelId]
 ["style-samples", novelId]
 ["skills", novelId]           与 ListSkillsInput.novel_id 对齐（novel 层 skill 随 novel 变）
+["remote-skills", page, size, query]  SkillMarketplace 远程技能市场列表（apperr 新 API）
+["remote-skill-content", name]        SkillMarketplace 远程技能内容（detail phase）
 
 单个（单数）：
 ["novel", id]

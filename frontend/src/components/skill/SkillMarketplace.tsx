@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
   Loader2,
@@ -10,13 +11,22 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { useApp } from "@/hooks/useApp";
-import type { remote } from "@/hooks/useApp";
+import type { remote } from "@/lib/wailsjs/go/models";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import { InstallRemoteSkill } from "@/lib/wailsjs/go/app/App";
+import { skillKeys } from "@/lib/queryKeys";
+import { AppErr } from "@/utils/wailsResult";
+import { useSkills } from "./useSkills";
+import { useRemoteSkills } from "./useRemoteSkills";
+import {
+  useRemoteSkillContent,
+  fetchRemoteSkillContent,
+} from "./useRemoteSkillContent";
+import { useFileContent } from "@/components/content/useFileContent";
 
 interface Props {
   open: boolean;
@@ -76,43 +86,87 @@ function classifyError(
   };
 }
 
+// 从 query.error 提取 classifyError 结果（apperr 新 API 的 AppErr 带 errCode）。
+// query.error 是 unknown，用 instanceof AppErr 守卫提取 errCode；非 AppErr 时 code="" 走 other 分支。
+function classifyQueryError(
+  err: unknown,
+  t: TFunction,
+): { code: string; message: string } | null {
+  if (!err) return null;
+  const code = err instanceof AppErr ? err.errCode : "";
+  return classifyError(code, toErrorMessage(err), t);
+}
+
 export default function SkillMarketplace({
   open,
   onOpenChange,
   novelId,
   onInstalled,
 }: Props) {
-  const app = useApp();
+  const qc = useQueryClient();
   const { t } = useTranslation();
+  const { fetchContent } = useFileContent();
 
   const [phase, setPhase] = useState<Phase>("browse");
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
-  const [items, setItems] = useState<remote.RemoteSkillMeta[]>([]);
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<{ code: string; message: string } | null>(
-    null,
-  );
 
   const [selectedSkill, setSelectedSkill] =
     useState<remote.RemoteSkillMeta | null>(null);
-  const [remoteContent, setRemoteContent] = useState("");
+  // localContent / remoteContentForConfirm / contentError 是 confirm_overwrite phase 用的 local state：
+  // detail phase 的 remote content 走 useRemoteSkillContent query，confirm_overwrite 时拷贝过来。
   const [localContent, setLocalContent] = useState("");
   const [remoteContentForConfirm, setRemoteContentForConfirm] = useState("");
-  const [contentLoading, setContentLoading] = useState(false);
   const [contentError, setContentError] = useState("");
 
   const [installTarget, setInstallTarget] = useState<InstallTarget>("user");
   const [installing, setInstalling] = useState(false);
 
-  const [installedNames, setInstalledNames] = useState<Set<string>>(new Set());
-  const [installedVersions, setInstalledVersions] = useState<
-    Map<string, number>
-  >(new Map());
+  // 5.4 commit 3: skills（已安装索引）走 useSkills query（commit 1 建），与 SkillList 共享缓存。
+  // installedNames/installedVersions 由 query data 推导，删 loadInstalledIndex + useState。
+  const { data: installedSkills = [] } = useSkills(novelId);
+  const { installedNames, installedVersions } = useMemo(() => {
+    const nameSet = new Set<string>();
+    const versionMap = new Map<string, number>();
+    for (const s of installedSkills) {
+      nameSet.add(s.name);
+      const prev = versionMap.get(s.name) ?? 0;
+      if (s.version > prev) versionMap.set(s.name, s.version);
+    }
+    return { installedNames: nameSet, installedVersions: versionMap };
+  }, [installedSkills]);
+
+  // 5.4 commit 3: 远程技能列表走 useRemoteSkills query（apperr 新 API，unwrapResult throw AppErr）。
+  // queryKey 含 page/size/query，debounce 由 debouncedQuery 进 key 实现（queryKey 变化自动 refetch）。
+  // enabled: open（modal 关闭时不 fetch，缓存保留 gcTime 供下次 open 快速显示）。
+  // error 由 query.error 经 classifyQueryError 映射 inline error bar（保留短码文案），中间件同时弹兜底 toast。
+  const remoteListQuery = useRemoteSkills(
+    { page, size: pageSize, query: debouncedQuery },
+    open,
+  );
+  const items = remoteListQuery.data?.items ?? [];
+  const total = remoteListQuery.data?.total ?? 0;
+  const totalPages = remoteListQuery.data?.total_pages ?? 0;
+  const loading = remoteListQuery.isLoading;
+  const error = useMemo(
+    () => classifyQueryError(remoteListQuery.error, t),
+    [remoteListQuery.error, t],
+  );
+
+  // 5.4 commit 3: 远程技能内容走 useRemoteSkillContent query（apperr 新 API）。
+  // enabled: !!selectedSkill && phase === "detail"（confirm_overwrite 不重新 fetch，用 remoteContentForConfirm）。
+  const remoteContentQuery = useRemoteSkillContent(
+    selectedSkill?.name ?? "",
+    !!selectedSkill && phase === "detail",
+  );
+  const remoteContent = remoteContentQuery.data ?? "";
+  const contentLoading = remoteContentQuery.isLoading;
+  const detailContentError = useMemo(
+    () => classifyQueryError(remoteContentQuery.error, t)?.message ?? "",
+    [remoteContentQuery.error, t],
+  );
 
   const canUpdateDetail = useMemo(() => {
     if (!selectedSkill) return false;
@@ -122,12 +176,11 @@ export default function SkillMarketplace({
 
   const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reset state when modal closes
+  // Reset local state when modal closes（query 缓存保留，下次 open 快速显示后 refetch）
   useEffect(() => {
     if (!open) {
       setPhase("browse");
       setSelectedSkill(null);
-      setRemoteContent("");
       setLocalContent("");
       setRemoteContentForConfirm("");
       setInstallTarget("user");
@@ -135,13 +188,8 @@ export default function SkillMarketplace({
       setDebouncedQuery("");
       setPage(1);
       setPageSize(DEFAULT_PAGE_SIZE);
-      setError(null);
       setContentError("");
-      setContentLoading(false);
       setInstalling(false);
-      setItems([]);
-      setTotal(0);
-      setTotalPages(0);
     }
   }, [open]);
 
@@ -157,140 +205,36 @@ export default function SkillMarketplace({
     };
   }, [query]);
 
-  // Load installed skills index (for card visual differentiation)
-  const loadInstalledIndex = useCallback(async () => {
-    try {
-      const list = await app.ListSkills({ novel_id: novelId });
-      const nameSet = new Set<string>();
-      const versionMap = new Map<string, number>();
-      for (const s of list ?? []) {
-        nameSet.add(s.name);
-        const prev = versionMap.get(s.name) ?? 0;
-        if (s.version > prev) versionMap.set(s.name, s.version);
-      }
-      setInstalledNames(nameSet);
-      setInstalledVersions(versionMap);
-    } catch (e) {
-      console.error("Load installed skills failed", e);
-    }
-  }, [app, novelId]);
-
-  // Load remote skills
-  const loadRemote = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await app.ListRemoteSkills({
-        page,
-        size: pageSize,
-        query: debouncedQuery,
-      });
-      const code = res?.err_code ?? "";
-      if (code && code !== "ok") {
-        const cls = classifyError(code, res?.err_msg ?? "", t);
-        setError(cls);
-        setItems([]);
-        setTotal(0);
-        setTotalPages(0);
-      } else {
-        const data = res?.data;
-        setItems(data?.items ?? []);
-        setTotal(data?.total ?? 0);
-        setTotalPages(data?.total_pages ?? 0);
-      }
-    } catch (e: unknown) {
-      const msg = toErrorMessage(e);
-      setError({
-        code: "other",
-        message: t("skill.marketplace.errorOther", { message: msg }),
-      });
-      setItems([]);
-      setTotal(0);
-      setTotalPages(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, page, pageSize, debouncedQuery, t]);
-
-  // Initial load when modal opens
-  useEffect(() => {
-    if (open) {
-      loadInstalledIndex();
-      loadRemote();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
-
-  // Reload when page/pageSize/debouncedQuery changes
-  useEffect(() => {
-    if (open) loadRemote();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, pageSize, debouncedQuery]);
-
-  // Load remote content when entering detail phase.
-  // 返回 content 字符串，调用方直接用返回值，避免闭包捕获过期的 remoteContent state。
-  const loadRemoteContent = useCallback(
-    async (name: string): Promise<string> => {
-      setContentLoading(true);
-      setContentError("");
-      setRemoteContent("");
-      try {
-        const res = await app.GetRemoteSkillContent(name);
-        const code = res?.err_code ?? "";
-        if (code && code !== "ok") {
-          const cls = classifyError(code, res?.err_msg ?? "", t);
-          setContentError(cls.message);
-          return "";
-        }
-        const content = res?.data ?? "";
-        setRemoteContent(content);
-        return content;
-      } catch (e: unknown) {
-        const msg = toErrorMessage(e);
-        setContentError(t("skill.marketplace.errorOther", { message: msg }));
-        return "";
-      } finally {
-        setContentLoading(false);
-      }
-    },
-    [app, t],
-  );
-
   // Click card → enter detail phase
-  const handleCardClick = useCallback(
-    (sk: remote.RemoteSkillMeta) => {
-      setSelectedSkill(sk);
-      setPhase("detail");
-      setRemoteContent("");
-      setLocalContent("");
-      setRemoteContentForConfirm("");
-      setContentError("");
-      loadRemoteContent(sk.name);
-    },
-    [loadRemoteContent],
-  );
+  const handleCardClick = useCallback((sk: remote.RemoteSkillMeta) => {
+    setSelectedSkill(sk);
+    setPhase("detail");
+    setLocalContent("");
+    setRemoteContentForConfirm("");
+    setContentError("");
+  }, []);
 
-  // GetContent probe for install target
+  // GetContent probe for install target（复用 content 领域 useFileContent，共享缓存）
   const probeLocal = useCallback(
     async (target: InstallTarget, name: string): Promise<string> => {
       if (target === "novel" && !novelId) return "";
       const path = pathForSource(target, name);
       try {
-        const content = await app.GetContent(novelId, path);
+        const content = await fetchContent(novelId, path);
         return content || "";
       } catch {
         return "";
       }
     },
-    [app, novelId],
+    [fetchContent, novelId],
   );
 
-  // Install skill
+  // Install skill（commit 3: 直接 import wailsjs InstallRemoteSkill，不经 useApp；保持读 err_code，commit 4 改 mutation + unwrapResult）
   const doInstall = useCallback(
     async (target: InstallTarget, name: string) => {
       setInstalling(true);
       try {
-        const res = await app.InstallRemoteSkill({
+        const res = await InstallRemoteSkill({
           name,
           target,
           novel_id: novelId,
@@ -301,13 +245,12 @@ export default function SkillMarketplace({
           toastError(cls.message);
           return;
         }
-        // success — refresh local + remote, trigger callback, back to browse
-        await loadInstalledIndex();
-        await loadRemote();
+        // success — refresh installed index + remote list, trigger callback, back to browse
+        qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
+        qc.invalidateQueries({ queryKey: ["remote-skills"] });
         onInstalled?.();
         setPhase("browse");
         setSelectedSkill(null);
-        setRemoteContent("");
         setLocalContent("");
         setRemoteContentForConfirm("");
       } catch (e: unknown) {
@@ -317,7 +260,7 @@ export default function SkillMarketplace({
         setInstalling(false);
       }
     },
-    [app, novelId, t, loadInstalledIndex, loadRemote, onInstalled],
+    [novelId, t, qc, onInstalled],
   );
 
   // Click install button — probe then install or enter confirm_overwrite
@@ -333,10 +276,20 @@ export default function SkillMarketplace({
       if (local) {
         // has same-name local skill → enter confirm_overwrite phase
         setLocalContent(local);
-        // 直接用 loadRemoteContent 返回值，避免闭包捕获过期的 remoteContent state；
-        // 已有缓存时复用，否则拉取
-        const remote =
-          remoteContent || (await loadRemoteContent(selectedSkill.name));
+        // 从 useRemoteSkillContent query 缓存取 content，或 fetchQuery 拉取（走同一 queryKey 复用缓存）
+        let remote = remoteContent;
+        if (!remote) {
+          try {
+            remote = await qc.fetchQuery({
+              queryKey: skillKeys.remoteContent(selectedSkill.name),
+              queryFn: () => fetchRemoteSkillContent(selectedSkill.name),
+            });
+          } catch (e: unknown) {
+            const cls = classifyQueryError(e, t);
+            setContentError(cls?.message ?? "");
+            remote = "";
+          }
+        }
         setRemoteContentForConfirm(remote);
         setPhase("confirm_overwrite");
       } else {
@@ -348,9 +301,9 @@ export default function SkillMarketplace({
       novelId,
       t,
       probeLocal,
-      remoteContent,
-      loadRemoteContent,
+      qc,
       doInstall,
+      remoteContent,
     ],
   );
 
@@ -360,11 +313,11 @@ export default function SkillMarketplace({
     await doInstall(installTarget, selectedSkill.name);
   }, [selectedSkill, installTarget, doInstall]);
 
-  // Refresh button
+  // Refresh button — invalidate queries（query 自动 refetch）
   const handleRefresh = useCallback(() => {
-    loadRemote();
-    loadInstalledIndex();
-  }, [loadRemote, loadInstalledIndex]);
+    qc.invalidateQueries({ queryKey: ["remote-skills"] });
+    qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
+  }, [qc, novelId]);
 
   // Overlay click — only close in browse phase
   const handleOverlayClick = useCallback(() => {
@@ -459,7 +412,6 @@ export default function SkillMarketplace({
                 onClick={() => {
                   setPhase("browse");
                   setSelectedSkill(null);
-                  setRemoteContent("");
                   setLocalContent("");
                   setContentError("");
                 }}
@@ -746,9 +698,9 @@ export default function SkillMarketplace({
                 <Loader2 className="w-4 h-4 animate-spin mr-2" />
                 {t("skill.marketplace.contentLoading")}
               </div>
-            ) : contentError ? (
+            ) : detailContentError ? (
               <div className="px-3 py-2 text-xs text-destructive bg-danger-bg border border-danger-border rounded-md">
-                {contentError}
+                {detailContentError}
               </div>
             ) : (
               <>

@@ -98,6 +98,12 @@ export const skillKeys = {
   // list: 与 ListSkillsInput.novel_id 对齐，避免跨 novel 串缓存（不同 novel 的 novel 层 skill 不同）。
   list: (novelId: number) => ["skills", novelId] as const,
   detail: (name: string) => ["skill", name] as const,
+  // remoteList: SkillMarketplace 远程技能市场列表（apperr 新 API）。
+  // input 含 page/size/query，进 key 避免不同分页/搜索串缓存。
+  remoteList: (input: { page: number; size: number; query: string }) =>
+    ["remote-skills", input.page, input.size, input.query] as const,
+  // remoteContent: SkillMarketplace 远程技能内容（detail phase）。
+  remoteContent: (name: string) => ["remote-skill-content", name] as const,
 };
 
 // chat 领域 GET 端点 query key（5.1 commit 1）。
