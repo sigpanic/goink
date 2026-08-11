@@ -105,7 +105,6 @@ export default function WorkspaceView({
   const setActivePanel = usePanelStore((s) => s.setActivePanel);
   const setSidebarPanel = usePanelStore((s) => s.setSidebarPanel);
   const setSidebarClosed = usePanelStore((s) => s.setSidebarClosed);
-  const [searchQuery, setSearchQuery] = useState("");
   // focusMap 外置到 useFocusStore（2.8）。各 View 自己订阅 focusId。
   // styleSampleFocusId 语义不同（null=已处理），保留本地 state。
   const focusEntity = useFocusStore((s) => s.focusEntity);
@@ -445,8 +444,6 @@ export default function WorkspaceView({
               }}
               onSearchNavigateEntity={handleSearchNavigateEntity}
               onSearchNavigateChapter={handleSearchNavigateChapter}
-              searchQuery={searchQuery}
-              onSearchChange={(q) => setSearchQuery(q)}
               onSelectGitFile={handleSelectGitFile}
               onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
               sidePanelWidth={sidePanelWidth}

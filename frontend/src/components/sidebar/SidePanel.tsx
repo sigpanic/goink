@@ -50,8 +50,6 @@ interface Props {
     matchPos: number,
     matchLen: number,
   ) => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
   onSelectGitFile: (file: git.FileDiff) => void;
   onSelectStyleSample: (id: number) => void;
   sidePanelWidth: number;
@@ -79,8 +77,6 @@ export default function SidePanel({
   onNewSkill,
   onSearchNavigateEntity,
   onSearchNavigateChapter,
-  searchQuery,
-  onSearchChange,
   onSelectGitFile,
   onSelectStyleSample,
   sidePanelWidth,
@@ -128,8 +124,6 @@ export default function SidePanel({
       {activePanel === "search" ? (
         <SearchPanel
           novelId={novelId}
-          query={searchQuery}
-          onQueryChange={onSearchChange}
           onNavigateEntity={onSearchNavigateEntity}
           onNavigateChapter={onSearchNavigateChapter}
         />

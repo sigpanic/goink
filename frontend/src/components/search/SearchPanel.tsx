@@ -17,11 +17,10 @@ import type { PanelId } from "@/types/panel";
 import SearchInput from "@/components/shared/SearchInput";
 import { useSearch } from "./useSearch";
 import type { SearchResult } from "./useSearch";
+import { useSearchStore } from "@/stores/useSearchStore";
 
 interface Props {
   novelId: number;
-  query: string;
-  onQueryChange: (query: string) => void;
   // 4b: type 透传——storyarc 全局搜索区分 arc/node 跳转（其他领域 undefined）。
   onNavigateEntity: (
     panelId: PanelId,
@@ -87,14 +86,14 @@ const GROUP_ORDER = [
 
 export default function SearchPanel({
   novelId,
-  query,
-  onQueryChange,
   onNavigateEntity,
   onNavigateChapter,
 }: Props) {
   const { t } = useTranslation();
+  const query = useSearchStore((s) => s.query);
+  const setQuery = useSearchStore((s) => s.setQuery);
   const [selectedIdx, setSelectedIdx] = useState(-1);
-  // debounce 300ms：输入框值（query prop）变化后延迟驱动 useQuery。
+  // debounce 300ms：输入框值（query 从 useSearchStore 读）变化后延迟驱动 useQuery。
   // 保留旧实现 300ms 时延（规则 7 UI/UX 不变）。竞态保护由 useQuery 内置机制接管（替代 reqIdRef）。
   const [debouncedQuery, setDebouncedQuery] = useState(query);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -157,7 +156,7 @@ export default function SearchPanel({
     ) {
       selectResult(flatList[selectedIdx]);
     } else if (e.key === "Escape") {
-      onQueryChange("");
+      setQuery("");
       inputRef.current?.blur();
     }
   }
@@ -196,7 +195,7 @@ export default function SearchPanel({
         <SearchInput
           ref={inputRef}
           value={query}
-          onChange={(v) => onQueryChange(v)}
+          onChange={(v) => setQuery(v)}
           onKeyDown={handleKeyDown}
           placeholder={t("search.searchPlaceholder")}
           loading={!isDebouncing && searchQuery.isFetching}
