@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toErrorMessage } from "@/utils/error";
-import { splitModelKey } from "@/utils/modelKey";
-import { useApp } from "@/hooks/useApp";
+import { ExtractPattern, CancelExtractPattern } from "@/lib/wailsjs/go/app/App";
+import { useSaveContent } from "@/components/content/useSaveContent";
 import { usePatternProgress } from "@/hooks/usePatternProgress";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
@@ -13,7 +13,8 @@ interface Props {
   taskId: string;
   novelId: number;
   chapterIds: number[]; // 空数组表示全书
-  modelKey: string; // "provider/model" 格式
+  providerName: string; // 结构化模型入参（替代拼接 modelKey + splitModelKey）
+  modelId: string;
   title: string; // 小说标题（进度页展示用）
   chapterCount: number; // 本次提取的章节数
   onExit: () => void; // 返回选择页
@@ -34,17 +35,20 @@ export default function PatternSessionView({
   taskId,
   novelId,
   chapterIds,
-  modelKey,
+  providerName,
+  modelId,
   title,
   chapterCount,
   onExit,
 }: Props) {
-  const app = useApp();
   const { t } = useTranslation();
   const [status, setStatus] = useState<Status>("running");
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  // 5.3 pattern commit 2: SaveContent 走 useSaveContent mutation（复用 5.2 content 领域），
+  //   loading 由 mutation.isPending 推导，删手动 setLoading state。
+  //   流式 ExtractPattern/CancelExtractPattern 改直接 import wailsjs（删 useApp），保持本地 state + try/catch。
+  const saveMutation = useSaveContent();
   const { progress, events, reset } = usePatternProgress(taskId);
   const startedRef = useRef(false);
 
@@ -54,19 +58,19 @@ export default function PatternSessionView({
     setResult(null);
     reset();
 
-    const [providerName, modelID] = splitModelKey(modelKey);
-    if (!providerName || !modelID) {
+    // 结构化入参校验（替代 splitModelKey 拆解 + 校验）
+    if (!providerName || !modelId) {
       setError(t("extract.extractFailed"));
       setStatus("failed");
       return;
     }
 
     try {
-      const res = await app.ExtractPattern({
+      const res = await ExtractPattern({
         task_id: taskId,
         novel_id: novelId,
         provider_name: providerName,
-        model_id: modelID,
+        model_id: modelId,
         reasoning_effort: "",
         chapter_ids: chapterIds.length > 0 ? chapterIds : undefined,
       });
@@ -97,7 +101,7 @@ export default function PatternSessionView({
 
   const handleCancel = async () => {
     try {
-      await app.CancelExtractPattern(novelId);
+      await CancelExtractPattern(novelId);
     } catch {
       // ignore cancel errors
     }
@@ -106,10 +110,9 @@ export default function PatternSessionView({
 
   const handleSave = async () => {
     if (!result) return;
-    setLoading(true);
     setError("");
     try {
-      await app.SaveContent({
+      await saveMutation.mutateAsync({
         novel_id: result.novelId,
         path: result.filePath,
         content: result.rawContent,
@@ -117,8 +120,6 @@ export default function PatternSessionView({
       onExit();
     } catch (e: unknown) {
       setError(toErrorMessage(e, t("extract.saveFailed")));
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -168,11 +169,13 @@ export default function PatternSessionView({
               </button>
               <button
                 onClick={handleSave}
-                disabled={loading}
+                disabled={saveMutation.isPending}
                 className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg text-sm font-medium bg-action-save text-action-save-foreground hover:bg-action-save/80 disabled:opacity-50 transition-colors"
               >
                 <Save className="w-3.5 h-3.5" />
-                {loading ? t("extract.saving") : t("extract.saveToUserSkill")}
+                {saveMutation.isPending
+                  ? t("extract.saving")
+                  : t("extract.saveToUserSkill")}
               </button>
             </div>
           </>

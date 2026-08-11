@@ -21,7 +21,8 @@ interface SessionParams {
   taskId: string;
   novelId: number;
   chapterIds: number[];
-  modelKey: string;
+  providerName: string;
+  modelId: string;
   title: string;
   chapterCount: number;
 }
@@ -126,12 +127,16 @@ export default function PatternExtractView({ currentNovelId }: Props) {
 
   const handleExtract = useCallback(() => {
     if (!canExtract) return;
+    // 5.3 pattern commit 2: 从 models 取结构化 ProviderName/ModelID 传入 sessionParams（废弃拼接 modelKey + splitModelKey）。
+    const selectedModel = models.find((m) => m.Key === modelKey);
+    if (!selectedModel) return;
     const taskId = createPatternTaskID();
     setSessionParams({
       taskId,
       novelId: targetNovelId,
       chapterIds: activeChapterIds,
-      modelKey,
+      providerName: selectedModel.ProviderName,
+      modelId: selectedModel.ModelID,
       title: targetNovelTitle || t("extract.progress.unknownWork"),
       chapterCount: activeChapterCount,
     });
@@ -140,6 +145,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     activeChapterCount,
     activeChapterIds,
     canExtract,
+    models,
     modelKey,
     t,
     targetNovelId,
@@ -152,7 +158,8 @@ export default function PatternExtractView({ currentNovelId }: Props) {
         taskId={sessionParams.taskId}
         novelId={sessionParams.novelId}
         chapterIds={sessionParams.chapterIds}
-        modelKey={sessionParams.modelKey}
+        providerName={sessionParams.providerName}
+        modelId={sessionParams.modelId}
         title={sessionParams.title}
         chapterCount={sessionParams.chapterCount}
         onExit={() => {
