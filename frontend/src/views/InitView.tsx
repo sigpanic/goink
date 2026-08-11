@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useApp } from "@/hooks/useApp";
+import { GetPlatform, Initialize } from "@/lib/wailsjs/go/app/App";
 import { useTheme, type Theme } from "@/hooks/useTheme";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon, Languages } from "lucide-react";
@@ -71,7 +71,6 @@ interface Props {
 }
 
 export default function InitView({ onInitialized }: Props) {
-  const app = useApp();
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useTheme();
 
@@ -95,10 +94,10 @@ export default function InitView({ onInitialized }: Props) {
   const [initializing, setInitializing] = useState(false);
 
   useEffect(() => {
-    app.GetPlatform().then((info) => {
+    GetPlatform().then((info) => {
       if (info.defaultPath) setDataDir(info.defaultPath as string);
     });
-  }, [app]);
+  }, []);
 
   function handleThemeSelect(t: Theme) {
     setSelectedTheme(t);
@@ -109,7 +108,7 @@ export default function InitView({ onInitialized }: Props) {
     setError("");
     setInitializing(true);
     try {
-      await app.Initialize(dataDir);
+      await Initialize(dataDir);
       onInitialized();
     } catch (e) {
       setError(String(e));

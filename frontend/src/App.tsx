@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
+import { IsInitialized, GetSettings } from "@/lib/wailsjs/go/app/App";
+import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -15,14 +17,11 @@ export default function App() {
   const [view, setView] = useState<View>("loading");
   const [initialNovelId, setInitialNovelId] = useState(0);
   const [fromInit, setFromInit] = useState(false);
-  const app = useApp();
-
   useEffect(() => {
-    app
-      .IsInitialized()
+    IsInitialized()
       .then(async (ok) => {
         if (ok) {
-          const settings = await app.GetSettings();
+          const settings = await GetSettings();
           setInitialNovelId(settings?.last_novel_id ?? 0);
           setView("workspace");
         } else {
@@ -33,7 +32,7 @@ export default function App() {
         console.error("App initialization failed", err);
         setView("init");
       });
-  }, [app]);
+  }, []);
 
   if (view === "loading") {
     return (
@@ -64,8 +63,12 @@ export default function App() {
           {view === "init" && (
             <InitView
               onInitialized={async () => {
-                const settings = await app.GetSettings();
-                setInitialNovelId(settings?.last_novel_id ?? 0);
+                try {
+                  const settings = await GetSettings();
+                  setInitialNovelId(settings?.last_novel_id ?? 0);
+                } catch (err) {
+                  toastError(toErrorMessage(err, t("chat.settingsLoadFailed")));
+                }
                 setFromInit(true);
                 setView("workspace");
               }}
