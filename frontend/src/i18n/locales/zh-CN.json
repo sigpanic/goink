@@ -806,6 +806,7 @@
     "search": "搜索...",
     "loading": "加载中...",
     "noSkills": "暂无技能",
+    "loadFailed": "加载失败",
     "currentNovel": "当前小说",
     "userLevel": "用户级",
     "builtin": "内置",

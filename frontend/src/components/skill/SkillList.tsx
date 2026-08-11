@@ -1,12 +1,15 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Search, Plus, Pencil, Trash2, Heart, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useApp } from "@/hooks/useApp";
 import type { skill } from "@/hooks/useApp";
+import { skillKeys } from "@/lib/queryKeys";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
+import { useSkills } from "./useSkills";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -38,37 +41,21 @@ export default function SkillList({
   onNewSkill,
 }: Props) {
   const app = useApp();
+  const qc = useQueryClient();
   const { t } = useTranslation();
-  const [skills, setSkills] = useState<skill.SkillMeta[]>([]);
+  // 5.4 commit 1: skills 走 query（与 SkillMarketplace 已安装索引共享缓存，commit 3 迁）。
+  // query 错误 toast 由全局中间件接管，组件加 isError 内连显示（对齐 ReaderList/PreferenceList）。
+  // DeleteSkill 仍走 useApp（commit 2 迁 useDeleteSkill mutation）。
+  const { data: skills = [], isLoading, isError } = useSkills(novelId);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
   const [showContribute, setShowContribute] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
-  const load = useCallback(async () => {
-    if (!novelId) {
-      setSkills([]);
-      return;
-    }
-    setLoading(true);
-    try {
-      const list = await app.ListSkills({ novel_id: novelId });
-      setSkills(list ?? []);
-    } catch (err) {
-      console.error("Failed to load skills:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [app, novelId]);
 
   const handleMarketplaceInstalled = useCallback(() => {
-    load();
-  }, [load]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+    qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
+  }, [qc, novelId]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return skills;
@@ -104,7 +91,8 @@ export default function SkillList({
         source: deleteTarget.source,
       });
       setDeleteTarget(null);
-      await load();
+      // 5.4 commit 1: 删除后刷新走 invalidateQueries（commit 2 迁 useDeleteSkill mutation）。
+      qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
     } catch (err) {
       toastError(t("skill.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
@@ -197,9 +185,13 @@ export default function SkillList({
         </div>
       </div>
       <div className="flex-1 overflow-y-auto overscroll-contain">
-        {loading ? (
+        {isLoading ? (
           <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">
             {t("skill.loading")}
+          </div>
+        ) : isError ? (
+          <div className="flex items-center justify-center py-8 text-xs text-destructive">
+            {t("skill.loadFailed")}
           </div>
         ) : skills.length === 0 ? (
           <div className="flex items-center justify-center py-8 text-xs text-muted-foreground">

@@ -830,6 +830,7 @@
     "search": "Search...",
     "loading": "Loading...",
     "noSkills": "No skills yet",
+    "loadFailed": "Load failed",
     "currentNovel": "Current Novel",
     "userLevel": "User",
     "builtin": "Built-in",

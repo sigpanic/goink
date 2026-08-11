@@ -93,7 +93,10 @@ export const styleSampleKeys = {
 };
 
 export const skillKeys = {
+  // all: 前缀失效用（invalidateQueries 失效所有 novel 的 list 缓存）。
   all: ["skills"] as const,
+  // list: 与 ListSkillsInput.novel_id 对齐，避免跨 novel 串缓存（不同 novel 的 novel 层 skill 不同）。
+  list: (novelId: number) => ["skills", novelId] as const,
   detail: (name: string) => ["skill", name] as const,
 };
 

@@ -29,7 +29,7 @@
 ["preferences", novelId]
 ["novel-settings", novelId]
 ["style-samples", novelId]
-["skills"]                    全局
+["skills", novelId]           与 ListSkillsInput.novel_id 对齐（novel 层 skill 随 novel 变）
 
 单个（单数）：
 ["novel", id]

@@ -35,7 +35,8 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // 5.3 commit 1：style 领域 GET 端点（list + infiniteList 共用 style-samples 前缀，detail 用 style-sample）
   "style-samples": "styleSample.loadFailed",
   "style-sample": "styleSample.loadFailed",
-  // skills: "skill.loadFailed",
+  // 5.4 commit 1：skill 领域 GET 端点（ListSkills）
+  skills: "skill.loadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。
