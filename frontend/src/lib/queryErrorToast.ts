@@ -44,6 +44,8 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   "git-commits": "git.commitsLoadFailed",
   "commit-files": "git.commitFilesLoadFailed",
   "file-diff": "git.fileDiffLoadFailed",
+  // 5.5 commit 1：search 领域 GET 端点（SearchAll 全局跨实体搜索）
+  search: "search.loadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。

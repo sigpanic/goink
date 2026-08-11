@@ -792,7 +792,8 @@
     "inputKeyword": "Enter keywords to search",
     "noResults": "No results",
     "searchPlaceholder": "Search characters, locations, timeline, text...",
-    "chapterN": "Ch.{{n}}"
+    "chapterN": "Ch.{{n}}",
+    "loadFailed": "Search failed"
   },
   "export": {
     "exportWork": "Export Work",

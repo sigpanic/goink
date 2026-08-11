@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Search,
   User,
@@ -13,18 +13,15 @@ import {
   Loader2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { SearchAll } from "@/lib/wailsjs/go/app/App";
-import { search } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
 import SearchInput from "@/components/shared/SearchInput";
-
-export type SearchResult = search.Result;
+import { useSearch } from "./useSearch";
+import type { SearchResult } from "./useSearch";
 
 interface Props {
   novelId: number;
   query: string;
-  results: SearchResult[];
-  onResultsChange: (query: string, results: SearchResult[]) => void;
+  onQueryChange: (query: string) => void;
   // 4b: type 透传——storyarc 全局搜索区分 arc/node 跳转（其他领域 undefined）。
   onNavigateEntity: (
     panelId: PanelId,
@@ -91,61 +88,34 @@ const GROUP_ORDER = [
 export default function SearchPanel({
   novelId,
   query,
-  results,
-  onResultsChange,
+  onQueryChange,
   onNavigateEntity,
   onNavigateChapter,
 }: Props) {
   const { t } = useTranslation();
-  const [loading, setLoading] = useState(false);
   const [selectedIdx, setSelectedIdx] = useState(-1);
+  // debounce 300ms：输入框值（query prop）变化后延迟驱动 useQuery。
+  // 保留旧实现 300ms 时延（规则 7 UI/UX 不变）。竞态保护由 useQuery 内置机制接管（替代 reqIdRef）。
+  const [debouncedQuery, setDebouncedQuery] = useState(query);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const timerRef = useRef<number>(0);
-  const reqIdRef = useRef(0);
-  const onResultsChangeRef = useRef(onResultsChange);
-  useEffect(() => {
-    onResultsChangeRef.current = onResultsChange;
-  }, [onResultsChange]);
-
-  const doSearch = useCallback(
-    async (q: string, reqId: number) => {
-      if (!q.trim() || !novelId) {
-        onResultsChangeRef.current(q, []);
-        setLoading(false);
-        return;
-      }
-      setLoading(true);
-      try {
-        const data = (await SearchAll(
-          novelId,
-          q.trim(),
-        )) as unknown as SearchResult[];
-        if (reqIdRef.current !== reqId) return;
-        setSelectedIdx(-1);
-        onResultsChangeRef.current(q, data ?? []);
-      } catch {
-        if (reqIdRef.current !== reqId) return;
-        onResultsChangeRef.current(q, []);
-      } finally {
-        if (reqIdRef.current === reqId) setLoading(false);
-      }
-    },
-    [novelId],
-  );
 
   useEffect(() => {
-    clearTimeout(timerRef.current);
-    reqIdRef.current++;
-    const id = reqIdRef.current;
-    timerRef.current = window.setTimeout(() => doSearch(query, id), 300);
-    return () => clearTimeout(timerRef.current);
-  }, [query, doSearch]);
+    const timer = window.setTimeout(() => setDebouncedQuery(query), 300);
+    return () => clearTimeout(timer);
+  }, [query]);
+
+  const searchQuery = useSearch({ novelId, query: debouncedQuery });
+
+  // debounce 期间当空结果：匹配旧实现输入瞬间 onResultsChange(v, []) 清空 results 的行为
+  // （输入瞬间显示「无搜索结果」，300ms 后才 spinner，规则 7 UI/UX 不变）。
+  const isDebouncing = query !== debouncedQuery;
+  const data = isDebouncing ? [] : (searchQuery.data ?? []);
 
   // 按分组整理结果
   const grouped = (() => {
     const map = new Map<string, SearchResult[]>();
-    for (const r of results) {
+    for (const r of data) {
       const existing = map.get(r.type) ?? [];
       existing.push(r);
       map.set(r.type, existing);
@@ -187,7 +157,7 @@ export default function SearchPanel({
     ) {
       selectResult(flatList[selectedIdx]);
     } else if (e.key === "Escape") {
-      onResultsChange("", []);
+      onQueryChange("");
       inputRef.current?.blur();
     }
   }
@@ -226,10 +196,10 @@ export default function SearchPanel({
         <SearchInput
           ref={inputRef}
           value={query}
-          onChange={(v) => onResultsChange(v, [])}
+          onChange={(v) => onQueryChange(v)}
           onKeyDown={handleKeyDown}
           placeholder={t("search.searchPlaceholder")}
-          loading={loading}
+          loading={!isDebouncing && searchQuery.isFetching}
           className="flex-1"
         />
       </div>
@@ -242,7 +212,13 @@ export default function SearchPanel({
               {t("search.inputKeyword")}
             </p>
           </div>
-        ) : loading ? (
+        ) : !isDebouncing && searchQuery.isError ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs text-muted-foreground">
+              {t("search.loadFailed")}
+            </p>
+          </div>
+        ) : !isDebouncing && searchQuery.isFetching ? (
           <div className="flex items-center justify-center h-20">
             <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
           </div>

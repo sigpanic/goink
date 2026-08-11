@@ -36,7 +36,6 @@ import GitCommitView from "@/components/git/GitCommitView";
 import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import { search } from "@/lib/wailsjs/go/models";
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
 import { CheckUpdate } from "@/lib/wailsjs/go/app/App";
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
@@ -107,7 +106,6 @@ export default function WorkspaceView({
   const setSidebarPanel = usePanelStore((s) => s.setSidebarPanel);
   const setSidebarClosed = usePanelStore((s) => s.setSidebarClosed);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<search.Result[]>([]);
   // focusMap 外置到 useFocusStore（2.8）。各 View 自己订阅 focusId。
   // styleSampleFocusId 语义不同（null=已处理），保留本地 state。
   const focusEntity = useFocusStore((s) => s.focusEntity);
@@ -448,11 +446,7 @@ export default function WorkspaceView({
               onSearchNavigateEntity={handleSearchNavigateEntity}
               onSearchNavigateChapter={handleSearchNavigateChapter}
               searchQuery={searchQuery}
-              searchResults={searchResults}
-              onSearchChange={(q, r) => {
-                setSearchQuery(q);
-                setSearchResults(r);
-              }}
+              onSearchChange={(q) => setSearchQuery(q)}
               onSelectGitFile={handleSelectGitFile}
               onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
               sidePanelWidth={sidePanelWidth}

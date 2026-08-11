@@ -163,3 +163,12 @@ export const fileDiffKeys = {
   detail: (novelId: number, hash: string, filePath: string) =>
     ["file-diff", novelId, hash, filePath] as const,
 };
+
+// 5.5 commit 1：search 领域 query key。
+// SearchAll(novelId, query) 全局跨实体搜索。query 字符串编入 key 驱动 refetch +
+// 让 query 内置竞态保护接管（替代旧 reqIdRef 手动竞态保护）。
+// staleTime=0（搜索是用户主动期望最新结果的操作）+ gcTime 短（防输入字符堆积 cache）。
+export const searchKeys = {
+  list: (novelId: number, query: string) =>
+    ["search", novelId, query] as const,
+};

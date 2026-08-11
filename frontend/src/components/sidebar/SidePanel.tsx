@@ -13,7 +13,6 @@ import ReaderList from "@/components/reader/ReaderList";
 import PreferenceList from "@/components/preference/PreferenceList";
 import NovelSettingList from "@/components/novel-setting/NovelSettingList";
 import StyleSampleList from "@/components/style/StyleSampleList";
-import type { SearchResult } from "@/components/search/SearchPanel";
 import GitHistoryList from "@/components/git/GitHistoryList";
 import type { git } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
@@ -52,8 +51,7 @@ interface Props {
     matchLen: number,
   ) => void;
   searchQuery: string;
-  searchResults: SearchResult[];
-  onSearchChange: (query: string, results: SearchResult[]) => void;
+  onSearchChange: (query: string) => void;
   onSelectGitFile: (file: git.FileDiff) => void;
   onSelectStyleSample: (id: number) => void;
   sidePanelWidth: number;
@@ -82,7 +80,6 @@ export default function SidePanel({
   onSearchNavigateEntity,
   onSearchNavigateChapter,
   searchQuery,
-  searchResults,
   onSearchChange,
   onSelectGitFile,
   onSelectStyleSample,
@@ -132,8 +129,7 @@ export default function SidePanel({
         <SearchPanel
           novelId={novelId}
           query={searchQuery}
-          results={searchResults}
-          onResultsChange={onSearchChange}
+          onQueryChange={onSearchChange}
           onNavigateEntity={onSearchNavigateEntity}
           onNavigateChapter={onSearchNavigateChapter}
         />

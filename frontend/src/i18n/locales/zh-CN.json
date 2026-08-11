@@ -769,7 +769,8 @@
     "inputKeyword": "输入关键词搜索",
     "noResults": "无搜索结果",
     "searchPlaceholder": "搜索人物、地点、时间线、正文...",
-    "chapterN": "第{{n}}章"
+    "chapterN": "第{{n}}章",
+    "loadFailed": "搜索失败"
   },
   "export": {
     "exportWork": "导出作品",
