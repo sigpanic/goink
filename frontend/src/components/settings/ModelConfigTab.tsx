@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useApp } from "@/hooks/useApp";
 import type { llm } from "@/hooks/useApp";
 import { toastSuccess } from "@/utils/toast";
 import { useSaveLLMConfig } from "./useSaveLLMConfig";
+import { useLLMConfig } from "./useLLMConfig";
+import { useTestConnection } from "./useTestConnection";
 import BuiltinProviderPane from "./BuiltinProviderPane";
 import CustomProviderPane from "./CustomProviderPane";
 
@@ -12,11 +13,11 @@ type SubNav = "builtin" | "custom";
 
 export default function ModelConfigTab() {
   const { t } = useTranslation();
-  const app = useApp();
   const saveMutation = useSaveLLMConfig();
+  const llmConfigQuery = useLLMConfig();
+  const testConnectionMutation = useTestConnection();
   const [providers, setProviders] = useState<llm.ProviderView[]>([]);
   const [subNav, setSubNav] = useState<SubNav>("builtin");
-  const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState("");
 
@@ -31,22 +32,20 @@ export default function ModelConfigTab() {
   // 保存过后的配置哈希，用于判断 key 是否被修改
   const savedKeysRef = useRef<Record<string, string>>({});
 
+  // query data ready 后一次性初始化 providers/savedKeysRef（providers 是本地编辑态，
+  // 后续 handleUpdateProvider/handleTest/handleSave 都改本地 state，不回写 query cache）。
+  // GET 错误由全局中间件接管（llm-config 前缀 → settings.llmConfigLoadFailed），不在此处理。
   useEffect(() => {
-    app
-      .GetLLMConfig()
-      .then((config) => {
-        if (config?.providers) {
-          setProviders(config.providers);
-          const keys: Record<string, string> = {};
-          for (const p of config.providers) {
-            if (p.api_key) keys[p.key] = p.api_key;
-          }
-          savedKeysRef.current = keys;
-        }
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
-  }, [app]);
+    const config = llmConfigQuery.data;
+    if (config?.providers) {
+      setProviders(config.providers);
+      const keys: Record<string, string> = {};
+      for (const p of config.providers) {
+        if (p.api_key) keys[p.key] = p.api_key;
+      }
+      savedKeysRef.current = keys;
+    }
+  }, [llmConfigQuery.data]);
 
   const builtinProviders = providers.filter((p) => p.source === "builtin");
   const customProviders = providers.filter((p) => p.source === "custom");
@@ -143,7 +142,7 @@ export default function ModelConfigTab() {
       try {
         // 后端 expandChatURLCandidates 会补 https:// 和多层 fallback，
         // 前端直接传原值，不再自己 norl。
-        const resolvedUrl = await app.TestConnection({
+        const resolvedUrl = await testConnectionMutation.mutateAsync({
           provider_name: providerKey,
           chat_url: provider.chat_url || "",
           api_key: provider.api_key,
@@ -180,7 +179,7 @@ export default function ModelConfigTab() {
         setTesting((prev) => ({ ...prev, [providerKey]: false }));
       }
     },
-    [providers, app, t],
+    [providers, testConnectionMutation, t],
   );
 
   const handleSave = useCallback(async () => {
@@ -247,7 +246,7 @@ export default function ModelConfigTab() {
     }
   }, [providers, saveMutation, testResults, handleTest, t]);
 
-  if (isLoading) {
+  if (llmConfigQuery.isLoading) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />

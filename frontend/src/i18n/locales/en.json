@@ -254,6 +254,7 @@
     "nickname": "Name",
     "email": "Email",
     "saveFailed": "Save failed",
+    "llmConfigLoadFailed": "Failed to load model config",
     "maintenance": "Maintenance",
     "rebuildIndexDesc": "If search is abnormal, rebuild the vector index for a specific novel.",
     "rebuilding": "Rebuilding...",

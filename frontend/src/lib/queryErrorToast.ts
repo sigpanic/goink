@@ -50,6 +50,8 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // settings 复用 chat.settingsLoadFailed（GetSettings 共享缓存，文案通用）
   "writing-activity": "profile.activityLoadFailed",
   "writing-stats": "profile.statsLoadFailed",
+  // 5.8 commit 1：LLM 配置 query（GetLLMConfig）
+  "llm-config": "settings.llmConfigLoadFailed",
 };
 
 // 4a 全局 query 错误 toast 中间件。
