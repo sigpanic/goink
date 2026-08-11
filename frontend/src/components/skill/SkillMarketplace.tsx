@@ -17,7 +17,6 @@ import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { InstallRemoteSkill } from "@/lib/wailsjs/go/app/App";
 import { skillKeys } from "@/lib/queryKeys";
 import { AppErr } from "@/utils/wailsResult";
 import { useSkills } from "./useSkills";
@@ -26,6 +25,7 @@ import {
   useRemoteSkillContent,
   fetchRemoteSkillContent,
 } from "./useRemoteSkillContent";
+import { useInstallRemoteSkill } from "./useInstallRemoteSkill";
 import { useFileContent } from "@/components/content/useFileContent";
 
 interface Props {
@@ -122,7 +122,10 @@ export default function SkillMarketplace({
   const [contentError, setContentError] = useState("");
 
   const [installTarget, setInstallTarget] = useState<InstallTarget>("user");
-  const [installing, setInstalling] = useState(false);
+  // 5.4 commit 4: installing 由 mutation.isPending 推导（删 useState），mutation onSuccess 失效 skills + remote-skills。
+  // installTarget 仍需 useState：在 doInstall 之前 setInstallTarget 标记哪个按钮 loading，mutation 不持此信息。
+  const installMutation = useInstallRemoteSkill(novelId);
+  const installing = installMutation.isPending;
 
   // 5.4 commit 3: skills（已安装索引）走 useSkills query（commit 1 建），与 SkillList 共享缓存。
   // installedNames/installedVersions 由 query data 推导，删 loadInstalledIndex + useState。
@@ -189,7 +192,6 @@ export default function SkillMarketplace({
       setPage(1);
       setPageSize(DEFAULT_PAGE_SIZE);
       setContentError("");
-      setInstalling(false);
     }
   }, [open]);
 
@@ -229,38 +231,38 @@ export default function SkillMarketplace({
     [fetchContent, novelId],
   );
 
-  // Install skill（commit 3: 直接 import wailsjs InstallRemoteSkill，不经 useApp；保持读 err_code，commit 4 改 mutation + unwrapResult）
+  // Install skill（commit 4: 走 useInstallRemoteSkill mutation + unwrapResult，删 InstallRemoteSkill 直接 import）。
+  // mutation onSuccess 已失效 skillKeys.list(novelId) + ["remote-skills"]，doInstall 内不再手动 invalidate。
+  // mutateAsync 稳定引用（TanStack Query 保证），进 deps 不会触发 doInstall 重建。
+  const installMutateAsync = installMutation.mutateAsync;
   const doInstall = useCallback(
     async (target: InstallTarget, name: string) => {
-      setInstalling(true);
       try {
-        const res = await InstallRemoteSkill({
+        await installMutateAsync({
           name,
           target,
           novel_id: novelId,
         });
-        const code = res?.err_code ?? "";
-        if (code && code !== "ok") {
-          const cls = classifyError(code, res?.err_msg ?? "", t);
-          toastError(cls.message);
-          return;
-        }
-        // success — refresh installed index + remote list, trigger callback, back to browse
-        qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
-        qc.invalidateQueries({ queryKey: ["remote-skills"] });
+        // success — 触发回调，回 browse（query 失效由 mutation onSuccess 处理）
         onInstalled?.();
         setPhase("browse");
         setSelectedSkill(null);
         setLocalContent("");
         setRemoteContentForConfirm("");
       } catch (e: unknown) {
-        const msg = toErrorMessage(e);
-        toastError(t("skill.marketplace.installFailed") + ": " + msg);
-      } finally {
-        setInstalling(false);
+        // 统一到 catch toast（删 err_code 分支）：AppErr 用 classifyError 映射短码文案，
+        // 非 AppErr（如网络层错误）走 installFailed + msg 兜底。
+        if (e instanceof AppErr) {
+          const cls = classifyError(e.errCode, e.message, t);
+          toastError(cls.message);
+        } else {
+          toastError(
+            t("skill.marketplace.installFailed") + ": " + toErrorMessage(e),
+          );
+        }
       }
     },
-    [novelId, t, qc, onInstalled],
+    [installMutateAsync, novelId, t, onInstalled],
   );
 
   // Click install button — probe then install or enter confirm_overwrite
