@@ -3,15 +3,7 @@ import { useTranslation } from "react-i18next";
 import { MessageSquare, Loader2, History, Plus } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
-import {
-  GetSession,
-  SetLastSession,
-  SetSelectedModel,
-  SetReasoningEffort,
-  SetApprovalMode,
-  CancelChat,
-  Chat,
-} from "@/lib/wailsjs/go/app/App";
+import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
 import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
@@ -44,6 +36,11 @@ import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useChatStore } from "./useChatStore";
 import { useCompressContext } from "./useCompressContext";
+import { useCancelChat } from "./useCancelChat";
+import { useSetLastSession } from "./useSetLastSession";
+import { useSetSelectedModel } from "./useSetSelectedModel";
+import { useSetReasoningEffort } from "./useSetReasoningEffort";
+import { useSetApprovalMode } from "./useSetApprovalMode";
 
 interface Props {
   novelId: number;
@@ -86,6 +83,11 @@ export default function ChatPanel({
   const { t } = useTranslation();
   const qc = useQueryClient();
   const compressMutation = useCompressContext();
+  const cancelChatMutation = useCancelChat();
+  const setLastSessionMutation = useSetLastSession();
+  const setSelectedModelMutation = useSetSelectedModel();
+  const setReasoningEffortMutation = useSetReasoningEffort();
+  const setApprovalModeMutation = useSetApprovalMode();
   const modelsQuery = useModels();
   const settingsQuery = useSettings();
   const sessionsQuery = useSessions({
@@ -211,10 +213,10 @@ export default function ChatPanel({
           }
         })
         .catch(() => {
-          SetLastSession("").catch(() => {});
+          setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
         });
     }
-  }, [novelId]);
+  }, [novelId, setLastSessionMutation, t]);
 
   // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
   // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
@@ -295,10 +297,10 @@ export default function ChatPanel({
   const handleSelectSession = useCallback(
     (sid: string) => {
       setActiveSessionId(sid);
-      SetLastSession(sid).catch(() => {});
+      setLastSessionMutation.mutateAsync(sid).catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
       // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
-    [],
+    [setLastSessionMutation, t],
   );
 
   const handleNewChat = useCallback(() => {
@@ -956,24 +958,24 @@ export default function ChatPanel({
         effort = m.ReasoningLevels[0];
         setReasoningEffort(effort);
       }
-      SetSelectedModel(key, effort).catch(() => {});
+      setSelectedModelMutation.mutateAsync({ key, effort }).catch((err) => toastError(toErrorMessage(err, t("chat.setSelectedModelFailed"))));
     },
-    [modelsQuery.data, setSelectedModel, setReasoningEffort],
+    [modelsQuery.data, setSelectedModel, setReasoningEffort, setSelectedModelMutation, t],
   );
 
   const handleSelectEffort = useCallback(
     (effort: string) => {
       setReasoningEffort(effort);
-      SetReasoningEffort(effort).catch(() => {});
+      setReasoningEffortMutation.mutateAsync(effort).catch((err) => toastError(toErrorMessage(err, t("chat.setReasoningEffortFailed"))));
     },
-    [setReasoningEffort],
+    [setReasoningEffort, setReasoningEffortMutation, t],
   );
 
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
-    SetApprovalMode(next).catch(() => {});
-  }, [approvalMode, setApprovalMode]);
+    setApprovalModeMutation.mutateAsync(next).catch((err) => toastError(toErrorMessage(err, t("chat.setApprovalModeFailed"))));
+  }, [approvalMode, setApprovalMode, setApprovalModeMutation, t]);
 
   const handleCompress = useCallback(async () => {
     if (!sessionId || !selectedModel || compressingRef.current) return;
@@ -1040,7 +1042,7 @@ export default function ChatPanel({
       const m = selectedModel.ModelID;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
-        CancelChat(sessionId);
+        cancelChatMutation.mutateAsync(sessionId).catch((err) => toastError(toErrorMessage(err, t("chat.cancelFailed"))));
       }
       setIsLoading(true);
 
@@ -1068,7 +1070,7 @@ export default function ChatPanel({
           if (data.session_id) {
             setSessionId(data.session_id);
             setActiveSessionId(data.session_id);
-            SetLastSession(data.session_id).catch(() => {});
+            setLastSessionMutation.mutateAsync(data.session_id).catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
           }
 
           // 更新 turn 的 turnId 为后端分配的真实值
@@ -1158,6 +1160,9 @@ export default function ChatPanel({
       applyAgentEvent,
       activeSessionId,
       qc,
+      cancelChatMutation,
+      setLastSessionMutation,
+      t,
     ],
   );
 
@@ -1432,6 +1437,7 @@ export default function ChatPanel({
       <ChatInput
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading}
+        isCancelling={cancelChatMutation.isPending}
         placeholder={inputPlaceholder}
         slashItems={slashCommandsQuery.data ?? []}
         onSend={handleSend}
@@ -1444,7 +1450,7 @@ export default function ChatPanel({
                 : t,
             ),
           );
-          CancelChat(sessionId);
+          cancelChatMutation.mutateAsync(sessionId).catch((err) => toastError(toErrorMessage(err, t("chat.cancelFailed"))));
         }}
       />
 

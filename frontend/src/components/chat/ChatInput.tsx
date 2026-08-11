@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
-import { ArrowUp, Square, Zap, Play, Star } from "lucide-react";
+import { ArrowUp, Square, Zap, Play, Star, Loader2 } from "lucide-react";
 import type { app } from "@/hooks/useApp";
 import SlashMenu from "./SlashMenu";
 
@@ -26,6 +26,7 @@ const score = (c: app.SlashCommand, q: string): number => {
 interface Props {
   disabled: boolean;
   isLoading: boolean;
+  isCancelling: boolean;
   placeholder: string;
   slashItems: app.SlashCommand[];
   onSend: (message: string) => void;
@@ -36,6 +37,7 @@ interface Props {
 export default function ChatInput({
   disabled,
   isLoading,
+  isCancelling,
   placeholder,
   slashItems,
   onSend,
@@ -254,9 +256,14 @@ export default function ChatInput({
         {isLoading && !hasContent ? (
           <button
             onClick={handleStopClick}
-            className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-md transition-all hover:bg-destructive/85 shrink-0"
+            disabled={isCancelling}
+            className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-md transition-all hover:bg-destructive/85 disabled:opacity-70 shrink-0"
           >
-            <Square className="w-4 h-4" fill="currentColor" />
+            {isCancelling ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Square className="w-4 h-4" fill="currentColor" />
+            )}
           </button>
         ) : (
           <button
