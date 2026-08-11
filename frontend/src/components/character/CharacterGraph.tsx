@@ -3,7 +3,7 @@ import { Graph, treeToGraphData } from "@antv/g6";
 import { LocateFixed, RefreshCw, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useGraphColors } from "@/components/graphColors";
-import type { character } from "@/hooks/useApp";
+import type { character } from "@/lib/wailsjs/go/models";
 import { useCharacters } from "./useCharacters";
 import { useCharacterRelations } from "./useCharacterRelations";
 

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/hooks/useApp";
+import type { llm } from "@/lib/wailsjs/go/models";
 import { toastSuccess } from "@/utils/toast";
 import { useSaveLLMConfig } from "./useSaveLLMConfig";
 import { useLLMConfig } from "./useLLMConfig";

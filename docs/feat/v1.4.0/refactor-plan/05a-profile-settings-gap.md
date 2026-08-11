@@ -31,7 +31,7 @@
 - [x] commit 4: WorkspaceView 删 useApp（GetPlatform/ApproveTool/SetActiveNovel + switchNovel + 测试 mock 迁移）
 
 ### 5.10 类型 import 迁移 + 删 useApp.ts（1 commit）
-- [ ] commit 1: 类型 import 全量迁移 `@/hooks/useApp` → `@/lib/wailsjs/go/models` + 删 useApp.ts
+- [x] commit 1: 类型 import 全量迁移 `@/hooks/useApp` → `@/lib/wailsjs/go/models` + 删 useApp.ts
 
 ---
 

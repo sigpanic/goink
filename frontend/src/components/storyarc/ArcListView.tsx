@@ -5,7 +5,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
-import type { storyarc } from "@/hooks/useApp";
+import type { storyarc } from "@/lib/wailsjs/go/models";
 import StoryArcGraph from "@/components/storyarc/StoryArcGraph";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";

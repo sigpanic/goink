@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Plus, X, Search, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/hooks/useApp";
+import type { llm } from "@/lib/wailsjs/go/models";
 import { DiscoverModels } from "@/lib/wailsjs/go/app/App";
 import { toErrorMessage } from "@/utils/error";
 import ModelEditForm from "./ModelEditForm";

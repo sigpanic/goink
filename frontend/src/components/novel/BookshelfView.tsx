@@ -12,7 +12,7 @@ import {
 import BookCover from "@/components/sidebar/BookCover";
 import { useNovels } from "@/components/novel/useNovels";
 import { useNovelStore } from "@/components/novel/useNovelStore";
-import type { novel } from "@/hooks/useApp";
+import type { novel } from "@/lib/wailsjs/go/models";
 import { toErrorMessage } from "@/utils/error";
 
 interface Props {

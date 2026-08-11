@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { novel } from "@/hooks/useApp";
+import type { novel } from "@/lib/wailsjs/go/models";
 import { toErrorMessage } from "@/utils/error";
 
 interface Props {

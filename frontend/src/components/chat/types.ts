@@ -1,4 +1,4 @@
-import type { session } from "@/hooks/useApp";
+import type { session } from "@/lib/wailsjs/go/models";
 
 // 与 Go 端 internal/agent/events.go 的 AgentEventType 枚举一一对应
 export enum AgentEventType {

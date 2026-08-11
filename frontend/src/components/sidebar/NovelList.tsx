@@ -2,7 +2,7 @@ import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import BookCover from "@/components/sidebar/BookCover";
-import type { novel } from "@/hooks/useApp";
+import type { novel } from "@/lib/wailsjs/go/models";
 
 interface Props {
   novels: novel.Novel[];

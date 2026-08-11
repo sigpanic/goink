@@ -2,7 +2,7 @@ import { useEffect, useRef, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { createPortal } from "react-dom";
 import { Zap, Play, Star } from "lucide-react";
-import type { app } from "@/hooks/useApp";
+import type { app } from "@/lib/wailsjs/go/models";
 
 const MODE_ICON: Record<string, React.ReactNode> = {
   auto: <Zap className="w-3.5 h-3.5 text-tag-amber-foreground shrink-0" />,

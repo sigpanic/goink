@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ChevronRight, MapPin, Trash2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { location } from "@/hooks/useApp";
+import type { location } from "@/lib/wailsjs/go/models";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { useLocations } from "./useLocations";
 import { useLocationStore } from "./useLocationStore";

@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
-import type { llm } from "@/hooks/useApp";
+import type { llm } from "@/lib/wailsjs/go/models";
 import TemperatureInfo from "./TemperatureInfo";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderIcon from "./ProviderIcon";

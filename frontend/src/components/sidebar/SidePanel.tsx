@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import type { novel, chapter } from "@/hooks/useApp";
 import NovelList from "./NovelList";
 import ChapterList from "@/components/chapter/ChapterList";
 import CharacterList from "@/components/character/CharacterList";
@@ -14,7 +13,7 @@ import PreferenceList from "@/components/preference/PreferenceList";
 import NovelSettingList from "@/components/novel-setting/NovelSettingList";
 import StyleSampleList from "@/components/style/StyleSampleList";
 import GitHistoryList from "@/components/git/GitHistoryList";
-import type { git } from "@/lib/wailsjs/go/models";
+import type { git, novel, chapter } from "@/lib/wailsjs/go/models";
 import type { PanelId } from "@/types/panel";
 import { usePanelStore } from "@/stores/usePanelStore";
 

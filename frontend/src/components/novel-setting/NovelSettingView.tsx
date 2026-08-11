@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Pencil, Plus, Globe, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { setting } from "@/hooks/useApp";
+import type { setting } from "@/lib/wailsjs/go/models";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";

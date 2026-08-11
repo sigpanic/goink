@@ -7,8 +7,7 @@ import {
 } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { imp, novel, chapter } from "@/hooks/useApp";
-import type { git } from "@/lib/wailsjs/go/models";
+import type { git, imp, novel, chapter } from "@/lib/wailsjs/go/models";
 import ActivityBar from "@/components/shell/ActivityBar";
 import StatusBar from "@/components/shell/StatusBar";
 import WindowControls from "@/components/shell/WindowControls";

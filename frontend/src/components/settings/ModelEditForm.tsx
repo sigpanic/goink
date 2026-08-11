@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/hooks/useApp";
+import type { llm } from "@/lib/wailsjs/go/models";
 
 interface Props {
   model: llm.ModelInfo;

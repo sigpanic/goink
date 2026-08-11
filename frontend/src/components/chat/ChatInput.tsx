@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ArrowUp, Square, Zap, Play, Star, Loader2 } from "lucide-react";
-import type { app } from "@/hooks/useApp";
+import type { app } from "@/lib/wailsjs/go/models";
 import SlashMenu from "./SlashMenu";
 
 // charMatch 检查 q 的所有字符是否按顺序出现在 s 中（模糊匹配）

@@ -14,7 +14,7 @@ import { useGraphColors } from "@/components/graphColors";
 import { useTheme } from "@/hooks/useTheme";
 import { arcPalette } from "./arcColors";
 import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
-import type { storyarc } from "@/hooks/useApp";
+import type { storyarc } from "@/lib/wailsjs/go/models";
 import { useStoryArcs } from "./useStoryArcs";
 import { useArcNodes } from "./useArcNodes";
 import { useMaxChapterNumber } from "./useMaxChapterNumber";

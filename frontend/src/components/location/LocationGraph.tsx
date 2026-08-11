@@ -3,7 +3,7 @@ import { Graph, treeToGraphData } from "@antv/g6";
 import { LocateFixed, Map as MapIcon, RefreshCw, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useGraphColors } from "@/components/graphColors";
-import type { location } from "@/hooks/useApp";
+import type { location } from "@/lib/wailsjs/go/models";
 import { useLocations } from "./useLocations";
 import { useLocationRelations } from "./useLocationRelations";
 

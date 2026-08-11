@@ -106,7 +106,8 @@ describe("SearchPanel", () => {
       );
     });
     // inline 错误显示（五态渲染的 isError 分支）
-    expect(screen.getByText("search.loadFailed")).toBeInTheDocument();
+    // findByText 轮询等待 error 状态 re-render（getByText 同步查会竞态）
+    expect(await screen.findByText("search.loadFailed")).toBeInTheDocument();
   });
 
   it("shows noResults when search returns empty", async () => {

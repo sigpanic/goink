@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import type { character } from "@/hooks/useApp";
+import type { character } from "@/lib/wailsjs/go/models";
 import CharacterGraph from "@/components/character/CharacterGraph";
 import TagInput from "@/components/shared/TagInput";
 import { toastError } from "@/utils/toast";
