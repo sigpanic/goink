@@ -4,12 +4,12 @@ import { Search, Plus, Pencil, Trash2, Heart, Store } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { useApp } from "@/hooks/useApp";
-import type { skill } from "@/hooks/useApp";
+import type { skill } from "@/lib/wailsjs/go/models";
 import { skillKeys } from "@/lib/queryKeys";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
 import { useSkills } from "./useSkills";
+import { useDeleteSkill } from "./useDeleteSkill";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
@@ -40,13 +40,13 @@ export default function SkillList({
   onEditSkill,
   onNewSkill,
 }: Props) {
-  const app = useApp();
   const qc = useQueryClient();
   const { t } = useTranslation();
   // 5.4 commit 1: skills 走 query（与 SkillMarketplace 已安装索引共享缓存，commit 3 迁）。
   // query 错误 toast 由全局中间件接管，组件加 isError 内连显示（对齐 ReaderList/PreferenceList）。
-  // DeleteSkill 仍走 useApp（commit 2 迁 useDeleteSkill mutation）。
   const { data: skills = [], isLoading, isError } = useSkills(novelId);
+  // 5.4 commit 2: DeleteSkill 走 mutation（onSuccess invalidate list，不再手动 invalidate）。
+  const deleteMutation = useDeleteSkill(novelId);
   const [search, setSearch] = useState("");
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -74,7 +74,6 @@ export default function SkillList({
   const [deleteTarget, setDeleteTarget] = useState<skill.SkillMeta | null>(
     null,
   );
-  const [deleting, setDeleting] = useState(false);
 
   // 点击删除按钮只记录目标并弹出确认框，真正的删除在 confirmDelete 里执行
   const handleDelete = (s: skill.SkillMeta) => {
@@ -83,21 +82,15 @@ export default function SkillList({
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
-    setDeleting(true);
     try {
-      await app.DeleteSkill({
-        novel_id: novelId,
+      await deleteMutation.mutateAsync({
         name: deleteTarget.name,
         source: deleteTarget.source,
       });
       setDeleteTarget(null);
-      // 5.4 commit 1: 删除后刷新走 invalidateQueries（commit 2 迁 useDeleteSkill mutation）。
-      qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
     } catch (err) {
       toastError(t("skill.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
-    } finally {
-      setDeleting(false);
     }
   };
 
@@ -251,7 +244,7 @@ export default function SkillList({
             : ""
         }
         danger
-        loading={deleting}
+        loading={deleteMutation.isPending}
         confirmText={t("common.delete")}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}

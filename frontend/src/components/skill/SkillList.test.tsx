@@ -35,23 +35,25 @@ vi.mock("./SkillContributeDialog", () => ({
   default: () => null,
 }));
 
+// 5.4 commit 2: mock SkillMarketplace 隔离测试（其内部仍用 useApp，commit 3 才迁）。
+vi.mock("./SkillMarketplace", () => ({
+  default: () => null,
+}));
+
 // 5.4 commit 1: skills 数据走 useSkills query（不再走 useApp.ListSkills）。
 // mockUseSkills 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
-const { mockUseSkills } = vi.hoisted(() => ({
+// 5.4 commit 2: DeleteSkill 走 useDeleteSkill mutation（不再走 useApp）。
+const { mockUseSkills, mockUseDeleteSkill } = vi.hoisted(() => ({
   mockUseSkills: vi.fn(),
+  mockUseDeleteSkill: vi.fn(),
 }));
 
 vi.mock("./useSkills", () => ({
   useSkills: mockUseSkills,
 }));
 
-// DeleteSkill 仍走 useApp（commit 2 迁 useDeleteSkill mutation），mock 保留。
-const mockDeleteSkill = vi.fn();
-
-vi.mock("@/hooks/useApp", () => ({
-  useApp: () => ({
-    DeleteSkill: mockDeleteSkill,
-  }),
+vi.mock("./useDeleteSkill", () => ({
+  useDeleteSkill: mockUseDeleteSkill,
 }));
 
 describe("SkillList", () => {
@@ -70,6 +72,11 @@ describe("SkillList", () => {
       data: [],
       isLoading: false,
       isError: false,
+    });
+    // 默认 delete mutation 返回 resolved mutateAsync + isPending false
+    mockUseDeleteSkill.mockReturnValue({
+      mutateAsync: vi.fn().mockResolvedValue(undefined),
+      isPending: false,
     });
   });
 
@@ -109,12 +116,16 @@ describe("SkillList", () => {
   });
 
   it("calls DeleteSkill on confirm and reloads", async () => {
+    const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseDeleteSkill.mockReturnValue({
+      mutateAsync: mockMutateAsync,
+      isPending: false,
+    });
     mockUseSkills.mockReturnValue({
       data: [{ name: "Writer", source: "novel", description: "" }],
       isLoading: false,
       isError: false,
     });
-    mockDeleteSkill.mockResolvedValue(undefined);
 
     render(<SkillList {...defaultProps} />);
     expect(await screen.findByText("Writer")).toBeInTheDocument();
@@ -127,8 +138,8 @@ describe("SkillList", () => {
     fireEvent.click(confirmBtn);
 
     await vi.waitFor(() => {
-      expect(mockDeleteSkill).toHaveBeenCalledWith({
-        novel_id: 1,
+      // 5.4 commit 2: mutateAsync 入参 {name, source}，novel_id 在 hook 内部拼
+      expect(mockMutateAsync).toHaveBeenCalledWith({
         name: "Writer",
         source: "novel",
       });
@@ -141,7 +152,10 @@ describe("SkillList", () => {
       isLoading: false,
       isError: false,
     });
-    mockDeleteSkill.mockRejectedValue(new Error("permission denied"));
+    mockUseDeleteSkill.mockReturnValue({
+      mutateAsync: vi.fn().mockRejectedValue(new Error("permission denied")),
+      isPending: false,
+    });
 
     render(<SkillList {...defaultProps} />);
     expect(await screen.findByText("Writer")).toBeInTheDocument();
