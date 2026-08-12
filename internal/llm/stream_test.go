@@ -2,6 +2,7 @@ package llm
 
 import (
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -140,5 +141,167 @@ func TestParseDefaultError_InvalidJSON(t *testing.T) {
 	want := "request failed: not json at all"
 	if err.Error() != want {
 		t.Errorf("got %q, want %q", err.Error(), want)
+	}
+}
+
+// --- mergeSystemMessages ---
+
+func TestMergeSystemMessages_NoSystem(t *testing.T) {
+	// 0 条 system：原样返回
+	in := []map[string]any{
+		{"role": "user", "content": "hi"},
+		{"role": "assistant", "content": "hello"},
+	}
+	got := mergeSystemMessages(in)
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("no system: got %v, want %v", got, in)
+	}
+}
+
+func TestMergeSystemMessages_SingleSystem(t *testing.T) {
+	// 1 条 system：原样返回（避免不必要拷贝）
+	in := []map[string]any{
+		{"role": "system", "content": "sys"},
+		{"role": "user", "content": "hi"},
+	}
+	got := mergeSystemMessages(in)
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("single system: got %v, want %v", got, in)
+	}
+}
+
+func TestMergeSystemMessages_ThreeSystemAgentPath(t *testing.T) {
+	// 复现 agent.go 主路径：sysPrompt + profile + state 三条 system
+	in := []map[string]any{
+		{"role": "system", "content": "sysPrompt"},
+		{"role": "system", "content": "profile"},
+		{"role": "system", "content": "state"},
+		{"role": "user", "content": "instruction"},
+	}
+	got := mergeSystemMessages(in)
+
+	if len(got) != 2 {
+		t.Fatalf("len: got %d, want 2 (1 merged system + 1 user)", len(got))
+	}
+	role, _ := got[0]["role"].(string)
+	if role != "system" {
+		t.Errorf("got[0] role: got %q, want %q", role, "system")
+	}
+	content, _ := got[0]["content"].(string)
+	wantContent := "sysPrompt\n\nprofile\n\nstate"
+	if content != wantContent {
+		t.Errorf("merged content: got %q, want %q", content, wantContent)
+	}
+	// user 消息保持原序
+	if got[1]["role"] != "user" || got[1]["content"] != "instruction" {
+		t.Errorf("got[1]: got %v, want {role:user content:instruction}", got[1])
+	}
+}
+
+func TestMergeSystemMessages_PreservesOtherRolesOrder(t *testing.T) {
+	// 多条 system + tool/assistant 顺序保持不变
+	in := []map[string]any{
+		{"role": "system", "content": "s1"},
+		{"role": "user", "content": "u1"},
+		{"role": "assistant", "content": "a1"},
+		{"role": "tool", "content": "t1"},
+		{"role": "system", "content": "s2"},
+		{"role": "user", "content": "u2"},
+	}
+	got := mergeSystemMessages(in)
+
+	want := []struct {
+		role    string
+		content string
+	}{
+		{"system", "s1\n\ns2"},
+		{"user", "u1"},
+		{"assistant", "a1"},
+		{"tool", "t1"},
+		{"user", "u2"},
+	}
+	if len(got) != len(want) {
+		t.Fatalf("len: got %d, want %d", len(got), len(want))
+	}
+	for i, w := range want {
+		if got[i]["role"] != w.role {
+			t.Errorf("got[%d] role: got %v, want %s", i, got[i]["role"], w.role)
+		}
+		if got[i]["content"] != w.content {
+			t.Errorf("got[%d] content: got %v, want %s", i, got[i]["content"], w.content)
+		}
+	}
+}
+
+func TestMergeSystemMessages_NonStringContentSystemPreserved(t *testing.T) {
+	// content 非 string 的 system（多模态场景）保持原样，不参与合并
+	in := []map[string]any{
+		{"role": "system", "content": "text-sys"},
+		{"role": "system", "content": []any{map[string]any{"type": "text", "text": "multi-sys"}}},
+		{"role": "user", "content": "hi"},
+	}
+	got := mergeSystemMessages(in)
+	// 1 条 string system + 1 条非 string system：len(sysParts)==1，原样返回
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("non-string system should be preserved as-is: got %v, want %v", got, in)
+	}
+}
+
+func TestMergeSystemMessages_MixedStringAndNonStringSystem(t *testing.T) {
+	// 2+ 条 string system + 1 条非 string system：string system 合并，非 string system 保留原序
+	in := []map[string]any{
+		{"role": "system", "content": "s1"},
+		{"role": "system", "content": []any{map[string]any{"type": "text", "text": "multi"}}},
+		{"role": "system", "content": "s2"},
+		{"role": "user", "content": "hi"},
+	}
+	got := mergeSystemMessages(in)
+
+	// 期望：merged string system + 非 string system + user
+	if len(got) != 3 {
+		t.Fatalf("len: got %d, want 3", len(got))
+	}
+	// 头部是合并后的 string system
+	if got[0]["role"] != "system" || got[0]["content"] != "s1\n\ns2" {
+		t.Errorf("got[0]: got %v, want merged string system", got[0])
+	}
+	// 接下来是非 string system（保持原序）
+	if got[1]["role"] != "system" {
+		t.Errorf("got[1] role: got %v, want system", got[1]["role"])
+	}
+	if _, ok := got[1]["content"].([]any); !ok {
+		t.Errorf("got[1] content: should be []any (non-string), got %T", got[1]["content"])
+	}
+	// 最后是 user
+	if got[2]["role"] != "user" || got[2]["content"] != "hi" {
+		t.Errorf("got[2]: got %v, want user", got[2])
+	}
+}
+
+func TestMergeSystemMessages_EmptyContentSystemSkipped(t *testing.T) {
+	// 空 content 的 system 跳过合并，保持原样
+	in := []map[string]any{
+		{"role": "system", "content": ""},
+		{"role": "system", "content": "s2"},
+		{"role": "user", "content": "hi"},
+	}
+	got := mergeSystemMessages(in)
+	// 只有 1 条非空 string system，sysParts 长度为 1，原样返回
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("empty content skipped: got %v, want %v", got, in)
+	}
+}
+
+func TestMergeSystemMessages_TwoEmptyOneNonEmpty(t *testing.T) {
+	// 2 条空 content + 1 条非空：sysParts 长度 1，原样返回
+	in := []map[string]any{
+		{"role": "system", "content": ""},
+		{"role": "system", "content": "real"},
+		{"role": "system", "content": ""},
+		{"role": "user", "content": "hi"},
+	}
+	got := mergeSystemMessages(in)
+	if !reflect.DeepEqual(got, in) {
+		t.Errorf("only one non-empty: got %v, want %v", got, in)
 	}
 }

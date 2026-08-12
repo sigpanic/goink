@@ -194,6 +194,8 @@ func (c *Client) buildPayload(
 	model string,
 	opts *CallOptions,
 ) map[string]any {
+	// 出站归一化：合并多条 system 为单条置于头部（参见 mergeSystemMessages）。
+	messages = mergeSystemMessages(messages)
 	payload := map[string]any{
 		"model":          model,
 		"messages":       messages,
@@ -266,6 +268,40 @@ func (c *Client) buildPayload(
 	}
 
 	return payload
+}
+
+// mergeSystemMessages 将 messages 数组中所有 role=system 的消息合并成单条置于头部。
+//
+// 背景：OpenAI 协议允许多条 system 消息，但大量本地推理后端（llama.cpp 系列、
+// 部分 ollama 后端等）只支持头部最多一条 system，多余会被静默丢弃或直接 400。
+// OpenAI 官方社区确认：多条 system ≈ 合并成一条（推理效果几乎等价），所以
+// 客户端主动合并是无损的，且能最大化跨后端兼容性。
+//
+// 行为：
+//   - 收集所有 role=system 且 content 为非空 string 的消息内容
+//   - 用空行分隔拼成单条 system，置于 messages 头部
+//   - 其余消息（含 content 非 string 的 system，如多模态）保持原有顺序
+//   - 0 或 1 条 string system 时直接返回原 messages，避免不必要的拷贝
+func mergeSystemMessages(messages []map[string]any) []map[string]any {
+	var sysParts []string
+	var others []map[string]any
+	for _, m := range messages {
+		if role, _ := m["role"].(string); role == "system" {
+			if content, ok := m["content"].(string); ok && content != "" {
+				sysParts = append(sysParts, content)
+				continue
+			}
+		}
+		others = append(others, m)
+	}
+	if len(sysParts) <= 1 {
+		return messages
+	}
+	merged := map[string]any{"role": "system", "content": strings.Join(sysParts, "\n\n")}
+	out := make([]map[string]any, 0, len(others)+1)
+	out = append(out, merged)
+	out = append(out, others...)
+	return out
 }
 
 // parseSSE 解析 SSE 流，产出 StreamEvent。
