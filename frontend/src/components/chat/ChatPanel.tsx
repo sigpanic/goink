@@ -216,7 +216,7 @@ export default function ChatPanel({
           setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
         });
     }
-  }, [novelId, setLastSessionMutation, t]);
+  }, [novelId, setLastSessionMutation.mutateAsync, t]);
 
   // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
   // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
@@ -300,7 +300,7 @@ export default function ChatPanel({
       setLastSessionMutation.mutateAsync(sid).catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
       // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
-    [setLastSessionMutation, t],
+    [setLastSessionMutation.mutateAsync, t],
   );
 
   const handleNewChat = useCallback(() => {
@@ -960,7 +960,7 @@ export default function ChatPanel({
       }
       setSelectedModelMutation.mutateAsync({ key, effort }).catch((err) => toastError(toErrorMessage(err, t("chat.setSelectedModelFailed"))));
     },
-    [modelsQuery.data, setSelectedModel, setReasoningEffort, setSelectedModelMutation, t],
+    [modelsQuery.data, setSelectedModel, setReasoningEffort, setSelectedModelMutation.mutateAsync, t],
   );
 
   const handleSelectEffort = useCallback(
@@ -968,14 +968,14 @@ export default function ChatPanel({
       setReasoningEffort(effort);
       setReasoningEffortMutation.mutateAsync(effort).catch((err) => toastError(toErrorMessage(err, t("chat.setReasoningEffortFailed"))));
     },
-    [setReasoningEffort, setReasoningEffortMutation, t],
+    [setReasoningEffort, setReasoningEffortMutation.mutateAsync, t],
   );
 
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
     setApprovalModeMutation.mutateAsync(next).catch((err) => toastError(toErrorMessage(err, t("chat.setApprovalModeFailed"))));
-  }, [approvalMode, setApprovalMode, setApprovalModeMutation, t]);
+  }, [approvalMode, setApprovalMode, setApprovalModeMutation.mutateAsync, t]);
 
   const handleCompress = useCallback(async () => {
     if (!sessionId || !selectedModel || compressingRef.current) return;
@@ -1033,7 +1033,7 @@ export default function ChatPanel({
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, selectedModel, compressMutation, t]);
+  }, [sessionId, selectedModel, compressMutation.mutateAsync, t]);
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -1160,8 +1160,8 @@ export default function ChatPanel({
       applyAgentEvent,
       activeSessionId,
       qc,
-      cancelChatMutation,
-      setLastSessionMutation,
+      cancelChatMutation.mutateAsync,
+      setLastSessionMutation.mutateAsync,
       t,
     ],
   );

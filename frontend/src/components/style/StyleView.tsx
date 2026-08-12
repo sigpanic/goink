@@ -195,7 +195,7 @@ export default function StyleView({
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.addFailed")));
     }
-  }, [newName, newContent, newNovelId, newTags, createMutation, t]);
+  }, [newName, newContent, newNovelId, newTags, createMutation.mutateAsync, t]);
 
   const handleDelete = useCallback((id: number, name: string) => {
     setDeleteTarget({ id, name });
@@ -215,7 +215,7 @@ export default function StyleView({
       toastError(t("styleSample.deleteFailed") + ": " + toErrorMessage(err));
       console.error(err);
     }
-  }, [deleteTarget, deleteMutation, t]);
+  }, [deleteTarget, deleteMutation.mutateAsync, t]);
 
   const handleExtract = useCallback(async () => {
     if (selected.size === 0 || !selectedModel) return;
@@ -280,7 +280,7 @@ export default function StyleView({
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.saveFailed")));
     }
-  }, [result, saveMutation, t, novelId]);
+  }, [result, saveMutation.mutateAsync, t, novelId]);
 
   const handleUpdate = useCallback(async () => {
     if (!detailId) return;
@@ -304,7 +304,7 @@ export default function StyleView({
     editContent,
     editTags,
     editNovelId,
-    updateMutation,
+    updateMutation.mutateAsync,
     t,
   ]);
 

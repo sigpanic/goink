@@ -232,7 +232,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           console.error(err);
         }
       },
-      [saveContentMutation, updateTab, t],
+      [saveContentMutation.mutateAsync, updateTab, t],
     );
 
     // Ctrl+S 立即保存

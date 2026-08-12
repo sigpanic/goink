@@ -179,7 +179,7 @@ export default function ModelConfigTab() {
         setTesting((prev) => ({ ...prev, [providerKey]: false }));
       }
     },
-    [providers, testConnectionMutation, t],
+    [providers, testConnectionMutation.mutateAsync, t],
   );
 
   const handleSave = useCallback(async () => {
@@ -244,7 +244,7 @@ export default function ModelConfigTab() {
     } finally {
       setIsSaving(false);
     }
-  }, [providers, saveMutation, testResults, handleTest, t]);
+  }, [providers, saveMutation.mutateAsync, testResults, handleTest, t]);
 
   if (llmConfigQuery.isLoading) {
     return (
