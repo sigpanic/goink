@@ -1,4 +1,4 @@
-import { useTheme } from "@/hooks/useTheme";
+import { useThemeStore } from "@/stores/useThemeStore";
 
 const C = {
   light: {
@@ -32,6 +32,6 @@ const C = {
 } as const;
 
 export function useGraphColors() {
-  const { theme } = useTheme();
+  const { theme } = useThemeStore();
   return C[theme];
 }

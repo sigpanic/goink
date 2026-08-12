@@ -74,9 +74,9 @@ vi.mock("@monaco-editor/react", () => ({
   ),
 }));
 
-// Mock useTheme
-vi.mock("@/hooks/useTheme", () => ({
-  useTheme: () => ({ theme: "light" as const }),
+// Mock useThemeStore
+vi.mock("@/stores/useThemeStore", () => ({
+  useThemeStore: () => ({ theme: "light" as const }),
 }));
 
 // Mock useEditorTabs

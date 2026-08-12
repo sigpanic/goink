@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { GitBranch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useTheme } from "@/hooks/useTheme";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { arcPalette } from "./arcColors";
 import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
 import type { storyarc } from "@/lib/wailsjs/go/models";
@@ -92,7 +92,7 @@ export default function ArcListView({ novelId }: Props) {
   const focusType = focus?.type; // "arc" | "node" | undefined
   const queryClient = useQueryClient();
   const { t } = useTranslation();
-  const { theme } = useTheme();
+  const { theme } = useThemeStore();
   const PALETTE = arcPalette(theme);
 
   // 4.3.1: arcs/allNodes/maxChapter 走 query（与 ArcList / StoryArcGraph 共享缓存）。

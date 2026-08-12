@@ -11,7 +11,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useGraphColors } from "@/components/graphColors";
-import { useTheme } from "@/hooks/useTheme";
+import { useThemeStore } from "@/stores/useThemeStore";
 import { arcPalette } from "./arcColors";
 import { storyarcKeys, arcNodeKeys, maxChapterKeys } from "@/lib/queryKeys";
 import type { storyarc } from "@/lib/wailsjs/go/models";
@@ -59,7 +59,7 @@ export default function StoryArcGraph({ novelId }: Props) {
   const queryClient = useQueryClient();
   const { t } = useTranslation();
   const C = useGraphColors();
-  const { theme } = useTheme();
+  const { theme } = useThemeStore();
   const PALETTE = arcPalette(theme);
   const containerRef = useRef<HTMLDivElement>(null);
   const graphRef = useRef<Graph | null>(null);

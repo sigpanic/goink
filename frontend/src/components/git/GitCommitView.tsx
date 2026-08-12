@@ -1,7 +1,7 @@
 import { DiffEditor } from "@monaco-editor/react";
 import { FileCode, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { useGitStore } from "./useGitStore";
 
 const MONACO_THEME: Record<Theme, string> = { light: "light", dark: "vs-dark" };
@@ -32,7 +32,7 @@ function getLanguage(path: string): string {
 
 export default function GitCommitView() {
   const { t } = useTranslation();
-  const { theme } = useTheme();
+  const { theme } = useThemeStore();
   // 3.8 后续：file 迁 useGitStore，GitCommitView 自己订阅（原由 WorkspaceView 透传 prop）。
   const file = useGitStore((s) => s.selectedGitFile);
 

@@ -72,8 +72,8 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   ApproveTool: mockApproveTool,
 }));
 
-vi.mock("@/hooks/useTheme", () => ({
-  useTheme: () => ({ theme: "light", toggle: vi.fn() }),
+vi.mock("@/stores/useThemeStore", () => ({
+  useThemeStore: () => ({ theme: "light", toggle: vi.fn() }),
 }));
 
 vi.mock("@/hooks/useLayoutState", () => ({

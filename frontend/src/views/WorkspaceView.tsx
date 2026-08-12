@@ -39,7 +39,7 @@ import { CheckUpdate, GetPlatform, ApproveTool } from "@/lib/wailsjs/go/app/App"
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
 import { WindowToggleMaximise } from "@/lib/wailsjs/runtime/runtime";
 import Logo from "@/components/Logo";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { useLayoutState } from "@/hooks/useLayoutState";
 import { useWindowState } from "@/hooks/useWindowState";
 import { useImportNovel } from "@/hooks/useImportNovel";
@@ -125,7 +125,7 @@ export default function WorkspaceView({
   // selectedGitFile → useGitStore。写方调 getState().setXxx，读方组件自己订阅。
   // reset 由下方 effect 监听 activeNovelId 变化自动调，等价原 switchToNovel wrapper 的 3 行 setState。
   const [platformOS, setPlatformOS] = useState("");
-  const { theme, toggle: toggleTheme } = useTheme();
+  const { theme, toggle: toggleTheme } = useThemeStore();
   const { isMaximised, setIsMaximised } = useWindowState();
   const {
     sidePanelWidth,

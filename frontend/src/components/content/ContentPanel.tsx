@@ -15,7 +15,7 @@ import { toErrorMessage } from "@/utils/error";
 import { useEditorTabs } from "@/hooks/useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { contentKeys } from "@/lib/queryKeys";
 import TabBar from "./TabBar";
@@ -93,7 +93,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       initRef,
     } = useEditorTabs(novelId);
 
-    const { theme } = useTheme();
+    const { theme } = useThemeStore();
     const [isLoading, setIsLoading] = useState(false);
     const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);

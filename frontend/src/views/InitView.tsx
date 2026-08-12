@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { GetPlatform, Initialize } from "@/lib/wailsjs/go/app/App";
-import { useTheme, type Theme } from "@/hooks/useTheme";
+import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { Button } from "@/components/ui/button";
 import { Sun, Moon, Languages } from "lucide-react";
 import Logo from "@/components/Logo";
@@ -72,7 +72,7 @@ interface Props {
 
 export default function InitView({ onInitialized }: Props) {
   const { t, i18n } = useTranslation();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme } = useThemeStore();
 
   const THEME_OPTIONS: { key: Theme; icon: React.ReactNode; label: string }[] =
     [
