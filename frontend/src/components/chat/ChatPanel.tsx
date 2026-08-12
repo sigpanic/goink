@@ -131,7 +131,6 @@ export default function ChatPanel({
   useEffect(() => {
     onApprovalFileEditRef.current = onApprovalFileEdit;
   }, [onApprovalFileEdit]);
-  const lastSessionIdRef = useRef("");
   const restoredRef = useRef(false);
 
   // 选中态恢复：依赖 useModels + useSettings 两个 query data 都 ready。
@@ -143,6 +142,7 @@ export default function ChatPanel({
     const modelList = modelsQuery.data;
     const settings = settingsQuery.data;
     if (!modelList || modelList.length === 0 || !settings) return;
+    if (!novelId) return;
     restoredRef.current = true;
 
     // 恢复模型选择（验证 key 仍存在）→ 设结构化 selectedModel
@@ -166,11 +166,19 @@ export default function ChatPanel({
       setApprovalMode(mode);
     }
 
-    // 暂存上次会话 ID，等 novelId 加载后恢复
+    // 直接恢复上次活跃会话（novelId 此时已有值，useLayoutEffect 先于 useEffect 执行）
     if (settings.last_session_id) {
-      lastSessionIdRef.current = settings.last_session_id;
+      GetSession(settings.last_session_id)
+        .then((detail) => {
+          if (detail && detail.novel_id === novelId) {
+            setActiveSessionId(settings.last_session_id);
+          }
+        })
+        .catch(() => {
+          setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
+        });
     }
-  }, [modelsQuery.data, settingsQuery.data, setSelectedModel, setReasoningEffort, setApprovalMode]);
+  }, [modelsQuery.data, settingsQuery.data, novelId, setSelectedModel, setReasoningEffort, setApprovalMode, setLastSessionMutation.mutateAsync, t]);
 
   // models query refetch 后（如 SettingsDialog 保存触发 invalidate）：
   // 检查当前 selectedModel 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
@@ -194,29 +202,15 @@ export default function ChatPanel({
   const sessionQuery = useSession(activeSid);
   const messagesQuery = useSessionMessages(activeSid);
 
-  // novelId 变化时重置会话视图 + 恢复上次活跃会话。
+  // novelId 变化时重置会话视图。
+  // 会话恢复由上方 restoredRef effect 负责（首次加载时直接恢复）。
   // 会话列表由 useSessions query 自动 fetch（novelId 变化 → queryKey 变化 → refetch）。
   useEffect(() => {
     if (!novelId) return;
     setActiveSessionId(undefined);
     setTurns([]);
     setSessionId("");
-
-    // 尝试恢复上次活跃会话（仅恢复一次，通过 ref 标记）
-    const sid = lastSessionIdRef.current;
-    if (sid && novelId) {
-      lastSessionIdRef.current = "";
-      GetSession(sid)
-        .then((detail) => {
-          if (detail && detail.novel_id === novelId) {
-            setActiveSessionId(sid);
-          }
-        })
-        .catch(() => {
-          setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
-        });
-    }
-  }, [novelId, setLastSessionMutation.mutateAsync, t]);
+  }, [novelId]);
 
   // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
   // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
@@ -308,8 +302,9 @@ export default function ChatPanel({
     setTurns([]);
     setSessionId("");
     setLastUsage(null);
+    setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
     qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
-  }, [novelId, qc]);
+  }, [novelId, qc, setLastSessionMutation.mutateAsync, t]);
 
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true);
