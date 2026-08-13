@@ -547,7 +547,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		if isStuckLoop(patterns, toolOutputs, loopCount) {
 			// 命中死循环：直接中断对话（不再靠提醒继续）
 			interrupted = true
-			interruptErr = errors.New("检测到重复调用循环，已中断对话")
+			interruptErr = &LoopInterrupt{Reason: "检测到重复调用循环，已中断对话"}
 			emit(AgentEvent{
 				TurnID: opts.TurnID, Type: EventToolCall, Phase: "loop_detected", Timestamp: time.Now(),
 			})
@@ -569,7 +569,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	}
 	if !normalEnd {
 		// MaxTurns 耗尽：循环条件退出，非正常 break，走 system_interrupted
-		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.New("已达最大轮数，对话结束")
+		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, &MaxTurnsInterrupt{Reason: "已达最大轮数，对话结束"}
 	}
 	return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, nil
 }

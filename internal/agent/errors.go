@@ -25,6 +25,11 @@ func FriendlyError(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return ""
 	}
+	// 中断类错误（工具连续失败/死循环/MaxTurns）：原因本身已是用户可读中文，直接透传。
+	var ie InterruptError
+	if errors.As(err, &ie) {
+		return ie.InterruptReason()
+	}
 	var apiErr *llm.APIError
 	if errors.As(err, &apiErr) {
 		// 网络错误/首字节超时：StatusCode=0，无 HTTP 状态码

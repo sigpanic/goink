@@ -40,6 +40,32 @@ func (a *Agent) flushInterruptedTools(stream <-chan llm.StreamEvent, opts *RunOp
 	}
 }
 
+// InterruptError 是系统中断类错误的标记接口。
+// FriendlyError 遇到实现该接口的 error 时，直接透传 InterruptReason()，
+// 不走 APIError/网络错误的兜底文案，确保用户看到具体中断原因。
+type InterruptError interface {
+	error
+	InterruptReason() string
+}
+
+// ToolFailureInterrupt 工具连续失败触发的中断（system 5 次 / args 5 次 / 全局 10 次）。
+type ToolFailureInterrupt struct{ Reason string }
+
+func (e *ToolFailureInterrupt) Error() string          { return e.Reason }
+func (e *ToolFailureInterrupt) InterruptReason() string { return e.Reason }
+
+// LoopInterrupt 死循环检测触发的中断。
+type LoopInterrupt struct{ Reason string }
+
+func (e *LoopInterrupt) Error() string          { return e.Reason }
+func (e *LoopInterrupt) InterruptReason() string { return e.Reason }
+
+// MaxTurnsInterrupt 最大轮数耗尽触发的中断。
+type MaxTurnsInterrupt struct{ Reason string }
+
+func (e *MaxTurnsInterrupt) Error() string          { return e.Reason }
+func (e *MaxTurnsInterrupt) InterruptReason() string { return e.Reason }
+
 // interruptTracker 统计工具连续失败次数，决定是否中断对话。
 //
 // 三级计数：
@@ -77,13 +103,13 @@ func (t *interruptTracker) recordFailure(name string, kind mcp_tools.ErrKind) (b
 	t.globalStreak++
 
 	if t.systemFailCnt[name] >= 5 {
-		return true, fmt.Errorf("工具 %s 连续系统错误 %d 次，已中断对话", name, t.systemFailCnt[name])
+		return true, &ToolFailureInterrupt{Reason: fmt.Sprintf("工具 %s 连续系统错误 %d 次，已中断对话", name, t.systemFailCnt[name])}
 	}
 	if t.argsFailCnt[name] >= 5 {
-		return true, fmt.Errorf("工具 %s 连续参数错误 %d 次，已中断对话", name, t.argsFailCnt[name])
+		return true, &ToolFailureInterrupt{Reason: fmt.Sprintf("工具 %s 连续参数错误 %d 次，已中断对话", name, t.argsFailCnt[name])}
 	}
 	if t.globalStreak >= 10 {
-		return true, fmt.Errorf("连续失败 %d 次，已中断对话", t.globalStreak)
+		return true, &ToolFailureInterrupt{Reason: fmt.Sprintf("连续失败 %d 次，已中断对话", t.globalStreak)}
 	}
 	return false, nil
 }
