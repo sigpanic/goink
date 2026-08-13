@@ -143,9 +143,15 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
     ) {
       const target = turns.find((t) => t.turnId === msg.turn_id);
       if (target) {
-        if (msg.event_type === "user_stopped") target.status = "stopped";
-        else if (msg.event_type === "error") target.status = "failed";
-        else target.status = "interrupted";
+        if (msg.event_type === "user_stopped") {
+          target.status = "stopped";
+        } else if (msg.event_type === "error") {
+          target.status = "failed";
+          target.errorMessage = msg.content;
+        } else {
+          target.status = "interrupted";
+          target.errorMessage = msg.content;
+        }
       }
       continue;
     }

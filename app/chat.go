@@ -193,6 +193,12 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 			ToAPI:      false,
 			AgentType:  "main",
 		})
+		// 统一 emit 结局事件：session.EventType 既是 DB 标记又是实时载荷，前端按同一套映射设 status
+		wails.EventsEmit(ctx, "chat:turn_outcome", map[string]any{
+			"turn_id":    turnID,
+			"event_type": string(eventType),
+			"reason":     agent.FriendlyError(runErr),
+		})
 		return &ChatResult{
 			SessionID: sess.SessionID,
 			TurnID:    turnID,

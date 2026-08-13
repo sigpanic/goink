@@ -424,10 +424,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						}
 
 						// 重试次数耗尽 → 失败兜底（不保存 partial，已经 Reset）
-						emit(AgentEvent{
-							TurnID: opts.TurnID, Type: EventError,
-							ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
-						})
+						// 主 turn 结局由 chat.go 统一 emit（chat:turn_outcome），子 agent 仍走 EventError 路由
+						if opts.SubTaskID != "" {
+							emit(AgentEvent{
+								TurnID: opts.TurnID, Type: EventError,
+								ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
+							})
+						}
 						return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, event.Error
 					}
 
@@ -476,10 +479,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 
 					// 失败兜底：不可重试 或 重试次数耗尽 → 保存 partial 后返回
-					emit(AgentEvent{
-						TurnID: opts.TurnID, Type: EventError,
-						ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
-					})
+					// 主 turn 结局由 chat.go 统一 emit（chat:turn_outcome），子 agent 仍走 EventError 路由
+					if opts.SubTaskID != "" {
+						emit(AgentEvent{
+							TurnID: opts.TurnID, Type: EventError,
+							ErrMsg: FriendlyError(event.Error), Timestamp: time.Now(),
+						})
+					}
 					finalText := responseBuffer.String()
 					thinkingContent := thinkingBuffer.String()
 					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {

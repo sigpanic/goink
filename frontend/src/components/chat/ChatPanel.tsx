@@ -274,6 +274,32 @@ export default function ChatPanel({
     };
   }, []);
 
+  // 监听 chat:turn_outcome：chat.go 在 Run 返回后 emit，携带权威 session.EventType。
+  // 前端按 event_type string 设 turn status（与 rebuildTurns 恢复用同一套映射）。
+  // 用顶层监听避免与 Chat() promise reject 的微任务竞态（turn_outcome 是 Run 返回前最后 emit）。
+  useEffect(() => {
+    const cleanup = EventsOn(
+      "chat:turn_outcome",
+      (data: { turn_id: number; event_type: string; reason: string }) => {
+        setTurns((prev) =>
+          prev.map((turn) => {
+            if (turn.turnId !== data.turn_id) return turn;
+            let status: Turn["status"] = "interrupted";
+            if (data.event_type === "error") status = "failed";
+            else if (data.event_type === "user_stopped") status = "stopped";
+            return {
+              ...turn,
+              status,
+              errorMessage: data.reason,
+              retrying: null,
+            };
+          }),
+        );
+      },
+    );
+    return () => cleanup();
+  }, []);
+
   // 流式输出时自动滚到底部，但仅在用户未主动上滚时
   useEffect(() => {
     if (isNearBottomRef.current) {
@@ -1100,7 +1126,12 @@ export default function ChatPanel({
         setTurns((prev) =>
           prev.map((t) => {
             if (t.id !== turnId) return t;
-            if (t.status === "stopped" || t.status === "failed") return t;
+            if (
+              t.status === "stopped" ||
+              t.status === "failed" ||
+              t.status === "interrupted"
+            )
+              return t;
             return {
               ...t,
               status: "interrupted" as const,
