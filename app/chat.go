@@ -174,13 +174,13 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	// 10. 最终回复已由 agent.Run() 内部 appendMsg 持久化，此处不重复存储
 	if runErr != nil {
 		a.logger.Error("对话失败", "err", runErr)
-		eventType := "system_interrupted"
+		eventType := session.EventSystemInterrupted
 		if errors.Is(runErr, context.Canceled) {
-			eventType = "user_stopped"
+			eventType = session.EventUserStopped
 		} else {
 			var apiErr *llm.APIError
 			if errors.As(runErr, &apiErr) {
-				eventType = "error"
+				eventType = session.EventError
 			}
 		}
 		a.session.DB.Create(&session.Message{

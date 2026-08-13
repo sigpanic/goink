@@ -164,7 +164,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	var thinkingBuffer strings.Builder
 	isThinking := false
 	recentPatterns := make([]string, 0, 6)
-	failCnt := make(map[string]int)
+	tracker := newInterruptTracker() // 工具连续失败计数（system 5/args 5/全局 10 中断）
 	runningTokens := a.InitRunningTokens(opts.Messages)
 	tools := a.registry.OpenAI(opts.AllowedTools)
 	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
@@ -184,7 +184,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		wails.EventsEmit(ctx, agentEventName, event)
 	}
 
-	interrupted := false
+	canceled := false    // 用户手动取消（ctx.Done）
+	interrupted := false // 系统主动中断（工具连续失败/MaxTurns/死循环）
+	var interruptErr error
+	normalEnd := false // 正常结束（无 tool 输出 break），区分 MaxTurns 耗尽
 
 	for loopCount < opts.MaxTurns {
 		toolOutputs := make([]toolOutput, 0)
@@ -228,7 +231,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		for {
 			select {
 			case <-ctx.Done():
-				interrupted = true
+				canceled = true
 				a.flushInterruptedTools(stream, &opts, &toolOutputs)
 				break streamLoop
 
@@ -339,15 +342,16 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						Metadata: metadata, Timestamp: time.Now(),
 					})
 
-					// 失败计数：仅系统异常计入
-					if !result.Success && result.ErrKind == "system" {
-						failCnt[name]++
+					// 失败计数：system 5 次/args 5 次/全局连续 10 次触发中断
+					if result.Success {
+						tracker.recordSuccess(name)
 					} else {
-						failCnt[name] = 0
-					}
-					if failCnt[name] == 3 {
-						content := fmt.Sprintf("<system-reminder>\n工具 %s 已连续失败 3 次，已被禁用，请不要再调用此工具。\n</system-reminder>", name)
-						a.appendMsg("user", content, "", nil, &opts, runningTokens)
+						if interrupt, reason := tracker.recordFailure(name, result.ErrKind); interrupt {
+							interrupted = true
+							interruptErr = reason
+							a.flushInterruptedTools(stream, &opts, &toolOutputs)
+							break streamLoop
+						}
 					}
 
 					// 暂存 inject
@@ -498,6 +502,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
 					nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
+			normalEnd = true
 			break
 		}
 
@@ -524,7 +529,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			}
 		}
 
-		if interrupted {
+		if canceled || interrupted {
 			break
 		}
 
@@ -534,11 +539,13 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			patterns = patterns[1:]
 		}
 		if isStuckLoop(patterns, toolOutputs, loopCount) {
-			content := "<system-reminder>\n系统检测到可能陷入重复调用。请基于已获取的信息直接开始写作，或明确告诉我你需要什么新的操作。\n</system-reminder>"
-			a.appendMsg("user", content, "", nil, &opts, runningTokens)
+			// 命中死循环：直接中断对话（不再靠提醒继续）
+			interrupted = true
+			interruptErr = errors.New("检测到重复调用循环，已中断对话")
 			emit(AgentEvent{
 				TurnID: opts.TurnID, Type: EventToolCall, Phase: "loop_detected", Timestamp: time.Now(),
 			})
+			break
 		}
 		recentPatterns = patterns
 
@@ -548,8 +555,15 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		loopCount++
 	}
 
-	if interrupted {
+	if canceled {
 		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, ctx.Err()
+	}
+	if interrupted {
+		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, interruptErr
+	}
+	if !normalEnd {
+		// MaxTurns 耗尽：循环条件退出，非正常 break，走 system_interrupted
+		return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.New("已达最大轮数，对话结束")
 	}
 	return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, nil
 }

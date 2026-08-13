@@ -168,7 +168,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 		Version:    opts.ActiveVersion,
 		ToAPI:      false,
 		ToFrontend: true,
-		EventType:  "compression",
+		EventType:  session.EventCompression,
 		AgentType:  opts.AgentType,
 		SubTaskID:  opts.SubTaskID,
 	}).Error; err != nil {
@@ -207,7 +207,7 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *
 		}
 		newVersion = sess.ActiveVersion
 
-		msg := func(role, content string, toAPI, toFE bool, eventType string) error {
+		msg := func(role, content string, toAPI, toFE bool, eventType session.EventType) error {
 			return tx.Create(&session.Message{
 				SessionID:  opts.SessionID,
 				TurnID:     opts.TurnID,
@@ -256,7 +256,7 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *
 			}
 		}
 		// 边界标记
-		if err := msg("system", "", false, true, "compression"); err != nil {
+		if err := msg("system", "", false, true, session.EventCompression); err != nil {
 			return fmt.Errorf("write compression marker: %w", err)
 		}
 

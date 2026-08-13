@@ -74,12 +74,26 @@ func (tc ToolContext) LoggerOrDefault() *slog.Logger {
 
 // ── 结果 ──────────────────────────────────────────────
 
+// ErrKind 标记工具失败的类别，供 agent 层决定中断/重试策略。
+//
+// 取值含义：
+// - ErrKindBusiness: 业务错误（实体不存在、状态冲突等），LLM 换参数/换路径可能成功，不计入中断
+// - ErrKindSystem:   系统错误（DB/网络/panic），重试可能恢复
+// - ErrKindArgs:     参数错误（格式不正确/校验失败），LLM 不会正确使用此工具，连续多次应中断
+type ErrKind string
+
+const (
+	ErrKindBusiness ErrKind = ""
+	ErrKindSystem   ErrKind = "system"
+	ErrKindArgs     ErrKind = "args"
+)
+
 // ToolResult 是工具执行结果。
 type ToolResult struct {
 	Success  bool            `json:"success"`
 	Data     map[string]any  `json:"data,omitempty"`
 	Error    string          `json:"error,omitempty"`
-	ErrKind  string          `json:"err_kind,omitempty"` // "" = 业务错误，"system" = 系统错误
+	ErrKind  ErrKind         `json:"err_kind,omitempty"` // 取值见 ErrKind 常量
 	Metadata map[string]any  `json:"metadata,omitempty"`
 	Inject   []InjectMessage `json:"inject,omitempty"`
 }
@@ -226,10 +240,10 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 	dec := json.NewDecoder(bytes.NewReader(rawArgs))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(args); err != nil {
-		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}
+		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error(), ErrKind: ErrKindArgs}
 	}
 	if err := r.validate.Struct(args); err != nil {
-		return &ToolResult{Success: false, Error: "参数校验失败: " + err.Error()}
+		return &ToolResult{Success: false, Error: "参数校验失败: " + err.Error(), ErrKind: ErrKindArgs}
 	}
 
 	tc.RawArgs = rawArgs
@@ -241,7 +255,7 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 		defer func() {
 			if p := recover(); p != nil {
 				r.logger.Error("tool panicked", "tool", name, "panic", p)
-				result = &ToolResult{Success: false, Error: "服务器内部错误，请稍后重试", ErrKind: "system"}
+				result = &ToolResult{Success: false, Error: "服务器内部错误，请稍后重试", ErrKind: ErrKindSystem}
 				execErr = nil
 			}
 		}()
@@ -250,7 +264,7 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 
 	if execErr != nil {
 		r.logger.Error("tool execution failed", "tool", name, "error", execErr, "elapsed_ms", time.Since(t0).Milliseconds())
-		return &ToolResult{Success: false, Error: "服务器内部错误，请稍后重试", ErrKind: "system"}
+		return &ToolResult{Success: false, Error: "服务器内部错误，请稍后重试", ErrKind: ErrKindSystem}
 	}
 
 	if result != nil {
