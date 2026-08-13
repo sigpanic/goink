@@ -34,8 +34,7 @@ import GitCommitView from "@/components/git/GitCommitView";
 import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import type { update as updateModels } from "@/lib/wailsjs/go/models";
-import { CheckUpdate, GetPlatform, ApproveTool } from "@/lib/wailsjs/go/app/App";
+import { GetPlatform, ApproveTool } from "@/lib/wailsjs/go/app/App";
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
 import { WindowToggleMaximise } from "@/lib/wailsjs/runtime/runtime";
 import Logo from "@/components/Logo";
@@ -56,6 +55,7 @@ import { novelKeys } from "@/lib/queryKeys";
 import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import { useUpdateCheck } from "@/components/update/useUpdateCheck";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -142,10 +142,8 @@ export default function WorkspaceView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── 更新检查 ────────────────────────────────────────────
-  const [showUpdate, setShowUpdate] = useState(false);
-  const [updateResult, setUpdateResult] =
-    useState<updateModels.CheckResult | null>(null);
+  // ── 更新检查（定时调度与状态封装在 useUpdateCheck）────────────────────────────
+  const { updateResult, showUpdate, setShowUpdate } = useUpdateCheck();
 
   // ── 书籍管理弹窗（state 见 useNovelStore，3.2 外置）──────────────────────────────
 
@@ -162,23 +160,6 @@ export default function WorkspaceView({
   useEffect(() => {
     if (initialShowHelp) setShowHelp(true);
   }, [initialShowHelp]);
-
-  // ── 启动后延迟检查更新 ──────────────────────────────────
-
-  useEffect(() => {
-    const timer = setTimeout(async () => {
-      try {
-        const result = await CheckUpdate(false);
-        if (result && result.hasUpdate) {
-          setUpdateResult(result);
-          setShowUpdate(true);
-        }
-      } catch {
-        /* 静默失败 */
-      }
-    }, 30_000);
-    return () => clearTimeout(timer);
-  }, []);
 
   // 3.8 后续：删 switchToNovel wrapper。切 novel 的 reset 改由下方 effect 监听
   // activeNovelId 变化自动调 useEditorStore/useGitStore 的 reset()——响应式而非命令式。
