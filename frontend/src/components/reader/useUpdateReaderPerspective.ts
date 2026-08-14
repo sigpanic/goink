@@ -7,8 +7,7 @@ import { readerKeys } from "@/lib/queryKeys";
 // mutationFn 直接 import wailsjs UpdateReaderPerspective（不用 useApp）。
 // 参数顺序：UpdateReaderPerspective(entryId, novelId, input)（3 参，entryId 在前，
 // 与 timeline 的 UpdateTimelineEntry(novelId, id, input) 顺序不同，reader 后端签名如此）。
-// 入参 {id, input}：input 用 app.UpdateReaderPerspectiveInput（全 optional，PATCH 语义），
-// 但 handler 全量回传 input 所有字段（§6 等价 PUT），含 handleQuickReveal 全量回传。
+// 入参 {id, input}：input 用 app.UpdateReaderPerspectiveInput（PUT 语义，全量回传），含 handleQuickReveal 全量回传。
 // 消费方：ReaderView.handleUpdate / handleQuickReveal（mutateAsync 抛错由 handler try/catch 接住）。
 // handler 负责 setEditMode(null) / 错误 toast（副作用各异，不放进 mutation）。
 // onSuccess 失效 reader：entry 字段变更入列表。
