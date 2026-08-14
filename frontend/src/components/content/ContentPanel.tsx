@@ -146,6 +146,31 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       useEditorStore.getState().setIsDirty(isDirty);
     }, [activeTab?.isDirty, activeTab?.outlineIsDirty, activeTab?.viewMode]);
 
+    // ── 大纲内容加载（handleSetViewMode 与恢复 tab effect 共用） ──
+
+    const loadOutlineContent = useCallback(
+      (tab: EditorTab) => {
+        if (
+          tab.type !== "file" ||
+          !isContentPath(tab.path) ||
+          tab.path === "goink.md"
+        ) {
+          return;
+        }
+        const derivedOutline = outlinePath(
+          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
+        );
+        fetchContent(novelId, derivedOutline)
+          .then((oc) => {
+            updateTab(tab.id, { outlineContent: oc || "" });
+          })
+          .catch(() => {
+            updateTab(tab.id, { outlineContent: "" });
+          });
+      },
+      [novelId, fetchContent, updateTab],
+    );
+
     // 从 localStorage 恢复 tab 后，自动加载文件内容
     const loadedRef = useRef<Set<string>>(new Set());
     useEffect(() => {
@@ -154,15 +179,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     }, [novelId]);
     useEffect(() => {
       if (!initRef.current) return;
-      const needsLoad = tabs.filter(
+      // 加载正文
+      const needsLoadContent = tabs.filter(
         (tab) =>
           tab.type === "file" &&
           tab.content == null &&
-          !loadedRef.current.has(tab.id),
+          !loadedRef.current.has(tab.id + ":content"),
       );
-      if (needsLoad.length === 0) return;
-      for (const tab of needsLoad) {
-        loadedRef.current.add(tab.id);
+      for (const tab of needsLoadContent) {
+        loadedRef.current.add(tab.id + ":content");
         fetchContent(novelId, tab.path)
           .then((content) => {
             updateTab(tab.id, { content: content ?? "" });
@@ -171,8 +196,20 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
           });
       }
+      // 加载大纲（恢复后 viewMode 是 outline/outline-edit 时）
+      const needsLoadOutline = tabs.filter(
+        (tab) =>
+          tab.type === "file" &&
+          (tab.viewMode === "outline" || tab.viewMode === "outline-edit") &&
+          tab.outlineContent == null &&
+          !loadedRef.current.has(tab.id + ":outline"),
+      );
+      for (const tab of needsLoadOutline) {
+        loadedRef.current.add(tab.id + ":outline");
+        loadOutlineContent(tab);
+      }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- initRef.current is mutable and not a valid dependency; effect should only re-run when tabs/novelId change
-    }, [tabs, novelId, fetchContent, t, updateTab]);
+    }, [tabs, novelId, fetchContent, t, updateTab, loadOutlineContent]);
 
     // Ctrl+Shift+V 切换技能预览
     useEffect(() => {
@@ -205,27 +242,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         // 切换到大纲（预览或编辑）时，如果未加载（或上次加载时文件不存在）则重新加载
         if (
           (mode === "outline" || mode === "outline-edit") &&
-          tab.type === "file" &&
           !tab.outlineContent
         ) {
-          const derivedOutline =
-            isContentPath(tab.path) && tab.path !== "goink.md"
-              ? outlinePath(
-                  parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-                )
-              : null;
-          if (derivedOutline) {
-            fetchContent(novelId, derivedOutline)
-              .then((oc) => {
-                updateTab(tabId, { outlineContent: oc || "" });
-              })
-              .catch(() => {
-                updateTab(tabId, { outlineContent: "" });
-              });
-          }
+          loadOutlineContent(tab);
         }
       },
-      [novelId, tabs, fetchContent, updateTab],
+      [tabs, updateTab, loadOutlineContent],
     );
 
     // ── 保存逻辑 ────────────────────────────────────────────
