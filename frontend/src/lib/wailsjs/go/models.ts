@@ -691,8 +691,8 @@ export namespace app {
 	    }
 	}
 	export class UpdateChapterPlanInput {
-	    scope?: string;
-	    content?: string;
+	    scope: string;
+	    content: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateChapterPlanInput(source);
@@ -857,13 +857,12 @@ export namespace app {
 	    }
 	}
 	export class UpdateTimelineEntryInput {
-	    title?: string;
-	    content?: string;
-	    detail_json?: string;
-	    target_chapter?: number;
-	    importance?: number;
-	    status?: string;
-	    resolved_chapter?: number;
+	    title: string;
+	    content: string;
+	    target_chapter: number;
+	    importance: number;
+	    status: string;
+	    resolved_chapter: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateTimelineEntryInput(source);
@@ -873,7 +872,6 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
 	        this.content = source["content"];
-	        this.detail_json = source["detail_json"];
 	        this.target_chapter = source["target_chapter"];
 	        this.importance = source["importance"];
 	        this.status = source["status"];

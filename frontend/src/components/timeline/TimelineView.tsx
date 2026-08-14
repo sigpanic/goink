@@ -74,7 +74,6 @@ type EditForm = {
   content: string;
   target_chapter: number;
   importance: number;
-  detail_json: string;
   status: string;
   resolved_chapter: number;
   // create-only
@@ -88,7 +87,6 @@ const EDIT_FORM_EMPTY: EditForm = {
   content: "",
   target_chapter: 1,
   importance: 3,
-  detail_json: "",
   status: "pending",
   resolved_chapter: 0,
 };
@@ -269,7 +267,6 @@ export default function TimelineView({ novelId }: Props) {
       content: entry.content || "",
       target_chapter: entry.target_chapter,
       importance: entry.importance,
-      detail_json: entry.detail_json || "",
       status: entry.status,
       resolved_chapter: entry.resolved_chapter,
     });
@@ -314,7 +311,6 @@ export default function TimelineView({ novelId }: Props) {
         target_chapter: form.target_chapter,
         importance: form.importance,
         source_chapter: 0,
-        detail_json: form.detail_json,
         source: "user",
       });
       setEditMode(null);
@@ -338,7 +334,6 @@ export default function TimelineView({ novelId }: Props) {
         input: {
           title: form.title,
           content: form.content,
-          detail_json: form.detail_json,
           target_chapter: form.target_chapter,
           importance: form.importance,
           status: form.status,
@@ -383,7 +378,6 @@ export default function TimelineView({ novelId }: Props) {
         input: {
           title: entry.title,
           content: entry.content || "",
-          detail_json: entry.detail_json || "",
           target_chapter: entry.target_chapter,
           importance: entry.importance,
           status: newStatus,

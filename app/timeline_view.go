@@ -38,10 +38,10 @@ func (a *App) GetTimelineEntries(novelID int64) ([]timeline.TimelineEntry, error
 
 // ── Chapter Plan CRUD ──────────────────────────────────
 
-// UpdateChapterPlanInput 是 UpdateChapterPlan 的参数。
+// UpdateChapterPlanInput 采用 PUT 语义：前端全量传，后端全量替换文件内容。
 type UpdateChapterPlanInput struct {
-	Scope   string `json:"scope,omitempty"`   // "next" | "near" | "far"
-	Content string `json:"content,omitempty"` // 计划内容
+	Scope   string `json:"scope"`   // "next" | "near" | "far"
+	Content string `json:"content"` // 计划内容
 }
 
 // UpdateChapterPlan 更新章节计划（全量替换文件内容）。
@@ -100,22 +100,34 @@ func (a *App) CreateTimelineEntry(novelID int64, input CreateTimelineEntryInput)
 	return &entry, nil
 }
 
-// UpdateTimelineEntryInput 是 UpdateTimelineEntry 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
+// UpdateTimelineEntryInput 采用 PUT 语义：前端全量传，后端全量覆盖。
+// DetailJSON 是 AI 写入字段，不在 input 里，后端 First 加载原值保留。
 type UpdateTimelineEntryInput struct {
-	Title           string `json:"title,omitempty"`
-	Content         string `json:"content,omitempty"`
-	DetailJSON      string `json:"detail_json,omitempty"`
-	TargetChapter   int    `json:"target_chapter,omitempty"`
-	Importance      int    `json:"importance,omitempty"`
-	Status          string `json:"status,omitempty"`           // "pending" | "resolved" | "abandoned"
-	ResolvedChapter int    `json:"resolved_chapter,omitempty"` // 标记 resolved 时填入
+	Title           string `json:"title"`
+	Content         string `json:"content"`
+	TargetChapter   int    `json:"target_chapter"`
+	Importance      int    `json:"importance"`
+	Status          string `json:"status"`           // "pending" | "resolved" | "abandoned"
+	ResolvedChapter int    `json:"resolved_chapter"` // 标记 resolved 时填入
 }
 
-// UpdateTimelineEntry 更新伏笔或用户指令。只更新非零值字段。
+// UpdateTimelineEntry 更新伏笔或用户指令。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateTimelineEntry(novelID int64, entryID int64, input UpdateTimelineEntryInput) error {
 	var entry timeline.TimelineEntry
-	if err := storage.PatchAndSave(a.timeline.DB.WithContext(a.ctx), entryID, novelID, &input, &entry); err != nil {
+	if err := a.timeline.DB.WithContext(a.ctx).
+		Where("id = ? AND novel_id = ?", entryID, novelID).
+		First(&entry).Error; err != nil {
+		return fmt.Errorf("update timeline entry: %w", err)
+	}
+	// PUT 全量覆盖用户可编辑字段。DetailJSON 是 AI 写入字段，不在 input 里，
+	// 保留 First 加载的原值，避免前端编辑保存覆盖 AI 写入的新值（lost update）。
+	entry.Title = input.Title
+	entry.Content = input.Content
+	entry.TargetChapter = input.TargetChapter
+	entry.Importance = input.Importance
+	entry.Status = input.Status
+	entry.ResolvedChapter = input.ResolvedChapter
+	if err := a.timeline.DB.WithContext(a.ctx).Save(&entry).Error; err != nil {
 		return fmt.Errorf("update timeline entry: %w", err)
 	}
 	return nil
