@@ -11,6 +11,7 @@ import (
 	"time"
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
+	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/git"
@@ -32,7 +33,7 @@ type EditArgs struct {
 	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
 	Reason     string `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
-	Title      string `json:"title" jsonschema:"description=章节标题。新建章节时必填；对已有章节传入时将覆盖原标题（仅 chapters/xxx.md 路径生效）" validate:"omitempty"`
+	Title      string `json:"title" jsonschema:"description=章节标题。新建章节时必填；对已有章节/大纲传入时将覆盖原标题（chapters/ 和 outlines/ 路径均生效）" validate:"omitempty"`
 }
 
 // EditTool 编辑文件（章节或故事状态），支持全文替换、查找替换、行范围替换。
@@ -61,7 +62,6 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	}
 
 	// 2. 读取当前文件
-	var fileExists bool
 	current, err := git.ReadFile(tc.NovelID, a.Path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -75,8 +75,6 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		} else {
 			return nil, fmt.Errorf("read file %s: %w", a.Path, err)
 		}
-	} else {
-		fileExists = true
 	}
 
 	// 3. 根据 change_type 生成新内容
@@ -138,30 +136,38 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		approvalFeedback = approval.Feedback
 	}
 
-	// 6. 章节/大纲 DB 记录维护（新建写入标题，已有章节可覆盖标题）
+	// 6. 章节/大纲 DB 记录维护（upsert：记录不存在则创建，存在且传了 title 则更新）
+	// 大纲无独立元数据表，寄生在 chapter 记录上，故 outline edit 也会触发本章记录创建。
+	// 不以文件是否存在区分 DB 处理——以 chapter 记录是否存在为准。
 	if isChapterPath(a.Path) || isOutlinePath(a.Path) {
 		chapNum := parseChapterNum(a.Path)
 		if chapNum == 0 {
 			chapNum = parseOutlineNum(a.Path)
 		}
 		if chapNum > 0 {
-			if !fileExists {
+			var ch chapter.Chapter
+			err := tc.DB.WithContext(ctx).
+				Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).
+				First(&ch).Error
+			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("query chapter record: %w", err)
+			}
+			if errors.Is(err, gorm.ErrRecordNotFound) {
 				title := a.Title
 				if title == "" {
 					title = fmt.Sprintf("第%d章", chapNum)
 				}
-				ch := chapter.Chapter{
+				ch = chapter.Chapter{
 					NovelID:       tc.NovelID,
 					ChapterNumber: chapNum,
 					Title:         title,
 				}
-				if err := tc.DB.WithContext(ctx).Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).FirstOrCreate(&ch).Error; err != nil {
+				if err := tc.DB.WithContext(ctx).Create(&ch).Error; err != nil {
 					return nil, fmt.Errorf("auto-create chapter record: %w", err)
 				}
-			} else if a.Title != "" && isChapterPath(a.Path) {
+			} else if a.Title != "" && ch.Title != a.Title {
 				if err := tc.DB.WithContext(ctx).
-					Model(&chapter.Chapter{}).
-					Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).
+					Model(&ch).
 					Update("title", a.Title).Error; err != nil {
 					return nil, fmt.Errorf("update chapter title: %w", err)
 				}
