@@ -83,28 +83,22 @@ func (a *App) SetActiveNovel(input SetActiveNovelInput) error {
 	return config.SaveSettings(a.db, a.settings)
 }
 
-// UpdateNovelInput 是更新小说的入参，空字段不更新（PATCH 语义）。
+// UpdateNovelInput 采用 PUT 语义：前端全量传，后端全量覆盖。
 type UpdateNovelInput struct {
-	Title       string `json:"title,omitempty"`
-	Description string `json:"description,omitempty"`
-	Genre       string `json:"genre,omitempty"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Genre       string `json:"genre"`
 }
 
-// UpdateNovel 更新小说信息。
+// UpdateNovel 更新小说信息。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateNovel(novelID int64, input UpdateNovelInput) (*novel.Novel, error) {
 	var n novel.Novel
 	if err := a.novel.DB.WithContext(a.ctx).First(&n, novelID).Error; err != nil {
 		return nil, fmt.Errorf("update novel: %w", err)
 	}
-	if input.Title != "" {
-		n.Title = input.Title
-	}
-	if input.Description != "" {
-		n.Description = input.Description
-	}
-	if input.Genre != "" {
-		n.Genre = input.Genre
-	}
+	n.Title = input.Title
+	n.Description = input.Description
+	n.Genre = input.Genre
 	if err := a.novel.DB.WithContext(a.ctx).Save(&n).Error; err != nil {
 		return nil, fmt.Errorf("update novel: %w", err)
 	}

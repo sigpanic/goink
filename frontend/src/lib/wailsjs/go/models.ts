@@ -741,9 +741,9 @@ export namespace app {
 	    }
 	}
 	export class UpdateNovelInput {
-	    title?: string;
-	    description?: string;
-	    genre?: string;
+	    title: string;
+	    description: string;
+	    genre: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateNovelInput(source);

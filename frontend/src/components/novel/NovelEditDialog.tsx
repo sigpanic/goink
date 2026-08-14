@@ -51,7 +51,7 @@ export default function NovelEditDialog({
   if (!open) return null;
 
   const isEdit = !!novel;
-  const canSave = isEdit ? true : title.trim().length > 0;
+  const canSave = title.trim().length > 0;
 
   async function handleSave() {
     if (!canSave || saving) return;
