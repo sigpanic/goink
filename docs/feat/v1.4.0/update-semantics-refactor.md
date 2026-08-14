@@ -247,58 +247,133 @@ PUT 全量覆盖要求前端表单包含 input 的所有字段。当前 5 处漏
 - 但 check_omitempty **未接入 CI**（pre-commit hook 和 GitHub Actions 都不跑），是孤立脚本
 - v1.4.0 改造后可考虑删除该脚本，或保留给 MCP 工具层（PATCH 语义的 input 仍用 omitempty）
 
-## 实施步骤
+## 实施步骤（领域推进 commit 计划）
 
-### 第 1 步：UpdatePreference（已完成，首个示范）
+> 按"逐个领域一次性改完"推进：每个领域 commit 包含 input 移除 AI 字段（如有）+ 后端改 PUT + 前端适配 + 重新生成 wails 绑定，自洽且上下文集中。timeline 领域最先做（消除真实 lost update）。
+>
+> 调研结论：维持现状是中-高风险。`UpdateTimelineEntry.detail_json` 已存在真实 lost update（前端预填 + 全量传 + PatchAndSave 退化 PUT，AI 写入后缓存陈旧时覆盖）。`UpdateCharacter.personality` / `UpdateLocation.detail_json` 当前安全但靠前端漏传兜底，脆弱。改 PUT 不移除 AI 字段会把这三个方法都变成 lost update，所以 **input 移除 AI 字段是 lost update 的根因解药，与 PUT/PATCH 之争无关**。
+>
+> PUT vs PATCH 权衡：PatchAndSave 的 `db.Save` 本身就是全量写回，并发上等价 PUT，改 PUT 不引入新并发风险。真 PATCH 走 `db.Updates(map)` 会破坏 oplog 的整行快照机制（newJSON 不完整）。Goink 是单用户桌面应用，并发风险可忽略。综合结论：走 PUT 方案。
+>
+> ChapterPlan 特例：`UpdateChapterPlan` 走 `timeline.SavePlan`（[store.go:49-51](../../../internal/timeline/store.go#L49)）调用 `git.WriteFile` 写文件，不走 DB，**不进 oplog**（设计如此）。它已经是 PUT 语义（直接赋值 `input.Content` + 全量替换文件），只需去 omitempty 让 TS 必填，无需其他改动。归入 timeline 领域 commit 顺手做。
 
-- App 层 `UpdatePreference` 改 PUT
-- 前端 `PreferenceView` 编辑表单加归属切换 UI
-- 修复 is_global 切换时 NovelID 处理
-- 加归属校验（不能改其他小说的偏好）
+### Commit 1: timeline 领域（消除真实 lost update，最先做）
 
-### 第 2 步：修前端漏传（PUT 改造前提）
+**后端改动**（[app/timeline_view.go](../../../app/timeline_view.go)）：
+- `UpdateTimelineEntryInput` 移除 `DetailJSON` 字段 + 去 `omitempty`
+- `UpdateTimelineEntry` 删 `PatchAndSave`，改为 `First` + 直接赋值 + `db.Save`
+- `UpdateChapterPlanInput` 去 `omitempty`（SavePlan 走文件不进 oplog，已是 PUT 语义，无需改后端逻辑）
 
-- 修 5 处 `openEdit` 漏填字段
-- 修 `UpdateArcNode` 快速状态切换（改成全量传或单独 API）
-- AI 写入字段（personality/detail_json）从 input 移除（前端不该传 AI 字段）
+**重新生成 wails 绑定**：`wails generate module`（或 `make build`），更新 `frontend/src/lib/wailsjs/go/models.ts` 和 `App.d.ts`。禁止手改绑定文件。
 
-### 第 3 步：App 层全量改 PUT
+**前端适配**（[frontend/src/components/timeline/TimelineView.tsx](../../../frontend/src/components/timeline/TimelineView.tsx)）：
+- `openEdit`（L266-277）移除 `detail_json` 预填
+- `buildPayload` / `handleUpdate`（L336-349）移除 `detail_json` 字段
+- 其他字段 TS 类型变必填，前端实际全量传，编译应通过
 
-按风险从低到高：
-1. `UpdateNovel`（3 字段，无 AI 字段，无漏传）
-2. `UpdateChapterPlan`（2 字段，无 AI 字段，无漏传）
-3. `UpdateReaderPerspective`（5 字段，无 AI 字段，无漏传）
-4. `UpdateTimelineEntry`（7 字段，无 AI 字段，无漏传）
-5. `UpdateStoryArc`（修漏传后改 PUT）
-6. `UpdateArcNode`（修漏传 + 快速状态切换后改 PUT）
-7. `UpdateCharacter`（input 去掉 personality 后改 PUT）
-8. `UpdateLocation`（input 去掉 detail_json 后改 PUT，注意 ClearParent 特殊处理）
-9. `UpdateStyleSample`（已是 PUT 语义，去掉 omitempty 即可）
+**验证**：go build + go test + npm run build + npm run lint
 
-每个方法改造：
-- input 去掉 omitempty
-- 后端删 `if != ""` 判断，直接赋值 + `db.Save`
-- 重新生成 Wails 绑定
-- 验证 TS 类型变必填
-- 前端验证 build + lint
+**效果**：消除 TimelineEntry 的真实 lost update（AI 写入 detail_json 后前端编辑保存不再覆盖）。ChapterPlan TS 类型变必填。
 
-### 第 4 步：MCP 工具层保持 json.Unmarshal RawArgs PATCH（preference 例外）
+### Commit 2: character 领域（消除脆弱兜底）
 
-MCP 工具层大部分工具（character/location/timeline/storyarc/reader_perspective）用项目统一的 PATCH 模式：
-- `db.First(&entity, id)` 加载完整 entity
-- `json.Unmarshal(tc.RawArgs, &entity)` 用 LLM 原始 JSON 覆盖
-- `db.Save(&entity)` 保存
+**后端改动**（[app/character_view.go](../../../app/character_view.go)）：
+- `UpdateCharacterInput` 移除 `Personality` 字段 + 去 `omitempty`
+- `UpdateCharacter` 删 `PatchAndSave`，改为 `First` + 直接赋值 + `db.Save`
 
-**`upsert_preference` 是例外**（刻意设计）：
-- 用 upsert + if 判断模式（不用 RawArgs）
-- 因为需要 upsert 语义/batch 事务/is_global 切换 NovelID/归属校验
-- 详见上文"特例"说明
+**重新生成 wails 绑定**
 
-### 第 5 步：清理 check_omitempty
+**前端适配**（[frontend/src/components/character/CharacterListView.tsx](../../../frontend/src/components/character/CharacterListView.tsx)）：无需改（本来就不传 personality，TS 类型变必填后 name/description/abilities 全量传编译通过）
 
-- 评估是否保留 check_omitempty 脚本
-- 如果保留，限制只检查 MCP 工具层的 input（App 层已改 PUT）
-- 如果删除，确认没有其他依赖
+**验证**：go build + go test + npm run build + npm run lint
+
+**效果**：消除 personality 漏传兜底的脆弱性。input 不含 AI 字段，前端无法传，PatchAndSave/PUT 都不碰 personality。
+
+### Commit 3: location 领域（消除脆弱兜底，保留 ClearParent）
+
+**后端改动**（[app/location_view.go](../../../app/location_view.go)）：
+- `UpdateLocationInput` 移除 `DetailJSON` 字段 + 去 `omitempty`
+- `UpdateLocation` 已经是手写 `if != ""` 模式，改成直接赋值
+- **保留 `ClearParent` bool flag 的特殊判断**：`if input.ClearParent { loc.ParentLocationID = 0 }`（这是控制信号不是 entity 字段，不能简单赋值）
+- `db.Save`
+
+**重新生成 wails 绑定**
+
+**前端适配**（[frontend/src/components/location/LocationListView.tsx](../../../frontend/src/components/location/LocationListView.tsx)）：无需改（本来就不传 detail_json，TS 类型变必填后其他字段全量传编译通过）
+
+**验证**：go build + go test + npm run build + npm run lint
+
+**效果**：消除 detail_json 漏传兜底的脆弱性。ClearParent 特殊逻辑保留。
+
+### Commit 4: storyarc 领域（清空意图影响功能）
+
+**后端改动**（[app/storyarc_view.go](../../../app/storyarc_view.go)）：
+- `UpdateArcNodeInput` 去 `omitempty` + `UpdateArcNode` 删 `PatchAndSave` + 直接赋值 + `db.Save`
+- `UpdateStoryArcInput` 去 `omitempty` + `UpdateStoryArc` 删 `PatchAndSave` + 直接赋值 + `db.Save`
+
+**重新生成 wails 绑定**
+
+**前端适配**（[frontend/src/components/storyarc/ArcListView.tsx](../../../frontend/src/components/storyarc/ArcListView.tsx)）：已全量回传（§6 注释），TS 类型变必填应编译通过
+
+**验证**：go build + go test + npm run build + npm run lint
+
+**效果**：
+- `ArcNode.actual_chapter=0` 能正确撤销"已发生章节"
+- `StoryArc.reactivate_at=""` 能正确清除暂停条件
+
+### Commit 5: reader 领域（清空意图影响功能）
+
+**后端改动**（[app/reader.go](../../../app/reader.go)）：
+- `UpdateReaderPerspectiveInput` 去 `omitempty` + `UpdateReaderPerspective` 删 `PatchAndSave` + 直接赋值 + `db.Save`
+
+**重新生成 wails 绑定**
+
+**前端适配**（[frontend/src/components/reader/ReaderView.tsx](../../../frontend/src/components/reader/ReaderView.tsx)）：需确认全量回传（`openEdit` L214-223 预填 5 字段，`handleUpdate` 应全量传）
+
+**验证**：go build + go test + npm run build + npm run lint
+
+**效果**：`ReaderPerspective.revealed_chapter=0` 能正确撤销"已揭示"
+
+### Commit 6: novel 领域（一致性/体验）
+
+**后端改动**（[app/novel.go](../../../app/novel.go)）：
+- `UpdateNovelInput` 去 `omitempty`
+- `UpdateNovel` 删 `if input.X != ""` 判断，直接赋值 + `db.Save`
+
+**重新生成 wails 绑定**
+
+**前端适配**（[frontend/src/components/novel/NovelEditDialog.tsx](../../../frontend/src/components/novel/NovelEditDialog.tsx)）：编辑模式 `canSave` 始终 true，需确认 title 空值处理（可加 toast 拦截或允许空 title）
+
+**验证**：go build + go test + npm run build + npm run lint
+
+### Commit 7: 清理（收尾）
+
+**改动**：
+- [internal/storage/patch.go:18-19](../../../internal/storage/patch.go#L18): 删除引用不存在的 `check_omitempty` 脚本的注释
+- [app/character_view.go](../../../app/character_view.go) / [location_view.go](../../../app/location_view.go) / [timeline_view.go](../../../app/timeline_view.go) / [storyarc_view.go](../../../app/storyarc_view.go) / [reader.go](../../../app/reader.go): 修正 `Update*Input` 注释，从"PATCH 只传要改字段"改为"PUT 全量回传"
+
+**验证**：go build（注释改动不影响编译）
+
+### commit 顺序与依赖
+
+- **Commit 1（timeline）必须最先做**——消除真实 lost update
+- Commit 2-6 互相独立，可任意顺序（建议按风险 P0→P1→P2：character/location → storyarc/reader → novel）
+- Commit 7 最后做（清理收尾）
+
+### MCP 工具层保持现状（不改）
+
+MCP 工具层（LLM 调用）保持 `json.Unmarshal(tc.RawArgs, &entity)` + `db.Save` 真 PATCH 模式，不改：
+- [character_tools.go](../../../internal/mcp_tools/character_tools.go) / [location_tools.go](../../../internal/mcp_tools/location_tools.go) / [timeline_tools.go](../../../internal/mcp_tools/timeline_tools.go) / [storyarc_tools.go](../../../internal/mcp_tools/storyarc_tools.go) / [reader_perspective_tools.go](../../../internal/mcp_tools/reader_perspective_tools.go)
+- `upsert_preference` 是刻意特例（upsert 语义/batch 事务/NovelID 联动/归属校验），保持现状
+
+### 验证策略
+
+每个 commit 必须通过：
+1. pre-commit hook（自动跑 go build/test + npm run build/lint/test）
+2. 手动验证场景：
+   - 编辑表单清空字段保存 → 字段变空（PUT 行为）
+   - AI 写入后前端编辑保存 → AI 字段不丢失（input 不含 AI 字段）
+   - oplog 记录正确（前端编辑进 oplog，可回滚；ChapterPlan 除外，走文件不进 oplog）
 
 ## 风险评估
 
@@ -351,7 +426,14 @@ db.Save(&item)                 // 3. 保存整个 entity
 
 ## 已完成（v1.4.0 首批）
 
-- [x] `UpdatePreference` 改 PUT（[app/novel.go](../../../app/novel.go)）
+### 已完成 PUT 改造的方法（3 个）
+
+- [x] `UpdatePreference` 改 PUT（[app/preference.go](../../../app/preference.go)）
+- [x] `UpdateStyleSample` 已是 PUT 语义（[app/style.go](../../../app/style.go)）
+- [x] `UpdateNovelSetting` 已是 PUT 语义（[app/setting.go](../../../app/setting.go)）—— 文档此前遗漏，调研补全
+
+### UpdatePreference 改造细节
+
 - [x] 前端 `PreferenceView` 编辑表单加归属切换 UI（[PreferenceView.tsx](../../../frontend/src/components/preference/PreferenceView.tsx)）
 - [x] 修复 `CreatePreference` is_global bug（NovelID 残留）
 - [x] 修复 `UpdatePreference` is_global 切换 bug（NovelID 不调整）
@@ -360,18 +442,28 @@ db.Save(&item)                 // 3. 保存整个 entity
 
 ## 待办
 
+> 完整实施步骤见上方「实施步骤（领域推进 commit 计划）」章节，共 7 个 commit，按领域推进、timeline 最先做。
+
 ### 前端（融入 v1.4.0 前端架构重构，领域推进时顺手做）
 
-- [ ] 各领域 useUpdateXxx mutation 的 payload 全量回传 input 所有字段（见 [refactor-plan/00-conventions.md §6](./refactor-plan/00-conventions.md)）
-- [ ] `UpdateArcNode` 快速状态切换：从 query 缓存读完整节点 → 改 status → 全量回传，或单独提供 `UpdateArcNodeStatus` API
+- [x] `UpdateArcNode` 快速状态切换：已改为全量回传（[ArcListView.tsx:451-474](../../../frontend/src/components/storyarc/ArcListView.tsx#L451)，§6 注释）
+- [x] ArcListView 编辑故事线 / 编辑节点全量回传（[ArcListView.tsx:316/398](../../../frontend/src/components/storyarc/ArcListView.tsx#L316)，§6 注释）
+- [ ] `TimelineView.tsx` 移除 `detail_json` 预填和回传（Commit 1 配套，input 移除字段后 TS 自然适配）
+- [ ] `CharacterListView.tsx` / `LocationListView.tsx` 漏传 AI 字段：Commit 2/3 移除 input AI 字段后自动解决（前端本来就不传）
 
-### 后端（单独重构）
+### 后端（按领域推进 commit 计划）
 
-- [ ] 从前端 input 移除前端不可编辑字段（`UpdateCharacterInput.Personality` / `UpdateLocationInput.DetailJSON` 等 AI 字段）
-- [ ] input 全必填 + 去 `omitempty` + `db.Save` 全量覆盖（按第 3 步顺序）
-- [ ] 评估 check_omitempty 脚本去留
+- [ ] Commit 1: timeline 领域（input 移除 detail_json + UpdateTimelineEntry 改 PUT + UpdateChapterPlan 去 omitempty）
+- [ ] Commit 2: character 领域（input 移除 personality + UpdateCharacter 改 PUT）
+- [ ] Commit 3: location 领域（input 移除 detail_json + UpdateLocation 改 PUT，保留 ClearParent）
+- [ ] Commit 4: storyarc 领域（UpdateArcNode + UpdateStoryArc 改 PUT）
+- [ ] Commit 5: reader 领域（UpdateReaderPerspective 改 PUT）
+- [ ] Commit 6: novel 领域（UpdateNovel 改 PUT）
+- [ ] Commit 7: 清理 `patch.go` 注释 + 修正 `Update*Input` 注释
 
 ### 说明
 
 - 前端全量回传在后端 input 变化前后都能工作：移除 AI 字段前透传 query 缓存最新值，移除后 TS 类型变必填前端自然适配。
 - 前后端解耦，前端规范统一是「全量回传 input 字段」，不依赖后端重构进度。
+- `check_omitempty` 脚本实际不存在（`scripts/` 目录无此文件），pre-commit 和 CI 都不调用，[patch.go:18-19](../../../internal/storage/patch.go#L18) 注释是过时引用，Commit 7 清理。
+- `UpdateChapterPlan` 走 `git.WriteFile` 写文件不进 oplog（设计如此），已是 PUT 语义，Commit 1 顺手去 omitempty 即可。
