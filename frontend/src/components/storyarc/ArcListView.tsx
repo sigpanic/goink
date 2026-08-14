@@ -69,22 +69,21 @@ type EditMode =
 type ArcForm = {
   name: string;
   arc_type: string;
-  description?: string;
-  importance?: number;
-  status?: string;
-  reactivate_at?: string;
+  description: string;
+  importance: number;
+  status: string;
 };
 type NodeForm = {
   story_arc_id: number;
   title: string;
-  description?: string;
+  description: string;
   target_chapter: number;
-  actual_chapter?: number;
-  status?: string;
+  actual_chapter: number;
+  status: string;
 };
 
-const EMPTY_ARC: ArcForm = { name: "", arc_type: "main" };
-const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", target_chapter: 1 };
+const EMPTY_ARC: ArcForm = { name: "", arc_type: "main", description: "", importance: 1, status: "" };
+const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", description: "", target_chapter: 1, actual_chapter: 0, status: "pending" };
 
 export default function ArcListView({ novelId }: Props) {
   const focus = useFocusWithNonce("storyarcs");
@@ -275,7 +274,7 @@ export default function ArcListView({ novelId }: Props) {
   }
 
   function openEditArc(arc: storyarc.StoryArc) {
-    // 4.3.3: 全量回传（§6）— 编辑时把 status/reactivate_at 也填进 form，
+    // 4.3.3: 全量回传（§6）— 编辑时把 status 也填进 form，
     // handleUpdateArc 直接传 arcForm 所有字段，等价 PUT。
     setArcForm({
       name: arc.name,
@@ -283,7 +282,6 @@ export default function ArcListView({ novelId }: Props) {
       description: arc.description || "",
       importance: arc.importance,
       status: arc.status,
-      reactivate_at: arc.reactivate_at,
     });
     setEditMode({ type: "edit_arc", arc });
   }
@@ -316,7 +314,7 @@ export default function ArcListView({ novelId }: Props) {
   async function handleUpdateArc() {
     if (!editMode || editMode.type !== "edit_arc") return;
     // 4.3.3: update 走 mutation（onSuccess 失效 storyarcs），删 setSaving/bumpRefresh。
-    // 全量回传 input 所有字段（§6 等价 PUT，openEditArc 已把 status/reactivate_at 填进 form）。
+    // 全量回传 input 所有字段（§6 等价 PUT，openEditArc 已把 status 填进 form）。
     try {
       await updateArcMutation.mutateAsync({
         id: editMode.arc.id,
@@ -326,7 +324,6 @@ export default function ArcListView({ novelId }: Props) {
           description: arcForm.description,
           importance: arcForm.importance,
           status: arcForm.status,
-          reactivate_at: arcForm.reactivate_at,
         },
       });
       setEditMode(null);

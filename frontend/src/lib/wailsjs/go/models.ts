@@ -671,11 +671,11 @@ export namespace app {
 	    }
 	}
 	export class UpdateArcNodeInput {
-	    title?: string;
-	    description?: string;
-	    target_chapter?: number;
-	    actual_chapter?: number;
-	    status?: string;
+	    title: string;
+	    description: string;
+	    target_chapter: number;
+	    actual_chapter: number;
+	    status: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateArcNodeInput(source);
@@ -807,12 +807,11 @@ export namespace app {
 	    }
 	}
 	export class UpdateStoryArcInput {
-	    name?: string;
-	    description?: string;
-	    arc_type?: string;
-	    importance?: number;
-	    status?: string;
-	    reactivate_at?: string;
+	    name: string;
+	    description: string;
+	    arc_type: string;
+	    importance: number;
+	    status: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateStoryArcInput(source);
@@ -825,7 +824,6 @@ export namespace app {
 	        this.arc_type = source["arc_type"];
 	        this.importance = source["importance"];
 	        this.status = source["status"];
-	        this.reactivate_at = source["reactivate_at"];
 	    }
 	}
 	export class UpdateStyleSampleInput {

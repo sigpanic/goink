@@ -74,21 +74,32 @@ func (a *App) CreateStoryArc(novelID int64, input CreateStoryArcInput) (*storyar
 	return &arc, nil
 }
 
-// UpdateStoryArcInput 是 UpdateStoryArc 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
+// UpdateStoryArcInput 采用 PUT 语义：前端全量传，后端全量覆盖。
+// ReactivateAt 是 AI 写入字段，不在 input 里，后端 First 加载原值保留。
 type UpdateStoryArcInput struct {
-	Name         string `json:"name,omitempty"`
-	Description  string `json:"description,omitempty"`
-	ArcType      string `json:"arc_type,omitempty"`
-	Importance   int    `json:"importance,omitempty"`
-	Status       string `json:"status,omitempty"`        // "active" | "paused" | "completed" | "abandoned"
-	ReactivateAt string `json:"reactivate_at,omitempty"` // 暂停恢复条件
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	ArcType     string `json:"arc_type"`
+	Importance  int    `json:"importance"`
+	Status      string `json:"status"` // "active" | "paused" | "completed" | "abandoned"
 }
 
-// UpdateStoryArc 更新叙事弧线。只更新非零值字段。
+// UpdateStoryArc 更新叙事弧线。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateStoryArc(novelID int64, arcID int64, input UpdateStoryArcInput) error {
 	var arc storyarc.StoryArc
-	if err := storage.PatchAndSave(a.storyarc.DB.WithContext(a.ctx), arcID, novelID, &input, &arc); err != nil {
+	if err := a.storyarc.DB.WithContext(a.ctx).
+		Where("id = ? AND novel_id = ?", arcID, novelID).
+		First(&arc).Error; err != nil {
+		return fmt.Errorf("update story arc: %w", err)
+	}
+	// PUT 全量覆盖用户可编辑字段。ReactivateAt 是 AI 写入字段，不在 input 里，
+	// 保留 First 加载的原值，避免前端编辑保存覆盖 AI 写入的新值（lost update）。
+	arc.Name = input.Name
+	arc.Description = input.Description
+	arc.ArcType = input.ArcType
+	arc.Importance = input.Importance
+	arc.Status = input.Status
+	if err := a.storyarc.DB.WithContext(a.ctx).Save(&arc).Error; err != nil {
 		return fmt.Errorf("update story arc: %w", err)
 	}
 	return nil
@@ -138,20 +149,29 @@ func (a *App) CreateArcNode(novelID int64, input CreateArcNodeInput) (*storyarc.
 	return &node, nil
 }
 
-// UpdateArcNodeInput 是 UpdateArcNode 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
+// UpdateArcNodeInput 采用 PUT 语义：前端全量传，后端全量覆盖。
 type UpdateArcNodeInput struct {
-	Title         string `json:"title,omitempty"`
-	Description   string `json:"description,omitempty"`
-	TargetChapter int    `json:"target_chapter,omitempty"`
-	ActualChapter int    `json:"actual_chapter,omitempty"`
-	Status        string `json:"status,omitempty"` // "pending" | "completed" | "abandoned"
+	Title         string `json:"title"`
+	Description   string `json:"description"`
+	TargetChapter int    `json:"target_chapter"`
+	ActualChapter int    `json:"actual_chapter"`
+	Status        string `json:"status"` // "pending" | "completed" | "abandoned"
 }
 
-// UpdateArcNode 更新弧线节点。只更新非零值字段。
+// UpdateArcNode 更新弧线节点。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateArcNode(novelID int64, nodeID int64, input UpdateArcNodeInput) error {
 	var node storyarc.ArcNode
-	if err := storage.PatchAndSave(a.storyarc.DB.WithContext(a.ctx), nodeID, novelID, &input, &node); err != nil {
+	if err := a.storyarc.DB.WithContext(a.ctx).
+		Where("id = ? AND novel_id = ?", nodeID, novelID).
+		First(&node).Error; err != nil {
+		return fmt.Errorf("update arc node: %w", err)
+	}
+	node.Title = input.Title
+	node.Description = input.Description
+	node.TargetChapter = input.TargetChapter
+	node.ActualChapter = input.ActualChapter
+	node.Status = input.Status
+	if err := a.storyarc.DB.WithContext(a.ctx).Save(&node).Error; err != nil {
 		return fmt.Errorf("update arc node: %w", err)
 	}
 	return nil
