@@ -56,19 +56,28 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 	return &char, nil
 }
 
-// UpdateCharacterInput 是 UpdateCharacter 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
+// UpdateCharacterInput 采用 PUT 语义：前端全量传，后端全量覆盖。
+// Personality 是 AI 写入字段，不在 input 里，后端 First 加载原值保留。
 type UpdateCharacterInput struct {
-	Name        string `json:"name,omitempty"`
-	Description string `json:"description,omitempty"`
-	Personality string `json:"personality,omitempty"`
-	Abilities   string `json:"abilities,omitempty"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Abilities   string `json:"abilities"`
 }
 
-// UpdateCharacter 更新角色。只更新非零值字段。
+// UpdateCharacter 更新角色。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateCharacter(novelID int64, charID int64, input UpdateCharacterInput) error {
 	var ch character.Character
-	if err := storage.PatchAndSave(a.character.DB.WithContext(a.ctx), charID, novelID, &input, &ch); err != nil {
+	if err := a.character.DB.WithContext(a.ctx).
+		Where("id = ? AND novel_id = ?", charID, novelID).
+		First(&ch).Error; err != nil {
+		return fmt.Errorf("update character: %w", err)
+	}
+	// PUT 全量覆盖用户可编辑字段。Personality 是 AI 写入字段，不在 input 里，
+	// 保留 First 加载的原值，避免前端编辑保存覆盖 AI 写入的新值（lost update）。
+	ch.Name = input.Name
+	ch.Description = input.Description
+	ch.Abilities = input.Abilities
+	if err := a.character.DB.WithContext(a.ctx).Save(&ch).Error; err != nil {
 		return fmt.Errorf("update character: %w", err)
 	}
 	return nil

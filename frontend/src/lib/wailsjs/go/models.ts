@@ -705,10 +705,9 @@ export namespace app {
 	    }
 	}
 	export class UpdateCharacterInput {
-	    name?: string;
-	    description?: string;
-	    personality?: string;
-	    abilities?: string;
+	    name: string;
+	    description: string;
+	    abilities: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateCharacterInput(source);
@@ -718,7 +717,6 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.description = source["description"];
-	        this.personality = source["personality"];
 	        this.abilities = source["abilities"];
 	    }
 	}

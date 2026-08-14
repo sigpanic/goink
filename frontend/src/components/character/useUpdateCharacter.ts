@@ -5,7 +5,7 @@ import { characterKeys } from "@/lib/queryKeys";
 
 // useUpdateCharacter: 更新角色 mutation。
 // mutationFn 直接 import wailsjs UpdateCharacter（不用 useApp）。
-// 入参 {id, input}：input 用 app.UpdateCharacterInput（全 optional，PATCH 语义）。
+// 入参 {id, input}：input 用 app.UpdateCharacterInput（PUT 语义，全量回传）。
 // handler 负责 setEditMode(null) + 错误 throw（副作用各异，不放进 mutation）。
 // onSuccess 失效 list：角色名/描述/能力更新入列表。
 // 不失效 relations：CharacterRelation 只存 character_id 不存 name，
