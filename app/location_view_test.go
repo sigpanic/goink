@@ -116,9 +116,13 @@ func TestUpdateLocation_ClearParent(t *testing.T) {
 	assert.NotNil(t, child.ParentLocationID)
 	assert.Equal(t, parent.ID, *child.ParentLocationID)
 
-	// Clear the parent
+	// Clear the parent by passing nil ParentLocationID (PUT semantics)
 	err = app.UpdateLocation(novelID, child.ID, UpdateLocationInput{
-		ClearParent: true,
+		Name:             child.Name,
+		LocationType:     child.LocationType,
+		Description:      child.Description,
+		ParentLocationID: nil,
+		Tags:             child.Tags,
 	})
 	require.NoError(t, err)
 

@@ -721,13 +721,11 @@ export namespace app {
 	    }
 	}
 	export class UpdateLocationInput {
-	    name?: string;
-	    location_type?: string;
-	    description?: string;
-	    detail_json?: string;
+	    name: string;
+	    location_type: string;
+	    description: string;
 	    parent_location_id?: number;
-	    tags?: string;
-	    clear_parent?: boolean;
+	    tags: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateLocationInput(source);
@@ -738,10 +736,8 @@ export namespace app {
 	        this.name = source["name"];
 	        this.location_type = source["location_type"];
 	        this.description = source["description"];
-	        this.detail_json = source["detail_json"];
 	        this.parent_location_id = source["parent_location_id"];
 	        this.tags = source["tags"];
-	        this.clear_parent = source["clear_parent"];
 	    }
 	}
 	export class UpdateNovelInput {

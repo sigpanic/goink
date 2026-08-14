@@ -192,7 +192,6 @@ export default function LocationListView({ novelId }: Props) {
     location_type: string;
     description: string;
     parent_location_id?: number;
-    clear_parent?: boolean;
     tags: string;
   } {
     return {
@@ -203,7 +202,6 @@ export default function LocationListView({ novelId }: Props) {
         form.parent_location_id && form.parent_location_id !== 0
           ? form.parent_location_id
           : undefined,
-      clear_parent: !form.parent_location_id ? true : undefined,
       tags: JSON.stringify(form.tags),
     };
   }

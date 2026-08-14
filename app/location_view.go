@@ -60,46 +60,32 @@ func (a *App) CreateLocation(novelID int64, input CreateLocationInput) (*locatio
 	return &loc, nil
 }
 
-// UpdateLocationInput 是 UpdateLocation 的参数。
-// 所有字段均为 optional，PATCH 只传要改的字段即可；传完整对象也行。
+// UpdateLocationInput 采用 PUT 语义：前端全量传，后端全量覆盖。
+// DetailJSON 是 AI 写入字段，不在 input 里，后端 First 加载原值保留。
+// ParentLocationID 传 nil 表示根节点（清空父级），传 &id 表示设置父级。
 type UpdateLocationInput struct {
-	Name             string `json:"name,omitempty"`
-	LocationType     string `json:"location_type,omitempty"`
-	Description      string `json:"description,omitempty"`
-	DetailJSON       string `json:"detail_json,omitempty"`
-	ParentLocationID *int64 `json:"parent_location_id,omitempty"`
-	Tags             string `json:"tags,omitempty"`
-	ClearParent      bool   `json:"clear_parent,omitempty" gorm:"-"`
+	Name             string `json:"name"`
+	LocationType     string `json:"location_type"`
+	Description      string `json:"description"`
+	ParentLocationID *int64 `json:"parent_location_id"`
+	Tags             string `json:"tags"`
 }
 
-// UpdateLocation 更新地点。只更新非零值字段。
-// 用手动 First+if+Save 而非 PatchAndSave，因为 ClearParent 需要特殊处理。
+// UpdateLocation 更新地点。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateLocation(novelID int64, locID int64, input UpdateLocationInput) error {
 	var loc location.Location
 	if err := a.location.DB.WithContext(a.ctx).
 		Where("id = ? AND novel_id = ?", locID, novelID).First(&loc).Error; err != nil {
 		return fmt.Errorf("update location: %w", err)
 	}
-	if input.Name != "" {
-		loc.Name = input.Name
-	}
-	if input.LocationType != "" {
-		loc.LocationType = input.LocationType
-	}
-	if input.Description != "" {
-		loc.Description = input.Description
-	}
-	if input.DetailJSON != "" {
-		loc.DetailJSON = input.DetailJSON
-	}
-	if input.Tags != "" {
-		loc.Tags = input.Tags
-	}
-	if input.ClearParent {
-		loc.ParentLocationID = nil
-	} else if input.ParentLocationID != nil {
-		loc.ParentLocationID = input.ParentLocationID
-	}
+	// PUT 全量覆盖用户可编辑字段。DetailJSON 是 AI 写入字段，不在 input 里，
+	// 保留 First 加载的原值，避免前端编辑保存覆盖 AI 写入的新值（lost update）。
+	// ParentLocationID 传 nil 表示根节点，传 &id 表示设置父级。
+	loc.Name = input.Name
+	loc.LocationType = input.LocationType
+	loc.Description = input.Description
+	loc.Tags = input.Tags
+	loc.ParentLocationID = input.ParentLocationID
 	if err := a.location.DB.WithContext(a.ctx).Save(&loc).Error; err != nil {
 		return fmt.Errorf("update location: %w", err)
 	}
