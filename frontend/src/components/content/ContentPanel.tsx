@@ -101,6 +101,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       id: string;
       path: string;
       content: string;
+      dirtyKey: "isDirty" | "outlineIsDirty";
     } | null>(null);
     const pendingHighlightRef = useRef<{
       matchPos: number;
@@ -126,14 +127,24 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     useEffect(() => {
       if (activeTab?.type === "file") {
         // 3.8 后续：activeContent 迁 useEditorStore，StatusBar 自己订阅。
-        useEditorStore.getState().setActiveContent(activeTab.content ?? "");
+        // 大纲编辑态用 outlineContent 作为当前活动内容
+        const c =
+          activeTab.viewMode === "outline-edit"
+            ? (activeTab.outlineContent ?? "")
+            : (activeTab.content ?? "");
+        useEditorStore.getState().setActiveContent(c);
       }
     }, [activeTab]);
 
     useEffect(() => {
       // 3.8 后续：isDirty 迁 useEditorStore，StatusBar 自己订阅。
-      useEditorStore.getState().setIsDirty(activeTab?.isDirty ?? false);
-    }, [activeTab?.isDirty]);
+      // 大纲编辑态用 outlineIsDirty 反映脏状态
+      const isDirty =
+        activeTab?.viewMode === "outline-edit"
+          ? (activeTab.outlineIsDirty ?? false)
+          : (activeTab?.isDirty ?? false);
+      useEditorStore.getState().setIsDirty(isDirty);
+    }, [activeTab?.isDirty, activeTab?.outlineIsDirty, activeTab?.viewMode]);
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
     const loadedRef = useRef<Set<string>>(new Set());
@@ -185,14 +196,18 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // ── 切换 viewMode：按需加载大纲内容 ──────────────────────
 
     const handleSetViewMode = useCallback(
-      (tabId: string, mode: "content" | "outline") => {
+      (tabId: string, mode: "content" | "outline" | "outline-edit") => {
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
         updateTab(tabId, { viewMode: mode });
 
-        // 切换到大纲时，如果未加载（或上次加载时文件不存在）则重新加载
-        if (mode === "outline" && tab.type === "file" && !tab.outlineContent) {
+        // 切换到大纲（预览或编辑）时，如果未加载（或上次加载时文件不存在）则重新加载
+        if (
+          (mode === "outline" || mode === "outline-edit") &&
+          tab.type === "file" &&
+          !tab.outlineContent
+        ) {
           const derivedOutline =
             isContentPath(tab.path) && tab.path !== "goink.md"
               ? outlinePath(
@@ -216,7 +231,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // ── 保存逻辑 ────────────────────────────────────────────
 
     const doSave = useCallback(
-      async (tabId: string, path: string, content: string) => {
+      async (
+        tabId: string,
+        path: string,
+        content: string,
+        dirtyKey: "isDirty" | "outlineIsDirty" = "isDirty",
+      ) => {
         if (!novelIdRef.current) return;
         try {
           // 5.2 commit 2: SaveContent 走 mutation（onSuccess 失效 contentKeys.detail），
@@ -226,7 +246,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             path,
             content,
           });
-          updateTab(tabId, { isDirty: false });
+          updateTab(tabId, { [dirtyKey]: false });
         } catch (err) {
           toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
           console.error(err);
@@ -242,7 +262,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           e.preventDefault();
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           const s = savingRef.current;
-          if (s) doSave(s.id, s.path, s.content);
+          if (s) doSave(s.id, s.path, s.content, s.dirtyKey);
         }
       };
       window.addEventListener("keydown", handler);
@@ -259,11 +279,44 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
-        savingRef.current = { id: tabId, path: tab.path, content };
+        savingRef.current = {
+          id: tabId,
+          path: tab.path,
+          content,
+          dirtyKey: "isDirty",
+        };
         saveTimerRef.current = setTimeout(() => {
           if (!savingRef.current) return;
           const s = savingRef.current;
-          doSave(s.id, s.path, s.content);
+          doSave(s.id, s.path, s.content, s.dirtyKey);
+        }, 500);
+      },
+      [tabs, updateTab, doSave],
+    );
+
+    // 大纲编辑：内容存 outlineContent，保存路径派生 outlinePath
+    const handleOutlineEditorChange = useCallback(
+      (tabId: string, value: string | undefined) => {
+        const content = value ?? "";
+        updateTab(tabId, { outlineContent: content, outlineIsDirty: true });
+        useEditorStore.getState().setActiveContent(content);
+
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab) return;
+        const outlineP = outlinePath(
+          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
+        );
+        savingRef.current = {
+          id: tabId,
+          path: outlineP,
+          content,
+          dirtyKey: "outlineIsDirty",
+        };
+        saveTimerRef.current = setTimeout(() => {
+          if (!savingRef.current) return;
+          const s = savingRef.current;
+          doSave(s.id, s.path, s.content, s.dirtyKey);
         }, 500);
       },
       [tabs, updateTab, doSave],
@@ -340,7 +393,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
           const s = savingRef.current;
           if (!s) return;
-          doSave(s.id, s.path, s.content);
+          doSave(s.id, s.path, s.content, s.dirtyKey);
         });
         // 编辑器挂载后检查待处理高亮（直接取 Monaco model 内容，避免 ref 时序问题）。
         const pending = pendingHighlightRef.current;
@@ -395,6 +448,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               const fresh = await fetchContent(data.novel_id, data.path);
               const patch: Partial<EditorTab> = { [refreshKey]: fresh };
               if (refreshKey === "content") patch.isDirty = false;
+              if (refreshKey === "outlineContent") patch.outlineIsDirty = false;
               updateTab(tab.id, patch);
             } catch {
               /* 文件可能被删 */
@@ -582,6 +636,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             const patch: Partial<EditorTab> = { viewMode };
             if (viewMode === "outline") {
               patch.outlineContent = fresh;
+              patch.outlineIsDirty = false;
             } else {
               patch.content = fresh;
               patch.isDirty = false;
@@ -799,6 +854,14 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
                 >
                   {t("content.outline")}
                 </button>
+                <button
+                  onClick={() =>
+                    handleSetViewMode(activeTab.id, "outline-edit")
+                  }
+                  className={tabBtnClass(viewMode === "outline-edit")}
+                >
+                  {t("content.outlineEdit")}
+                </button>
               </>
             )}
           </div>
@@ -836,6 +899,13 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             <ContentEditor
               value={activeTab.content ?? ""}
               onChange={(v) => handleEditorChange(activeTab.id, v)}
+              onMount={handleEditorMount}
+              editorTheme={MONACO_THEME[theme]}
+            />
+          ) : viewMode === "outline-edit" ? (
+            <ContentEditor
+              value={activeTab.outlineContent ?? ""}
+              onChange={(v) => handleOutlineEditorChange(activeTab.id, v)}
               onMount={handleEditorMount}
               editorTheme={MONACO_THEME[theme]}
             />
