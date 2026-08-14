@@ -787,11 +787,11 @@ export namespace app {
 	    }
 	}
 	export class UpdateReaderPerspectiveInput {
-	    type?: string;
-	    content?: string;
-	    planted_chapter?: number;
-	    related_truth?: string;
-	    revealed_chapter?: number;
+	    type: string;
+	    content: string;
+	    planted_chapter: number;
+	    related_truth: string;
+	    revealed_chapter: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateReaderPerspectiveInput(source);

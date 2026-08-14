@@ -16,13 +16,13 @@ type CreateReaderPerspectiveInput struct {
 	RevealedChapter int    `json:"revealed_chapter,omitempty"` // 可选，默认 0
 }
 
-// UpdateReaderPerspectiveInput 是更新读者认知条目的入参。
+// UpdateReaderPerspectiveInput 采用 PUT 语义：前端全量传，后端全量覆盖。
 type UpdateReaderPerspectiveInput struct {
-	Type            string `json:"type,omitempty"`
-	Content         string `json:"content,omitempty"`
-	PlantedChapter  int    `json:"planted_chapter,omitempty"`
-	RelatedTruth    string `json:"related_truth,omitempty"`
-	RevealedChapter int    `json:"revealed_chapter,omitempty"`
+	Type            string `json:"type"`
+	Content         string `json:"content"`
+	PlantedChapter  int    `json:"planted_chapter"`
+	RelatedTruth    string `json:"related_truth"`
+	RevealedChapter int    `json:"revealed_chapter"`
 }
 
 // GetReaderPerspectives 返回指定小说的全部读者认知条目，按 type, planted_chapter ASC 排列。
@@ -60,10 +60,20 @@ func (a *App) CreateReaderPerspective(novelID int64, input CreateReaderPerspecti
 	return &item, nil
 }
 
-// UpdateReaderPerspective 更新一条读者认知条目。
+// UpdateReaderPerspective 更新一条读者认知条目。PUT 全量覆盖用户可编辑字段。
 func (a *App) UpdateReaderPerspective(id int64, novelID int64, input UpdateReaderPerspectiveInput) error {
 	var item reader.ReaderPerspective
-	if err := storage.PatchAndSave(a.reader.DB.WithContext(a.ctx), id, novelID, &input, &item); err != nil {
+	if err := a.reader.DB.WithContext(a.ctx).
+		Where("id = ? AND novel_id = ?", id, novelID).
+		First(&item).Error; err != nil {
+		return fmt.Errorf("update reader perspective: %w", err)
+	}
+	item.Type = input.Type
+	item.Content = input.Content
+	item.PlantedChapter = input.PlantedChapter
+	item.RelatedTruth = input.RelatedTruth
+	item.RevealedChapter = input.RevealedChapter
+	if err := a.reader.DB.WithContext(a.ctx).Save(&item).Error; err != nil {
 		return fmt.Errorf("update reader perspective: %w", err)
 	}
 	return nil
