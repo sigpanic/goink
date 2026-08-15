@@ -191,7 +191,9 @@ export default function WorkspaceView({
   function handleSelectChapter(ch: chapter.Chapter) {
     const chTitle = `${t("sidebar.chapterN", { n: ch.chapter_number })} ${ch.title}`;
     // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
-    useEditorStore.getState().setTabTarget({ path: ch.file_path, title: chTitle });
+    useEditorStore
+      .getState()
+      .setTabTarget({ path: ch.file_path, title: chTitle });
     contentRef.current?.openFile(ch.file_path, chTitle);
   }
 

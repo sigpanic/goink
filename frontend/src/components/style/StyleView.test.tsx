@@ -87,8 +87,7 @@ const {
 // query（List/GetStyleSample/GetModels/GetSettings）+ mutation（Create/Update/Delete/SaveContent）+ 直接调用（ExtractStyle/CancelExtract）。
 // useModels/useSettings/useSaveContent hook 内部 import wailsjs 函数，mock 后 hook 自动调到。
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
-  const mod =
-    await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
+  const mod = await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
   return {
     ...mod,
     ListStyleSamples: mockListStyleSamples,

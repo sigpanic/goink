@@ -82,8 +82,21 @@ type NodeForm = {
   status: string;
 };
 
-const EMPTY_ARC: ArcForm = { name: "", arc_type: "main", description: "", importance: 1, status: "" };
-const EMPTY_NODE: NodeForm = { story_arc_id: 0, title: "", description: "", target_chapter: 1, actual_chapter: 0, status: "pending" };
+const EMPTY_ARC: ArcForm = {
+  name: "",
+  arc_type: "main",
+  description: "",
+  importance: 1,
+  status: "",
+};
+const EMPTY_NODE: NodeForm = {
+  story_arc_id: 0,
+  title: "",
+  description: "",
+  target_chapter: 1,
+  actual_chapter: 0,
+  status: "pending",
+};
 
 export default function ArcListView({ novelId }: Props) {
   const focus = useFocusWithNonce("storyarcs");

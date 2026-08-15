@@ -175,10 +175,23 @@ export default function ChatPanel({
           }
         })
         .catch(() => {
-          setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
+          setLastSessionMutation
+            .mutateAsync("")
+            .catch((err) =>
+              toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
+            );
         });
     }
-  }, [modelsQuery.data, settingsQuery.data, novelId, setSelectedModel, setReasoningEffort, setApprovalMode, setLastSessionMutation.mutateAsync, t]);
+  }, [
+    modelsQuery.data,
+    settingsQuery.data,
+    novelId,
+    setSelectedModel,
+    setReasoningEffort,
+    setApprovalMode,
+    setLastSessionMutation.mutateAsync,
+    t,
+  ]);
 
   // models query refetch 后（如 SettingsDialog 保存触发 invalidate）：
   // 检查当前 selectedModel 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
@@ -317,7 +330,11 @@ export default function ChatPanel({
   const handleSelectSession = useCallback(
     (sid: string) => {
       setActiveSessionId(sid);
-      setLastSessionMutation.mutateAsync(sid).catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
+      setLastSessionMutation
+        .mutateAsync(sid)
+        .catch((err) =>
+          toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
+        );
       // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
     [setLastSessionMutation.mutateAsync, t],
@@ -328,7 +345,11 @@ export default function ChatPanel({
     setTurns([]);
     setSessionId("");
     setLastUsage(null);
-    setLastSessionMutation.mutateAsync("").catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
+    setLastSessionMutation
+      .mutateAsync("")
+      .catch((err) =>
+        toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
+      );
     qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
   }, [novelId, qc, setLastSessionMutation.mutateAsync, t]);
 
@@ -979,15 +1000,29 @@ export default function ChatPanel({
         effort = m.ReasoningLevels[0];
         setReasoningEffort(effort);
       }
-      setSelectedModelMutation.mutateAsync({ key, effort }).catch((err) => toastError(toErrorMessage(err, t("chat.setSelectedModelFailed"))));
+      setSelectedModelMutation
+        .mutateAsync({ key, effort })
+        .catch((err) =>
+          toastError(toErrorMessage(err, t("chat.setSelectedModelFailed"))),
+        );
     },
-    [modelsQuery.data, setSelectedModel, setReasoningEffort, setSelectedModelMutation.mutateAsync, t],
+    [
+      modelsQuery.data,
+      setSelectedModel,
+      setReasoningEffort,
+      setSelectedModelMutation.mutateAsync,
+      t,
+    ],
   );
 
   const handleSelectEffort = useCallback(
     (effort: string) => {
       setReasoningEffort(effort);
-      setReasoningEffortMutation.mutateAsync(effort).catch((err) => toastError(toErrorMessage(err, t("chat.setReasoningEffortFailed"))));
+      setReasoningEffortMutation
+        .mutateAsync(effort)
+        .catch((err) =>
+          toastError(toErrorMessage(err, t("chat.setReasoningEffortFailed"))),
+        );
     },
     [setReasoningEffort, setReasoningEffortMutation.mutateAsync, t],
   );
@@ -995,7 +1030,11 @@ export default function ChatPanel({
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
-    setApprovalModeMutation.mutateAsync(next).catch((err) => toastError(toErrorMessage(err, t("chat.setApprovalModeFailed"))));
+    setApprovalModeMutation
+      .mutateAsync(next)
+      .catch((err) =>
+        toastError(toErrorMessage(err, t("chat.setApprovalModeFailed"))),
+      );
   }, [approvalMode, setApprovalMode, setApprovalModeMutation.mutateAsync, t]);
 
   const handleCompress = useCallback(async () => {
@@ -1063,7 +1102,11 @@ export default function ChatPanel({
       const m = selectedModel.ModelID;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
-        cancelChatMutation.mutateAsync(sessionId).catch((err) => toastError(toErrorMessage(err, t("chat.cancelFailed"))));
+        cancelChatMutation
+          .mutateAsync(sessionId)
+          .catch((err) =>
+            toastError(toErrorMessage(err, t("chat.cancelFailed"))),
+          );
       }
       setIsLoading(true);
 
@@ -1091,7 +1134,11 @@ export default function ChatPanel({
           if (data.session_id) {
             setSessionId(data.session_id);
             setActiveSessionId(data.session_id);
-            setLastSessionMutation.mutateAsync(data.session_id).catch((err) => toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))));
+            setLastSessionMutation
+              .mutateAsync(data.session_id)
+              .catch((err) =>
+                toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
+              );
           }
 
           // 更新 turn 的 turnId 为后端分配的真实值
@@ -1476,7 +1523,11 @@ export default function ChatPanel({
                 : t,
             ),
           );
-          cancelChatMutation.mutateAsync(sessionId).catch((err) => toastError(toErrorMessage(err, t("chat.cancelFailed"))));
+          cancelChatMutation
+            .mutateAsync(sessionId)
+            .catch((err) =>
+              toastError(toErrorMessage(err, t("chat.cancelFailed"))),
+            );
         }}
       />
 

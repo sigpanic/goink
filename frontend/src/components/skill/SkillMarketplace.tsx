@@ -298,15 +298,7 @@ export default function SkillMarketplace({
         await doInstall(target, selectedSkill.name);
       }
     },
-    [
-      selectedSkill,
-      novelId,
-      t,
-      probeLocal,
-      qc,
-      doInstall,
-      remoteContent,
-    ],
+    [selectedSkill, novelId, t, probeLocal, qc, doInstall, remoteContent],
   );
 
   // Confirm overwrite

@@ -23,8 +23,7 @@ const { mockSearchAll, mockI18n } = vi.hoisted(() => ({
 }));
 
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
-  const mod =
-    await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
+  const mod = await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
   return { ...mod, SearchAll: mockSearchAll };
 });
 
@@ -95,10 +94,9 @@ describe("SearchPanel", () => {
     // 5.5 commit 1：GET 错误由中间件接管（queryErrorToast.ts），不再 silent catch。
     mockSearchAll.mockRejectedValue(new Error("network timeout"));
     renderPanel();
-    fireEvent.change(
-      screen.getByPlaceholderText("search.searchPlaceholder"),
-      { target: { value: "张" } },
-    );
+    fireEvent.change(screen.getByPlaceholderText("search.searchPlaceholder"), {
+      target: { value: "张" },
+    });
     // 中间件 fire toastError
     await vi.waitFor(() => {
       expect(toastError).toHaveBeenCalledWith(
@@ -113,10 +111,9 @@ describe("SearchPanel", () => {
   it("shows noResults when search returns empty", async () => {
     mockSearchAll.mockResolvedValue([]);
     renderPanel();
-    fireEvent.change(
-      screen.getByPlaceholderText("search.searchPlaceholder"),
-      { target: { value: "无匹配" } },
-    );
+    fireEvent.change(screen.getByPlaceholderText("search.searchPlaceholder"), {
+      target: { value: "无匹配" },
+    });
     expect(await screen.findByText("search.noResults")).toBeInTheDocument();
   });
 
@@ -125,18 +122,13 @@ describe("SearchPanel", () => {
       { type: "character", id: 5, title: "李四", panel_id: "characters" },
     ]);
     renderPanel();
-    fireEvent.change(
-      screen.getByPlaceholderText("search.searchPlaceholder"),
-      { target: { value: "李" } },
-    );
+    fireEvent.change(screen.getByPlaceholderText("search.searchPlaceholder"), {
+      target: { value: "李" },
+    });
     const item = await screen.findByText("李四");
     fireEvent.click(item);
     // 4b: character 类型 focusType=undefined
-    expect(mockNavigateEntity).toHaveBeenCalledWith(
-      "characters",
-      5,
-      undefined,
-    );
+    expect(mockNavigateEntity).toHaveBeenCalledWith("characters", 5, undefined);
   });
 
   it("navigates chapter on click", async () => {
@@ -151,10 +143,9 @@ describe("SearchPanel", () => {
       },
     ]);
     renderPanel();
-    fireEvent.change(
-      screen.getByPlaceholderText("search.searchPlaceholder"),
-      { target: { value: "第一" } },
-    );
+    fireEvent.change(screen.getByPlaceholderText("search.searchPlaceholder"), {
+      target: { value: "第一" },
+    });
     const item = await screen.findByText("第一章");
     fireEvent.click(item);
     expect(mockNavigateChapter).toHaveBeenCalled();

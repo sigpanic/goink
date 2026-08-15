@@ -10,7 +10,11 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import { GetVersion, CheckUpdate, GetAppConfig } from "@/lib/wailsjs/go/app/App";
+import {
+  GetVersion,
+  CheckUpdate,
+  GetAppConfig,
+} from "@/lib/wailsjs/go/app/App";
 import type { update as updateModels } from "@/lib/wailsjs/go/models";
 import { useNovels } from "@/components/novel/useNovels";
 import { useSettings } from "@/components/settings/useSettings";

@@ -10,10 +10,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import {
-  ExtractStyle,
-  CancelExtract,
-} from "@/lib/wailsjs/go/app/App";
+import { ExtractStyle, CancelExtract } from "@/lib/wailsjs/go/app/App";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSaveContent } from "@/components/content/useSaveContent";
@@ -135,7 +132,9 @@ export default function StyleView({
       setEditName(sampleQuery.data.name);
       setEditContent(sampleQuery.data.content);
       setEditTags(sampleQuery.data.tags || []);
-      setEditNovelId(sampleQuery.data.is_global ? 0 : sampleQuery.data.novel_id);
+      setEditNovelId(
+        sampleQuery.data.is_global ? 0 : sampleQuery.data.novel_id,
+      );
     }
   }, [sampleQuery.data]);
 
@@ -477,10 +476,16 @@ export default function StyleView({
             </button>
             <button
               onClick={handleAdd}
-              disabled={!newName.trim() || !newContent.trim() || createMutation.isPending}
+              disabled={
+                !newName.trim() ||
+                !newContent.trim() ||
+                createMutation.isPending
+              }
               className="h-9 px-4 text-sm font-medium rounded-md bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
             >
-              {createMutation.isPending ? t("styleSample.saving") : t("styleSample.addSample")}
+              {createMutation.isPending
+                ? t("styleSample.saving")
+                : t("styleSample.addSample")}
             </button>
           </div>
           <div className="mt-2">
@@ -691,7 +696,9 @@ export default function StyleView({
                 disabled={updateMutation.isPending || !sampleQuery.data}
                 className="h-9 px-5 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:opacity-90 disabled:opacity-40 transition-opacity"
               >
-                {updateMutation.isPending ? t("styleSample.saving") : t("common.save")}
+                {updateMutation.isPending
+                  ? t("styleSample.saving")
+                  : t("common.save")}
               </button>
             </div>
           </div>

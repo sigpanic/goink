@@ -73,11 +73,7 @@ export default function SettingsDialog({
             ✕
           </button>
 
-          {activeTab === "model" ? (
-            <ModelConfigTab />
-          ) : (
-            <GeneralConfigTab />
-          )}
+          {activeTab === "model" ? <ModelConfigTab /> : <GeneralConfigTab />}
         </div>
       </div>
     </div>

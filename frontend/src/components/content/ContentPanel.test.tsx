@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render as originalRender, screen, fireEvent, act } from "@testing-library/react";
+import {
+  render as originalRender,
+  screen,
+  fireEvent,
+  act,
+} from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";

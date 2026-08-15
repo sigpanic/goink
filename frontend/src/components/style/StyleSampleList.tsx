@@ -34,8 +34,7 @@ export default function StyleSampleList({
     search: submittedSearch,
   });
 
-  const samples =
-    samplesQuery.data?.pages.flatMap((p) => p.items ?? []) ?? [];
+  const samples = samplesQuery.data?.pages.flatMap((p) => p.items ?? []) ?? [];
   const total = samplesQuery.data?.pages[0]?.total ?? 0;
   const hasMore = samplesQuery.hasNextPage;
   const isLoading = samplesQuery.isLoading;

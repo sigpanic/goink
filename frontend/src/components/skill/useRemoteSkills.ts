@@ -26,7 +26,9 @@ export function useRemoteSkills(
     queryKey: skillKeys.remoteList(input),
     queryFn: async (): Promise<RemoteSkillPageResult> => {
       const res = await ListRemoteSkills(input);
-      return unwrapResult<storage.PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_>(res);
+      return unwrapResult<storage.PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_>(
+        res,
+      );
     },
     enabled,
   });

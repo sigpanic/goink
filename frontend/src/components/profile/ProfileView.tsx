@@ -24,9 +24,7 @@ export default function ProfileView() {
   const settingsQuery = useProfileSettings();
 
   const isLoading =
-    activityQuery.isLoading ||
-    statsQuery.isLoading ||
-    settingsQuery.isLoading;
+    activityQuery.isLoading || statsQuery.isLoading || settingsQuery.isLoading;
   const isError =
     activityQuery.isError || statsQuery.isError || settingsQuery.isError;
 

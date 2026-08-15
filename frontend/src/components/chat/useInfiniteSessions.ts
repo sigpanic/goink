@@ -14,11 +14,7 @@ export function useInfiniteSessions(input: {
   enabled: boolean;
 }) {
   return useInfiniteQuery({
-    queryKey: sessionKeys.infiniteList(
-      input.novelId,
-      input.size,
-      input.search,
-    ),
+    queryKey: sessionKeys.infiniteList(input.novelId, input.size, input.search),
     queryFn: async ({ pageParam }) => {
       const r = await GetSessions({
         novel_id: input.novelId,

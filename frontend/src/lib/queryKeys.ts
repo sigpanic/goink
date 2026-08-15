@@ -79,12 +79,8 @@ export const styleSampleKeys = {
   all: ["style-samples"] as const,
   // list: StyleView 单页分页（page 进 key，page 变化触发新 query）。
   // 与 infiniteList 区分缓存（StyleSampleList 无限滚动用 infiniteList）。
-  list: (
-    novelId: number,
-    page: number,
-    size: number,
-    search: string,
-  ) => ["style-samples", novelId, page, size, search] as const,
+  list: (novelId: number, page: number, size: number, search: string) =>
+    ["style-samples", novelId, page, size, search] as const,
   // infiniteList: StyleSampleList 无限滚动（page 由 pageParam 管理，不进 key）。
   // search 变化触发新 query。对齐 sessionKeys.infiniteList 模式。
   infiniteList: (novelId: number, size: number, search: string) =>
@@ -135,12 +131,8 @@ export const sessionMessagesKeys = {
 export const sessionKeys = {
   // list: 单页查询（ChatPanel 最近会话 page=1 size=5）。queryKey 含分页/搜索参数，
   // 与 SessionHistory 的 infiniteList 区分缓存（size/search 不同则不共享）。
-  list: (
-    novelId: number,
-    page: number,
-    size: number,
-    search: string,
-  ) => ["sessions", novelId, page, size, search] as const,
+  list: (novelId: number, page: number, size: number, search: string) =>
+    ["sessions", novelId, page, size, search] as const,
   // infiniteList: SessionHistory 无限滚动序列（size=20 + search）。
   // page 由 useInfiniteQuery 的 pageParam 管理，不进 key；search 变化触发新 query。
   infiniteList: (novelId: number, size: number, search: string) =>
@@ -176,8 +168,7 @@ export const fileDiffKeys = {
 // 让 query 内置竞态保护接管（替代旧 reqIdRef 手动竞态保护）。
 // staleTime=0（搜索是用户主动期望最新结果的操作）+ gcTime 短（防输入字符堆积 cache）。
 export const searchKeys = {
-  list: (novelId: number, query: string) =>
-    ["search", novelId, query] as const,
+  list: (novelId: number, query: string) => ["search", novelId, query] as const,
 };
 
 // 5.7 commit 1：profile 领域 query key。

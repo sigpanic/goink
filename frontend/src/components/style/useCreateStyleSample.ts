@@ -12,8 +12,7 @@ import { styleSampleKeys } from "@/lib/queryKeys";
 export function useCreateStyleSample() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: app.CreateStyleSampleInput) =>
-      CreateStyleSample(input),
+    mutationFn: (input: app.CreateStyleSampleInput) => CreateStyleSample(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: styleSampleKeys.all });
     },

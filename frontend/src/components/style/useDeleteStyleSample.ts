@@ -12,8 +12,7 @@ import { styleSampleKeys } from "@/lib/queryKeys";
 export function useDeleteStyleSample() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: app.DeleteStyleSampleInput) =>
-      DeleteStyleSample(input),
+    mutationFn: (input: app.DeleteStyleSampleInput) => DeleteStyleSample(input),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: styleSampleKeys.all });
     },

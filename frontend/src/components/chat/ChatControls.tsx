@@ -40,7 +40,8 @@ export default function ChatControls({
 
   const selectedKey = selectedModel?.Key ?? "";
   const supportsReasoning =
-    !!selectedModel?.ReasoningLevels && selectedModel.ReasoningLevels.length > 0;
+    !!selectedModel?.ReasoningLevels &&
+    selectedModel.ReasoningLevels.length > 0;
 
   const modelOptions = models.map((m) => ({
     value: m.Key,

@@ -225,7 +225,9 @@ export default function ChapterList({
           <div className="flex items-center justify-center h-full">
             <div className="text-center">
               <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-xs text-destructive">{t("chapter.loadFailed")}</p>
+              <p className="text-xs text-destructive">
+                {t("chapter.loadFailed")}
+              </p>
               <button
                 onClick={() => refetch()}
                 className="text-xs text-primary underline mt-1"

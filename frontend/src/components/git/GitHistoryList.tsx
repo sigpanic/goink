@@ -109,7 +109,11 @@ export default function GitHistoryList({ novelId }: Props) {
 
   // 无限滚动：sentinel 进入视口时拉下一页（react-intersection-observer useInView）
   useEffect(() => {
-    if (inView && commitsQuery.hasNextPage && !commitsQuery.isFetchingNextPage) {
+    if (
+      inView &&
+      commitsQuery.hasNextPage &&
+      !commitsQuery.isFetchingNextPage
+    ) {
       commitsQuery.fetchNextPage();
     }
   }, [

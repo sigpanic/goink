@@ -45,21 +45,17 @@ vi.mock("react-intersection-observer", () => ({
 }));
 
 // Mock wailsjs App：覆盖 GetCommitLog/GetCommitFileList/GetFileDiff
-const {
-  mockGetCommitLog,
-  mockGetCommitFileList,
-  mockGetFileDiff,
-  mockI18n,
-} = vi.hoisted(() => ({
-  mockGetCommitLog: vi.fn(),
-  mockGetCommitFileList: vi.fn(),
-  mockGetFileDiff: vi.fn(),
-  // 中间件用 i18n.exists/t，mock 让 exists 返回 true + t 返回 key 本身
-  mockI18n: {
-    exists: vi.fn().mockReturnValue(true),
-    t: vi.fn().mockImplementation((key: string) => key),
-  },
-}));
+const { mockGetCommitLog, mockGetCommitFileList, mockGetFileDiff, mockI18n } =
+  vi.hoisted(() => ({
+    mockGetCommitLog: vi.fn(),
+    mockGetCommitFileList: vi.fn(),
+    mockGetFileDiff: vi.fn(),
+    // 中间件用 i18n.exists/t，mock 让 exists 返回 true + t 返回 key 本身
+    mockI18n: {
+      exists: vi.fn().mockReturnValue(true),
+      t: vi.fn().mockImplementation((key: string) => key),
+    },
+  }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   GetCommitLog: mockGetCommitLog,
@@ -235,9 +231,7 @@ describe("GitHistoryList", () => {
   });
 
   it("refetches commits when novelId changes", async () => {
-    const { rerender } = renderWithProvider(
-      <GitHistoryList novelId={1} />,
-    );
+    const { rerender } = renderWithProvider(<GitHistoryList novelId={1} />);
     await screen.findByText("first commit");
     expect(mockGetCommitLog).toHaveBeenCalledWith(1, 50, "");
     // 切 novelId

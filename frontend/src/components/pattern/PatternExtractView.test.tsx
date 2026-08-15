@@ -66,8 +66,7 @@ const { mockGetChapters, mockGetModels, mockGetSettings, mockI18n } =
 // mock wailsjs App：覆盖 PatternExtractView 使用的 wailsjs 函数。
 // query（GetChapters/GetModels/GetSettings）供 useChapters/useModels/useSettings hook 调用。
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
-  const mod =
-    await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
+  const mod = await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>();
   return {
     ...mod,
     GetChapters: mockGetChapters,
