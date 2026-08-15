@@ -48,6 +48,14 @@ export default function BuiltinProviderPane({
     setDropdownOpen(false);
   }, [selectedKey]);
 
+  // providers 异步加载后同步 selectedKey：父组件 providers 初值为 []，
+  // 首次挂载 selectedKey 被锁成 ""，providers 就绪后需自愈到首项 key
+  useEffect(() => {
+    if (providers.length > 0 && !providers.find((p) => p.key === selectedKey)) {
+      setSelectedKey(providers[0].key);
+    }
+  }, [providers, selectedKey]);
+
   // 点击外部关闭下拉
   useEffect(() => {
     if (!dropdownOpen) return;

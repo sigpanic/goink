@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Plus, X, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { llm } from "@/lib/wailsjs/go/models";
@@ -36,6 +36,14 @@ export default function CustomProviderPane({
   const [selectedKey, setSelectedKey] = useState(providers[0]?.key || "");
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [showNewForm, setShowNewForm] = useState(false);
+
+  // providers 异步加载后同步 selectedKey：父组件 providers 初值为 []，
+  // 首次挂载 selectedKey 被锁成 ""，providers 就绪后需自愈到首项 key
+  useEffect(() => {
+    if (providers.length > 0 && !providers.find((p) => p.key === selectedKey)) {
+      setSelectedKey(providers[0].key);
+    }
+  }, [providers, selectedKey]);
 
   // 删除自定义 provider：点按钮只记录目标弹确认框，确认后在 confirmDeleteProvider 里执行
   const confirmDeleteProvider = () => {
