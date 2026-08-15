@@ -51,19 +51,19 @@ type InterruptError interface {
 // ToolFailureInterrupt 工具连续失败触发的中断（system 5 次 / args 5 次 / 全局 10 次）。
 type ToolFailureInterrupt struct{ Reason string }
 
-func (e *ToolFailureInterrupt) Error() string          { return e.Reason }
+func (e *ToolFailureInterrupt) Error() string           { return e.Reason }
 func (e *ToolFailureInterrupt) InterruptReason() string { return e.Reason }
 
 // LoopInterrupt 死循环检测触发的中断。
 type LoopInterrupt struct{ Reason string }
 
-func (e *LoopInterrupt) Error() string          { return e.Reason }
+func (e *LoopInterrupt) Error() string           { return e.Reason }
 func (e *LoopInterrupt) InterruptReason() string { return e.Reason }
 
 // MaxTurnsInterrupt 最大轮数耗尽触发的中断。
 type MaxTurnsInterrupt struct{ Reason string }
 
-func (e *MaxTurnsInterrupt) Error() string          { return e.Reason }
+func (e *MaxTurnsInterrupt) Error() string           { return e.Reason }
 func (e *MaxTurnsInterrupt) InterruptReason() string { return e.Reason }
 
 // interruptTracker 统计工具连续失败次数，决定是否中断对话。
