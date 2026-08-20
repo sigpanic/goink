@@ -18,7 +18,6 @@ on:
 
 jobs:
   verify-codesign:
-    if: github.repository == 'sigpanic/goink-private'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4

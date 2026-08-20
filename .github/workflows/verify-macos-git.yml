@@ -7,7 +7,6 @@ on:
 
 jobs:
   verify:
-    if: github.repository == 'sigpanic/goink-private'
     runs-on: macos-latest
     steps:
       - name: Find real git binary

@@ -14,8 +14,7 @@
   <img src="https://img.shields.io/badge/TypeScript-6.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript 6" />
   <img src="https://img.shields.io/badge/Tailwind-4.3-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" alt="Tailwind 4" />
   <img src="https://img.shields.io/badge/ONNX_Runtime-1.26-005BED?style=for-the-badge&logo=onnx&logoColor=white" alt="ONNX Runtime" />
-  <img src="https://img.shields.io/badge/source-AGPL_v3-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="AGPL v3" />
-	  <img src="https://img.shields.io/badge/binary-EULA-orange?style=for-the-badge" alt="EULA" />
+  <img src="https://img.shields.io/badge/license-AGPL_v3-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="AGPL v3" />
 </p>
 
 <p align="center"><strong><a href="README_EN.md">English Version</a> | 本文档为中文版</strong></p>
@@ -210,8 +209,6 @@ make dev     # 开发模式（热重载）
 | 前端 | React 19 + TypeScript + Tailwind CSS 4 + shadcn/ui |
 
 ## License
-
-本仓库源代码以 [AGPL v3](LICENSE) 授权。官方二进制发行版以 [软件许可协议](EULA.md) 发布，免费用于个人及商业用途。
 
 Goink is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). See [LICENSE](LICENSE) for the full text and [NOTICE](NOTICE) for additional terms under AGPLv3 Section 7.
 

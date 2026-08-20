@@ -10,7 +10,6 @@ on:
 
 jobs:
   build-windows:
-    if: github.repository == 'sigpanic/goink-private'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -93,7 +92,6 @@ jobs:
           path: build/dist/*
 
   build-linux:
-    if: github.repository == 'sigpanic/goink-private'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -165,7 +163,6 @@ jobs:
           path: build/dist/*
 
   build-macos:
-    if: github.repository == 'sigpanic/goink-private'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -259,16 +256,11 @@ jobs:
 
   release:
     needs: [build-windows, build-linux, build-macos]
-    if: startsWith(github.ref, 'refs/tags/') && github.repository == 'sigpanic/goink-private'
+    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
-        with:
-          sparse-checkout: |
-            EULA.md
-          sparse-checkout-cone-mode: false
       - uses: actions/download-artifact@v4
 
       - name: Collect artifacts
@@ -277,12 +269,9 @@ jobs:
           cp windows/* dist/ 2>/dev/null || true
           cp linux/* dist/ 2>/dev/null || true
           cp macos/* dist/ 2>/dev/null || true
-          cp EULA.md dist/
           cd dist && shopt -s nullglob && sha256sum *.{exe,AppImage,dmg} > sha256sums.txt
 
       - name: Upload Release Assets
         uses: softprops/action-gh-release@v2
         with:
-          token: ${{ secrets.SYNC_PAT }}
-          repository: sigpanic/goink
           files: dist/*
