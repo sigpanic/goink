@@ -19,6 +19,12 @@ jobs:
           PAT: ${{ secrets.SYNC_PAT }}
         run: |
           set -euo pipefail
+          # actions/checkout@v4 leaves http.https://github.com/.extraheader set to
+          # the GITHUB_TOKEN credential, which takes precedence over credentials
+          # embedded in the URL below and would force all pushes to authenticate
+          # as github-actions[bot] (no write access to the public repo, 403).
+          git config --unset-all http.https://github.com/.extraheader || true
+          [ -n "$PAT" ] || { echo "SYNC_PAT secret is empty"; exit 1; }
           PUBLIC_URL="https://x-access-token:${PAT}@github.com/sigpanic/goink.git"
           TARGET=$(git log --before='30 days ago' --format='%H' -1 master)
           if [ -z "$TARGET" ]; then
