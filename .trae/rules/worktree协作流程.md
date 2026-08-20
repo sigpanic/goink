@@ -6,37 +6,47 @@
 
 | 工作区 | 目录 | 分支 | 用途 |
 |---|---|---|---|
-| 主工作区 | `/home/nianhe/projects/todo` | `master` | agent 1 直接在 master 上开发 |
-| 副工作区 | `/home/nianhe/projects/goink` | `feat/goink-wt`（从 master 切出） | agent 2 在该 feature 分支上开发 |
+| 主工作区 | `/home/nianhe/projects/todo` | `master` | agent 1 直接在 master 上开发（或临时切小开发分支） |
+| 副工作区 | `/home/nianhe/projects/goink` | `dev`（从 master 切出） | agent 2 在该开发分支上开发 |
 
 - 同一分支不能被两个 worktree 同时 checkout，因此两边分支必须不同。
 - 两个工作区对全量文件都有读写权限，不冲突靠派活时挑选不相干模块保证，不靠 worktree 隔离。
 
-## 同步机制（master → feat）
+## 同步机制（master → dev，不走 PR）
 
-master 前进后，feat 分支要跟上 master 的新 commit：
+master 前进后（master 上有 dev 没有的新 commit），副工作区 dev 用 `git merge` 拉取 master 的最新内容（**不走 PR**，PR 只用于 dev → master 合并）：
 
 ```
 cd /home/nianhe/projects/goink
-git rebase master
+git fetch origin
+git merge origin/master              # ff 或产生 sync merge commit（git 自动选择）
+git push origin dev                   # 无需 force
 ```
 
-- rebase 把 feat 自己的 commit 重新摞到 master 最新之上，本质是“把 master 的 commit 拿过来”。
-- rebase 会重写 feat 的 commit hash（feat 是本地未 push 分支，安全）。
-- rebase 前确保 feat 工作区干净（已 commit 或已 stash），否则会中断报冲突。
+- `git merge origin/master` 的行为：
+  - dev 是 master 祖先时（dev 无独有 commit）：自动 ff，不产生 merge commit，不重写 hash/date。
+  - 双向分歧时（dev 有独有 commit + master 有新 commit）：产生 sync merge commit，不重写 dev 独有 commit 的 hash/date，dev 历史非线性。
+- **PR 前建议先 sync**：在副工作区 dev 上先 `git merge origin/master` 解决冲突，再 push dev、走 PR，可以让 PR 看起来干净（无冲突），代价是 dev 上多一个 sync merge commit。
+- 不要用 `git rebase origin/master`：会重写 dev 独有 commit 的 hash + committer date，破坏历史稳定性，还需要 force push。
 
-## 合并回 master（feat → master）
+## 合并回 master（dev → master，走 GitHub PR）
 
-feat 干完后并回 master，保持线性历史、不产生 merge commit：
+dev 干完后通过 GitHub PR 合并回 master，**产生 merge commit**（不再用本地 `git merge --ff-only`）：
 
 ```
+# 副工作区推 dev
+cd /home/nianhe/projects/goink
+git push origin dev
+
+# 主工作区建 PR 并合并（--merge 产生 merge commit）
 cd /home/nianhe/projects/todo
-git merge --ff-only feat/goink-wt
+gh pr create --base master --head dev --title "<英文标题>" --body "<英文描述>"
+gh pr merge dev --merge               # 不删 dev 分支，dev 永久存在
 ```
 
-- 因 feat 已 rebase、严格领先 master，快进合并，无 merge commit。
-- 若 master 又动了导致无法快进：先回 goink/ 再 `git rebase master` 一次，即可 ff-only。
-- 若确实想留功能合并标记，可用 `git merge --no-ff feat/goink-wt` 强制产生 merge commit（需用户授权）。
+- `--merge` 产生 merge commit，保留 dev 上的完整提交历史与合并节点。
+- 合并后 master 前进，副工作区需要走“同步机制”用 `git merge origin/master` 拉取最新。
+- 不要用 `--rebase` 或 `--squash`：前者会让 dev 历史在 master 上被重写失去合并节点；后者会丢失 dev 上每个 commit 的细粒度信息。
 
 ## 环境说明
 
@@ -47,6 +57,5 @@ git merge --ff-only feat/goink-wt
 
 ## 红线（呼应《编码规则.md》Git 写操作禁令）
 
-- 所有 `git rebase` / `git merge` / `git commit` / `git stash` 等写操作，必须经用户明确授权，禁止擅自执行。
-- 禁止 `git push`。
+- 所有 `git rebase` / `git merge` / `git commit` / `git stash` / `git push` 等写操作，必须经用户明确授权，禁止擅自执行。
 - 写完代码先发询问等用户 review，用户明确说 commit 才可提交。

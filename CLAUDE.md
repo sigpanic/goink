@@ -17,7 +17,7 @@ This repo uses `git worktree` — see `.trae/rules/worktree协作流程.md` for 
 | worktree | dir | branch | role |
 |---|---|---|---|
 | main | `/home/nianhe/projects/todo` | `master` | agent 1 works directly on master |
-| secondary | `/home/nianhe/projects/goink` | `feat/goink-wt` (cut from master) | agent 2 works on this feature branch |
+| secondary | `/home/nianhe/projects/goink` | `dev` (cut from master) | agent 2 works on this dev branch |
 
 - **Stay in your own worktree** — read, edit, and run commands only inside the worktree you were invoked in (the *Primary working directory* shown in your environment). Never `cd` into the other worktree to read or edit files: the other worktree may be on a different branch with stale or divergent code, and cross-worktree edits risk clobbering the other agent's in-flight work. If you were invoked in `goink`, treat `goink/` as your root; if in `todo`, treat `todo/` as your root.
 - **Git commands** — run from the *current worktree's* root (the dir you were invoked in), not a hardcoded path. `log`/`status`/`diff`/`build`/`test` all reflect the current worktree's HEAD; redirecting them to the other worktree reads the wrong branch. Before any git operation, confirm CWD is the current worktree root.

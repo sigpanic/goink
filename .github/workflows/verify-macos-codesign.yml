@@ -1,12 +1,12 @@
 name: Verify macOS Codesign
 
-# 触发：push 到 feat/goink-wt 分支且本文件变更时（秒级检测）
+# 触发：push 到 dev 分支且本文件变更时（秒级检测）
 #       或 workflow_dispatch 手动触发（备选，需 workflow 在默认分支上注册过）
 # 在 macos-latest 上跑完整构建 + 打包，然后对 .app / dmg 做签名状态诊断
 on:
   push:
     branches:
-      - feat/goink-wt
+      - dev
     paths:
       - '.github/workflows/verify-macos-codesign.yml'
   workflow_dispatch:
