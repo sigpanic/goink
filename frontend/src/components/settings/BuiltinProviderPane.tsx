@@ -1,19 +1,13 @@
-import { useState, useRef, useEffect } from "react";
-import {
-  X,
-  CheckCircle2,
-  Loader2,
-  Globe,
-  ExternalLink,
-  ChevronDown,
-} from "lucide-react";
+import { useState, useEffect } from "react";
+import { Globe, ExternalLink, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import type { llm } from "@/lib/wailsjs/go/models";
-import TemperatureInfo from "./TemperatureInfo";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderIcon from "./ProviderIcon";
-import TestResultWithHint from "./TestResultWithHint";
+import ProviderFormFields from "./ProviderFormFields";
+import ProviderDropdown from "./ProviderDropdown";
+import ProviderStatusBadge from "./ProviderStatusBadge";
 
 interface Props {
   providers: llm.ProviderView[];
@@ -23,8 +17,12 @@ interface Props {
   onTest: (
     providerKey: string,
   ) => Promise<{ resolvedUrl?: string; error?: string }>;
-  testResults: Record<string, { ok: boolean; msg?: string } | undefined>;
+  testResults: Record<string, { ok: boolean; msg?: string; warning?: string } | undefined>;
   testing: Record<string, boolean>;
+  // 父组件外部指令：focusNonce 自增时 setSelectedKey(focusKey)，
+  // 用于保存测试失败时把视图切到失败 provider 方便用户定位
+  focusKey?: string;
+  focusNonce?: number;
 }
 
 export default function BuiltinProviderPane({
@@ -35,17 +33,16 @@ export default function BuiltinProviderPane({
   onTest,
   testResults,
   testing,
+  focusKey,
+  focusNonce,
 }: Props) {
   const { t } = useTranslation();
   const [selectedKey, setSelectedKey] = useState(providers[0]?.key || "");
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // 切换服务商时重置折叠和下拉状态
+  // 切换服务商时重置折叠状态（dropdown 已由 ProviderDropdown 内部管理）
   useEffect(() => {
     setHelpOpen(false);
-    setDropdownOpen(false);
   }, [selectedKey]);
 
   // providers 异步加载后同步 selectedKey：父组件 providers 初值为 []，
@@ -56,20 +53,16 @@ export default function BuiltinProviderPane({
     }
   }, [providers, selectedKey]);
 
-  // 点击外部关闭下拉
+  // 父组件外部指令：focusNonce 自增时强制选中 focusKey
+  // （focusNonce 自增保证即便 focusKey 未变也能触发，比如连续失败同一 provider）
   useEffect(() => {
-    if (!dropdownOpen) return;
-    const handle = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      ) {
-        setDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
-  }, [dropdownOpen]);
+    if (focusKey && providers.find((p) => p.key === focusKey)) {
+      setSelectedKey(focusKey);
+    }
+    // 故意只依赖 focusNonce，不依赖 focusKey/providers
+    // （providers 变化时上面那个 effect 已处理，这里只响应外部指令）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusNonce]);
 
   const provider = providers.find((p) => p.key === selectedKey);
   if (!provider) {
@@ -79,10 +72,6 @@ export default function BuiltinProviderPane({
       </div>
     );
   }
-
-  const hasKey = !!provider.api_key;
-  const isTesting = testing[selectedKey];
-  const testResult = testResults[selectedKey];
 
   const allExistingIds = new Set([
     ...(provider?.builtin_models || []).map((m) => m.id),
@@ -96,97 +85,34 @@ export default function BuiltinProviderPane({
         <label className="text-xs text-muted-foreground w-14 shrink-0">
           {t("settings.provider")}
         </label>
-        <div className="relative flex-1" ref={dropdownRef}>
-          <button
-            onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="flex items-center gap-2 w-full h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
+        <ProviderDropdown
+          providers={providers}
+          selectedKey={selectedKey}
+          onSelect={setSelectedKey}
+          testResults={testResults}
+          renderIcon={(key) => (
             <ProviderIcon
-              provider={selectedKey}
+              provider={key}
               className="w-4 h-4 shrink-0 text-muted-foreground"
             />
-            <span className="flex-1 text-left">{provider.name}</span>
-            <ChevronDown
-              className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
-            />
-          </button>
-          {dropdownOpen && (
-            <div className="absolute z-50 top-full left-0 right-0 mt-1 rounded-md border bg-popover text-popover-foreground shadow-md py-1 max-h-56 overflow-auto">
-              {providers.map((p) => (
-                <button
-                  key={p.key}
-                  onClick={() => {
-                    setSelectedKey(p.key);
-                    setDropdownOpen(false);
-                  }}
-                  className={`flex items-center gap-2 w-full px-2.5 py-1.5 text-sm hover:bg-muted/50 transition-colors ${p.key === selectedKey ? "bg-muted/30" : ""}`}
-                >
-                  <ProviderIcon
-                    provider={p.key}
-                    className="w-4 h-4 shrink-0 text-muted-foreground"
-                  />
-                  <span>{p.name}</span>
-                </button>
-              ))}
-            </div>
           )}
-        </div>
-        <span
-          className={`flex items-center gap-1 text-xs shrink-0 ${hasKey ? "text-success-foreground" : "text-muted-foreground"}`}
-        >
-          {hasKey ? (
-            <>
-              <CheckCircle2 className="w-3.5 h-3.5" />{" "}
-              {t("settings.configured")}
-            </>
-          ) : (
-            t("settings.notConfigured")
-          )}
-        </span>
-      </div>
-
-      {/* API Key + 测试 */}
-      <div className="flex items-center gap-2">
-        <label className="text-xs text-muted-foreground w-14 shrink-0">
-          {t("settings.apiKey")}
-        </label>
-        <input
-          type="password"
-          value={provider.api_key}
-          onChange={(e) => onUpdate(selectedKey, { api_key: e.target.value })}
-          placeholder={t("settings.enterApiKey")}
-          className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         />
-        <button
-          onClick={() => onTest(selectedKey)}
-          disabled={!provider.api_key || isTesting}
-          className="h-8 px-2.5 rounded-md border text-xs shrink-0 hover:bg-muted/50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isTesting ? (
-            <Loader2 className="w-3.5 h-3.5 animate-spin" />
-          ) : (
-            t("settings.test")
-          )}
-        </button>
-      </div>
-
-      {/* Chat URL */}
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-muted-foreground w-14 shrink-0">
-          {t("settings.chatUrl")}
-        </label>
-        <input
-          value={provider.chat_url}
-          onChange={(e) => onUpdate(selectedKey, { chat_url: e.target.value })}
-          className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        <ProviderStatusBadge
+          hasKey={!!provider.api_key}
+          testResult={testResults[selectedKey]}
         />
       </div>
-      <p className="text-xs text-muted-foreground pl-[4.5rem]">
-        {t("settings.urlAutoDetectHint")}
-      </p>
 
-      {/* 测试结果 */}
-      <TestResultWithHint testResult={testResult} />
+      {/* 共享表单字段：ChatURL → APIKey → TestResult → Temperature → CustomModelList */}
+      <ProviderFormFields
+        provider={provider}
+        selectedKey={selectedKey}
+        onUpdate={onUpdate}
+        onTest={onTest}
+        onRemoveCustomModel={onRemoveCustomModel}
+        testResults={testResults}
+        testing={testing}
+      />
 
       {/* 注册链接 */}
       {provider.platform_url && (
@@ -233,28 +159,6 @@ export default function BuiltinProviderPane({
         </div>
       )}
 
-      {/* Temperature */}
-      <div className="flex items-center gap-3">
-        <label className="text-xs text-muted-foreground w-14 shrink-0 flex items-center gap-1">
-          {t("settings.creativity")}
-          <TemperatureInfo />
-        </label>
-        <input
-          type="range"
-          min="0"
-          max="2"
-          step="0.1"
-          value={provider.temperature}
-          onChange={(e) =>
-            onUpdate(selectedKey, { temperature: parseFloat(e.target.value) })
-          }
-          className="flex-1 h-8"
-        />
-        <span className="text-xs text-muted-foreground w-8 text-right">
-          {(provider.temperature ?? 0.7).toFixed(1)}
-        </span>
-      </div>
-
       {/* 内置模型 */}
       {provider.builtin_models && provider.builtin_models.length > 0 && (
         <div>
@@ -281,61 +185,6 @@ export default function BuiltinProviderPane({
                     </>
                   )}
                 </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 自定义模型 */}
-      {provider.custom_models && provider.custom_models.length > 0 && (
-        <div>
-          <span className="text-xs text-muted-foreground mb-2 block">
-            {t("settings.customModels")}
-          </span>
-          <div className="rounded-md border divide-y">
-            {provider.custom_models.map((m) => (
-              <div
-                key={m.id}
-                className="flex items-center justify-between px-3 py-2"
-              >
-                <div>
-                  <span className="text-sm">{m.name || m.id}</span>
-                  {(m.context_window > 0 || m.max_output_tokens > 0) && (
-                    <span className="text-xs text-muted-foreground ml-2">
-                      {m.context_window > 0 &&
-                        (m.context_window >= 1_000_000
-                          ? (m.context_window / 1_000_000).toFixed(0) + "M"
-                          : (m.context_window / 1_000).toFixed(0) + "K")}
-                      {m.max_output_tokens > 0 && (
-                        <>
-                          {" "}
-                          · {(m.max_output_tokens / 1_000).toFixed(0)}K{" "}
-                          {t("settings.output")}
-                        </>
-                      )}
-                      {m.supports_thinking ? (
-                        <> · {t("settings.thinking")}</>
-                      ) : null}
-                      {m.reasoning_levels?.length ? (
-                        <>
-                          {" "}
-                          · {t("settings.level")}:{" "}
-                          {m.reasoning_levels.join(",")}
-                        </>
-                      ) : null}
-                      {m.supports_vision ? (
-                        <> · {t("settings.vision")}</>
-                      ) : null}
-                    </span>
-                  )}
-                </div>
-                <button
-                  onClick={() => onRemoveCustomModel(selectedKey, m.id)}
-                  className="text-muted-foreground hover:text-destructive transition-colors"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
               </div>
             ))}
           </div>

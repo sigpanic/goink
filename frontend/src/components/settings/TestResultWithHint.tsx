@@ -9,12 +9,13 @@ import { explainErrorKey } from "@/utils/errorExplain";
 import { cn } from "@/utils/cn";
 
 interface Props {
-  testResult?: { ok: boolean; msg?: string } | undefined;
+  testResult?: { ok: boolean; msg?: string; warning?: string } | undefined;
   className?: string;
 }
 
 /**
  * 测试结果显示组件：错误/成功消息 + 错误时的 ? 图标 Tooltip 提示。
+ * 成功但有 warning（如 429 限流）时，额外显示黄色 ⚠ 提示，不影响 ok 判定。
  * BuiltinProviderPane、CustomProviderPane、ModelDiscoveryPanel 共用，避免重复代码。
  * className 可覆盖默认的 pl-[4rem] 左 padding（如 ModelDiscoveryPanel 不需要对齐 label）。
  */
@@ -26,7 +27,7 @@ export default function TestResultWithHint({ testResult, className }: Props) {
     <div
       className={cn(
         "text-xs pl-[4rem] flex items-start gap-1.5",
-        testResult.ok ? "text-success-foreground" : "text-red-500",
+        testResult.ok ? "text-success-foreground" : "text-destructive",
         className,
       )}
     >
@@ -47,6 +48,11 @@ export default function TestResultWithHint({ testResult, className }: Props) {
           ? t("settings.connectionSuccess")
           : `✗ ${testResult.msg || t("settings.connectionFailed")}`}
       </span>
+      {testResult.ok && testResult.warning && (
+        <span className="whitespace-pre-line text-warning-foreground shrink-0">
+          ⚠ {testResult.warning}
+        </span>
+      )}
     </div>
   );
 }

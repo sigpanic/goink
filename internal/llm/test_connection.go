@@ -21,6 +21,14 @@ type TestConnectionInput struct {
 	ModelID      string `json:"model_id"`
 }
 
+// TestConnectionResult 是连通性测试的结果。
+// URL 是验证通过的实际端点（可能和入参不同，是 fallback 探测到的）。
+// Warning 是非致命提示（如 429 限流视为通过但提示用户当前被限速）。
+type TestConnectionResult struct {
+	URL     string `json:"url"`
+	Warning string `json:"warning"`
+}
+
 // expandChatURLCandidates 生成候选 URL 列表，用于多层 fallback 真测。
 // 顺序（按可能性从高到低）：
 //  1. 原样（用户填的完整端点，如 https://x.com/proxy/chat）
@@ -90,16 +98,18 @@ func expandChatURLCandidates(raw string) []string {
 // 返回该 URL。全部失败返回 error，附带最后一个候选的错误信息。
 //
 // 返回值：
-//   - (url, nil)：验证通过，url 是实际可用的端点（可能和入参不同，是 fallback 探测到的）
-//   - ("", error)：所有候选均失败
+//   - (TestConnectionResult{URL:...}, nil)：验证通过，URL 是实际可用的端点（可能和入参不同，是 fallback 探测到的）
+//   - (TestConnectionResult{URL:..., Warning:...}, nil)：验证通过但有警告（如 429 限流视为通过）
+//   - (TestConnectionResult{}, error)：所有候选均失败
 //
 // 设计目标：用户填啥都能 work。
 //   - 裸域名 https://1024token.club → 探测到 /v1/chat/completions
 //   - base URL https://api.deepseek.com/v1 → 探测到 /v1/chat/completions
 //   - 完整端点 https://x.com/proxy/chat → 原样通过
 //
-// 调用方（前端）应将返回的 url 回写到 provider.chat_url，确保保存的 URL 和测试时一致。
-func TestConnection(ctx context.Context, builtin map[string]Provider, input TestConnectionInput) (string, error) {
+// 调用方（前端）应将返回的 URL 回写到 provider.chat_url，确保保存的 URL 和测试时一致。
+// Warning 非空时也应展示给用户（不影响 ok 判定，但提示当前被限流等）。
+func TestConnection(ctx context.Context, builtin map[string]Provider, input TestConnectionInput) (TestConnectionResult, error) {
 	chatURL := input.ChatURL
 	buildHeaders := func(base map[string]string) map[string]string { return base }
 	var buildRequest func(map[string]any) map[string]any
@@ -118,7 +128,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 
 	candidates := expandChatURLCandidates(chatURL)
 	if len(candidates) == 0 {
-		return "", fmt.Errorf("URL 为空")
+		return TestConnectionResult{}, fmt.Errorf("URL 为空")
 	}
 
 	payload := map[string]any{
@@ -135,7 +145,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 
 	body, err := json.Marshal(payload)
 	if err != nil {
-		return "", fmt.Errorf("序列化请求失败: %w", err)
+		return TestConnectionResult{}, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
 	headers := buildHeaders(map[string]string{
@@ -152,28 +162,31 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 	var allErrs []string
 	for _, candidate := range candidates {
 		probeCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
-		err := probeCandidate(probeCtx, client, candidate, body, headers)
+		warning, err := probeCandidate(probeCtx, client, candidate, body, headers)
 		cancel()
 		if err == nil {
-			return candidate, nil
+			return TestConnectionResult{URL: candidate, Warning: warning}, nil
 		}
 		allErrs = append(allErrs, fmt.Sprintf("候选 %s: %v", candidate, err))
 	}
-	return "", fmt.Errorf("所有候选 URL 均验证失败:\n%s", strings.Join(allErrs, "\n"))
+	return TestConnectionResult{}, fmt.Errorf("所有候选 URL 均验证失败:\n%s", strings.Join(allErrs, "\n"))
 }
 
 // probeCandidate 对单个候选 URL 发真测请求，验证 200 + text/event-stream + 有效 SSE chunk。
-// 返回 nil 表示通过；返回 error 表示失败（调用方用循环里的 candidate 作为成功 URL）。
+// 返回 (warning, error)：
+//   - warning 非 "" 表示通过但有提示（如 429 限流视为通过，URL/Key/Model 都对只是被限速）
+//   - error 非 nil 表示失败
+//   - 都为零值表示完全通过
 //
 // 验证链路：
 //  1. HTTP 请求成功（网络可达）
-//  2. 状态码 < 400（4xx/5xx 被拦下）
+//  2. 状态码：429 视为通过（限流，配置有效）；其他 4xx/5xx 被拦下
 //  3. Content-Type 是 text/event-stream（中转站 SPA fallback 返回 200+HTML 会被拦下）
 //  4. SSE 流中至少有一个 data: 行，且 JSON 含 choices 字段（空流/非标格式被拦下）
-func probeCandidate(ctx context.Context, client *http.Client, url string, body []byte, headers map[string]string) error {
+func probeCandidate(ctx context.Context, client *http.Client, url string, body []byte, headers map[string]string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("创建请求失败: %w", err)
+		return "", fmt.Errorf("创建请求失败: %w", err)
 	}
 	for k, v := range headers {
 		req.Header.Set(k, v)
@@ -181,13 +194,19 @@ func probeCandidate(ctx context.Context, client *http.Client, url string, body [
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return fmt.Errorf("请求失败: %w", err)
+		return "", fmt.Errorf("请求失败: %w", err)
 	}
 	defer resp.Body.Close()
 
+	// 429 视为通过：URL/Key/Model 配置都正确，只是当前请求被限流。
+	// 不继续读 SSE 流（429 通常没有有效 SSE 响应），直接返回 warning。
+	if resp.StatusCode == http.StatusTooManyRequests {
+		return "429 限流，配置有效但当前被限速", nil
+	}
+
 	if resp.StatusCode >= 400 {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("%s", summarizeErrorBody(resp.StatusCode, errBody))
+		return "", fmt.Errorf("%s", summarizeErrorBody(resp.StatusCode, errBody))
 	}
 
 	// 检查 Content-Type 是 SSE 流。中转站 SPA 对不存在的路径可能返回 200 + HTML 首页，
@@ -195,7 +214,7 @@ func probeCandidate(ctx context.Context, client *http.Client, url string, body [
 	ct := resp.Header.Get("Content-Type")
 	if !strings.HasPrefix(ct, "text/event-stream") {
 		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return fmt.Errorf("响应不是 SSE 流 (Content-Type: %s), %s", ct, summarizeErrorBody(resp.StatusCode, errBody))
+		return "", fmt.Errorf("响应不是 SSE 流 (Content-Type: %s), %s", ct, summarizeErrorBody(resp.StatusCode, errBody))
 	}
 
 	// 扫描 SSE 流，验证至少有一个 data: 行且 JSON 含 choices 字段。
@@ -215,14 +234,14 @@ func probeCandidate(ctx context.Context, client *http.Client, url string, body [
 		var chunk map[string]any
 		if err := json.Unmarshal([]byte(data), &chunk); err == nil {
 			if _, ok := chunk["choices"]; ok {
-				return nil
+				return "", nil
 			}
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return fmt.Errorf("读取 SSE 流失败: %w", err)
+		return "", fmt.Errorf("读取 SSE 流失败: %w", err)
 	}
-	return fmt.Errorf("SSE 流中未找到有效 chunk（可能模型不可用或返回非标准格式）")
+	return "", fmt.Errorf("SSE 流中未找到有效 chunk（可能模型不可用或返回非标准格式）")
 }
 
 // summarizeErrorBody 把 HTTP 错误响应体格式化为简洁的错误消息。

@@ -33,7 +33,8 @@
     "maximize": "最大化",
     "restore": "还原",
     "done": "完成",
-    "failed": "失败"
+    "failed": "失败",
+    "listSeparator": "、"
   },
   "time": {
     "justNow": "刚刚",
@@ -265,7 +266,11 @@
     "customProviders": "自定义服务商",
     "testingConnection": "正在测试连通性...",
     "connectionTestFailed": "连通性测试失败",
+    "confirmKeepFailureTitle": "测试失败",
+    "confirmKeepFailureMessage": "{{name}} 连通性测试失败：{{error}}\n\n是否仍要保留此配置？保留后下次保存将不再重测，除非你修改了 API Key 或 URL。",
+    "keepAnyway": "保留配置",
     "configSaved": "配置已保存",
+    "configSavedWithKept": "配置已保存（其中 {{names}} 被保留为已知失败）",
     "pleaseConfigureApiKey": "请先配置至少一个服务商的 API Key",
     "apiKeyNotConfigured": "未配置 API Key",
     "invalidUrl": "URL 格式不正确",
@@ -275,6 +280,10 @@
     "provider": "服务商",
     "configured": "已配置",
     "notConfigured": "未配置",
+    "notTested": "未测试",
+    "passed": "已通过",
+    "passedWithWarning": "通过(限流)",
+    "failed": "失败",
     "apiKey": "API Key",
     "enterApiKey": "输入 API Key",
     "test": "测试",

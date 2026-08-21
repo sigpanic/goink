@@ -1450,6 +1450,21 @@ export namespace llm {
 		}
 	}
 	
+	
+	export class TestConnectionResult {
+	    url: string;
+	    warning: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestConnectionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.url = source["url"];
+	        this.warning = source["warning"];
+	    }
+	}
 
 }
 

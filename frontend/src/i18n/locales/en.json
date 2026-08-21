@@ -33,7 +33,8 @@
     "maximize": "Maximize",
     "restore": "Restore",
     "done": "Done",
-    "failed": "Failed"
+    "failed": "Failed",
+    "listSeparator": ", "
   },
   "time": {
     "justNow": "Just now",
@@ -274,7 +275,11 @@
     "customProviders": "Custom Providers",
     "testingConnection": "Testing connection...",
     "connectionTestFailed": "Connection test failed",
+    "confirmKeepFailureTitle": "Test Failed",
+    "confirmKeepFailureMessage": "{{name}} connection test failed: {{error}}\n\nKeep this provider anyway? If kept, it will be skipped on next save until you change its API Key or URL.",
+    "keepAnyway": "Keep Anyway",
     "configSaved": "Configuration saved",
+    "configSavedWithKept": "Configuration saved ({{names}} kept as known failure)",
     "pleaseConfigureApiKey": "Please configure at least one provider's API Key",
     "apiKeyNotConfigured": "API Key not configured",
     "invalidUrl": "Invalid URL format",
@@ -284,6 +289,10 @@
     "provider": "Provider",
     "configured": "Configured",
     "notConfigured": "Not configured",
+    "notTested": "Not tested",
+    "passed": "Passed",
+    "passedWithWarning": "Passed (limited)",
+    "failed": "Failed",
     "apiKey": "API Key",
     "enterApiKey": "Enter API Key",
     "test": "Test",
