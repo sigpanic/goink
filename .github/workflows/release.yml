@@ -84,6 +84,12 @@ jobs:
           echo "=== 4. ONNX runtime 存在性检查 ==="
           ls build/runtime/onnxruntime.dll 2>/dev/null || { echo "::error::onnxruntime.dll 缺失"; exit 1; }
 
+          echo "=== 5. VC++ Runtime DLL 存在性检查（onnxruntime 依赖）==="
+          for dll in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do
+            ls "build/runtime/$dll" 2>/dev/null || { echo "::error::$dll 缺失（VC++ Runtime 未捆绑）"; exit 1; }
+          done
+          echo "VC++ Runtime DLL 齐全"
+
           echo "All Windows smoke tests passed"
 
       - uses: actions/upload-artifact@v4
