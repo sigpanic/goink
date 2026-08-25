@@ -27,16 +27,17 @@ export default function ModelConfigTab() {
   const [testResults, setTestResults] = useState<
     Record<
       string,
-      { ok: boolean; msg?: string; warning?: string; keySnapshot: string } | undefined
+      | { ok: boolean; msg?: string; warning?: string; keySnapshot: string }
+      | undefined
     >
   >({});
   const [testing, setTesting] = useState<Record<string, boolean>>({});
   // 用户已知晓失败的 provider key 集合。
   // 一旦保存时某 provider 测试失败，加入此集合，下次保存跳过重测
   // （除非用户改了该 provider 的 api_key 或 chat_url，handleUpdateProvider 会清）
-  const [acknowledgedFailures, setAcknowledgedFailures] = useState<
-    Set<string>
-  >(new Set());
+  const [acknowledgedFailures, setAcknowledgedFailures] = useState<Set<string>>(
+    new Set(),
+  );
   // 保存过后的配置哈希，用于判断 key 是否被修改
   const savedKeysRef = useRef<Record<string, string>>({});
 
@@ -93,7 +94,8 @@ export default function ModelConfigTab() {
       const keys: Record<string, string> = {};
       const results: Record<
         string,
-        { ok: boolean; msg?: string; warning?: string; keySnapshot: string } | undefined
+        | { ok: boolean; msg?: string; warning?: string; keySnapshot: string }
+        | undefined
       > = {};
       for (const p of config.providers) {
         if (p.api_key) {
@@ -359,9 +361,12 @@ export default function ModelConfigTab() {
       savedKeysRef.current = keys;
       // 根据 keptFailures 构造成功消息：含保留信息时显示完整提示，
       // 无保留时仅显示"配置已保存"
-      const successMsg = keptFailures.length > 0
-        ? t("settings.configSavedWithKept", { names: keptFailures.join(t("common.listSeparator")) })
-        : t("settings.configSaved");
+      const successMsg =
+        keptFailures.length > 0
+          ? t("settings.configSavedWithKept", {
+              names: keptFailures.join(t("common.listSeparator")),
+            })
+          : t("settings.configSaved");
       // ✓ 前缀让用户一眼看出是成功消息（颜色已是绿色，符号强化识别）
       // saveMsg 不主动清理，保留显示直到下次保存（成功/失败/测试中）结果覆盖
       setSaveMsg(`✓ ${successMsg}`);
@@ -372,7 +377,16 @@ export default function ModelConfigTab() {
     } finally {
       setIsSaving(false);
     }
-  }, [providers, saveMutation.mutateAsync, testResults, acknowledgedFailures, handleTest, focusOn, confirmFailure, t]);
+  }, [
+    providers,
+    saveMutation.mutateAsync,
+    testResults,
+    acknowledgedFailures,
+    handleTest,
+    focusOn,
+    confirmFailure,
+    t,
+  ]);
 
   if (llmConfigQuery.isLoading) {
     return (

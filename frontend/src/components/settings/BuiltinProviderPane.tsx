@@ -17,7 +17,10 @@ interface Props {
   onTest: (
     providerKey: string,
   ) => Promise<{ resolvedUrl?: string; error?: string }>;
-  testResults: Record<string, { ok: boolean; msg?: string; warning?: string } | undefined>;
+  testResults: Record<
+    string,
+    { ok: boolean; msg?: string; warning?: string } | undefined
+  >;
   testing: Record<string, boolean>;
   // 父组件外部指令：focusNonce 自增时 setSelectedKey(focusKey)，
   // 用于保存测试失败时把视图切到失败 provider 方便用户定位
