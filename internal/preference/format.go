@@ -8,9 +8,9 @@ import (
 )
 
 // PreferencesTokenBudget 是注入 system 消息时偏好的软上限（token）。
-// 设计依据：4k 占 200k 上下文窗口 2%，中文 4k 约等于 2-3k 字，能装 30-80 条偏好。
+// 设计依据：8k 占 200k 上下文窗口 4%，中文 8k 约等于 4-6k 字，能装 60-160 条偏好。
 // 超预算时按 updated_at DESC 保留最近活跃的，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
-const PreferencesTokenBudget = 4000
+const PreferencesTokenBudget = 8000
 
 // FormatPreferences 格式化偏好列表为可读文本，按全局/小说专属分组，每条带 id 前缀。
 // 用于 NovelProfile 注入 system 消息，agent 看到后可通过 id 调 upsert_preference 更新。

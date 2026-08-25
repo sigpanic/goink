@@ -8,9 +8,9 @@ import (
 )
 
 // SettingsTokenBudget 是注入 system 消息时设定的软上限（token）。
-// 设计依据：8k 占 200k 上下文窗口 4%，中文 8k 约等于 4-6k 字，能装较完整的世界观/力量体系。
+// 设计依据：12k 占 200k 上下文窗口 6%，中文 12k 约等于 6-9k 字，能装较完整的世界观/力量体系。
 // 超预算时按 updated_at DESC 保留最近活跃的，末尾追加截断提示（让 LLM 知道有内容被截断、应合并而非新建）。
-const SettingsTokenBudget = 8000
+const SettingsTokenBudget = 12000
 
 // FormatSettings 格式化设定列表为可读文本，每条带 id 前缀。
 // 用于 NovelState 注入 system 消息，agent 看到后可通过 id 调 upsert_setting 更新。

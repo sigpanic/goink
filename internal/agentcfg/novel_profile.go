@@ -19,7 +19,7 @@ import (
 // 调用方负责事务外构建（compress 模式）：传入的 db 应为带 ctx 的非事务句柄，
 // 避免在事务内调用导致 SQLite 单连接池死锁。
 //
-// 设定软上限 8k token（setting.SettingsTokenBudget）、偏好软上限 4k token（preference.PreferencesTokenBudget）：
+// 设定软上限 12k token（setting.SettingsTokenBudget）、偏好软上限 8k token（preference.PreferencesTokenBudget）：
 // 超预算时按 updated_at DESC 保留最近活跃的，丢弃最久未活动的。这里用 slog.Default() 记 warn，best-effort 不阻塞流程。
 // 拼接顺序：设定在前、偏好在后（与 system 消息注入顺序一致）。
 //
