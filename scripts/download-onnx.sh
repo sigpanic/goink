@@ -90,64 +90,44 @@ download_onnx() {
     ls -la "$RUNTIME_DIR/"
 }
 
-# download_vc_runtime 从官方 VC++ Redistributable 提取 vcruntime140.dll 等到 $RUNTIME_DIR。
+# download_vc_runtime 从系统 System32 复制 VC++ Runtime DLL 到 $RUNTIME_DIR。
 # ONNX Runtime（onnxruntime.dll）动态链接 VC++ Runtime（vcruntime140.dll、
 # vcruntime140_1.dll、msvcp140.dll）。放到 onnxruntime.dll 同目录，利用
 # Windows DLL 搜索优先级（应用目录 > System32 > PATH）避免用户系统 PATH 冲突
 # 或版本不匹配导致的 DllMain 初始化失败。
 # 仅 Windows 调用；Linux/macOS 不需要。
+#
+# 原方案从 VC Redist exe 提取 DLL，但 VC Redist 14.x 是 WiX Burn 引导程序，
+# MSI/CAB payload 封装在 exe 尾部，7z 只能解压外层 Cab（bootstrapper），
+# 无法解压尾部 MSI payload，导致 find 找不到 DLL。故改从 System32 复制
+# （Windows runner 已预装 VC++ Redist，版本兼容 ONNX Runtime 1.26.0）。
 download_vc_runtime() {
-    echo "下载 VC++ Redistributable (x64)..."
-    local vc_redist="/tmp/vc_redist.x64.exe"
-    if ! curl -fsSL --retry 3 --connect-timeout 30 -o "$vc_redist" "https://aka.ms/vs/17/release/vc_redist.x64.exe"; then
-        echo "警告: 下载 VC++ Redist 失败，跳过（假设系统已安装）"
+    local sys32=""
+    for candidate in "/c/Windows/System32" "C:/Windows/System32" "/mnt/c/Windows/System32"; do
+        if [ -d "$candidate" ]; then
+            sys32="$candidate"
+            break
+        fi
+    done
+
+    if [ -z "$sys32" ]; then
+        echo "警告: 未找到 System32 目录，跳过 VC++ Runtime 复制（非 Windows 环境？）"
         return 0
     fi
 
-    if ! command -v 7z >/dev/null 2>&1; then
-        echo "警告: 未找到 7z，跳过 VC++ Runtime 提取（CI 已预装，本地需自行安装 7-Zip）"
-        rm -f "$vc_redist"
-        return 0
-    fi
-
-    local extract_dir="/tmp/vc-redist-extract"
-    rm -rf "$extract_dir"
-    mkdir -p "$extract_dir"
-
-    # 第一步：解压 SFX exe
-    if ! 7z x -o"$extract_dir" "$vc_redist" -y >/dev/null 2>&1; then
-        echo "警告: 解压 VC Redist exe 失败，跳过"
-        rm -rf "$extract_dir" "$vc_redist"
-        return 0
-    fi
-
-    # 第二步：递归查找已直接暴露的 DLL（部分 redist 结构）
     local found=0
-    while IFS= read -r -d '' dll; do
-        cp -f "$dll" "$RUNTIME_DIR/"
-        found=1
-        echo "  $(basename "$dll") → $RUNTIME_DIR/"
-    done < <(find "$extract_dir" \( -name "vcruntime*.dll" -o -name "msvcp*.dll" \) -print0 2>/dev/null)
-
-    # 第三步：若未找到，VC 14+ redist 把 DLL 封在 MSI 内，逐个解压 MSI 再查找
-    if [ "$found" -eq 0 ]; then
-        local msi_extract="$extract_dir/_msi"
-        mkdir -p "$msi_extract"
-        while IFS= read -r -d '' msi; do
-            7z x -o"$msi_extract" "$msi" -y >/dev/null 2>&1 || true
-        done < <(find "$extract_dir" -name "*.msi" -print0 2>/dev/null)
-
-        while IFS= read -r -d '' dll; do
-            cp -f "$dll" "$RUNTIME_DIR/"
+    for dll in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do
+        if [ -f "$sys32/$dll" ]; then
+            cp -f "$sys32/$dll" "$RUNTIME_DIR/"
             found=1
-            echo "  $(basename "$dll") → $RUNTIME_DIR/"
-        done < <(find "$msi_extract" \( -name "vcruntime*.dll" -o -name "msvcp*.dll" \) -print0 2>/dev/null)
-    fi
-
-    rm -rf "$extract_dir" "$vc_redist"
+            echo "  $dll → $RUNTIME_DIR/"
+        else
+            echo "警告: $sys32/$dll 不存在，跳过"
+        fi
+    done
 
     if [ "$found" -eq 0 ]; then
-        echo "警告: 未能从 VC Redist 提取 DLL，跳过"
+        echo "警告: 未能从 System32 复制任何 VC++ Runtime DLL，跳过"
     else
         echo "VC++ Runtime DLL → $RUNTIME_DIR/"
     fi
