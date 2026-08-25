@@ -37,7 +37,7 @@ func NewClient(providers map[string]Provider, log *slog.Logger) *Client {
 }
 
 // newHTTPClient 创建流式请求专用 http.Client：
-//   - ResponseHeaderTimeout: 60s 首字节超时（不含 body 读取）
+//   - ResponseHeaderTimeout: 10m 首字节超时（不含 body 读取）
 //   - DialContext: 10s TCP 连接超时
 //   - Client.Timeout: 0（不限制整体超时，body 读取由 ctx 控制）
 //
@@ -50,7 +50,7 @@ func newHTTPClient() *http.Client {
 			DialContext: (&net.Dialer{
 				Timeout: 10 * time.Second,
 			}).DialContext,
-			ResponseHeaderTimeout: 60 * time.Second,
+			ResponseHeaderTimeout: 10 * time.Minute,
 		},
 	}
 }
@@ -128,7 +128,7 @@ func (c *Client) ChatStream(
 			msg := "网络连接失败，请检查网络后重试"
 			retryable := true
 			if isTimeout {
-				msg = "服务器响应超时（首字节超过 60s），请稍后重试"
+				msg = "服务器响应超时（首字节超过 10m），请稍后重试"
 				c.logger.Warn("llm first byte timeout", "err", err, "url", req.URL.String())
 			} else {
 				// 非超时网络错误：区分永久性（DNS NXDOMAIN / 连接拒绝）与瞬时性（EOF / reset）
