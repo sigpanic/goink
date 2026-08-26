@@ -94,7 +94,10 @@ export default function ModelPicker({
     : [];
 
   // provider 标题行 icon：内置 LOGOS 匹配则用 logo，否则 fallback 首字母圆形（与设置页 Custom 风格一致）。
-  const renderProviderIcon = (providerKey: string, providerName: string): ReactNode => (
+  const renderProviderIcon = (
+    providerKey: string,
+    providerName: string,
+  ): ReactNode => (
     <ProviderIcon
       provider={providerKey}
       className="w-4 h-4 shrink-0 text-muted-foreground"
