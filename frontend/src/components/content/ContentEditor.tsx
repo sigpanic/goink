@@ -23,13 +23,17 @@ export default function ContentEditor({
       onMount={onMount}
       options={{
         minimap: { enabled: false },
-        lineNumbers: "off",
+        lineNumbers: "on",
         scrollBeyondLastLine: false,
         fontSize: 17,
         lineHeight: 30,
         fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
         wordWrap: "on",
         automaticLayout: true,
+        renderLineHighlight: "line",
+        cursorSmoothCaretAnimation: "on",
+        smoothScrolling: true,
+        mouseWheelZoom: true,
         unicodeHighlight: {
           nonBasicASCII: false,
           ambiguousCharacters: false,

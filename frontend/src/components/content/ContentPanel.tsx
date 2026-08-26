@@ -801,7 +801,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
                   fontSize: 15,
                   lineHeight: 26,
                   fontFamily: "'Noto Serif SC', 'Source Han Serif SC', serif",
-                  lineNumbers: "off",
+                  lineNumbers: "on",
                   wordWrap: "on",
                   automaticLayout: true,
                   readOnly: true,
