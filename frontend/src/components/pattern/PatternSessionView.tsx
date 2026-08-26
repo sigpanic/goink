@@ -15,6 +15,7 @@ interface Props {
   chapterIds: number[]; // 空数组表示全书
   providerName: string; // 结构化模型入参（替代拼接 modelKey + splitModelKey）
   modelId: string;
+  reasoningEffort: string; // reasoning effort（model 不支持时为空串）
   title: string; // 小说标题（进度页展示用）
   chapterCount: number; // 本次提取的章节数
   onExit: () => void; // 返回选择页
@@ -37,6 +38,7 @@ export default function PatternSessionView({
   chapterIds,
   providerName,
   modelId,
+  reasoningEffort,
   title,
   chapterCount,
   onExit,
@@ -71,7 +73,7 @@ export default function PatternSessionView({
         novel_id: novelId,
         provider_name: providerName,
         model_id: modelId,
-        reasoning_effort: "",
+        reasoning_effort: reasoningEffort,
         chapter_ids: chapterIds.length > 0 ? chapterIds : undefined,
       });
       setResult({

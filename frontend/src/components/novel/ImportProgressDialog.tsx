@@ -11,7 +11,7 @@ import type {
   ImportProgressState,
 } from "@/hooks/useImportNovel";
 import type { llm } from "@/lib/wailsjs/go/models";
-import PopSelect from "@/components/chat/PopSelect";
+import PopSelect from "@/components/shared/PopSelect";
 
 interface Props {
   open: boolean;

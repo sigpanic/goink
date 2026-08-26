@@ -7,7 +7,8 @@ import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import type { llm } from "@/lib/wailsjs/go/models";
 import { createPatternTaskID } from "@/hooks/usePatternProgress";
-import PopSelect from "@/components/chat/PopSelect";
+import PopSelect from "@/components/shared/PopSelect";
+import ModelPicker from "@/components/model/ModelPicker";
 import ChapterRangeInput from "./ChapterRangeInput";
 import PatternSessionView from "./PatternSessionView";
 
@@ -24,6 +25,7 @@ interface SessionParams {
   chapterIds: number[];
   providerName: string;
   modelId: string;
+  reasoningEffort: string;
   title: string;
   chapterCount: number;
 }
@@ -51,6 +53,8 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
     null,
   );
+  // reasoningEffort：跟随选中模型。model 支持时默认第一档，不支持时空串。
+  const [reasoningEffort, setReasoningEffort] = useState("");
 
   useEffect(() => {
     if (!userSelectedNovelRef.current) {
@@ -134,6 +138,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
       chapterIds: activeChapterIds,
       providerName: selectedModel.ProviderName,
       modelId: selectedModel.ModelID,
+      reasoningEffort,
       title: targetNovelTitle || t("extract.progress.unknownWork"),
       chapterCount: activeChapterCount,
     });
@@ -142,11 +147,31 @@ export default function PatternExtractView({ currentNovelId }: Props) {
     activeChapterCount,
     activeChapterIds,
     canExtract,
+    reasoningEffort,
     selectedModel,
     t,
     targetNovelId,
     targetNovelTitle,
   ]);
+
+  // 切 model：若支持 reasoning 默认第一档，不支持时清空（与 ChatControls 一致）。
+  const handleSelectModel = useCallback(
+    (key: string) => {
+      const m = models.find((item) => item.Key === key);
+      if (!m) return;
+      setSelectedModel(m);
+      if (m.ReasoningLevels?.length) {
+        setReasoningEffort(m.ReasoningLevels[0]);
+      } else {
+        setReasoningEffort("");
+      }
+    },
+    [models],
+  );
+
+  const handleSelectEffort = useCallback((effort: string) => {
+    setReasoningEffort(effort);
+  }, []);
 
   if (view === "session" && sessionParams) {
     return (
@@ -156,6 +181,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
         chapterIds={sessionParams.chapterIds}
         providerName={sessionParams.providerName}
         modelId={sessionParams.modelId}
+        reasoningEffort={sessionParams.reasoningEffort}
         title={sessionParams.title}
         chapterCount={sessionParams.chapterCount}
         onExit={() => {
@@ -209,16 +235,12 @@ export default function PatternExtractView({ currentNovelId }: Props) {
               {t("extract.selectedChapters")}
             </button>
           </div>
-          <PopSelect
-            value={selectedModel?.Key ?? ""}
-            options={models.map((m) => ({
-              value: m.Key,
-              label: m.ModelName,
-            }))}
-            onChange={(key) => {
-              const m = models.find((item) => item.Key === key);
-              if (m) setSelectedModel(m);
-            }}
+          <ModelPicker
+            models={models}
+            selectedKey={selectedModel?.Key ?? ""}
+            reasoningEffort={reasoningEffort}
+            onSelectModel={handleSelectModel}
+            onSelectEffort={handleSelectEffort}
             minWidth="140px"
             dropUp={false}
           />

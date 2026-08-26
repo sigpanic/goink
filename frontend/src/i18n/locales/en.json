@@ -157,6 +157,7 @@
     "setSelectedModelFailed": "Failed to set model",
     "setReasoningEffortFailed": "Failed to set reasoning effort",
     "setApprovalModeFailed": "Failed to set approval mode",
+    "reasoning": "Reasoning",
     "highReasoning": "High",
     "maxReasoning": "Max",
     "configureModel": "Configure Model...",

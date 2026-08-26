@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import PopSelect from "./PopSelect";
+import ModelPicker from "@/components/model/ModelPicker";
 import ContextRing from "./ContextRing";
 import type { UsageInfo } from "./ContextRing";
 import { useModels } from "@/components/settings/useModels";
@@ -20,6 +20,7 @@ interface Props {
 // ChatControls: 模型/推理/审批控件。
 // models 列表走 useModels query 订阅；selectedModel/reasoningEffort/approvalMode
 // 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。回调仍由 props 传入（mutation commit 4 迁）。
+// 5.x: 模型 + reasoning 合并进 ModelPicker（按 provider 聚类 + 底部 reasoning 跟随区域）。
 export default function ChatControls({
   onSelectModel,
   onRefreshModels,
@@ -39,43 +40,21 @@ export default function ChatControls({
   const approvalMode = useChatStore((s) => s.approvalMode);
 
   const selectedKey = selectedModel?.Key ?? "";
-  const supportsReasoning =
-    !!selectedModel?.ReasoningLevels &&
-    selectedModel.ReasoningLevels.length > 0;
-
-  const modelOptions = models.map((m) => ({
-    value: m.Key,
-    label: m.ModelName,
-  }));
-  const reasoningOptions = supportsReasoning
-    ? selectedModel!.ReasoningLevels.map((level) => ({
-        value: level,
-        label:
-          level === "high" ? t("chat.highReasoning") : t("chat.maxReasoning"),
-      }))
-    : [];
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-2 text-xs shrink-0 select-none">
-      <PopSelect
-        value={selectedKey}
-        options={modelOptions}
-        onChange={onSelectModel}
+      <ModelPicker
+        models={models}
+        selectedKey={selectedKey}
+        reasoningEffort={reasoningEffort}
+        onSelectModel={onSelectModel}
+        onSelectEffort={onSelectEffort}
         onOpen={onRefreshModels}
         footerAction={{
           label: t("chat.configureModel"),
           onClick: onConfigModel,
         }}
       />
-
-      {supportsReasoning && (
-        <PopSelect
-          value={reasoningEffort}
-          options={reasoningOptions}
-          onChange={onSelectEffort}
-          minWidth="80px"
-        />
-      )}
 
       <div className="flex-1" />
 

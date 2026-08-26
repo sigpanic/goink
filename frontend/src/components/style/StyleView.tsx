@@ -24,7 +24,8 @@ import { useDeleteStyleSample } from "./useDeleteStyleSample";
 import StyleSampleCard from "./StyleSampleCard";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
-import PopSelect from "@/components/chat/PopSelect";
+import PopSelect from "@/components/shared/PopSelect";
+import ModelPicker from "@/components/model/ModelPicker";
 import TagInput from "@/components/shared/TagInput";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
@@ -80,6 +81,8 @@ export default function StyleView({
   const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
     null,
   );
+  // reasoningEffort：跟随选中模型。model 支持时默认第一档，不支持时空串。
+  const [reasoningEffort, setReasoningEffort] = useState("");
   const [error, setError] = useState("");
   const [result, setResult] = useState<{
     name: string;
@@ -153,9 +156,34 @@ export default function StyleView({
   useEffect(() => {
     if (!selectedModel && models.length > 0 && settingsQuery.data) {
       const key = settingsQuery.data.selected_model_key || "";
-      setSelectedModel(models.find((m) => m.Key === key) ?? models[0] ?? null);
+      const m = models.find((x) => x.Key === key) ?? models[0] ?? null;
+      if (m) {
+        setSelectedModel(m);
+        if (m.ReasoningLevels?.length) {
+          setReasoningEffort(m.ReasoningLevels[0]);
+        }
+      }
     }
   }, [models, settingsQuery.data, selectedModel]);
+
+  // 切 model：若支持 reasoning 默认第一档，不支持时清空（与 ChatControls 一致）。
+  const handleSelectModel = useCallback(
+    (key: string) => {
+      const m = models.find((item) => item.Key === key);
+      if (!m) return;
+      setSelectedModel(m);
+      if (m.ReasoningLevels?.length) {
+        setReasoningEffort(m.ReasoningLevels[0]);
+      } else {
+        setReasoningEffort("");
+      }
+    },
+    [models],
+  );
+
+  const handleSelectEffort = useCallback((effort: string) => {
+    setReasoningEffort(effort);
+  }, []);
 
   const toggleSelect = useCallback((id: number) => {
     setSelected((prev) => {
@@ -242,7 +270,7 @@ export default function StyleView({
         sample_ids: [...selected],
         provider_name: selectedModel.ProviderName,
         model_id: selectedModel.ModelID,
-        reasoning_effort: "",
+        reasoning_effort: reasoningEffort,
       });
       if (runningTaskIdRef.current !== taskId) return;
       setResult({
@@ -263,7 +291,7 @@ export default function StyleView({
         runningTaskIdRef.current = null;
       }
     }
-  }, [selected, selectedModel, phase, t]);
+  }, [selected, selectedModel, reasoningEffort, phase, t]);
 
   const handleSave = useCallback(async () => {
     if (!result) return;
@@ -384,16 +412,12 @@ export default function StyleView({
               )}
               {phase !== "adding" && selected.size > 0 && (
                 <>
-                  <PopSelect
-                    value={selectedModel?.Key ?? ""}
-                    options={models.map((m) => ({
-                      value: m.Key,
-                      label: m.ModelName,
-                    }))}
-                    onChange={(key) => {
-                      const m = models.find((item) => item.Key === key);
-                      if (m) setSelectedModel(m);
-                    }}
+                  <ModelPicker
+                    models={models}
+                    selectedKey={selectedModel?.Key ?? ""}
+                    reasoningEffort={reasoningEffort}
+                    onSelectModel={handleSelectModel}
+                    onSelectEffort={handleSelectEffort}
                     minWidth="140px"
                     dropUp={false}
                   />

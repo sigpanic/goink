@@ -27,7 +27,7 @@ vi.mock("./PatternSessionView", () => ({
   ),
 }));
 
-vi.mock("@/components/chat/PopSelect", () => ({
+vi.mock("@/components/shared/PopSelect", () => ({
   default: ({ value, options, onChange }: any) => (
     <select
       value={value}
@@ -37,6 +37,22 @@ vi.mock("@/components/chat/PopSelect", () => ({
       {options?.map((o: any) => (
         <option key={o.value} value={o.value}>
           {o.label}
+        </option>
+      ))}
+    </select>
+  ),
+}));
+
+vi.mock("@/components/model/ModelPicker", () => ({
+  default: ({ models, selectedKey, onSelectModel }: any) => (
+    <select
+      value={selectedKey}
+      onChange={(e) => onSelectModel(e.target.value)}
+      data-testid="pop-select"
+    >
+      {models?.map((m: any) => (
+        <option key={m.Key} value={m.Key}>
+          {m.ModelName}
         </option>
       ))}
     </select>

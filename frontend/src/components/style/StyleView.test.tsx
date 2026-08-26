@@ -31,7 +31,7 @@ vi.mock("@/components/Markdown", () => ({
   default: ({ content }: any) => <div>{content}</div>,
 }));
 
-vi.mock("@/components/chat/PopSelect", () => ({
+vi.mock("@/components/shared/PopSelect", () => ({
   default: ({ value, options, onChange }: any) => (
     <select
       value={value}

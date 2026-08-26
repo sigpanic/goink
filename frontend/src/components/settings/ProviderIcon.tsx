@@ -1,3 +1,4 @@
+import { type ReactNode } from "react";
 import deepseekRaw from "@/assets/providers/deepseek.svg?raw";
 import doubaoRaw from "@/assets/providers/doubao.svg?raw";
 import qwenRaw from "@/assets/providers/qwen.svg?raw";
@@ -19,12 +20,14 @@ const LOGOS: Record<string, string> = {
 export default function ProviderIcon({
   provider,
   className,
+  fallback = null,
 }: {
   provider: string;
   className?: string;
+  fallback?: ReactNode;
 }) {
   const raw = LOGOS[provider];
-  if (!raw) return null;
+  if (!raw) return <>{fallback}</>;
   return (
     <span className={className} dangerouslySetInnerHTML={{ __html: raw }} />
   );

@@ -149,6 +149,7 @@
     "setSelectedModelFailed": "设置模型失败",
     "setReasoningEffortFailed": "设置推理强度失败",
     "setApprovalModeFailed": "设置审批模式失败",
+    "reasoning": "推理程度",
     "highReasoning": "高推理",
     "maxReasoning": "最大推理",
     "configureModel": "配置模型...",

@@ -14,6 +14,7 @@ type UserLLMConfig struct {
 type AvailableModel struct {
 	Key              string // "deepseek/deepseek-v4-pro"
 	ModelID          string // "deepseek-v4-pro"（独立字段，不依赖 Key 拆分）
+	ProviderKey      string // "deepseek"（小写 key，与 ProviderView.Key 一致，供 ProviderIcon 匹配）
 	ProviderName     string // "DeepSeek"
 	ModelName        string // "DeepSeek V4 Pro"
 	ContextWindow    int
@@ -184,6 +185,7 @@ func Models(providers map[string]Provider) []AvailableModel {
 			list = append(list, AvailableModel{
 				Key:              name + "/" + m.ID,
 				ModelID:          m.ID,
+				ProviderKey:      name,
 				ProviderName:     p.Name,
 				ModelName:        m.Name,
 				ContextWindow:    m.ContextWindow,
