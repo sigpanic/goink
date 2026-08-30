@@ -25,7 +25,7 @@ WizardStyle=modern
 
 [Files]
 Source: "..\..\bin\goink.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\runtime\*"; DestDir: "{app}\runtime"; Flags: recursesubdirs
+Source: "..\..\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式:"; Flags: checkedonce
