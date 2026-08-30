@@ -21,8 +21,7 @@ UninstallDisplayIcon={app}\{#MyAppExeName}
 ArchitecturesInstallIn64BitMode=x64compatible
 DirExistsWarning=no
 WizardStyle=modern
-; 升级时读取上次安装路径，默认装到原位置，避免自定义路径用户踩坑
-InstallDirRegKey=HKCU\Software\sigpanic\Goink\InstallDir
+; UsePreviousAppDir 默认 yes，AppId 稳定后升级时自动读取上次安装目录
 
 [Files]
 Source: "..\..\bin\goink.exe"; DestDir: "{app}"; Flags: ignoreversion
@@ -35,11 +34,6 @@ Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: 
 Name: "{autoprograms}\{#MyAppName}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
 Name: "{autoprograms}\{#MyAppName}\卸载 Goink"; Filename: "{uninstallexe}"
 Name: "{userdesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
-
-; 配合 [Setup] 段的 InstallDirRegKey，写入上次安装路径到注册表
-; 升级时 InstallDirRegKey 读取此值作为默认目录，避免自定义路径用户踩坑
-[Registry]
-Root: HKCU; Subkey: "Software\sigpanic\Goink"; ValueType: string; ValueName: "InstallDir"; ValueData: "{app}"; Flags: uninsdeletevalue
 
 ; 安装完成后可选启动 Goink（postinstall 显示复选框，skipifsilent 避免静默安装时弹窗）
 [Run]
