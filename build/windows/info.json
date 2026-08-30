@@ -1,0 +1,17 @@
+{
+  "fixed": {
+    "file_version": "0.0.0.0",
+    "product_version": "0.0.0.0"
+  },
+  "info": {
+    "0000": {
+      "CompanyName": "sigpanic",
+      "FileDescription": "Goink - AI 小说创作助手",
+      "FileVersion": "0.0.0.0",
+      "ProductName": "Goink",
+      "ProductVersion": "0.0.0.0",
+      "LegalCopyright": "Copyright © 2026 sigpanic",
+      "Comments": "Goink - AI 小说创作助手"
+    }
+  }
+}

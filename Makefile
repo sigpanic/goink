@@ -27,13 +27,14 @@ frontend:
 	cd frontend && npm ci && npm run build
 
 # 生产构建（需先 deps）
-# 动态注入版本号到 wails.json 的 info.productVersion，构建后恢复原文件
+# 动态注入版本号到 build/windows/info.json 的 fixed.file_version 和 fixed.product_version
+# （Wails v2 读这个文件用 winres 生成 .syso 嵌入 goink.exe PE 版本资源），构建后恢复原文件
 build: deps frontend
-	@cp wails.json wails.json.bak && \
-	trap 'mv wails.json.bak wails.json' EXIT && \
-	VERSION_NUM=$$(V=$$(echo "$(VERSION)" | sed 's/^v//' | sed 's/-.*//'); if echo "$$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "$$V"; else echo "0.0.0"; fi) && \
-	jq --arg v "$$VERSION_NUM" '.info.productVersion = $$v' wails.json > wails.json.tmp && \
-	mv wails.json.tmp wails.json && \
+	@cp build/windows/info.json build/windows/info.json.bak && \
+	trap 'mv build/windows/info.json.bak build/windows/info.json' EXIT && \
+	VERSION_NUM=$$(V=$$(echo "$(VERSION)" | sed 's/^v//' | sed 's/-.*//'); if echo "$$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "$$V.0"; else echo "0.0.0.0"; fi) && \
+	jq --arg v "$$VERSION_NUM" '.fixed.file_version = $$v | .fixed.product_version = $$v | .info."0000".FileVersion = $$v | .info."0000".ProductVersion = $$v' build/windows/info.json > build/windows/info.json.tmp && \
+	mv build/windows/info.json.tmp build/windows/info.json && \
 	wails build -tags webkit2_41 -o $(APP_NAME) -ldflags "$(LDFLAGS)"
 
 # 纯前端开发（浏览器模式，后端不可用）
@@ -71,8 +72,17 @@ package:
 	esac
 
 # Windows Inno Setup 安装包
+# 规范化 VERSION 为 4 段数字版本号（如 1.4.2 → 1.4.2.0），传给 setup.iss 的 VersionInfoVersion
 package-windows: build
-	export VERSION=$(VERSION) && iscc $(BUILD_DIR)/package/windows/setup.iss
+	@V=$$(echo "$(VERSION)" | sed 's/^v//' | sed 's/-.*//'); \
+	if echo "$$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then \
+		VERSION_INFO=$$(awk -F. '{printf "%s.%s.%s.0", $$1, $$2, $$3}' <<< "$$V"); \
+	else \
+		VERSION_INFO="0.0.0.0"; \
+	fi; \
+	export VERSION=$(VERSION); \
+	export VERSION_INFO; \
+	iscc $(BUILD_DIR)/package/windows/setup.iss
 
 # Linux AppImage
 package-linux: build

@@ -51,9 +51,15 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          # 动态注入 versioninfo 到 wails.json（Windows exe 右键属性显示版本/版权）
-          VERSION_NUM=$(V=$(echo "$VERSION" | sed 's/^v//' | sed 's/-.*//'); if echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then echo "$V"; else echo "0.0.0"; fi)
-          jq --arg v "$VERSION_NUM" '.info.productVersion = $v' wails.json > wails.json.tmp && mv wails.json.tmp wails.json
+          # 规范化为 4 段数字版本号（#.#.#.#），用于 Windows PE 版本资源
+          V=$(echo "$VERSION" | sed 's/^v//' | sed 's/-.*//')
+          if echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION_INFO=$(awk -F. '{printf "%s.%s.%s.0", $1, $2, $3}' <<< "$V")
+          else
+            VERSION_INFO="0.0.0.0"
+          fi
+          # 注入 build/windows/info.json（goink.exe PE 版本资源，Wails 用 winres 读它生成 .syso）
+          jq --arg v "$VERSION_INFO" '.fixed.file_version = $v | .fixed.product_version = $v | .info."0000".FileVersion = $v | .info."0000".ProductVersion = $v' build/windows/info.json > build/windows/info.json.tmp && mv build/windows/info.json.tmp build/windows/info.json
           wails build -tags webkit2_41 -o goink.exe -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
 
       - name: Install Inno Setup
@@ -65,7 +71,15 @@ jobs:
           export PATH="/c/Program Files (x86)/Inno Setup 6:$PATH"
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
+          # 规范化为 4 段数字版本号，用于 setup.iss 的 VersionInfoVersion
+          V=$(echo "$VERSION" | sed 's/^v//' | sed 's/-.*//')
+          if echo "$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            VERSION_INFO=$(awk -F. '{printf "%s.%s.%s.0", $1, $2, $3}' <<< "$V")
+          else
+            VERSION_INFO="0.0.0.0"
+          fi
           export VERSION
+          export VERSION_INFO
           iscc build/package/windows/setup.iss
 
       - name: Smoke test (Windows)

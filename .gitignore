@@ -16,7 +16,8 @@ models/
 !/build/runtime/models/vocab.txt
 /build/dist/
 /build/*.AppDir/
-/build/windows/
+/build/windows/*
+!/build/windows/info.json
 goink
 goink.exe
 
