@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 )
 
 // AppDir 返回当前可执行文件所在的目录。
@@ -129,11 +130,38 @@ func ResolveOnnxLib() (string, error) {
 	return "", fmt.Errorf("platform: ONNX Runtime 库未找到（%s）", libName)
 }
 
+var (
+	dataDirOnce  sync.Once
+	dataDirCache string
+)
+
 // DataDir 返回应用数据目录（绝对路径）。
-// Windows 返回可执行文件所在目录（单目录安装模式），其他平台返回 ~/Goink/。
+//
+// Windows: exe 目录可写时返回 exe 目录（portable 模式，旧用户零迁移）；
+// 不可写（如装到 Program Files）时 fallback 到 %LOCALAPPDATA%\Goink。
+// 其他平台: 返回 ~/Goink/。
 // 开发模式下 exe 位于临时目录时，所有平台统一返回 ~/Goink/。
 // 环境变量 GOINK_DATA_DIR 可覆盖以上逻辑，用于集成测试。
+//
+// 结果用 sync.Once 缓存，避免每次调用都做可写性检测。
 func DataDir() string {
+	dataDirOnce.Do(func() {
+		dataDirCache = resolveDataDir()
+	})
+	return dataDirCache
+}
+
+// ResetDataDirCache 重置 DataDir 的 sync.Once 缓存，供测试使用。
+// 测试用例用 t.Setenv("GOINK_DATA_DIR", ...) 设置不同的临时目录后，
+// 需要调用此函数重置缓存，否则 DataDir() 仍返回第一次调用的缓存值。
+// 生产代码不应调用此函数。
+func ResetDataDirCache() {
+	dataDirOnce = sync.Once{}
+	dataDirCache = ""
+}
+
+// resolveDataDir 实际计算 DataDir，仅由 DataDir 通过 sync.Once 调用一次。
+func resolveDataDir() string {
 	if dir := os.Getenv("GOINK_DATA_DIR"); dir != "" {
 		return dir
 	}
@@ -141,12 +169,34 @@ func DataDir() string {
 		if dir, err := AppDir(); err == nil {
 			tmp := os.TempDir()
 			if !strings.HasPrefix(strings.ToLower(dir), strings.ToLower(tmp)) {
-				return dir
+				if isWritableDir(dir) {
+					return dir
+				}
+				// exe 目录不可写（如装到 Program Files），fallback 到 %LOCALAPPDATA%\Goink
+				// 直接读 LOCALAPPDATA 环境变量，语义明确，不依赖 os.UserCacheDir() 的 "Cache" 语义。
+				// 不用 os.UserConfigDir()，它在 Windows 返回 %AppData%（Roaming 漫游目录），
+				// 数据库/日志这些不该漫游的数据应该放 %LOCALAPPDATA%（Local 本地目录）。
+				if localAppData := os.Getenv("LOCALAPPDATA"); localAppData != "" {
+					return filepath.Join(localAppData, "Goink")
+				}
 			}
 		}
 	}
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, "Goink")
+}
+
+// isWritableDir 检测目录是否可写：创建临时文件测试，删除后返回。
+// 比 os.MkdirAll 更准确：能区分"目录存在但不可写"和"目录可写"两种情况。
+func isWritableDir(dir string) bool {
+	f, err := os.CreateTemp(dir, ".goink-write-test-*")
+	if err != nil {
+		return false
+	}
+	name := f.Name()
+	_ = f.Close()
+	_ = os.Remove(name)
+	return true
 }
 
 // bundledGitPath 返回自带的 git 完整路径。

@@ -8,5 +8,12 @@
   "author": {
     "name": "",
     "email": ""
+  },
+  "info": {
+    "companyName": "Goink",
+    "productName": "Goink",
+    "productVersion": "1.4.0",
+    "copyright": "Copyright © 2026 Goink",
+    "comments": "Goink - AI 小说创作助手"
   }
 }

@@ -27,7 +27,13 @@ frontend:
 	cd frontend && npm ci && npm run build
 
 # 生产构建（需先 deps）
+# 动态注入版本号到 wails.json 的 info.productVersion，构建后恢复原文件
 build: deps frontend
+	@cp wails.json wails.json.bak && \
+	trap 'mv wails.json.bak wails.json' EXIT && \
+	VERSION_NUM=$$(V=$$(echo "$(VERSION)" | sed 's/^v//' | sed 's/-.*//'); if echo "$$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "$$V"; else echo "0.0.0"; fi) && \
+	jq --arg v "$$VERSION_NUM" '.info.productVersion = $$v' wails.json > wails.json.tmp && \
+	mv wails.json.tmp wails.json && \
 	wails build -tags webkit2_41 -o $(APP_NAME) -ldflags "$(LDFLAGS)"
 
 # 纯前端开发（浏览器模式，后端不可用）

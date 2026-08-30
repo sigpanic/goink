@@ -92,7 +92,9 @@ func (a *App) OnStartup(ctx context.Context) {
 		a.logger.Error("加载配置失败", "err", err)
 		return
 	}
-	a.initWithConfig(cfg)
+	if err := a.initWithConfig(cfg); err != nil {
+		a.logger.Error("应用初始化失败", "err", err)
+	}
 }
 
 // OnShutdown 在 Wails 窗口关闭前调用，释放资源。
@@ -138,13 +140,16 @@ func (a *App) Initialize(dataDir string) error {
 		return fmt.Errorf("加载配置失败: %w", err)
 	}
 
-	a.initWithConfig(cfg)
+	if err := a.initWithConfig(cfg); err != nil {
+		return fmt.Errorf("应用初始化失败: %w", err)
+	}
 	return nil
 }
 
 // initWithConfig 在配置加载成功后初始化所有运行时模块。
 // 只有全部步骤成功才会将 a.cfg 设为非 nil，防止半初始化状态下 IsInitialized() 误报。
-func (a *App) initWithConfig(cfg *config.AppConfig) {
+// 返回 error 让调用方（OnStartup/Initialize）能感知失败并通知前端。
+func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	config.Set(cfg)
 
 	// 1. 异步加载 ONNX 模型（不阻塞 GUI，尽早调用）
@@ -154,21 +159,21 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 	db, err := storage.Open(config.GlobalDBPath(), a.logger)
 	if err != nil {
 		a.logger.Error("打开数据库失败", "err", err)
-		return
+		return fmt.Errorf("打开数据库失败: %w", err)
 	}
 	a.db = db
 
 	// 3. 自动建表
 	if err := migrate.Run(db, a.logger); err != nil {
 		a.logger.Error("数据库迁移失败", "err", err)
-		return
+		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
 	// 4. 加载运行时配置
 	settings, err := config.LoadSettings(db)
 	if err != nil {
 		a.logger.Error("加载设置失败", "err", err)
-		return
+		return fmt.Errorf("加载设置失败: %w", err)
 	}
 	a.settings = settings
 
@@ -261,4 +266,5 @@ func (a *App) initWithConfig(cfg *config.AppConfig) {
 
 	a.cfg = cfg
 	a.logger.Info("应用初始化完成", "data_dir", config.DataDirPath())
+	return nil
 }

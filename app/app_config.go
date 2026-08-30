@@ -47,7 +47,9 @@ func (a *App) UpdateDataDir(newPath string) error {
 		return fmt.Errorf("加载新配置失败: %w", err)
 	}
 
-	a.initWithConfig(cfg)
+	if err := a.initWithConfig(cfg); err != nil {
+		return fmt.Errorf("重新初始化失败: %w", err)
+	}
 	a.logger.Info("数据目录已更改", "data_dir", config.DataDirPath())
 	return nil
 }
