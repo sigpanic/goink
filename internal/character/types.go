@@ -51,7 +51,8 @@ type CharacterRelation struct {
 	TargetCharacterID int64     `gorm:"column:target_character_id;not null;index"   json:"target_character_id"` // 关系接收方
 	RelationDescribe  string    `gorm:"column:relation_describe;not null"          json:"relation_describe"`    // 自由文本，LLM 自行描述，如 "亦师亦敌"、"朋友、高中同学"，工具描述的时候需要告诉llm详细描述而不是简单的type
 	Description       string    `gorm:"column:description"                          json:"description"`         // 当前关系阶段的详细描述
-	ChapterNumber     int       `gorm:"column:chapter_number"                      json:"chapter_number"`       // 此关系在哪个章节确立/变更，可用于拉取章节细节作为 LLM 上下文
+	ChapterNumber     int       `gorm:"column:chapter_number"                      json:"chapter_number"`       // 此关系在哪个章节确立/变更，可用于拉取章节细节作为 LLM 上下文；v1.5.0 迁移期保留，commit 1.7 删除
+	ChapterID         *int64    `gorm:"column:chapter_id;index"                     json:"chapter_id"`           // v1.5.0 新增：chapters.id 外键（nullable）；commit 1.5 由 ChapterNumber 反查填充
 	IsCurrent         bool      `gorm:"column:is_current;not null;index"            json:"is_current"`          // true=当前有效关系，false=历史记录
 	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"            json:"created_at"`
 }

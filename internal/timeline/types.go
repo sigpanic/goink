@@ -77,20 +77,23 @@ type ChapterPlan struct {
 //   - update_timeline_entry：更新单条（title/content/importance/target_chapter/status），
 //     标记 resolved 时记录 resolved_chapter
 type TimelineEntry struct {
-	ID              int64     `gorm:"column:id;primaryKey;autoIncrement"      json:"id"`
-	NovelID         int64     `gorm:"column:novel_id;not null;index"          json:"novel_id"`
-	Category        string    `gorm:"column:category;not null;index"          json:"category"`         // "foreshadowing" | "user_directive"，约束枚举
-	Status          string    `gorm:"column:status;not null;index"            json:"status"`           // "pending" | "resolved" | "abandoned"
-	Title           string    `gorm:"column:title;not null"                   json:"title"`            // 简短标题
-	Content         string    `gorm:"column:content"                          json:"content"`          // 详细描述
-	DetailJSON      string    `gorm:"column:detail_json"                      json:"detail_json"`      // JSON，category 相关结构化数据（伏笔类型、提示文本等）
-	TargetChapter   int       `gorm:"column:target_chapter;not null"          json:"target_chapter"`   // 预计回收章节号，主排序键，必填。不用于过滤，不准确不影响可见性，这个需要提醒llm完成的时候留下准确的章节号
-	Importance      int       `gorm:"column:importance;default:3"             json:"importance"`       // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
-	SourceChapter   int       `gorm:"column:source_chapter"                   json:"source_chapter"`   // 在哪章创建/埋下的，创建后不可变
-	Source          string    `gorm:"column:source"                           json:"source"`           // "ai" | "user"，谁创建的
-	ResolvedChapter int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"` // 在哪章回收，0 表示未回收
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
+	ID                int64     `gorm:"column:id;primaryKey;autoIncrement"      json:"id"`
+	NovelID           int64     `gorm:"column:novel_id;not null;index"          json:"novel_id"`
+	Category          string    `gorm:"column:category;not null;index"          json:"category"`               // "foreshadowing" | "user_directive"，约束枚举
+	Status            string    `gorm:"column:status;not null;index"            json:"status"`                 // "pending" | "resolved" | "abandoned"
+	Title             string    `gorm:"column:title;not null"                   json:"title"`                  // 简短标题
+	Content           string    `gorm:"column:content"                          json:"content"`                // 详细描述
+	DetailJSON        string    `gorm:"column:detail_json"                      json:"detail_json"`            // JSON，category 相关结构化数据（伏笔类型、提示文本等）
+	TargetChapter     int       `gorm:"column:target_chapter;not null"          json:"target_chapter"`         // 预计回收章节号，主排序键，必填。不用于过滤，不准确不影响可见性，这个需要提醒llm完成的时候留下准确的章节号
+	Importance        int       `gorm:"column:importance;default:3"             json:"importance"`             // 重要度 1-5，默认 3。同 target_chapter 内的次排序键
+	SourceChapter     int       `gorm:"column:source_chapter"                   json:"source_chapter"`         // 在哪章创建/埋下的，创建后不可变
+	Source            string    `gorm:"column:source"                           json:"source"`                 // "ai" | "user"，谁创建的
+	ResolvedChapter   int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"`       // 在哪章回收，0 表示未回收
+	TargetChapterID   *int64    `gorm:"column:target_chapter_id;index"          json:"target_chapter_id"`      // v1.5.0 新增：chapters.id 外键，commit 1.5 由 TargetChapter 反查填充
+	SourceChapterID   *int64    `gorm:"column:source_chapter_id;index"          json:"source_chapter_id"`      // v1.5.0 新增：chapters.id 外键，commit 1.5 由 SourceChapter 反查填充
+	ResolvedChapterID *int64    `gorm:"column:resolved_chapter_id;index"        json:"resolved_chapter_id"`    // v1.5.0 新增：chapters.id 外键，commit 1.5 由 ResolvedChapter 反查填充
+	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
+	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
 }
 
 // TableName 指定 GORM 表名。

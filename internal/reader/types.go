@@ -21,14 +21,16 @@ const (
 // related_truth 是作者全知视角——不仅 misconception，所有类型都可记录真相。
 // "谁杀了村长"是悬念，答案作者心里应该有数。
 type ReaderPerspective struct {
-	ID              int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID         int64     `gorm:"column:novel_id;not null;index"      json:"novel_id"`
-	Type            string    `gorm:"column:type;not null;index"          json:"type"`             // "known" | "suspense" | "misconception"
-	Content         string    `gorm:"column:content;not null"             json:"content"`          // 条目内容：读者知道/想知道/误以为的事情
-	RelatedTruth    string    `gorm:"column:related_truth"                json:"related_truth"`    // 作者视角：真实情况。所有类型可选，不只是 misconception
-	PlantedChapter  int       `gorm:"column:planted_chapter;not null"     json:"planted_chapter"`  // 在哪章种下
-	RevealedChapter int       `gorm:"column:revealed_chapter;default:0"   json:"revealed_chapter"` // 在哪章回收，0=未回收
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"    json:"created_at"`
+	ID                int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	NovelID           int64     `gorm:"column:novel_id;not null;index"      json:"novel_id"`
+	Type              string    `gorm:"column:type;not null;index"          json:"type"`               // "known" | "suspense" | "misconception"
+	Content           string    `gorm:"column:content;not null"             json:"content"`            // 条目内容：读者知道/想知道/误以为的事情
+	RelatedTruth      string    `gorm:"column:related_truth"                json:"related_truth"`      // 作者视角：真实情况。所有类型可选，不只是 misconception
+	PlantedChapter    int       `gorm:"column:planted_chapter;not null"     json:"planted_chapter"`    // 在哪章种下
+	RevealedChapter   int       `gorm:"column:revealed_chapter;default:0"   json:"revealed_chapter"`   // 在哪章回收，0=未回收
+	PlantedChapterID  *int64    `gorm:"column:planted_chapter_id;index"      json:"planted_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 PlantedChapter 反查填充
+	RevealedChapterID *int64    `gorm:"column:revealed_chapter_id;index"     json:"revealed_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 RevealedChapter 反查填充
+	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"    json:"created_at"`
 }
 
 // TableName 指定 GORM 表名。

@@ -27,16 +27,18 @@ func (StoryArc) TableName() string { return "story_arcs" }
 // target_chapter 是 LLM 对不确定未来的估算，只排不滤——不准确时 review agent 校准。
 // actual_chapter 记录实际发生在哪章，0=未发生。
 type ArcNode struct {
-	ID            int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
-	NovelID       int64     `gorm:"column:novel_id;not null;index"         json:"novel_id"`
-	StoryArcID    int64     `gorm:"column:story_arc_id;not null;index"     json:"story_arc_id"`
-	Title         string    `gorm:"column:title;not null"                  json:"title"`          // "发现仇人身份"
-	Description   string    `gorm:"column:description"                     json:"description"`    // 节点详情
-	TargetChapter int       `gorm:"column:target_chapter;default:0"        json:"target_chapter"` // 预计章节，0=未定
-	ActualChapter int       `gorm:"column:actual_chapter;default:0"        json:"actual_chapter"` // 实际章节，0=未发生
-	Status        string    `gorm:"column:status;not null;default:pending" json:"status"`         // "pending" | "completed" | "abandoned"
-	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime"       json:"created_at"`
-	UpdatedAt     time.Time `gorm:"column:updated_at;autoUpdateTime"       json:"updated_at"`
+	ID              int64     `gorm:"column:id;primaryKey;autoIncrement" json:"id"`
+	NovelID         int64     `gorm:"column:novel_id;not null;index"         json:"novel_id"`
+	StoryArcID      int64     `gorm:"column:story_arc_id;not null;index"     json:"story_arc_id"`
+	Title           string    `gorm:"column:title;not null"                  json:"title"`              // "发现仇人身份"
+	Description     string    `gorm:"column:description"                     json:"description"`        // 节点详情
+	TargetChapter   int       `gorm:"column:target_chapter;default:0"        json:"target_chapter"`     // 预计章节，0=未定
+	ActualChapter   int       `gorm:"column:actual_chapter;default:0"        json:"actual_chapter"`     // 实际章节，0=未发生
+	TargetChapterID *int64    `gorm:"column:target_chapter_id;index"          json:"target_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 TargetChapter 反查填充
+	ActualChapterID *int64    `gorm:"column:actual_chapter_id;index"          json:"actual_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 ActualChapter 反查填充
+	Status          string    `gorm:"column:status;not null;default:pending" json:"status"`             // "pending" | "completed" | "abandoned"
+	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"       json:"created_at"`
+	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime"       json:"updated_at"`
 }
 
 func (ArcNode) TableName() string { return "arc_nodes" }
