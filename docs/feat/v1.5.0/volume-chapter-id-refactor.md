@@ -1,6 +1,7 @@
 # 分卷 + 章节 id 化改造方案
 
 > 本文档只描述"做什么"，不写具体代码实现。
+> 一切以代码为准，文档仅供参考；实现时如发现文档与代码有差异，向用户汇报。
 
 ## 一、目标
 
@@ -84,7 +85,7 @@
 
 卷纲存文件系统（不入库）：`volumes/{volume_id}.md`，类似现有 `chapters/{id}.md`、`outlines/{id}.md`、`goink.md` 的文件模型。卷纲内容：创作主题、目标章节范围、节奏、关键角色/伏笔等。AI 可通过 rw_tools 读写卷纲（路径正则扩展支持 `volumes/\d+\.md`）。
 
-### 5.3 timeline_entry 表
+### 5.3 time_entries 表（GORM 表名，结构体 TimelineEntry）
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
@@ -92,13 +93,14 @@
 | `source_chapter int` | `source_chapter_id int64` | int → int64 nullable |
 | `resolved_chapter int` | `resolved_chapter_id int64` | int → int64 nullable |
 
-### 5.4 arc_node 表
+### 5.4 arc_nodes 表（GORM 表名，结构体 ArcNode）
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
 | `target_chapter int` | `target_chapter_id int64` | int → int64 nullable |
+| `actual_chapter int` | `actual_chapter_id int64` | int → int64 nullable（标记完成时填入的实际发生章节） |
 
-### 5.5 reader_perspective_entry 表
+### 5.5 reader_perspectives 表（GORM 表名，结构体 ReaderPerspective）
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
