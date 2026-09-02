@@ -20,6 +20,7 @@ import (
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -101,6 +102,8 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&rollback.TurnCommit{},
 		&style.Sample{},
 		&writing.WritingLog{},
+		&volume.Volume{},
+		&MigrateState{},
 	}
 
 	for _, m := range models {
