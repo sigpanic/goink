@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { InstallRemoteSkill } from "@/lib/wailsjs/go/app/App";
 import type { app } from "@/lib/wailsjs/go/models";
-import { skillKeys } from "@/lib/queryKeys";
+import { contentKeys, skillKeys } from "@/lib/queryKeys";
 import { unwrapResult } from "@/utils/wailsResult";
 
 // useInstallRemoteSkill: 安装远程技能 mutation（apperr 新 API）。
@@ -14,6 +14,8 @@ import { unwrapResult } from "@/utils/wailsResult";
 //   - skillKeys.list(novelId)：SkillList/SkillMarketplace 已安装索引刷新，
 //     installedVersions Map 重算（决定卡片 installed/updatable 标记）
 //   - ["remote-skills"]：远程列表整体失效，卡片标记刷新
+//   - contentKeys.detail：清除安装前 probeLocal 对同路径 GetContent 缓存下的空内容
+//     （issue #47：安装后点开技能预览无内容，重启才恢复）
 // mutation 不挂 onError；调用方 try/catch + toastError（对齐 useDeleteSkill 模式）。
 // AppErr.errCode 由调用方读出经 classifyError 映射短码文案（如 rate_limited → errorRateLimited）。
 export function useInstallRemoteSkill(novelId: number) {
@@ -23,9 +25,17 @@ export function useInstallRemoteSkill(novelId: number) {
       const res = await InstallRemoteSkill(input);
       return unwrapResult(res);
     },
-    onSuccess: () => {
+    onSuccess: (_data, input) => {
       qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
       qc.invalidateQueries({ queryKey: ["remote-skills"] });
+      // 安装路径与 SkillList.skillPath / SkillMarketplace.pathForSource 保持一致
+      const path =
+        input.target === "novel"
+          ? `skills/${input.name}.md`
+          : `~/.goink/skills/${input.name}.md`;
+      qc.invalidateQueries({
+        queryKey: contentKeys.detail(input.novel_id, path),
+      });
     },
   });
 }
