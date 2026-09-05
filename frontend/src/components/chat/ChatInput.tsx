@@ -3,6 +3,9 @@ import { ArrowUp, Square, Zap, Play, Star, Loader2 } from "lucide-react";
 import type { app } from "@/lib/wailsjs/go/models";
 import SlashMenu from "./SlashMenu";
 
+// 草稿 localStorage key 前缀（per-session 持久化，沿用 goink_ 惯例）
+const DRAFT_PREFIX = "goink_chat_draft_";
+
 // charMatch 检查 q 的所有字符是否按顺序出现在 s 中（模糊匹配）
 const charMatch = (s: string, q: string): boolean => {
   let qi = 0;
@@ -28,6 +31,7 @@ interface Props {
   isLoading: boolean;
   isCancelling: boolean;
   placeholder: string;
+  draftKey: string;
   slashItems: app.SlashCommand[];
   onSend: (message: string) => void;
   onStop: () => void;
@@ -39,6 +43,7 @@ export default function ChatInput({
   isLoading,
   isCancelling,
   placeholder,
+  draftKey,
   slashItems,
   onSend,
   onStop,
@@ -46,6 +51,57 @@ export default function ChatInput({
 }: Props) {
   const [hasContent, setHasContent] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastDraftKeyRef = useRef(draftKey);
+
+  // 草稿恢复：draftKey 变化时先落盘旧 key 的当前内容，再恢复新 key 的草稿。
+  useEffect(() => {
+    const key = draftKey;
+    const prevKey = lastDraftKeyRef.current;
+    lastDraftKeyRef.current = key;
+
+    if (draftTimerRef.current) {
+      clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = null;
+    }
+
+    const textarea = textareaRef.current;
+    if (prevKey && prevKey !== key) {
+      const current = textarea?.value ?? "";
+      if (current) localStorage.setItem(DRAFT_PREFIX + prevKey, current);
+      else localStorage.removeItem(DRAFT_PREFIX + prevKey);
+    }
+
+    const saved = localStorage.getItem(DRAFT_PREFIX + key);
+    if (textarea) {
+      textarea.value = saved ?? "";
+      textarea.style.height = "auto";
+      textarea.style.height = Math.min(textarea.scrollHeight, 180) + "px";
+      setHasContent((saved ?? "").trim().length > 0);
+    }
+  }, [draftKey]);
+
+  // 草稿兜底：关窗前 flush 一次；卸载时清掉待写入 timer。
+  useEffect(() => {
+    const flush = () => {
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+      const textarea = textareaRef.current;
+      if (textarea?.value) {
+        localStorage.setItem(DRAFT_PREFIX + lastDraftKeyRef.current, textarea.value);
+      }
+    };
+    window.addEventListener("beforeunload", flush);
+    return () => {
+      window.removeEventListener("beforeunload", flush);
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+    };
+  }, []);
 
   // slash menu state
   const [slashOpen, setSlashOpen] = useState(false);
@@ -176,6 +232,12 @@ export default function ChatInput({
           setHasContent(false);
           setActiveCommand(null);
           closeSlash();
+          // 发送成功：清掉已落盘/待写入的草稿
+          if (draftTimerRef.current) {
+            clearTimeout(draftTimerRef.current);
+            draftTimerRef.current = null;
+          }
+          localStorage.removeItem(DRAFT_PREFIX + lastDraftKeyRef.current);
         }
       }
     },
@@ -197,6 +259,15 @@ export default function ChatInput({
       target.style.height = Math.min(target.scrollHeight, 180) + "px";
       setHasContent(target.value.trim().length > 0);
       checkSlash(target.value);
+      // 草稿持久化：防抖 300ms 落盘（与 useLayoutState 同风格）
+      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
+      draftTimerRef.current = setTimeout(() => {
+        draftTimerRef.current = null;
+        localStorage.setItem(
+          DRAFT_PREFIX + lastDraftKeyRef.current,
+          target.value,
+        );
+      }, 300);
     },
     [checkSlash],
   );
@@ -212,6 +283,12 @@ export default function ChatInput({
       setHasContent(false);
       setActiveCommand(null);
       closeSlash();
+      // 发送成功：清掉已落盘/待写入的草稿
+      if (draftTimerRef.current) {
+        clearTimeout(draftTimerRef.current);
+        draftTimerRef.current = null;
+      }
+      localStorage.removeItem(DRAFT_PREFIX + lastDraftKeyRef.current);
     }
   }, [disabled, onSend, closeSlash]);
 

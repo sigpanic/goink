@@ -1251,6 +1251,9 @@ export default function ChatPanel({
       ? t("chat.configureModelFirst")
       : t("chat.inputPlaceholder");
 
+  // 草稿 key：已有会话按 sessionId，新对话（未选中/新开）按小说分槽
+  const draftKey = sessionId ? sessionId : `new_${novelId}`;
+
   return (
     <aside
       className="shrink-0 flex flex-col bg-sidebar border-l relative overflow-hidden"
@@ -1512,6 +1515,7 @@ export default function ChatPanel({
         isLoading={isLoading}
         isCancelling={cancelChatMutation.isPending}
         placeholder={inputPlaceholder}
+        draftKey={draftKey}
         slashItems={slashCommandsQuery.data ?? []}
         onSend={handleSend}
         onListSlash={refreshSlashCommands}
