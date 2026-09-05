@@ -30,11 +30,7 @@ const FORMATS = [
   },
 ] as const;
 
-export default function ExportDialog({
-  novelTitle,
-  onClose,
-  onExport,
-}: Props) {
+export default function ExportDialog({ novelTitle, onClose, onExport }: Props) {
   const { t } = useTranslation();
   const [format, setFormat] = useState<"epub" | "markdown" | "txt">("epub");
   const [exporting, setExporting] = useState(false);

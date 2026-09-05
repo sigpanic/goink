@@ -90,7 +90,10 @@ export default function ChatInput({
       }
       const textarea = textareaRef.current;
       if (textarea?.value) {
-        localStorage.setItem(DRAFT_PREFIX + lastDraftKeyRef.current, textarea.value);
+        localStorage.setItem(
+          DRAFT_PREFIX + lastDraftKeyRef.current,
+          textarea.value,
+        );
       }
     };
     window.addEventListener("beforeunload", flush);
