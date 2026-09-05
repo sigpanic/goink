@@ -60,11 +60,7 @@ interface EditorTabsStoreState {
   closeTab: (novelId: number, id: string) => void;
   closeAllTabs: (novelId: number) => void;
   setActiveTabId: (novelId: number, id: string) => void;
-  updateTab: (
-    novelId: number,
-    id: string,
-    patch: Partial<EditorTab>,
-  ) => void;
+  updateTab: (novelId: number, id: string, patch: Partial<EditorTab>) => void;
   openDiffTab: (
     novelId: number,
     data: {

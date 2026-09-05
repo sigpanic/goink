@@ -54,9 +54,7 @@ export function useWindowState() {
     function save() {
       Promise.all([WindowGetSize(), WindowGetPosition(), WindowIsMaximised()])
         .then(([size, pos, max]) => {
-          const payload = max
-            ? "M1"
-            : `${size.w},${size.h},${pos.x},${pos.y}`;
+          const payload = max ? "M1" : `${size.w},${size.h},${pos.x},${pos.y}`;
           if (payload === lastSaved) return;
           lastSaved = payload;
           if (max) {
