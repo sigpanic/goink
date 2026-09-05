@@ -105,12 +105,13 @@ export default function NovelDialogs() {
         onClose={() => setDeletingNovel(null)}
         onConfirm={handleDeleteNovel}
       />
-      <ExportDialog
-        open={exportNovelId !== null}
-        novelTitle={novels.find((n) => n.id === exportNovelId)?.title ?? ""}
-        onClose={() => setExportNovelId(null)}
-        onExport={handleExportNovel}
-      />
+      {exportNovelId !== null && (
+        <ExportDialog
+          novelTitle={novels.find((n) => n.id === exportNovelId)?.title ?? ""}
+          onClose={() => setExportNovelId(null)}
+          onExport={handleExportNovel}
+        />
+      )}
     </>
   );
 }
