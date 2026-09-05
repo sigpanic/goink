@@ -220,7 +220,7 @@
     "executing": "Executing",
     "analyzing": "Analyzing...",
     "noContent": "No content",
-    "compressingContext": "Compressing context ({{seconds}}s)",
+    "compressingContext": "Compressing context ({{seconds}})",
     "compressedContext": "Context compressed",
     "systemContext": "System Context",
     "userInput": "User Input",

@@ -211,7 +211,7 @@
     "executing": "执行中",
     "analyzing": "正在分析…",
     "noContent": "暂无内容",
-    "compressingContext": "正在压缩上下文（{{seconds}}s）",
+    "compressingContext": "正在压缩上下文（{{seconds}}）",
     "compressedContext": "已压缩上下文",
     "systemContext": "系统上下文",
     "userInput": "用户输入",
