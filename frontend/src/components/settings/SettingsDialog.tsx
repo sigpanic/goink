@@ -1,10 +1,18 @@
 import { useState } from "react";
-import { Settings, Cpu } from "lucide-react";
+import { Settings, Cpu, Info } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import ModelConfigTab from "./ModelConfigTab";
 import GeneralConfigTab from "./GeneralConfigTab";
+import AboutTab from "./AboutTab";
 
-type Tab = "general" | "model";
+type Tab = "general" | "model" | "about";
+
+// 内容区按 activeTab 映射渲染，避免嵌套三元。
+const TAB_CONTENT: Record<Tab, React.ReactNode> = {
+  general: <GeneralConfigTab />,
+  model: <ModelConfigTab />,
+  about: <AboutTab />,
+};
 
 interface Props {
   open: boolean;
@@ -32,6 +40,11 @@ export default function SettingsDialog({
       id: "model",
       label: t("settings.modelConfig"),
       icon: <Cpu className="w-4 h-4" />,
+    },
+    {
+      id: "about",
+      label: t("settings.about"),
+      icon: <Info className="w-4 h-4" />,
     },
   ];
 
@@ -73,7 +86,7 @@ export default function SettingsDialog({
             ✕
           </button>
 
-          {activeTab === "model" ? <ModelConfigTab /> : <GeneralConfigTab />}
+          {TAB_CONTENT[activeTab]}
         </div>
       </div>
     </div>
