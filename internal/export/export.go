@@ -35,3 +35,25 @@ func ExportNovel(n *novel.Novel, chapters []ChapterWithContent, format, author s
 		return nil, "", fmt.Errorf("export: 不支持的格式: %s", format)
 	}
 }
+
+// DefaultFilename 返回指定导出格式的默认文件名（与 ExportNovel 返回的一致）。
+func DefaultFilename(n *novel.Novel, format string) (string, error) {
+	ext, err := extension(format)
+	if err != nil {
+		return "", err
+	}
+	return safeFilename(n.Title) + ext, nil
+}
+
+func extension(format string) (string, error) {
+	switch format {
+	case "epub":
+		return ".epub", nil
+	case "markdown":
+		return ".md", nil
+	case "txt":
+		return ".txt", nil
+	default:
+		return "", fmt.Errorf("export: 不支持的格式: %s", format)
+	}
+}

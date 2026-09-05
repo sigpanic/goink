@@ -203,31 +203,16 @@ func (a *App) SaveCover(novelID int64, data []byte) error {
 
 // ── 导出 ──────────────────────────────────────────────────
 
-// ExportNovel 将小说导出为指定格式，弹出保存对话框让用户选择保存位置。
+// ExportNovel 将小说导出为指定格式。先弹出保存对话框让用户选择保存位置，
+// 再读取章节并生成文件，避免在耗时生成后才弹窗（Windows 上 Wails 原生对话框
+// 在桥接负载下可能无法创建窗口，导致导出卡死）。
 func (a *App) ExportNovel(novelID int64, format string) error {
 	var n novel.Novel
 	if err := a.novel.DB.WithContext(a.ctx).First(&n, novelID).Error; err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}
 
-	chapters, err := a.chapter.ListAllByNovel(a.ctx, novelID)
-	if err != nil {
-		return fmt.Errorf("export novel: %w", err)
-	}
-	if len(chapters) == 0 {
-		return fmt.Errorf("export novel: 没有可导出的章节")
-	}
-
-	var cc []export.ChapterWithContent
-	for _, ch := range chapters {
-		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ChapterNumber))
-		if err != nil {
-			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ChapterNumber, err)
-		}
-		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
-	}
-
-	data, filename, err := export.ExportNovel(&n, cc, format, a.settings.UserName)
+	filename, err := export.DefaultFilename(&n, format)
 	if err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}
@@ -249,6 +234,28 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 	}
 	if savePath == "" {
 		return nil // 用户取消
+	}
+
+	chapters, err := a.chapter.ListAllByNovel(a.ctx, novelID)
+	if err != nil {
+		return fmt.Errorf("export novel: %w", err)
+	}
+	if len(chapters) == 0 {
+		return fmt.Errorf("export novel: 没有可导出的章节")
+	}
+
+	var cc []export.ChapterWithContent
+	for _, ch := range chapters {
+		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ChapterNumber))
+		if err != nil {
+			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ChapterNumber, err)
+		}
+		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
+	}
+
+	data, _, err := export.ExportNovel(&n, cc, format, a.settings.UserName)
+	if err != nil {
+		return fmt.Errorf("export novel: %w", err)
 	}
 
 	if err := os.WriteFile(savePath, data, 0644); err != nil {
