@@ -1,6 +1,0 @@
-[tool.ruff]
-target-version = "py312"
-exclude = ["database/scripts", "dev_test", "frontend"]
-
-[tool.ruff.lint]
-select = ["UP045", "UP006", "UP035", "F401"]
