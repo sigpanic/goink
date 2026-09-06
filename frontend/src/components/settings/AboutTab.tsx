@@ -1,11 +1,5 @@
 import { useState, useEffect } from "react";
-import {
-  Star,
-  Heart,
-  ExternalLink,
-  Info,
-  Package,
-} from "lucide-react";
+import { Star, Heart, ExternalLink, Info, Package } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { GetVersion } from "@/lib/wailsjs/go/app/App";
@@ -38,7 +32,12 @@ export default function AboutTab() {
   ];
 
   // 随安装包打包的第三方运行时组件（仅分发部分，不含源码级依赖）。
-  const deps: { name: string; version?: string; license: string; desc: string }[] = [
+  const deps: {
+    name: string;
+    version?: string;
+    license: string;
+    desc: string;
+  }[] = [
     {
       name: "ONNX Runtime",
       version: "1.26.0",
@@ -94,7 +93,10 @@ export default function AboutTab() {
       </h4>
       <ul className="mt-2 space-y-1.5">
         {features.map((f, i) => (
-          <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
+          <li
+            key={i}
+            className="flex items-start gap-2 text-xs text-muted-foreground"
+          >
             <span className="mt-1.5 w-1 h-1 rounded-full bg-primary/60 shrink-0" />
             <span className="leading-5">{f}</span>
           </li>
@@ -185,7 +187,10 @@ export default function AboutTab() {
       </p>
       <ul className="mt-2 space-y-1.5">
         {deps.map((d, i) => (
-          <li key={i} className="flex items-start justify-between gap-3 text-[11px]">
+          <li
+            key={i}
+            className="flex items-start justify-between gap-3 text-[11px]"
+          >
             <span className="text-muted-foreground flex-1 leading-4">
               <span className="text-foreground">{d.name}</span>
               <span className="text-muted-foreground"> · {d.desc}</span>
