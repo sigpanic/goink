@@ -60,7 +60,10 @@ func exportEpub(n *novel.Novel, chapters []ChapterWithContent, author string) ([
 		return nil, "", fmt.Errorf("epub: 写入失败: %w", err)
 	}
 
-	filename := safeFilename(n.Title) + ".epub"
+	filename, err := DefaultFilename(n, "epub")
+	if err != nil {
+		return nil, "", err
+	}
 	return out.Bytes(), filename, nil
 }
 

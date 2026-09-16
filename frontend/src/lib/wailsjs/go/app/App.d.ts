@@ -88,7 +88,7 @@ export function DeleteStyleSample(arg1:app.DeleteStyleSampleInput):Promise<void>
 
 export function DeleteTimelineEntry(arg1:number,arg2:number):Promise<void>;
 
-export function DiscoverModels(arg1:string,arg2:string):Promise<Array<llm.ModelInfo>>;
+export function DiscoverModels(arg1:string,arg2:string,arg3:string):Promise<Array<llm.ModelInfo>>;
 
 export function DismissUpdate(arg1:string):Promise<void>;
 

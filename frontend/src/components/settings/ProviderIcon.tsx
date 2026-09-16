@@ -6,6 +6,7 @@ import zhipuRaw from "@/assets/providers/zhipu.svg?raw";
 import minimaxRaw from "@/assets/providers/minimax.svg?raw";
 import mimoRaw from "@/assets/providers/mimo.svg?raw";
 import moonshotRaw from "@/assets/providers/moonshot.svg?raw";
+import opencodeRaw from "@/assets/providers/opencode.svg?raw";
 
 const LOGOS: Record<string, string> = {
   deepseek: deepseekRaw,
@@ -15,6 +16,8 @@ const LOGOS: Record<string, string> = {
   minimax: minimaxRaw,
   mimo: mimoRaw,
   moonshot: moonshotRaw,
+  opencode: opencodeRaw,
+  "opencode-go": opencodeRaw,
 };
 
 export default function ProviderIcon({

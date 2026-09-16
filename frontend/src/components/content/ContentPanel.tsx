@@ -12,7 +12,7 @@ import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { useEditorTabs } from "@/hooks/useEditorTabs";
+import { useEditorTabs } from "./useEditorTabs";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
@@ -248,6 +248,26 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         }
       },
       [tabs, updateTab, loadOutlineContent],
+    );
+
+    // ── 阅读位置键（正文/大纲各自独立，见 useEditorTabsStore）──────
+
+    const positionKeyFor = useCallback(
+      (tab: EditorTab, mode: string): string | undefined => {
+        let p = tab.path;
+        // 大纲（预览/编辑）对应实际文件 outlines/NNN.md，正文对应 chapters/NNN.md
+        if (
+          (mode === "outline" || mode === "outline-edit") &&
+          isContentPath(tab.path) &&
+          tab.path !== "goink.md"
+        ) {
+          p = outlinePath(
+            parseInt(tab.path.replace(/.*\//, "").replace(".md", ""), 10),
+          );
+        }
+        return `${novelId}:${p}:${mode}`;
+      },
+      [novelId],
     );
 
     // ── 保存逻辑 ────────────────────────────────────────────
@@ -919,6 +939,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             />
           ) : viewMode === "content" ? (
             <ContentEditor
+              key={`${activeTab.id}:content`}
+              positionKey={positionKeyFor(activeTab, "content")}
               value={activeTab.content ?? ""}
               onChange={(v) => handleEditorChange(activeTab.id, v)}
               onMount={handleEditorMount}
@@ -926,13 +948,19 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             />
           ) : viewMode === "outline-edit" ? (
             <ContentEditor
+              key={`${activeTab.id}:outline-edit`}
+              positionKey={positionKeyFor(activeTab, "outline-edit")}
               value={activeTab.outlineContent ?? ""}
               onChange={(v) => handleOutlineEditorChange(activeTab.id, v)}
               onMount={handleEditorMount}
               editorTheme={MONACO_THEME[theme]}
             />
           ) : (
-            <OutlineViewer content={activeTab.outlineContent ?? ""} />
+            <OutlineViewer
+              key={`${activeTab.id}:outline`}
+              positionKey={positionKeyFor(activeTab, "outline")}
+              content={activeTab.outlineContent ?? ""}
+            />
           )}
         </div>
       </main>

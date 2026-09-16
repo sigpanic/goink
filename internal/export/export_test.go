@@ -281,3 +281,61 @@ func TestSafeFilename(t *testing.T) {
 		}
 	}
 }
+
+// ── DefaultFilename ───────────────────────────────────────
+
+func TestDefaultFilename(t *testing.T) {
+	tests := []struct {
+		format string
+		want   string
+	}{
+		{"epub", "测试书名.epub"},
+		{"markdown", "测试书名.md"},
+		{"txt", "测试书名.txt"},
+	}
+	for _, tc := range tests {
+		got, err := DefaultFilename(testNovel(), tc.format)
+		if err != nil {
+			t.Fatalf("DefaultFilename(%s): %v", tc.format, err)
+		}
+		if got != tc.want {
+			t.Errorf("DefaultFilename(%s) = %q, want %q", tc.format, got, tc.want)
+		}
+	}
+}
+
+func TestDefaultFilename_SanitizesTitle(t *testing.T) {
+	n := &novel.Novel{Title: "书:名/带非法字符"}
+	got, err := DefaultFilename(n, "epub")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := safeFilename(n.Title) + ".epub"; got != want {
+		t.Errorf("DefaultFilename = %q, want %q", got, want)
+	}
+}
+
+func TestDefaultFilename_UnknownFormat(t *testing.T) {
+	if _, err := DefaultFilename(testNovel(), "pdf"); err == nil {
+		t.Fatal("expected error for unknown format")
+	}
+}
+
+// TestDefaultFilename_ConsistentWithExport 保证弹窗预填名与生成器返回名一致，
+// 防止 DefaultFilename 与 ExportNovel 内部文件名规则将来漂移。
+func TestDefaultFilename_ConsistentWithExport(t *testing.T) {
+	chs := testChapters()
+	for _, format := range []string{"epub", "markdown", "txt"} {
+		_, genName, err := ExportNovel(testNovel(), chs, format, "")
+		if err != nil {
+			t.Fatalf("ExportNovel(%s): %v", format, err)
+		}
+		got, err := DefaultFilename(testNovel(), format)
+		if err != nil {
+			t.Fatalf("DefaultFilename(%s): %v", format, err)
+		}
+		if got != genName {
+			t.Errorf("format=%s: DefaultFilename=%q != ExportNovel filename=%q", format, got, genName)
+		}
+	}
+}

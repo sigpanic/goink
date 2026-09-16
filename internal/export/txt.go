@@ -26,6 +26,9 @@ func exportTxt(n *novel.Novel, chapters []ChapterWithContent) ([]byte, string, e
 		b.WriteString("\n\n\n")
 	}
 
-	filename := safeFilename(n.Title) + ".txt"
+	filename, err := DefaultFilename(n, "txt")
+	if err != nil {
+		return nil, "", err
+	}
 	return []byte(b.String()), filename, nil
 }

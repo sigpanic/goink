@@ -196,6 +196,7 @@ export default function BuiltinProviderPane({
 
       <ModelDiscoveryPanel
         key={selectedKey}
+        providerName={selectedKey}
         chatUrl={provider.chat_url}
         apiKey={provider.api_key}
         existingIds={allExistingIds}

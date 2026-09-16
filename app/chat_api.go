@@ -155,8 +155,8 @@ func (a *App) SaveLLMConfig(input llm.LLMConfigView) error {
 }
 
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
-func (a *App) DiscoverModels(chatURL, apiKey string) ([]llm.ModelInfo, error) {
-	return llm.DiscoverModels(a.ctx, chatURL, apiKey)
+func (a *App) DiscoverModels(providerName, chatURL, apiKey string) ([]llm.ModelInfo, error) {
+	return llm.DiscoverModels(a.ctx, llm.Builtin, providerName, chatURL, apiKey)
 }
 
 // TestConnectionInput 是连通性测试的入参。

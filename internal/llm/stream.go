@@ -110,7 +110,7 @@ func (c *Client) ChatStream(
 			"Authorization": "Bearer " + p.APIKey,
 		}
 		if p.BuildHeaders != nil {
-			headers = p.BuildHeaders(headers)
+			headers = p.BuildHeaders(opts, headers)
 		}
 		for k, v := range headers {
 			req.Header.Set(k, v)

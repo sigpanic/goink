@@ -17,6 +17,12 @@
   <img src="https://img.shields.io/badge/license-AGPL_v3-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="AGPL v3" />
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/162663?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-162663" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/162663/daily?language=Go" alt="sigpanic%2Fgoink | Trendshift" width="250" height="55"/></a>
+</p>
+
+<p align="center"><sub>如果 Goink 对你有帮助，欢迎 <a href="#赞赏">赞赏支持</a>；点个 Star 也是莫大的鼓励。</sub></p>
+
 <p align="center"><strong><a href="README_EN.md">English Version</a> | 本文档为中文版</strong></p>
 
 ---
@@ -221,3 +227,12 @@ Goink is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). S
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sigpanic/goink&type=date&legend=top-left" />
  </picture>
 </a>
+
+## 赞赏
+
+Goink 开发过程中使用了多种 AI 服务（含订阅费用）。如果 Goink 对你有帮助，欢迎赞赏支持，赞赏将用于覆盖开发过程中的 AI 订阅费用。如果方便，建议备注你的 GitHub 用户名，方便我们记住你的支持。
+
+<p align="center">
+  <img src="assets/wechat.jpg" alt="微信赞赏" width="220" />
+  <img src="assets/zfb.jpg" alt="支付宝赞赏" width="220" />
+</p>

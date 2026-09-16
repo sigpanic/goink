@@ -14,16 +14,16 @@ import (
 // 默认行为走 OpenAI 兼容格式，钩子函数用于处理供应商差异。
 // 同时用作用户配置的 JSON 格式（Hooks 不参与序列化，反序列化后为 nil）。
 type Provider struct {
-	Name         string                                         `json:"name"`                  // 供应商名称，如 "DeepSeek"
-	ChatURL      string                                         `json:"chat_url"`              // 聊天补全端点
-	APIKey       string                                         `json:"api_key,omitempty"`     // API 密钥
-	PlatformURL  string                                         `json:"-"`                     // 注册平台 URL，仅内置模板使用
-	HelpText     string                                         `json:"-"`                     // 注册引导文字，仅内置模板使用
-	Models       []ModelInfo                                    `json:"models"`                // 可用模型列表
-	Temperature  *float64                                       `json:"temperature,omitempty"` // 默认创意度 0~2，nil 表示未设置，运行时取内置默认
-	BuildRequest func(payload map[string]any) map[string]any    `json:"-"`                     // 发送前改造请求体，nil 则原样发送
-	BuildHeaders func(base map[string]string) map[string]string `json:"-"`                     // 发送前改造请求头，nil 则使用默认 Bearer 鉴权
-	ParseError   func(body []byte) error                        `json:"-"`                     // 解析非标准错误响应体，nil 则使用默认 OpenAI 格式解析
+	Name         string                                                            `json:"name"`                  // 供应商名称，如 "DeepSeek"
+	ChatURL      string                                                            `json:"chat_url"`              // 聊天补全端点
+	APIKey       string                                                            `json:"api_key,omitempty"`     // API 密钥
+	PlatformURL  string                                                            `json:"-"`                     // 注册平台 URL，仅内置模板使用
+	HelpText     string                                                            `json:"-"`                     // 注册引导文字，仅内置模板使用
+	Models       []ModelInfo                                                       `json:"models"`                // 可用模型列表
+	Temperature  *float64                                                          `json:"temperature,omitempty"` // 默认创意度 0~2，nil 表示未设置，运行时取内置默认
+	BuildRequest func(payload map[string]any) map[string]any                       `json:"-"`                     // 发送前改造请求体，nil 则原样发送
+	BuildHeaders func(opts *CallOptions, base map[string]string) map[string]string `json:"-"`                     // 发送前改造请求头，nil 则使用默认 Bearer 鉴权；opts 可为 nil（无请求级上下文）
+	ParseError   func(body []byte) error                                           `json:"-"`                     // 解析非标准错误响应体，nil 则使用默认 OpenAI 格式解析
 }
 
 // ModelInfo 描述一个具体模型的元信息。
@@ -75,6 +75,7 @@ type CallOptions struct {
 	ReasoningEffort *string  // 不传从 ModelInfo 取
 	ThinkingEnabled *bool    // 不传从 ModelInfo 判断
 	ToolChoice      any      // OpenAI tool_choice payload; nil = provider default
+	SessionID       string   // 会话标识（如 Goink session_id），仅需要会话感知的服务商消费；空=无会话上下文（hook 内部兜底）
 }
 
 // StreamEventType 流式事件的类型。

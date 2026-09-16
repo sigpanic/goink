@@ -111,7 +111,7 @@ func expandChatURLCandidates(raw string) []string {
 // Warning 非空时也应展示给用户（不影响 ok 判定，但提示当前被限流等）。
 func TestConnection(ctx context.Context, builtin map[string]Provider, input TestConnectionInput) (TestConnectionResult, error) {
 	chatURL := input.ChatURL
-	buildHeaders := func(base map[string]string) map[string]string { return base }
+	buildHeaders := func(opts *CallOptions, base map[string]string) map[string]string { return base }
 	var buildRequest func(map[string]any) map[string]any
 
 	if bp, ok := builtin[input.ProviderName]; ok {
@@ -148,7 +148,7 @@ func TestConnection(ctx context.Context, builtin map[string]Provider, input Test
 		return TestConnectionResult{}, fmt.Errorf("序列化请求失败: %w", err)
 	}
 
-	headers := buildHeaders(map[string]string{
+	headers := buildHeaders(nil, map[string]string{
 		"Content-Type":  "application/json",
 		"Accept":        "text/event-stream",
 		"Authorization": "Bearer " + input.APIKey,

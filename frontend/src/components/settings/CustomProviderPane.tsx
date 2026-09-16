@@ -242,6 +242,7 @@ export default function CustomProviderPane({
 
           <ModelDiscoveryPanel
             key={selectedKey}
+            providerName={provider.name}
             chatUrl={provider.chat_url}
             apiKey={provider.api_key}
             existingIds={

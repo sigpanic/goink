@@ -15,7 +15,7 @@ AppPublisher=sigpanic
 AppPublisherURL=https://github.com/sigpanic/goink
 AppSupportURL=https://github.com/sigpanic/goink/issues
 AppUpdatesURL=https://github.com/sigpanic/goink/releases
-AppId={{9288ae33-8307-4a08-ac6b-3d3c83521f86}
+AppId=Goink
 DefaultDirName={code:GetDefaultDir}
 DefaultGroupName={#MyAppName}
 OutputDir=..\..\dist
@@ -39,7 +39,13 @@ VersionInfoOriginalFilename=goink-v{#MyAppVersion}-windows-amd64.exe
 
 [Files]
 Source: "..\..\bin\goink.exe"; DestDir: "{app}"; Flags: ignoreversion
-Source: "..\..\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs
+; VC++ Runtime DLL（vcruntime140/vcruntime140_1/msvcp140）是 onnxruntime.dll 的依赖。
+; Windows 加载器解析 onnxruntime.dll 的依赖时从 exe 目录（标准搜索顺序第 1 位）查找，
+; 不搜 onnxruntime.dll 所在目录，故单独装到 {app}（goink.exe 同目录），runtime 里排除。
+Source: "..\..\runtime\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs; Excludes: "vcruntime140.dll,vcruntime140_1.dll,msvcp140.dll"
+Source: "..\..\runtime\vcruntime140.dll";   DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\runtime\vcruntime140_1.dll"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\runtime\msvcp140.dll";       DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "快捷方式:"; Flags: checkedonce

@@ -13,7 +13,7 @@ import (
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
 // 从 chatURL 推导 modelsURL（去掉 /chat/completions，拼接 /models），
 // 解析标准 OpenAI 格式及 Kimi 等扩展字段。返回的 ModelInfo 中未获取到的字段留零值。
-func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, error) {
+func DiscoverModels(ctx context.Context, builtin map[string]Provider, providerName, chatURL, apiKey string) ([]ModelInfo, error) {
 	baseURL := extractBaseURL(chatURL)
 	modelsURL := baseURL + "/models"
 
@@ -22,6 +22,14 @@ func DiscoverModels(ctx context.Context, chatURL, apiKey string) ([]ModelInfo, e
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
 	req.Header.Set("Authorization", "Bearer "+apiKey)
+	// 按 provider 名匹配 builtin provider，应用其 BuildHeaders
+	// （如 OpenCode 的 x-opencode-session + UA），保证 /models 探测与 chat 请求一致。
+	// 未命中（自定义 provider 或内置无 hook）不附加额外头，仅保留鉴权头。
+	if p, ok := builtin[providerName]; ok && p.BuildHeaders != nil {
+		for k, v := range p.BuildHeaders(nil, map[string]string{}) {
+			req.Header.Set(k, v)
+		}
+	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)

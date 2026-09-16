@@ -17,6 +17,12 @@
   <img src="https://img.shields.io/badge/license-AGPL_v3-blue?style=for-the-badge&logo=opensourceinitiative&logoColor=white" alt="AGPL v3" />
 </p>
 
+<p align="center">
+  <a href="https://trendshift.io/repositories/162663?utm_source=trendshift-badge&amp;utm_medium=badge&amp;utm_campaign=badge-trendshift-162663" target="_blank" rel="noopener noreferrer"><img src="https://trendshift.io/api/badge/trendshift/repositories/162663/daily?language=Go" alt="sigpanic%2Fgoink | Trendshift" width="250" height="55"/></a>
+</p>
+
+<p align="center"><sub>If Goink helps you, please consider <a href="#donate">donating</a>; a Star is also a great encouragement.</sub></p>
+
 <p align="center"><strong><a href="README.md">中文版</a> | English Version</strong></p>
 
 ---
@@ -221,3 +227,12 @@ Goink is licensed under the GNU Affero General Public License v3.0 (AGPL-3.0). S
    <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=sigpanic/goink&type=date&legend=top-left" />
  </picture>
 </a>
+
+## Donate
+
+Goink development relies on several AI services (including subscription costs). If Goink helps you, donations are welcome—they go toward covering the AI subscription costs during development. If convenient, please note your GitHub username so we can remember your support.
+
+<p align="center">
+  <img src="assets/wechat.jpg" alt="WeChat donate" width="220" />
+  <img src="assets/zfb.jpg" alt="Alipay donate" width="220" />
+</p>

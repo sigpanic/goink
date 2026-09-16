@@ -8,6 +8,7 @@ import ModelEditForm from "./ModelEditForm";
 import TestResultWithHint from "./TestResultWithHint";
 
 interface Props {
+  providerName: string;
   chatUrl: string;
   apiKey: string;
   existingIds: Set<string>;
@@ -28,6 +29,7 @@ const emptyModel = (): llm.ModelInfo =>
   }) as unknown as llm.ModelInfo;
 
 export default function ModelDiscoveryPanel({
+  providerName,
   chatUrl,
   apiKey,
   existingIds,
@@ -63,7 +65,7 @@ export default function ModelDiscoveryPanel({
     setDiscoveredModels([]);
     setSelectedForImport(new Set());
     try {
-      const models = await DiscoverModels(chatUrl, apiKey);
+      const models = await DiscoverModels(providerName, chatUrl, apiKey);
       if (!models || models.length === 0) {
         setDiscoverError(t("settings.noModelsFound"));
       } else {

@@ -49,7 +49,7 @@ func (c *Client) GenerateText(
 		"Authorization": "Bearer " + p.APIKey,
 	}
 	if p.BuildHeaders != nil {
-		headers = p.BuildHeaders(headers)
+		headers = p.BuildHeaders(nil, headers)
 	}
 	for k, v := range headers {
 		req.Header.Set(k, v)

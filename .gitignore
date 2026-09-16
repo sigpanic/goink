@@ -40,3 +40,6 @@ frontend/package.json.md5
 /release/
 docs.local/
 goink-skills/
+
+# Legacy Python prototype (Goink 前身，保留本地参考，不纳入版本控制)
+python-master/

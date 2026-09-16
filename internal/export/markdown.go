@@ -46,6 +46,9 @@ func exportMarkdown(n *novel.Novel, chapters []ChapterWithContent) ([]byte, stri
 		b.WriteString("\n\n")
 	}
 
-	filename := safeFilename(n.Title) + ".md"
+	filename, err := DefaultFilename(n, "markdown")
+	if err != nil {
+		return nil, "", err
+	}
 	return []byte(b.String()), filename, nil
 }

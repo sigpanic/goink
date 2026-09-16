@@ -96,7 +96,7 @@ let mockTabsState: any[] = [];
 let mockActiveTabIdState: string | null = null;
 let mockInitRefValue = true;
 
-vi.mock("@/hooks/useEditorTabs", () => ({
+vi.mock("./useEditorTabs", () => ({
   useEditorTabs: () => ({
     tabs: mockTabsState,
     activeTab:

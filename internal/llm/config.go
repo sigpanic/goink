@@ -47,7 +47,9 @@ func Merge(builtin map[string]Provider, user *UserLLMConfig) map[string]Provider
 			if p.ChatURL == "" {
 				p.ChatURL = bp.ChatURL
 			}
-			if p.Temperature == nil {
+			if up.Temperature != nil {
+				p.Temperature = up.Temperature
+			} else {
 				p.Temperature = bp.Temperature
 			}
 			p.BuildRequest = bp.BuildRequest
@@ -98,6 +100,7 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 	for key, bp := range Builtin {
 		var apiKey, chatURL string
 		var customModels []ModelInfo
+		temperature := derefOrZero(bp.Temperature)
 		for _, up := range user.Providers {
 			if up.Name == key {
 				apiKey = up.APIKey
@@ -105,6 +108,9 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 					chatURL = up.ChatURL
 				}
 				customModels = up.Models
+				if up.Temperature != nil {
+					temperature = *up.Temperature
+				}
 				break
 			}
 		}
@@ -118,7 +124,7 @@ func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
 			APIKey:        apiKey,
 			PlatformURL:   bp.PlatformURL,
 			HelpText:      bp.HelpText,
-			Temperature:   derefOrZero(bp.Temperature),
+			Temperature:   temperature,
 			Source:        "builtin",
 			BuiltinModels: append([]ModelInfo{}, bp.Models...),
 			CustomModels:  append([]ModelInfo{}, customModels...),

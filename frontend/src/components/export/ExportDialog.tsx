@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { toErrorMessage } from "@/utils/error";
 
 interface Props {
-  open: boolean;
   novelTitle: string;
   onClose: () => void;
   onExport: (format: "epub" | "markdown" | "txt") => Promise<void>;
@@ -31,19 +30,12 @@ const FORMATS = [
   },
 ] as const;
 
-export default function ExportDialog({
-  open,
-  novelTitle,
-  onClose,
-  onExport,
-}: Props) {
+export default function ExportDialog({ novelTitle, onClose, onExport }: Props) {
   const { t } = useTranslation();
   const [format, setFormat] = useState<"epub" | "markdown" | "txt">("epub");
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);
-
-  if (!open) return null;
 
   async function handleExport() {
     if (exporting) return;
