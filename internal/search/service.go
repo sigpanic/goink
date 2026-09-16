@@ -499,18 +499,19 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 	reranked := rag.MMRRerank(query, filtered, RagTopK, 0.7)
 
 	allChapters, err := s.chapStore.ListAllByNovel(ctx, novelID)
-	chapMeta := make(map[int]chapter.Chapter)
+	chapMeta := make(map[int64]chapter.Chapter)
 	if err != nil {
 		s.logger.Warn("chapter list for RAG search failed", "err", err)
 	} else {
 		for _, ch := range allChapters {
-			chapMeta[ch.ChapterNumber] = ch
+			chapMeta[ch.ID] = ch
 		}
 	}
 
 	var results []Result
 	for _, r := range reranked {
-		meta := chapMeta[r.ChapterNumber]
+		// v1.5.0：vec 表只存 chapter_id，按 id 反查章节信息（真实章节号/标题）
+		meta := chapMeta[r.ChapterID]
 		contentPreview := r.Content
 		runes := []rune(contentPreview)
 		if len(runes) > 200 {
@@ -521,8 +522,8 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 			Type:          "rag",
 			ID:            0,
 			Title:         meta.Title,
-			ChapterNum:    r.ChapterNumber,
-			FilePath:      git.ChapterPath(r.ChapterNumber),
+			ChapterNum:    meta.ChapterNumber,
+			FilePath:      git.ChapterPath(meta.ChapterNumber),
 			MatchPrefix:   contentPreview,
 			MatchLen:      utf8.RuneCountInString(r.Content),
 			MatchPosition: r.StartRunePos,

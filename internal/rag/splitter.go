@@ -122,6 +122,7 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 
 	baseMeta := map[string]any{
 		"chapter_number": params.ChapterNumber,
+		"chapter_id":     params.ChapterID,
 		"chapter_title":  title,
 	}
 
@@ -133,6 +134,7 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 			ID:            fmt.Sprintf("%d_summary", params.ChapterNumber),
 			Content:       summary,
 			ChapterNumber: params.ChapterNumber,
+			ChapterID:     params.ChapterID,
 			ChunkType:     "summary",
 			ChunkIndex:    0,
 			Metadata:      baseMeta,
@@ -158,6 +160,7 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 			ID:            fmt.Sprintf("%d_brief", params.ChapterNumber),
 			Content:       brief,
 			ChapterNumber: params.ChapterNumber,
+			ChapterID:     params.ChapterID,
 			ChunkType:     "chapter_brief",
 			ChunkIndex:    0,
 			Metadata:      baseMeta,
@@ -171,6 +174,7 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 			ID:            fmt.Sprintf("%d_%d", params.ChapterNumber, i),
 			Content:       chunk,
 			ChapterNumber: params.ChapterNumber,
+			ChapterID:     params.ChapterID,
 			ChunkType:     "content",
 			ChunkIndex:    i,
 			StartRunePos:  positions[i],

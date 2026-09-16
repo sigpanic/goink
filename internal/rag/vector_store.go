@@ -48,12 +48,21 @@ func (s *VectorStore) ensureTable(ctx context.Context, novelID int64) error {
 			return fmt.Errorf("rag: drop old vec table %s: %w", tableName, err)
 		}
 	}
+	// v1.5.0 迁移：旧表仍用 chapter_number 列（迁移前 schema）时 DROP 重建。
+	// vec0 虚拟表不支持改列名，只能重建为新 schema（chapter_id 列）。
+	// 向量是派生索引，丢失后由 RebuildAll 覆盖度检查自动重建，无需数据搬迁。
+	if hasOld, _ := tableHasColumn(ctx, s.db, tableName, "chapter_number"); hasOld {
+		s.log.Warn("rag: 旧表仍含 chapter_number 列，重建为新 schema", "table", tableName)
+		if _, err := s.db.ExecContext(ctx, fmt.Sprintf("DROP TABLE IF EXISTS %s", tableName)); err != nil {
+			return fmt.Errorf("rag: drop legacy vec table %s: %w", tableName, err)
+		}
+	}
 	sql := fmt.Sprintf(`CREATE VIRTUAL TABLE IF NOT EXISTS %s USING vec0(
 		embedding float[512] distance_metric=cosine,
 		chunk_id text,
 		content text,
 		chunk_type text,
-		chapter_number integer,
+		chapter_id integer,
 		chunk_index integer,
 		start_position integer
 	)`, tableName)
@@ -100,8 +109,8 @@ func (s *VectorStore) IndexChunks(ctx context.Context, novelID int64, chunks []C
 		}
 
 		_, err = tx.ExecContext(ctx,
-			fmt.Sprintf(`INSERT INTO %s (embedding, chunk_id, content, chunk_type, chapter_number, chunk_index, start_position) VALUES (?, ?, ?, ?, ?, ?, ?)`, tableName),
-			v, chunk.ID, chunk.Content, chunk.ChunkType, chunk.ChapterNumber, chunk.ChunkIndex, chunk.StartRunePos,
+			fmt.Sprintf(`INSERT INTO %s (embedding, chunk_id, content, chunk_type, chapter_id, chunk_index, start_position) VALUES (?, ?, ?, ?, ?, ?, ?)`, tableName),
+			v, chunk.ID, chunk.Content, chunk.ChunkType, chunk.ChapterID, chunk.ChunkIndex, chunk.StartRunePos,
 		)
 		if err != nil {
 			return fmt.Errorf("rag: insert chunk %s: %w", chunk.ID, err)
@@ -137,14 +146,19 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 	args := []any{q}
 
 	if filter != nil {
-		if len(filter.ChapterNumbers) > 0 {
-			placeholders := make([]string, len(filter.ChapterNumbers))
-			for i, id := range filter.ChapterNumbers {
+		if len(filter.ChapterIDs) > 0 {
+			placeholders := make([]string, len(filter.ChapterIDs))
+			for i, id := range filter.ChapterIDs {
 				placeholders[i] = "?"
 				args = append(args, id)
 			}
 			whereClauses = append(whereClauses,
-				fmt.Sprintf("chapter_number IN (%s)", strings.Join(placeholders, ",")))
+				fmt.Sprintf("chapter_id IN (%s)", strings.Join(placeholders, ",")))
+		}
+		if len(filter.ChapterNumbers) > 0 {
+			// v1.5.0 后 vec 表已无 chapter_number 列，此过滤不再可用。
+			// 调用方应改用 ChapterIDs（commit 4.3 迁移）。
+			s.log.Warn("rag: Search filter.ChapterNumbers deprecated, use ChapterIDs", "values", filter.ChapterNumbers)
 		}
 		if len(filter.ChunkTypes) > 0 {
 			placeholders := make([]string, len(filter.ChunkTypes))
@@ -163,7 +177,7 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 	}
 
 	querySQL := fmt.Sprintf(
-		`SELECT chunk_id, content, chunk_type, chapter_number, distance, start_position, embedding FROM %s WHERE embedding MATCH ?%s ORDER BY distance LIMIT ?`,
+		`SELECT chunk_id, content, chunk_type, chapter_id, distance, start_position, embedding FROM %s WHERE embedding MATCH ?%s ORDER BY distance LIMIT ?`,
 		tableName, whereSQL,
 	)
 	args = append(args, topK)
@@ -177,10 +191,11 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 	var results []SearchResult
 	for rows.Next() {
 		var chunkID, content, chunkType string
-		var chapterNumber, startRunePos int
+		var chapterID int64
+		var startRunePos int
 		var distance float64
 		var embBlob []byte
-		if err := rows.Scan(&chunkID, &content, &chunkType, &chapterNumber, &distance, &startRunePos, &embBlob); err != nil {
+		if err := rows.Scan(&chunkID, &content, &chunkType, &chapterID, &distance, &startRunePos, &embBlob); err != nil {
 			return nil, fmt.Errorf("rag: scan result: %w", err)
 		}
 		relevance := 1.0 - distance
@@ -188,14 +203,14 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 			relevance = 0
 		}
 		results = append(results, SearchResult{
-			ChunkID:       chunkID,
-			Content:       content,
-			SourceType:    chunkType,
-			ChapterNumber: chapterNumber,
-			StartRunePos:  startRunePos,
-			Distance:      distance,
-			Relevance:     relevance,
-			Embedding:     deserializeFloat32(embBlob),
+			ChunkID:      chunkID,
+			Content:      content,
+			SourceType:   chunkType,
+			ChapterID:    chapterID,
+			StartRunePos: startRunePos,
+			Distance:     distance,
+			Relevance:    relevance,
+			Embedding:    deserializeFloat32(embBlob),
 		})
 	}
 
@@ -208,16 +223,17 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 }
 
 // DeleteChapterChunks 删除指定章节的所有向量块。
-func (s *VectorStore) DeleteChapterChunks(ctx context.Context, novelID int64, chapterNumber int) error {
+// 参数 chapterID 为 chapters.id。
+func (s *VectorStore) DeleteChapterChunks(ctx context.Context, novelID int64, chapterID int64) error {
 	tableName := s.tableName(novelID)
 	_, err := s.db.ExecContext(ctx,
-		fmt.Sprintf(`DELETE FROM %s WHERE chapter_number = ?`, tableName),
-		chapterNumber,
+		fmt.Sprintf(`DELETE FROM %s WHERE chapter_id = ?`, tableName),
+		chapterID,
 	)
 	if err != nil {
-		return fmt.Errorf("rag: delete chapter %d chunks: %w", chapterNumber, err)
+		return fmt.Errorf("rag: delete chapter %d chunks: %w", chapterID, err)
 	}
-	s.log.Info("已删除章节向量", "novel_id", novelID, "chapter_number", chapterNumber)
+	s.log.Info("已删除章节向量", "novel_id", novelID, "chapter_id", chapterID)
 	return nil
 }
 
@@ -230,6 +246,62 @@ func (s *VectorStore) CountChunks(ctx context.Context, novelID int64) (int, erro
 	err := s.db.QueryRowContext(ctx,
 		fmt.Sprintf("SELECT COUNT(*) FROM %s", s.tableName(novelID))).Scan(&count)
 	return count, err
+}
+
+// DistinctChapterIDs 返回向量表中已索引的去重章节 id 集合。
+// 供 RebuildAll 覆盖度检查使用：与 chapters 表实际 id 对比，
+// 找出缺失章节（增量补建）和孤儿 chunk（清理）。
+func (s *VectorStore) DistinctChapterIDs(ctx context.Context, novelID int64) ([]int64, error) {
+	if err := s.ensureTable(ctx, novelID); err != nil {
+		return nil, err
+	}
+	rows, err := s.db.QueryContext(ctx,
+		fmt.Sprintf("SELECT DISTINCT chapter_id FROM %s", s.tableName(novelID)))
+	if err != nil {
+		return nil, fmt.Errorf("rag: distinct chapter_id: %w", err)
+	}
+	defer rows.Close()
+
+	var ids []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, fmt.Errorf("rag: scan distinct chapter_id: %w", err)
+		}
+		ids = append(ids, id)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("rag: iterate distinct chapter_id: %w", err)
+	}
+	return ids, nil
+}
+
+// DeleteOrphanChunks 删除向量表中 chapter_id 不在有效列表内的行（孤儿 chunk）。
+// 典型场景：章节被删除后其向量残留，或迁移期写入的 chapter_id=0 未知归属行。
+// 不触发 DROP/CREATE，直接 DELETE；validChapterIDs 为空时清空整表。
+func (s *VectorStore) DeleteOrphanChunks(ctx context.Context, novelID int64, validChapterIDs []int64) error {
+	tableName := s.tableName(novelID)
+	if len(validChapterIDs) == 0 {
+		_, err := s.db.ExecContext(ctx, fmt.Sprintf("DELETE FROM %s", tableName))
+		if err != nil {
+			return fmt.Errorf("rag: clear orphan chunks for novel %d: %w", novelID, err)
+		}
+		return nil
+	}
+
+	placeholders := make([]string, len(validChapterIDs))
+	args := make([]any, len(validChapterIDs))
+	for i, id := range validChapterIDs {
+		placeholders[i] = "?"
+		args[i] = id
+	}
+	sqlStr := fmt.Sprintf(
+		"DELETE FROM %s WHERE chapter_id IS NULL OR chapter_id NOT IN (%s)",
+		tableName, strings.Join(placeholders, ","))
+	if _, err := s.db.ExecContext(ctx, sqlStr, args...); err != nil {
+		return fmt.Errorf("rag: delete orphan chunks for novel %d: %w", novelID, err)
+	}
+	return nil
 }
 
 // DeleteNovel 删除整部小说的向量表。
