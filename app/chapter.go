@@ -51,11 +51,11 @@ func (a *App) CreateChapter(input CreateChapterInput) (*chapter.Chapter, error) 
 		return nil, fmt.Errorf("failed to create chapter: %w", err)
 	}
 
-	if err := git.WriteFile(input.NovelID, git.ChapterPath(ch.ChapterNumber), ""); err != nil {
+	if err := git.WriteFile(input.NovelID, git.ChapterPath(ch.ID), ""); err != nil {
 		return nil, fmt.Errorf("failed to create chapter: %w", err)
 	}
 
-	ch.FilePath = git.ChapterPath(ch.ChapterNumber)
+	ch.FilePath = git.ChapterPath(ch.ID)
 
 	return &ch, nil
 }

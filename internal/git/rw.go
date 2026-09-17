@@ -12,9 +12,13 @@ import (
 )
 
 // ── 文件路径 ──────────────────────────────────────────────
-// 此处都是相对路径，位于小说目录之下的，小说目录由config决定
-func ChapterPath(num int) string {
-	return fmt.Sprintf("chapters/%03d.md", num)
+// 此处都是相对路径，位于小说目录之下的，小说目录由config决定。
+// 章节文件以 id 命名（chapters/id_{id}.md）：id_ 前缀将 id 命名空间与
+// 历史 num 纯数字命名空间（chapters/001.md）隔离，保证迁移 rename 判断结构性可靠。
+
+// ChapterPath 返回章节正文文件相对路径（按章节 id）。
+func ChapterPath(id int64) string {
+	return fmt.Sprintf("chapters/id_%d.md", id)
 }
 
 func GoinkPath() string {
@@ -29,8 +33,14 @@ func PlanPath(scope string) string {
 	return fmt.Sprintf("plans/%s.md", scope)
 }
 
-func OutlinePath(num int) string {
-	return fmt.Sprintf("outlines/%03d.md", num)
+// OutlinePath 返回章节大纲文件相对路径（按章节 id）。
+func OutlinePath(id int64) string {
+	return fmt.Sprintf("outlines/id_%d.md", id)
+}
+
+// VolumePath 返回卷纲文件相对路径（按卷 id）。
+func VolumePath(volumeID int64) string {
+	return fmt.Sprintf("volumes/%d.md", volumeID)
 }
 
 // ── 文件读写 ──────────────────────────────────────────────

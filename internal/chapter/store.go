@@ -52,7 +52,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
 	}
 
 	s.logger.Debug("chapter store: listed", "novel_id", novelID, "total", total, "page", pp.Page)
@@ -69,7 +69,7 @@ func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, e
 		return nil, fmt.Errorf("chapter store: list all: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
 	}
 	return chapters, nil
 }
@@ -85,7 +85,7 @@ func (s *Store) GetByNovelAndNumber(ctx context.Context, novelID int64, chapterN
 		}
 		return nil, fmt.Errorf("chapter store: get by novel+number: %w", err)
 	}
-	ch.FilePath = git.ChapterPath(ch.ChapterNumber)
+	ch.FilePath = git.ChapterPath(ch.ID)
 	return &ch, nil
 }
 
@@ -113,7 +113,7 @@ func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, 
 		return nil, fmt.Errorf("chapter store: search: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
 	}
 	return chapters, nil
 }
@@ -129,7 +129,7 @@ func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chap
 		return nil, fmt.Errorf("chapter store: recent: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
 	}
 	return chapters, nil
 }

@@ -71,13 +71,13 @@ func ImportWithResult(ctx context.Context, logger *slog.Logger, db *gorm.DB, res
 	return doImport(ctx, logger, db, result, title, filePath, gitName, gitEmail, onProgress)
 }
 
-// doImport 执行导入的核心流程：创建 Novel → 写入章节 → git add → DB 事务 → git commit。
+// doImport 执行导入的核心流程：创建 Novel → 建章节记录（拿 id）→ 写 id 命名文件 → git add → git commit。
 // Import 和 ImportWithResult 共享此逻辑。
 //
-// 事务策略（参考 RollbackBeforeTurn 三步模式）：
-//  1. 创建 Novel + 写文件 + git add（可逆操作，不 commit）
-//  2. DB 事务写入 Chapters（原子操作）
-//  3. git commit（不可逆但极低失败率，放在 DB 成功之后）
+// 事务策略（章节文件按 id 命名，必须先建 DB 记录拿到 id）：
+//  1. 创建 Novel + 建 Chapters 记录（DB 事务，原子）
+//  2. 写章节文件（chapters/id_{id}.md）+ git add（可逆操作，不 commit）
+//  3. git commit（不可逆但极低失败率，放在文件成功之后）
 func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Result, title, filePath, gitName, gitEmail string, onProgress ProgressCallback) (*ImportResult, error) {
 	chapterCount := len(result.Chapters)
 	onProgress("create_novel", "正在创建作品", 0, chapterCount, 10, 0)
@@ -87,9 +87,8 @@ func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Res
 		Description: fmt.Sprintf("从 %s 导入，共 %d 章", filePath, chapterCount),
 	}
 
-	// ── Step 1: 创建 Novel 记录 + 文件操作 + git add（不 commit） ──
-	// Novel 必须先创建以获取 ID（文件路径依赖此 ID）。
-	// 如果后续步骤失败，cleanupImport 会删除 Novel 记录和文件。
+	// ── Step 1: 创建 Novel 记录（拿 ID，文件路径依赖此 ID） ──
+	// 后续步骤失败时 cleanupImport 会删除 Novel 记录和文件。
 
 	if err := db.WithContext(ctx).Create(&n).Error; err != nil {
 		onProgress("error", "创建小说失败", 0, chapterCount, 0, 0)
@@ -109,10 +108,37 @@ func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Res
 		return nil, fmt.Errorf("创建 goink.md 失败: %w", err)
 	}
 
+	// ── Step 2: DB 事务写入 Chapters（原子操作，拿 id） ──
+	// 章节文件以 id 命名（chapters/id_{id}.md），必须先建记录拿到 id 再写文件。
+	onProgress("saving_metadata", "正在保存章节元数据", 0, chapterCount, 12, n.ID)
+	chapters := make([]chapter.Chapter, 0, chapterCount)
+	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		for i, ch := range result.Chapters {
+			chapNum := i + 1
+			chap := chapter.Chapter{
+				NovelID:       n.ID,
+				ChapterNumber: chapNum,
+				Title:         ch.Title,
+				WordCount:     text.ComputeStats(ch.Content).WordCount,
+			}
+			if err := tx.Create(&chap).Error; err != nil {
+				return fmt.Errorf("创建第%d章元数据失败: %w", chapNum, err)
+			}
+			chapters = append(chapters, chap)
+		}
+		return nil
+	}); err != nil {
+		// DB 写入失败，完整清理：删除 Novel 记录 + 文件目录
+		cleanupImport(db, ctx, logger, n.ID)
+		onProgress("error", "导入失败，已撤销本次导入产生的数据和文件", 0, chapterCount, 0, n.ID)
+		return nil, err
+	}
+
+	// ── Step 3: 写章节文件（id 命名） + git add（可逆，不 commit） ──
 	onProgress("write_chapters", "正在写入章节", 0, chapterCount, 15, n.ID)
 	for i, ch := range result.Chapters {
 		chapNum := i + 1
-		if err := git.WriteFile(n.ID, git.ChapterPath(chapNum), ch.Content); err != nil {
+		if err := git.WriteFile(n.ID, git.ChapterPath(chapters[i].ID), ch.Content); err != nil {
 			cleanupImport(db, ctx, logger, n.ID)
 			onProgress("error", fmt.Sprintf("写入第%d章失败", chapNum), chapNum, chapterCount, 0, n.ID)
 			return nil, fmt.Errorf("写入第%d章失败: %w", chapNum, err)
@@ -134,30 +160,7 @@ func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Res
 		return nil, fmt.Errorf("暂存导入文件失败: %w", err)
 	}
 
-	// ── Step 2: DB 事务写入 Chapters（原子操作） ──
-	onProgress("saving_metadata", "正在保存章节元数据", chapterCount, chapterCount, 93, n.ID)
-	if err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		for i, ch := range result.Chapters {
-			chapNum := i + 1
-			chap := chapter.Chapter{
-				NovelID:       n.ID,
-				ChapterNumber: chapNum,
-				Title:         ch.Title,
-				WordCount:     text.ComputeStats(ch.Content).WordCount,
-			}
-			if err := tx.Create(&chap).Error; err != nil {
-				return fmt.Errorf("创建第%d章元数据失败: %w", chapNum, err)
-			}
-		}
-		return nil
-	}); err != nil {
-		// DB 写入失败，完整清理：删除 Novel 记录 + 文件目录
-		cleanupImport(db, ctx, logger, n.ID)
-		onProgress("error", "导入失败，已撤销本次导入产生的数据和文件", 0, chapterCount, 0, n.ID)
-		return nil, err
-	}
-
-	// ── Step 3: git commit（不可逆但极低失败率） ──
+	// ── Step 4: git commit（不可逆但极低失败率） ──
 	// DB 已提交，Chapters 已创建。git commit 失败时数据完整，只是缺版本记录。
 	if _, err := repo.Commit(fmt.Sprintf("import novel: %s", title)); err != nil {
 		// 不回滚 DB：数据完整，只是缺 git 初始提交
@@ -178,11 +181,15 @@ func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Res
 	}, nil
 }
 
-// cleanupImport 清理导入失败后的残留：删除 Novel 记录和文件目录。
+// cleanupImport 清理导入失败后的残留：删除文件目录、Chapters 记录和 Novel 记录。
 func cleanupImport(db *gorm.DB, ctx context.Context, logger *slog.Logger, novelID int64) {
 	// 删除文件目录（含 .git 仓库）
 	if err := os.RemoveAll(config.NovelDirPath(novelID)); err != nil {
 		logger.Error("清理导入失败后的小说目录失败", "novel_id", novelID, "err", err)
+	}
+	// 删除 Chapters 记录（DB 建记录先于写文件，文件失败时记录已存在，需一并清理）
+	if err := db.WithContext(ctx).Where("novel_id = ?", novelID).Delete(&chapter.Chapter{}).Error; err != nil {
+		logger.Error("清理导入失败后的 Chapters 记录失败", "novel_id", novelID, "err", err)
 	}
 	// 删除 Novel 记录
 	if err := db.WithContext(ctx).Delete(&novel.Novel{}, novelID).Error; err != nil {

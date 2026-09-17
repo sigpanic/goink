@@ -79,7 +79,7 @@ func createChapterInDB(t *testing.T, novelID int64, chapterNumber int, title, su
 	}
 
 	// Write chapter content to disk
-	if err := git.WriteFile(novelID, git.ChapterPath(chapterNumber), content); err != nil {
+	if err := git.WriteFile(novelID, git.ChapterPath(ch.ID), content); err != nil {
 		t.Fatalf("write chapter %d file failed: %v", chapterNumber, err)
 	}
 }

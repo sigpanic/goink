@@ -259,7 +259,7 @@ func (e *Extractor) loadChapters(ctx context.Context, novelID int64, ids []int64
 		if len(idSet) > 0 && !idSet[ch.ID] {
 			continue
 		}
-		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ChapterNumber))
+		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ID))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
 			return nil, fmt.Errorf("读取第%d章失败: %w", ch.ChapterNumber, err)
 		}

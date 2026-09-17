@@ -31,7 +31,7 @@ func TestCreateChapter(t *testing.T) {
 	assert.Equal(t, 1, ch.ChapterNumber)
 	assert.Equal(t, "First Chapter", ch.Title)
 	assert.Equal(t, novelID, ch.NovelID)
-	assert.Equal(t, "chapters/001.md", ch.FilePath)
+	assert.Equal(t, "chapters/id_1.md", ch.FilePath)
 }
 
 func TestCreateChapter_AutoIncrement(t *testing.T) {
@@ -121,10 +121,10 @@ func TestGetChapters_AfterCreate(t *testing.T) {
 
 	// Verify chapter files were created
 	for _, ch := range chapters {
-		assert.Equal(t, chapterPath(ch.ChapterNumber), ch.FilePath)
+		assert.Equal(t, chapterPath(ch.ID), ch.FilePath)
 	}
 }
 
-func chapterPath(num int) string {
-	return fmt.Sprintf("chapters/%03d.md", num)
+func chapterPath(id int64) string {
+	return fmt.Sprintf("chapters/id_%d.md", id)
 }

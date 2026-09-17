@@ -76,11 +76,11 @@ func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 	}
 	for _, r := range rows {
 		// 正文：chapters/001.md → chapters/id_1.md
-		if err := renameChapterFile(dir, git.ChapterPath(r.ChapterNumber), chapterIDPath(r.ID)); err != nil {
+		if err := renameChapterFile(dir, chapterNumPath(r.ChapterNumber), chapterIDPath(r.ID)); err != nil {
 			log.Warn("migrate v160: 章节文件 rename 失败", "novel_id", novelID, "id", r.ID, "err", err)
 		}
 		// 大纲：outlines/001.md → outlines/id_1.md
-		if err := renameChapterFile(dir, git.OutlinePath(r.ChapterNumber), outlineIDPath(r.ID)); err != nil {
+		if err := renameChapterFile(dir, outlineNumPath(r.ChapterNumber), outlineIDPath(r.ID)); err != nil {
 			log.Warn("migrate v160: 大纲文件 rename 失败", "novel_id", novelID, "id", r.ID, "err", err)
 		}
 	}
@@ -106,6 +106,11 @@ func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 	log.Info("migrate v160: 章节文件 rename 完成", "novel_id", novelID)
 	return nil
 }
+
+// chapterNumPath / outlineNumPath 是历史 num 命名的源路径（仅迁移内部使用，
+// 等价旧 git.ChapterPath/OutlinePath 的 num 版本；commit 2 起 git 包只提供 id 版本）。
+func chapterNumPath(num int) string { return fmt.Sprintf("chapters/%03d.md", num) }
+func outlineNumPath(num int) string { return fmt.Sprintf("outlines/%03d.md", num) }
 
 // chapterIDPath / outlineIDPath 是迁移后的 id 命名路径（id_ 前缀）。
 // 前缀将 id 命名空间与旧 num 的纯数字命名空间（chapters/001.md）完全隔离：
