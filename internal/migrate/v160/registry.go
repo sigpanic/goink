@@ -26,7 +26,7 @@ var registry = []engine.Step{
 	// commit 1.5：交叉引用数据 num→id 重写
 	step{key: "1-crossref-data", run: migrateCrossRefData},
 	// commit 1.6：sort_order 初始化 + 建 volumes/ + 文件 rename
-	// step{key: "2-rename-files", run: migrateRenameFiles},
+	step{key: "2-rename-files", run: migrateRenameFiles},
 	// commit 1.7：删旧列 + 收尾（框架写 done 即收尾）
 	// step{key: "3-drop-legacy", run: migrateDropLegacy},
 }
