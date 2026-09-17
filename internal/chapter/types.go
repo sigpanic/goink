@@ -13,8 +13,8 @@ type Chapter struct {
 	ID            int64     `gorm:"column:id;primaryKey;autoIncrement"                                    json:"id"`
 	NovelID       int64     `gorm:"column:novel_id;not null;uniqueIndex:uk_novel_chapter;index"           json:"novel_id"`
 	ChapterNumber int       `gorm:"column:chapter_number;not null;uniqueIndex:uk_novel_chapter"           json:"chapter_number"`
-	VolumeID      *int64    `gorm:"column:volume_id;index"                                                 json:"volume_id"`   // 可空外键 → volumes.id，NULL=未分卷；commit 1.2 新增
-	SortOrder     int       `gorm:"column:sort_order;default:0"                                           json:"sort_order"`  // 内部排序键，commit 1.6 初始化=ChapterNumber；commit 1.2 新增
+	VolumeID      *int64    `gorm:"column:volume_id;index"                                                 json:"volume_id"` // 可空外键 → volumes.id，NULL=未分卷；commit 1.2 新增
+	SortOrder     int       `gorm:"column:sort_order;default:0"                                           json:"sort_order"` // 内部排序键，commit 1.6 初始化=ChapterNumber；commit 1.2 新增
 	Title         string    `gorm:"column:title"                                                          json:"title"`
 	Summary       string    `gorm:"column:summary"                                                        json:"summary"` // AI 生成的章节简介
 	WordCount     int       `gorm:"column:word_count;default:0"                                           json:"word_count"`

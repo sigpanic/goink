@@ -27,9 +27,9 @@ type SearchResult struct {
 	ChunkID       string
 	Content       string
 	SourceType    string
-	ChapterNumber int // 已废弃：vector_store.Search 恒不填充（恒 0）。v1.6.0 后用 ChapterID，需章节号时由调用方按 id 反查
+	ChapterNumber int   // 已废弃：vector_store.Search 恒不填充（恒 0）。v1.6.0 后用 ChapterID，需章节号时由调用方按 id 反查
 	ChapterID     int64 // v1.6.0 新增：从 vec 表 chapter_id 列读出
-	StartRunePos  int // chunk 在原始正文中的 rune 偏移
+	StartRunePos  int   // chunk 在原始正文中的 rune 偏移
 	Distance      float64
 	Relevance     float64
 	Embedding     []float32 // 512维向量，用于MMR多样性计算
