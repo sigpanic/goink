@@ -36,7 +36,7 @@
 
 | 层 | 现状 | 改造点 |
 |---|---|---|
-| 文件系统 | `chapters/{chapter_number:03d}.md` | 改用 `chapters/{id}.md` |
+| 文件系统 | `chapters/{chapter_number:03d}.md` | 改用 `chapters/id_{id}.md`（id_ 前缀隔离旧 num 命名空间，rename 判断结构性可靠） |
 | DB chapter 表 | 含 `chapter_number int` 字段，(novel_id, chapter_number) 唯一索引 | 移除 chapter_number，新增 volume_id |
 | DB 交叉引用表 | timeline/arc_node/reader/character_relations 用章节号 int | 全改 chapter_id int64 外键 |
 | DB writing_log | chapter_number int | 改 chapter_id int64（删除后允许孤儿） |
@@ -146,8 +146,8 @@ migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6
 
 | 项 | 旧 | 新 |
 |---|---|---|
-| 章节正文路径 | `chapters/{chapter_number:03d}.md` | `chapters/{id}.md` |
-| 章节大纲路径 | `outlines/{chapter_number:03d}.md` | `outlines/{id}.md` |
+| 章节正文路径 | `chapters/{chapter_number:03d}.md` | `chapters/id_{id}.md` |
+| 章节大纲路径 | `outlines/{chapter_number:03d}.md` | `outlines/id_{id}.md` |
 | `git.ChapterPath` 函数签名 | `ChapterPath(num int) string` | `ChapterPath(id int64) string` |
 | `git.OutlinePath` 函数签名 | `OutlinePath(num int) string` | `OutlinePath(id int64) string` |
 | rw_tools 路径正则 | `chapters/\d{3,6}\.md` | `chapters/\d+\.md` + `chapters/new.md`（占位新建） |
@@ -175,7 +175,7 @@ migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6
 | 3. 建 volume 表 | AutoMigrate 新表 | GORM AutoMigrate 幂等 |
 | 4. 加 volume_id + sort_order 列 | chapter 表加 `volume_id *int64` + `sort_order int`；sort_order 初始化 = chapter_number（保留原顺序） | `HasColumn` 已存在则跳过；sort_order 为 NULL 时初始化 |
 | 5. 建 volumes/ 目录 | 每个 novel 仓库创建空 `volumes/` 目录 + `.gitkeep` | 目录存在则跳过 |
-| 6. 文件逐个 mv（见 7.3） | 遍历所有 novel 仓库 rename 文件 `chapters/{num:03d}.md → chapters/{id}.md`、`outlines/{num:03d}.md → outlines/{id}.md` | 目标存在/源不存在则跳过 |
+| 6. 文件逐个 mv（见 7.3） | 遍历所有 novel 仓库 rename 文件 `chapters/{num:03d}.md → chapters/id_{id}.md`、`outlines/{num:03d}.md → outlines/id_{id}.md` | 目标存在/源不存在则跳过 |
 | 7. 删旧字段 | 删 chapter_number 列及交叉引用表的旧 num 列 | `HasColumn` 不存在则跳过 |
 
 ### 7.3 文件系统迁移（每 novel 独立处理）
@@ -184,10 +184,11 @@ migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6
 
 **阶段 A：逐个 rename**（os.Rename，非 git mv）
 - 对每个 chapter 记录，按 id 逐个 rename：
-  - 若 `chapters/{id}.md` 已存在 → 跳过（已迁移）
+  - 若 `chapters/id_{id}.md` 已存在 → 跳过（已迁移）
   - 若 `chapters/{num:03d}.md` 不存在 → 跳过（源已 mv 走，已迁移）
-  - 否则 `os.Rename(chapters/{num:03d}.md, chapters/{id}.md)`
-- 大纲同理（`outlines/{num:03d}.md → outlines/{id}.md`）
+  - 否则 `os.Rename(chapters/{num:03d}.md, chapters/id_{id}.md)`
+- 大纲同理（`outlines/{num:03d}.md → outlines/id_{id}.md`）
+- id_ 前缀将 id 命名空间与旧 num 纯数字命名空间完全隔离：任何 num 值不可能撞名，目标存在即本文件已完成迁移，判断结构性可靠
 - 跨文件系统时（os.Rename 返回 EXDEV）退化成 cp+rm（同文件系统内通常一次 rename 完成）
 
 **为什么用普通 mv 不用 git mv**：
@@ -206,7 +207,7 @@ migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6
 - 单步骤幂等检查（step 内部自检自身完成条件）：
   - DB 列已存在 → 跳过
   - DB 数据重写条件 `WHERE chapter_id IS NULL` → 已重写的不重复
-  - 文件目标 `chapters/{id}.md` 已存在 → 跳过 rename
+  - 文件目标 `chapters/id_{id}.md` 已存在 → 跳过 rename
   - 文件源 `chapters/{num:03d}.md` 不存在 → 跳过 rename
   - git 干净 → 跳过 commit
 - 全部 step done → backup 组判断"全 done"→ 后续启动跳过备份

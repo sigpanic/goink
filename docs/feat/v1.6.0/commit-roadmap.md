@@ -27,7 +27,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | 1.3 | `feat(rag): migrate vec table chapter_number to chapter_id` | vec_novel_{id} 虚拟表 chapter_number 列改为 chapter_id；vec0 不支持改列名 → DROP 重建为新 schema；向量是派生索引，丢失后由 RebuildAll 覆盖度检查自动重建，无需数据搬迁 |
 | 1.4 | `feat(migrate): auto-backup before migration` | migrate 跑前自动备份 novel-agent.db + novels/ 到 platform.DataDir()/backups/{timestamp}/；保留最近 3 份；备份失败不阻塞 migrate |
 | 1.5 | `refactor(migrate): rewrite cross-ref data num->id` | 5 张交叉引用表数据重写（vec 已由 1.3 DROP 重建处理，不在此列）：按 (novel_id, 旧 num 列) 反查 chapters.id 写入新 chapter_id 列；反查失败写 NULL + 告警日志；WHERE chapter_id IS NULL 幂等；实现放 internal/migrate/v160 子包 |
-| 1.6 | `refactor(migrate): init sort_order + create volumes/ + rename files` | chapter.sort_order 初始化 = chapter_number（保留原顺序）；每个 novel 仓库建 volumes/ 目录 + .gitkeep；文件逐个 os.Rename chapters/{num:03d}.md → chapters/{id}.md + outlines/{num:03d}.md → outlines/{id}.md；EXDEV 退化 cp+rm；按 novel 各自 git commit |
+| 1.6 | `refactor(migrate): init sort_order + create volumes/ + rename files` | chapter.sort_order 初始化 = chapter_number（保留原顺序）；每个 novel 仓库建 volumes/ 目录 + .gitkeep；文件逐个 os.Rename chapters/{num:03d}.md → chapters/id_{id}.md + outlines/{num:03d}.md → outlines/id_{id}.md（id_ 前缀隔离新旧命名空间，rename 判断结构性可靠）；EXDEV 退化 cp+rm；按 novel 各自 git commit |
 | 1.7 | `refactor(migrate): drop legacy chapter_number columns + set done` | 删 chapter.chapter_number 列 + 5 张交叉引用表旧 num 列；写 migrate_state status="done"；新用户 DB 初始化后 INSERT 所有已知 step 为 done |
 
 ### PR1 内部依赖

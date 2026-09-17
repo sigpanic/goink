@@ -77,24 +77,24 @@ func TestRenameFilesMigration(t *testing.T) {
 		}
 	}
 
-	// 2. 文件 rename：正文 001.md→1.md、002.md→2.md；大纲 001.md→1.md
-	if !exists("chapters/1.md") || exists("chapters/001.md") {
-		t.Fatal("chapters/1.md 应存在且 001.md 应消失")
+	// 2. 文件 rename：正文 001.md→id_1.md、002.md→id_2.md；大纲 001.md→id_1.md
+	if !exists("chapters/id_1.md") || exists("chapters/001.md") {
+		t.Fatal("chapters/id_1.md 应存在且 001.md 应消失")
 	}
-	if !exists("chapters/2.md") || exists("chapters/002.md") {
-		t.Fatal("chapters/2.md 应存在且 002.md 应消失")
+	if !exists("chapters/id_2.md") || exists("chapters/002.md") {
+		t.Fatal("chapters/id_2.md 应存在且 002.md 应消失")
 	}
-	if !exists("outlines/1.md") || exists("outlines/001.md") {
-		t.Fatal("outlines/1.md 应存在且 001.md 应消失")
+	if !exists("outlines/id_1.md") || exists("outlines/001.md") {
+		t.Fatal("outlines/id_1.md 应存在且 001.md 应消失")
 	}
 	// 源不存在的章节（3/5）不产生目标文件
-	if exists("chapters/5.md") {
-		t.Fatal("chapters/5.md 不应存在（源 005.md 不存在）")
+	if exists("chapters/id_5.md") {
+		t.Fatal("chapters/id_5.md 不应存在（源 005.md 不存在）")
 	}
 	// 内容完整迁移
-	data, _ := os.ReadFile(filepath.Join(novelDir, "chapters", "1.md"))
+	data, _ := os.ReadFile(filepath.Join(novelDir, "chapters", "id_1.md"))
 	if string(data) != "ch1 content" {
-		t.Fatalf("chapters/1.md 内容错误: %q", data)
+		t.Fatalf("chapters/id_1.md 内容错误: %q", data)
 	}
 
 	// 3. volumes/ + .gitkeep
@@ -122,8 +122,8 @@ func TestRenameFilesMigration(t *testing.T) {
 	if exists("chapters/001.md") {
 		t.Fatal("幂等重跑后 chapters/001.md 不应复活")
 	}
-	if !exists("chapters/1.md") {
-		t.Fatal("幂等重跑后 chapters/1.md 丢失")
+	if !exists("chapters/id_1.md") {
+		t.Fatal("幂等重跑后 chapters/id_1.md 丢失")
 	}
 	uncommitted, err = repo.HasUncommitted()
 	if err != nil {
