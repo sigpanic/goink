@@ -35,28 +35,27 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
   git push origin master
   ```
 
-## 3. 本地打 tag
+## 3. 本地打 tag 并推送
 
 - 查看当前最新 tag：`git tag --sort=-v:refname | head -5`
-- 本地打 tag 仅作本地记录，**不要 push**（见第 4 步）
+- 打 annotated tag，push 到远端（push 同时触发 CI）
 - tag message：英文，和发版说明一致即可
 - 命令：
   ```
   git tag -a vX.Y.Z -m "<英文说明>"
+  git push origin vX.Y.Z
   ```
 
-## 4. 手动建 release（gh ≥ 2.98，一步完成建 tag + release + 触发 CI）
+## 4. 手动建 release
 
-- **gh ≥ 2.98 行为变化**：`gh release create vX.Y.Z` 对未推送的本地 tag 会直接报错
-  `tag exists locally but has not been pushed ... specify the --target flag`，必须加 `--target <commit-sha>`
-- `--target <commit-sha>` 会通过 GitHub API 同时：创建远程 tag（指向该 commit）→ 触发 CI（release.yml 检测到 tag）→ 创建 release。因此**无需再手动 push tag**，且 release body 就是手写中文，CI 只上传产物、不会抢建空 body
-- commit-sha 取待发布分支的 HEAD（必须是已包含全部待发布提交的 commit）：`git rev-parse HEAD`
+- 第 3 步已 push tag，gh 直接用它创建 release（**不要加 `--target`**，会在远端另建类型不同的 tag 对象，导致本地与远端不一致）
+- release job 要等三个构建完成后才跑，手动 create 秒级完成，必然先存在；CI 只上传产物、不覆盖 body；若 CI 抢建了空 body，用 `gh release edit` 覆盖
 - Release 信息**用中文手写**，不要用 `--generate-notes`
 - 基于第 1 步读取的完整 commit body 与 issue 上下文撰写，不要只依赖 oneline
 - 格式分块：「新增功能」「改进」「修复」等
 - 命令：
   ```
-  gh release create vX.Y.Z --target <commit-sha> --title "vX.Y.Z" --notes "中文 release notes"
+  gh release create vX.Y.Z --title "vX.Y.Z" --notes "中文 release notes"
   ```
 
 ## 5. 校验
@@ -74,7 +73,6 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 
 - **Release notes**：仅手写中文。`release.yml` 的 release job 不再 `generate_release_notes`，只把产物上传到第 4 步已建的 release，不覆盖 body。
 - **辨识版本内 fix**：区分「修复上个版本已存在的问题」（应写入 notes）与「开发过程中先 feat 后 fix 的新问题」（属本版本内部迭代，不算与上个版本的差异，不应写入 notes）。只记录面向用户的、相对上个版本的真实变化。务必结合 `Refs #NN` 的 issue 讨论确认每个 fix 到底修的是什么。
-- **本地 tag 与远程 tag**：本地 `git tag -a` 是 annotated tag 对象；gh `--target` 在远程创建的是 lightweight tag（指向同一 commit）。两者指向相同 commit 但对象不同，**不要再用 `git push origin vX.Y.Z` 推本地 tag**（远程 ref 已存在，push 会报 non-fast-forward）。
 - **Commit 规范**：英文、具体描述、无 emoji、无 Co-Authored-By
 - **PR 规范**：英文标题和描述
 - **Release notes 规范**：中文
