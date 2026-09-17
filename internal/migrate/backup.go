@@ -11,6 +11,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/migrate/engine"
 	"github.com/sigpanic/goink/internal/platform"
 )
 
@@ -33,8 +34,8 @@ import (
 func backupBeforeMigrate(db *gorm.DB, log *slog.Logger, migration string) error {
 	// 本迁移组（migration）有记录且全部 done → 迁移已完成，无需再备份
 	var total, done int64
-	db.Model(&MigrateState{}).Where("migration = ?", migration).Count(&total)
-	db.Model(&MigrateState{}).Where("migration = ? AND status = ?", migration, "done").Count(&done)
+	db.Model(&engine.MigrateState{}).Where("migration = ?", migration).Count(&total)
+	db.Model(&engine.MigrateState{}).Where("migration = ? AND status = ?", migration, "done").Count(&done)
 	if total > 0 && total == done {
 		log.Info("迁移已完成，跳过备份", "migration", migration)
 		return nil

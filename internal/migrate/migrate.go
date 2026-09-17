@@ -10,6 +10,8 @@ import (
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/location"
+	"github.com/sigpanic/goink/internal/migrate/engine"
+	_ "github.com/sigpanic/goink/internal/migrate/v160" // blank：触发 v160.init 注册，Run 无需感知具体迁移
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
@@ -24,17 +26,25 @@ import (
 	"github.com/sigpanic/goink/internal/writing"
 )
 
-// Run 自动创建/更新全部数据表，幂等安全。
+// Run 自动创建/更新全部数据表，幂等安全。作为外部入口，遍历 engine.Registry
+// 执行所有已注册迁移（备份 + 步骤），不感知具体迁移。
 func Run(db *gorm.DB, log *slog.Logger) error {
 	// 0. 先建 migrate_state 表：backup 的"本迁移组 done 判断"依赖它存在；
 	//    只建这一张表，不触发 time_entries 等表的加列，不影响下方 renameColumns 的顺序约束。
-	if err := db.AutoMigrate(&MigrateState{}); err != nil {
+	if err := db.AutoMigrate(&engine.MigrateState{}); err != nil {
 		return fmt.Errorf("migrate: migrate_state 表: %w", err)
 	}
 
-	// v1.6.0：破坏性迁移前自动备份（仅迁移期执行一次、按迁移名目录、失败不阻塞迁移）。
-	if err := backupBeforeMigrate(db, log, migrationV160); err != nil {
-		log.Warn("迁移前自动备份失败（继续迁移）", "err", err)
+	// 破坏性迁移前自动备份（按迁移名目录、幂等、失败不阻塞迁移）。
+	// 只备份 Destructive 迁移；纯增量迁移（仅加列）不备份。
+	// 必须放在下方删列 / rename / AutoMigrate 之前，保证备份的是迁移前 schema。
+	for _, m := range engine.Registry {
+		if !m.Destructive {
+			continue
+		}
+		if err := backupBeforeMigrate(db, log, m.Name); err != nil {
+			log.Warn("迁移前自动备份失败（继续迁移）", "migration", m.Name, "description", m.Description, "err", err)
+		}
 	}
 
 	// 移除旧 novels 表的 dir_path 列（该字段从未被读取过）。幂等：列不存在时报错忽略。
@@ -114,7 +124,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&style.Sample{},
 		&writing.WritingLog{},
 		&volume.Volume{},
-		&MigrateState{},
+		&engine.MigrateState{},
 	}
 
 	for _, m := range models {
@@ -123,10 +133,13 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		}
 	}
 
-	// v1.6.0 破坏性迁移步骤（注册表驱动，见 step.go）：数据重写 / 文件重命名 / 删旧列。
-	// 依赖上方 AutoMigrate 已把 chapter_id / volume_id / sort_order 列加上（commit 1.2 模型）。
-	if err := runSteps(db, log, migrationV160, registryV160); err != nil {
-		return err
+	// 所有已注册迁移的破坏性步骤（注册表驱动，见 engine 包）：数据重写 / 文件重命名 / 删旧列。
+	// 依赖上方 AutoMigrate 已把各迁移所需列加上（如 v160 的 chapter_id / volume_id / sort_order）。
+	for _, m := range engine.Registry {
+		log.Info("执行迁移", "migration", m.Name, "description", m.Description)
+		if err := engine.RunSteps(db, log, m.Name, m.Steps); err != nil {
+			return err
+		}
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))

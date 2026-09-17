@@ -126,13 +126,13 @@
 字段：`migration string, step string, status string, started_at timestamp, finished_at timestamp`
 
 - `migration`：迁移标识，一次大迁移一组行，如 `"v1.6.0-chapter-id-refactor"`，未来新迁移加新组即可复用此表
-- `step`：迁移内执行步骤标识，`(migration, step)` 唯一，一行 = 一个步骤（如 `"1.5-crossref-data"`）
+- `step`：迁移内执行步骤标识，`(migration, step)` 唯一，一行 = 一个步骤（如 `"1-crossref-data"`）
 - `status`：`"running"` / `"done"` / `"failed"`，单步骤状态
 - `started_at` / `finished_at`：时间戳，便于排查
 
-migrate.Run 流程（注册表驱动，见 internal/migrate/step.go）：
+migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6.0 步骤实现见 internal/migrate/v160 子包）：
 - 先 AutoMigrate 建 migrate_state 表（backup 的组判断依赖它存在）
-- backup 查本迁移组（`migration = "v1.6.0-..."`）是否全部 done：全 done 则跳过备份；否则备份（按迁移名目录，临时目录原子 rename）
+- 只对 `Destructive: true` 的迁移备份：查本迁移组（`migration = "v1.6.0-..."`）是否全部 done：全 done 则跳过备份；否则备份（按迁移名目录，临时目录原子 rename）。纯增量迁移（仅加列）不备份
 - 框架遍历注册表步骤：已 done 跳过；未 done 置 running → 执行（步骤内部幂等）→ done / failed
 - 新库短路：chapters 表不存在 → 所有 step 直接 INSERT done
 
@@ -523,6 +523,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 11. **AI 不自动开卷**：AI 写到卷末时提示用户"建议开新卷"，由用户在前端创建卷；AI 不自主开卷（卷边界是用户掌控的大动作）
 12. **实时计算 num**：不 DB 维护 num 字段，list 时按 (volume_id, sort_order) 排序位次实时生成；DB 维护 num 等于回退 chapter_number 老方案，失去 id 方案价值
 13. **get 函数签名**：前端 get/delete 函数保持现状 (T, error)，不走 PageResult（章节列表一次拿全部，不需要分页），不走 errcode（错误类型单一，delete 引用冲突走 ToolResult.Data 结构化返回）
+14. **迁移代码组织**：migrate 包只留框架（MigrateState + backup + Step 接口 + runSteps）；v1.6.0 迁移步骤实现全部放 `internal/migrate/v160` 子包（registry.go + 各 step 文件）；Step 为接口避免 migrate → v160 循环依赖；vec 表重写归 commit 1.3（DROP 重建 + RebuildAll），1.5 只重写 5 张 GORM 表；`engine.Migration` 带 `Destructive` 字段声明是否破坏性（backup 只对 Destructive 迁移执行）+ `Description` 字段简述迁移目的（打印进日志便于排查）
 
 ### 待确认
 

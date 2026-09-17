@@ -24,9 +24,9 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 |---|---|---|
 | 1.1 | `feat(migrate): add migrate_state + volume tables` | 新建 migrate_state 表（migration+step 两级：migration 迁移标识 + step 步骤标识 + status + 时间戳）+ volume 表（id/novel_id/name/sort_order+时间戳）；加 MigrateState/Volume model 到 AutoMigrate 列表 |
 | 1.2 | `feat(chapter): add volume_id + sort_order + cross-ref chapter_id columns` | chapter 表加 volume_id *int64 + sort_order int；5 张交叉引用表（time_entries/arc_nodes/reader_perspectives/writing_log/character_relations）各加 chapter_id 列；**保留旧字段共存**（迁移期双字段） |
-| 1.3 | `feat(rag): migrate vec table chapter_number to chapter_id` | vec_novel_{id} 虚拟表 chapter_number 列改为 chapter_id；新建 vec 表用 chapter_id 列；旧 chunk 数据反查 chapter.id 迁移（失败写 0 + 日志） |
+| 1.3 | `feat(rag): migrate vec table chapter_number to chapter_id` | vec_novel_{id} 虚拟表 chapter_number 列改为 chapter_id；vec0 不支持改列名 → DROP 重建为新 schema；向量是派生索引，丢失后由 RebuildAll 覆盖度检查自动重建，无需数据搬迁 |
 | 1.4 | `feat(migrate): auto-backup before migration` | migrate 跑前自动备份 novel-agent.db + novels/ 到 platform.DataDir()/backups/{timestamp}/；保留最近 3 份；备份失败不阻塞 migrate |
-| 1.5 | `refactor(migrate): rewrite cross-ref data num->id` | 5 张交叉引用表 + vec 表数据重写：按 (novel_id, 旧 num 列) 反查 chapters.id 写入新 chapter_id 列；反查失败写 NULL + 告警日志；WHERE chapter_id IS NULL 幂等 |
+| 1.5 | `refactor(migrate): rewrite cross-ref data num->id` | 5 张交叉引用表数据重写（vec 已由 1.3 DROP 重建处理，不在此列）：按 (novel_id, 旧 num 列) 反查 chapters.id 写入新 chapter_id 列；反查失败写 NULL + 告警日志；WHERE chapter_id IS NULL 幂等；实现放 internal/migrate/v160 子包 |
 | 1.6 | `refactor(migrate): init sort_order + create volumes/ + rename files` | chapter.sort_order 初始化 = chapter_number（保留原顺序）；每个 novel 仓库建 volumes/ 目录 + .gitkeep；文件逐个 os.Rename chapters/{num:03d}.md → chapters/{id}.md + outlines/{num:03d}.md → outlines/{id}.md；EXDEV 退化 cp+rm；按 novel 各自 git commit |
 | 1.7 | `refactor(migrate): drop legacy chapter_number columns + set done` | 删 chapter.chapter_number 列 + 5 张交叉引用表旧 num 列；写 migrate_state status="done"；新用户 DB 初始化后 INSERT 所有已知 step 为 done |
 
@@ -37,6 +37,12 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 - 1.5 依赖 1.2（加列后才能重写）
 - 1.6 依赖 1.2（sort_order 加列后才能初始化）
 - 1.7 依赖 1.5/1.6（数据迁移+文件迁移完成后才能删旧列）
+
+### PR1 代码结构
+
+- `internal/migrate/` 只留框架：MigrateState 状态模型 + backup（只对 Destructive 迁移执行）+ Step 接口 + runSteps 驱动
+- v1.6.0 迁移步骤实现全部放 `internal/migrate/v160/` 子包：registry.go（注册表）+ 各 step 实现文件（crossref.go / rename.go / drop.go）
+- Step 是接口（`Key()` / `Run()`）：v160 的私有 step 结构实现它，无需 import migrate，避免 migrate → v160 → migrate 循环依赖
 
 ## PR1 后续：代码层适配（原 commit #2-#4）
 

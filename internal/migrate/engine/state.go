@@ -1,16 +1,12 @@
-package migrate
+package engine
 
 import "time"
-
-// migrationV160 是 v1.6.0 分卷 + 章节 id 化改造的迁移标识。
-// 备份/完成判断只看本组，未来新增迁移各自一行一组，互不干扰。
-const migrationV160 = "v1.6.0-chapter-id-refactor"
 
 // MigrateState 是迁移进度跟踪表，按"迁移 + step"两级记录。
 //
 // 设计原则：
 //   - 一行 = (migration, step)。migration 标识一次大迁移（如 "v1.6.0-chapter-id-refactor"），
-//     step 标识该迁移内的执行步骤（语义化 key，如 "1.5-crossref-data"，见 step.go 注册表）
+//     step 标识该迁移内的执行步骤（语义化 key，如 "1-crossref-data"）
 //   - status 取值：running | done | failed（未开始 = 无行，stepStatus 返回空串）
 //   - 幂等：迁移启动时查 migration 组内非 done 的 step，逐个执行；每步"内部执行完再写 done"
 //   - 中断续跑：某 step 写 done 前中断 → 该 step 未 done → 下次从它重跑（step 内部幂等）
@@ -24,7 +20,7 @@ const migrationV160 = "v1.6.0-chapter-id-refactor"
 type MigrateState struct {
 	ID         int64      `gorm:"column:id;primaryKey;autoIncrement"                      json:"id"`
 	Migration  string     `gorm:"column:migration;not null;uniqueIndex:uk_migration_step" json:"migration"`   // 迁移标识，如 "v1.6.0-chapter-id-refactor"
-	Step       string     `gorm:"column:step;not null;uniqueIndex:uk_migration_step"      json:"step"`        // 迁移内 step 标识（语义化 key，如 "1.5-crossref-data"）
+	Step       string     `gorm:"column:step;not null;uniqueIndex:uk_migration_step"      json:"step"`        // 迁移内 step 标识（语义化 key，如 "1-crossref-data"）
 	Status     string     `gorm:"column:status;not null;index"                            json:"status"`      // "running" | "done" | "failed"（未开始无行）
 	StartedAt  *time.Time `gorm:"column:started_at"                                       json:"started_at"`  // 本 step 开始时间，nullable
 	FinishedAt *time.Time `gorm:"column:finished_at"                                      json:"finished_at"` // 本 step 完成时间，nullable
