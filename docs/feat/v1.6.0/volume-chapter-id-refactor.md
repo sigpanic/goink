@@ -123,17 +123,20 @@
 
 ### 5.8 migrate_state 表（新增，迁移状态管理）
 
-字段：`step string PK, status string, started_at timestamp, finished_at timestamp`
+字段：`migration string, step string, status string, started_at timestamp, finished_at timestamp`
 
-- `step`：迁移标识，每个迁移独立一行，如 `"v1.5.0_chapter_id_refactor"`，未来新迁移加新 step 行即可复用此表
-- `status`：`"running"` / `"done"`，整体迁移状态
+- `migration`：迁移标识，一次大迁移一组行，如 `"v1.6.0-chapter-id-refactor"`，未来新迁移加新组即可复用此表
+- `step`：迁移内执行步骤标识，`(migration, step)` 唯一，一行 = 一个步骤（如 `"1.5-crossref-data"`）
+- `status`：`"running"` / `"done"` / `"failed"`，单步骤状态
 - `started_at` / `finished_at`：时间戳，便于排查
 
-migrate.Run 流程：
-- 入口查 `WHERE step = "v1.5.0_..." ` → `status == "done"` 则秒过
-- 记录不存在或 status == "running" → 建/更新记录为 running，跑各步骤（单步骤幂等），全部成功后写 status = "done"
+migrate.Run 流程（注册表驱动，见 internal/migrate/step.go）：
+- 先 AutoMigrate 建 migrate_state 表（backup 的组判断依赖它存在）
+- backup 查本迁移组（`migration = "v1.6.0-..."`）是否全部 done：全 done 则跳过备份；否则备份（按迁移名目录，临时目录原子 rename）
+- 框架遍历注册表步骤：已 done 跳过；未 done 置 running → 执行（步骤内部幂等）→ done / failed
+- 新库短路：chapters 表不存在 → 所有 step 直接 INSERT done
 
-**新用户处理**：DB 初始化时（GORM AutoMigrate 后）直接 INSERT 所有已知 step 为 "done"，migrate.Run 入口秒过，新用户不跑任何 migrate 步骤。
+**新用户处理**：新库短路直接全 done，不跑任何 migrate 步骤。
 
 **为什么不用 HasColumn 做 flag**：migrate 步骤7删了 chapter_number 列后，如果中途中断（如步骤6文件 rename 未完成），重启后 HasColumn(chapter, chapter_number) 不存在会误判"已迁移"，导致文件 rename 永远不完成。migrate_state 表独立追踪整体状态，跟 schema 列状态解耦，更可靠。
 
@@ -198,17 +201,17 @@ migrate.Run 流程：
 
 ### 7.4 中断恢复
 
-每个步骤设计为可重入，整体靠 migrate_state 表（见 5.8）的 status 字段做 flag：
-- migrate.Run 入口查 `migrate_state.status == "done"` → 秒过（整体已迁移，启动无开销）
-- status == "running"（或记录不存在）→ 继续跑各步骤（单步骤幂等）：
+每个步骤设计为可重入，靠 migrate_state 表（见 5.8）按 `(migration, step)` 记录状态做 flag：
+- 框架遍历注册表：已 done 的 step 跳过；未 done 的置 running → 执行（单步骤幂等）→ done / failed
+- 单步骤幂等检查（step 内部自检自身完成条件）：
   - DB 列已存在 → 跳过
   - DB 数据重写条件 `WHERE chapter_id IS NULL` → 已重写的不重复
   - 文件目标 `chapters/{id}.md` 已存在 → 跳过 rename
   - 文件源 `chapters/{num:03d}.md` 不存在 → 跳过 rename
   - git 干净 → 跳过 commit
-- 全部步骤成功 → status = "done"，后续启动秒过
+- 全部 step done → backup 组判断"全 done"→ 后续启动跳过备份
 
-重启 `migrate.Run` 自动从未完成处继续，status 仍为 "running" 时继续跑，单步骤幂等保证不重复执行已完成的子操作。
+重启 `migrate.Run` 自动从未 done 的 step 继续，单步骤幂等保证不重复执行已完成的子操作。
 
 ### 7.5 注意事项
 
@@ -515,7 +518,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 6. **结构操作仅前端**：不新增 insert/move/delete chapter mcp_tool
 7. **实施顺序**（第十五节）：7 个 commit，PR1 破坏性核心 #1-#4，PR2 增量功能 #5-#7
 8. **migrate 执行模式**：启动时同步等待（应用启动时跑 migrate，跑完进主界面；大数据量启动慢但简单）
-9. **migrate_state 表**（5.8）：自建迁移状态表（step+status），整体 running/done flag，不用 HasColumn 做 flag（避免中途中断误判）；不引入 golang-migrate（与 GORM AutoMigrate 冲突）
+9. **migrate_state 表**（5.8）：自建迁移状态表（migration+step 两级），按步骤 running/done/failed 记录，不用 HasColumn 做 flag（避免中途中断误判）；不引入 golang-migrate（与 GORM AutoMigrate 冲突）
 10. **文件迁移**（7.3）：逐个 os.Rename + git commit 两阶段，不用 cp+rm 三阶段，不用 git mv（非原子）；EXDEV 时退化 cp+rm
 11. **AI 不自动开卷**：AI 写到卷末时提示用户"建议开新卷"，由用户在前端创建卷；AI 不自主开卷（卷边界是用户掌控的大动作）
 12. **实时计算 num**：不 DB 维护 num 字段，list 时按 (volume_id, sort_order) 排序位次实时生成；DB 维护 num 等于回退 chapter_number 老方案，失去 id 方案价值

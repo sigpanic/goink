@@ -5,7 +5,7 @@ import "time"
 // Chapter 是章节元数据，正文和大纲以文件形式存储在 Git 仓库中。
 // DB 仅保存索引和统计信息，不存实际内容。
 //
-// v1.5.0 迁移期双字段共存：
+// v1.6.0 迁移期双字段共存：
 //   - ChapterNumber（旧）：章节号，迁移完成后由 commit 1.7 删除
 //   - VolumeID/SortOrder（新）：分卷外键 + 内部排序键，章节号改由 (volume_id, sort_order) 排序后位次实时生成
 //   - ChapterNumber 唯一索引在 commit 1.7 删字段时一并删除

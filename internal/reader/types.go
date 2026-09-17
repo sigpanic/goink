@@ -28,8 +28,8 @@ type ReaderPerspective struct {
 	RelatedTruth      string    `gorm:"column:related_truth"                json:"related_truth"`      // 作者视角：真实情况。所有类型可选，不只是 misconception
 	PlantedChapter    int       `gorm:"column:planted_chapter;not null"     json:"planted_chapter"`    // 在哪章种下
 	RevealedChapter   int       `gorm:"column:revealed_chapter;default:0"   json:"revealed_chapter"`   // 在哪章回收，0=未回收
-	PlantedChapterID  *int64    `gorm:"column:planted_chapter_id;index"      json:"planted_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 PlantedChapter 反查填充
-	RevealedChapterID *int64    `gorm:"column:revealed_chapter_id;index"     json:"revealed_chapter_id"` // v1.5.0 新增：chapters.id 外键，commit 1.5 由 RevealedChapter 反查填充
+	PlantedChapterID  *int64    `gorm:"column:planted_chapter_id;index"      json:"planted_chapter_id"` // v1.6.0 新增：chapters.id 外键，commit 1.5 由 PlantedChapter 反查填充
+	RevealedChapterID *int64    `gorm:"column:revealed_chapter_id;index"     json:"revealed_chapter_id"` // v1.6.0 新增：chapters.id 外键，commit 1.5 由 RevealedChapter 反查填充
 	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"    json:"created_at"`
 }
 

@@ -510,7 +510,7 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 
 	var results []Result
 	for _, r := range reranked {
-		// v1.5.0：vec 表只存 chapter_id，按 id 反查章节信息（真实章节号/标题）
+		// v1.6.0：vec 表只存 chapter_id，按 id 反查章节信息（真实章节号/标题）
 		meta := chapMeta[r.ChapterID]
 		contentPreview := r.Content
 		runes := []rune(contentPreview)

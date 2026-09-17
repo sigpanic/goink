@@ -22,7 +22,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 
 | # | Commit message | 做什么 |
 |---|---|---|
-| 1.1 | `feat(migrate): add migrate_state + volume tables` | 新建 migrate_state 表（step+status+时间戳）+ volume 表（id/novel_id/name/sort_order+时间戳）；加 MigrateState/Volume model 到 AutoMigrate 列表 |
+| 1.1 | `feat(migrate): add migrate_state + volume tables` | 新建 migrate_state 表（migration+step 两级：migration 迁移标识 + step 步骤标识 + status + 时间戳）+ volume 表（id/novel_id/name/sort_order+时间戳）；加 MigrateState/Volume model 到 AutoMigrate 列表 |
 | 1.2 | `feat(chapter): add volume_id + sort_order + cross-ref chapter_id columns` | chapter 表加 volume_id *int64 + sort_order int；5 张交叉引用表（time_entries/arc_nodes/reader_perspectives/writing_log/character_relations）各加 chapter_id 列；**保留旧字段共存**（迁移期双字段） |
 | 1.3 | `feat(rag): migrate vec table chapter_number to chapter_id` | vec_novel_{id} 虚拟表 chapter_number 列改为 chapter_id；新建 vec 表用 chapter_id 列；旧 chunk 数据反查 chapter.id 迁移（失败写 0 + 日志） |
 | 1.4 | `feat(migrate): auto-backup before migration` | migrate 跑前自动备份 novel-agent.db + novels/ 到 platform.DataDir()/backups/{timestamp}/；保留最近 3 份；备份失败不阻塞 migrate |

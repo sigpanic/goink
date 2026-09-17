@@ -18,7 +18,7 @@ import (
 // 调用方按章节号语义提交（ChapterNumber），consumer 反查 ch.ID 后填充 ChapterID，
 // 后续删除/索引一律用 ChapterID（chapters.id 外键）。
 //
-// TODO(v1.5.0): 反查是过渡设计——v1.5.0 支持删除/重排后章节号实时计算且不再存 DB，
+// TODO(v1.6.0): 反查是过渡设计——v1.6.0 支持删除/重排后章节号实时计算且不再存 DB，
 // 反查会失效并引入竞态（去重窗口内章节号过期）。commit 3.1 将调用方（rw_tools/content）
 // 路径解析改为 id 后，SubmitRefresh 改按 chapterID 提交，删除此反查与 ChapterNumber 字段。
 type RefreshTask struct {
@@ -169,7 +169,7 @@ func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 		q.logger.Warn("查章节失败，跳过向量刷新", "novel_id", task.NovelID, "chapter_number", task.ChapterNumber, "err", err)
 		return
 	}
-	// TODO(v1.5.0): 反查 ch.ID 是过渡实现（见 RefreshTask 注释），commit 3.1 改按 id 提交后删除。
+	// TODO(v1.6.0): 反查 ch.ID 是过渡实现（见 RefreshTask 注释），commit 3.1 改按 id 提交后删除。
 	// 当前阶段（章节号稳定）无竞态；此后删除/索引一律用 chapter_id 外键。
 	task.ChapterID = ch.ID
 

@@ -89,9 +89,9 @@ type TimelineEntry struct {
 	SourceChapter     int       `gorm:"column:source_chapter"                   json:"source_chapter"`         // 在哪章创建/埋下的，创建后不可变
 	Source            string    `gorm:"column:source"                           json:"source"`                 // "ai" | "user"，谁创建的
 	ResolvedChapter   int       `gorm:"column:resolved_chapter"                 json:"resolved_chapter"`       // 在哪章回收，0 表示未回收
-	TargetChapterID   *int64    `gorm:"column:target_chapter_id;index"          json:"target_chapter_id"`      // v1.5.0 新增：chapters.id 外键，commit 1.5 由 TargetChapter 反查填充
-	SourceChapterID   *int64    `gorm:"column:source_chapter_id;index"          json:"source_chapter_id"`      // v1.5.0 新增：chapters.id 外键，commit 1.5 由 SourceChapter 反查填充
-	ResolvedChapterID *int64    `gorm:"column:resolved_chapter_id;index"        json:"resolved_chapter_id"`    // v1.5.0 新增：chapters.id 外键，commit 1.5 由 ResolvedChapter 反查填充
+	TargetChapterID   *int64    `gorm:"column:target_chapter_id;index"          json:"target_chapter_id"`      // v1.6.0 新增：chapters.id 外键，commit 1.5 由 TargetChapter 反查填充
+	SourceChapterID   *int64    `gorm:"column:source_chapter_id;index"          json:"source_chapter_id"`      // v1.6.0 新增：chapters.id 外键，commit 1.5 由 SourceChapter 反查填充
+	ResolvedChapterID *int64    `gorm:"column:resolved_chapter_id;index"        json:"resolved_chapter_id"`    // v1.6.0 新增：chapters.id 外键，commit 1.5 由 ResolvedChapter 反查填充
 	CreatedAt         time.Time `gorm:"column:created_at;autoCreateTime"        json:"created_at"`
 	UpdatedAt         time.Time `gorm:"column:updated_at;autoUpdateTime"        json:"updated_at"`
 }

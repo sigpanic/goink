@@ -48,7 +48,7 @@ func (s *VectorStore) ensureTable(ctx context.Context, novelID int64) error {
 			return fmt.Errorf("rag: drop old vec table %s: %w", tableName, err)
 		}
 	}
-	// v1.5.0 迁移：旧表仍用 chapter_number 列（迁移前 schema）时 DROP 重建。
+	// v1.6.0 迁移：旧表仍用 chapter_number 列（迁移前 schema）时 DROP 重建。
 	// vec0 虚拟表不支持改列名，只能重建为新 schema（chapter_id 列）。
 	// 向量是派生索引，丢失后由 RebuildAll 覆盖度检查自动重建，无需数据搬迁。
 	if hasOld, _ := tableHasColumn(ctx, s.db, tableName, "chapter_number"); hasOld {
@@ -156,7 +156,7 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 				fmt.Sprintf("chapter_id IN (%s)", strings.Join(placeholders, ",")))
 		}
 		if len(filter.ChapterNumbers) > 0 {
-			// v1.5.0 后 vec 表已无 chapter_number 列，此过滤不再可用。
+			// v1.6.0 后 vec 表已无 chapter_number 列，此过滤不再可用。
 			// 调用方应改用 ChapterIDs（commit 4.3 迁移）。
 			s.log.Warn("rag: Search filter.ChapterNumbers deprecated, use ChapterIDs", "values", filter.ChapterNumbers)
 		}

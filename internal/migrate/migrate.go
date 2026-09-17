@@ -26,6 +26,17 @@ import (
 
 // Run 自动创建/更新全部数据表，幂等安全。
 func Run(db *gorm.DB, log *slog.Logger) error {
+	// 0. 先建 migrate_state 表：backup 的"本迁移组 done 判断"依赖它存在；
+	//    只建这一张表，不触发 time_entries 等表的加列，不影响下方 renameColumns 的顺序约束。
+	if err := db.AutoMigrate(&MigrateState{}); err != nil {
+		return fmt.Errorf("migrate: migrate_state 表: %w", err)
+	}
+
+	// v1.6.0：破坏性迁移前自动备份（仅迁移期执行一次、按迁移名目录、失败不阻塞迁移）。
+	if err := backupBeforeMigrate(db, log, migrationV160); err != nil {
+		log.Warn("迁移前自动备份失败（继续迁移）", "err", err)
+	}
+
 	// 移除旧 novels 表的 dir_path 列（该字段从未被读取过）。幂等：列不存在时报错忽略。
 	if err := db.Exec("ALTER TABLE novels DROP COLUMN dir_path").Error; err != nil {
 		log.Warn("迁移：删除 novels.dir_path 列失败（如列已不存在则无害）", "err", err)
@@ -110,6 +121,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		if err := db.AutoMigrate(m); err != nil {
 			return fmt.Errorf("migrate: %T: %w", m, err)
 		}
+	}
+
+	// v1.6.0 破坏性迁移步骤（注册表驱动，见 step.go）：数据重写 / 文件重命名 / 删旧列。
+	// 依赖上方 AutoMigrate 已把 chapter_id / volume_id / sort_order 列加上（commit 1.2 模型）。
+	if err := runSteps(db, log, migrationV160, registryV160); err != nil {
+		return err
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
