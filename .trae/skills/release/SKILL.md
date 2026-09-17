@@ -72,6 +72,7 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 ## 注意事项
 
 - **Release notes**：仅手写中文。`release.yml` 的 release job 不再 `generate_release_notes`，只把产物上传到第 4 步已建的 release，不覆盖 body。
+- **禁止 force push 已发布的 tag**：会重新触发 release workflow（匹配 `v*`），用不可复现的新构建覆盖现有 release 产物并重置下载计数。若确有必要动旧 tag，必须先临时禁用 Release workflow（GitHub → Settings → Actions），操作完再启用。
 - **辨识版本内 fix**：区分「修复上个版本已存在的问题」（应写入 notes）与「开发过程中先 feat 后 fix 的新问题」（属本版本内部迭代，不算与上个版本的差异，不应写入 notes）。只记录面向用户的、相对上个版本的真实变化。务必结合 `Refs #NN` 的 issue 讨论确认每个 fix 到底修的是什么。
 - **Commit 规范**：英文、具体描述、无 emoji、无 Co-Authored-By
 - **PR 规范**：英文标题和描述
