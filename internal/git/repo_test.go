@@ -258,6 +258,7 @@ func TestCommitFileList_ShowFile(t *testing.T) {
 	}
 	if commit == nil {
 		t.Fatal("expected non-nil commit")
+		return
 	}
 	if len(entries) == 0 {
 		t.Fatal("expected at least 1 file entry")
@@ -390,6 +391,7 @@ func TestCommitFileList_CommitInfo(t *testing.T) {
 	}
 	if commit == nil {
 		t.Fatal("expected non-nil commit")
+		return
 	}
 	if commit.Hash != hash {
 		t.Errorf("hash mismatch: expected %q, got %q", hash, commit.Hash)
