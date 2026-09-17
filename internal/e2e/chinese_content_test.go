@@ -76,6 +76,7 @@ func indexChapter(t *testing.T, vs *rag.VectorStore, novelID int64, chapterNum i
 
 	params := rag.ChapterChunkParams{
 		ChapterNumber: chapterNum,
+		ChapterID:     int64(chapterNum),
 		ChapterTitle:  title,
 		Content:       content,
 		Summary:       summary,
@@ -200,24 +201,24 @@ func TestChineseContent_MultipleChapters(t *testing.T) {
 	t.Logf("Search returned %d results:", len(results))
 	for i, r := range results {
 		t.Logf("  [%d] chunk=%s type=%s ch=%d relevance=%.4f content=%.60s...",
-			i, r.ChunkID, r.SourceType, r.ChapterNumber, r.Relevance, r.Content)
+			i, r.ChunkID, r.SourceType, r.ChapterID, r.Relevance, r.Content)
 	}
 
 	// Verify chapter 2 content ranks highest
 	topResult := results[0]
-	if topResult.ChapterNumber != 2 {
+	if topResult.ChapterID != 2 {
 		// Allow some flexibility — at least verify chapter 2 appears in top results
 		foundCh2 := false
 		for _, r := range results {
-			if r.ChapterNumber == 2 {
+			if r.ChapterID == 2 {
 				foundCh2 = true
 				break
 			}
 		}
 		if !foundCh2 {
-			t.Errorf("chapter 2 not found in any search results; top is chapter %d", topResult.ChapterNumber)
+			t.Errorf("chapter 2 not found in any search results; top is chapter %d", topResult.ChapterID)
 		} else {
-			t.Logf("WARNING: chapter 2 did not rank first (chapter %d did), but was found in results", topResult.ChapterNumber)
+			t.Logf("WARNING: chapter 2 did not rank first (chapter %d did), but was found in results", topResult.ChapterID)
 		}
 	}
 

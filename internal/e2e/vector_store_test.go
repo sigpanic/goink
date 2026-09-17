@@ -123,9 +123,9 @@ func TestVectorStore_SearchWithFilter(t *testing.T) {
 
 	// Index chunks from multiple chapters
 	chunks := []rag.Chunk{
-		{ID: "10003_0", Content: "第一章：主角初入江湖", ChapterNumber: 1, ChunkType: "content", ChunkIndex: 0},
-		{ID: "10003_1", Content: "第二章：主角遭遇强敌", ChapterNumber: 2, ChunkType: "content", ChunkIndex: 0},
-		{ID: "10003_2", Content: "第三章：主角修炼突破", ChapterNumber: 3, ChunkType: "content", ChunkIndex: 0},
+		{ID: "10003_0", Content: "第一章：主角初入江湖", ChapterNumber: 1, ChapterID: 1, ChunkType: "content", ChunkIndex: 0},
+		{ID: "10003_1", Content: "第二章：主角遭遇强敌", ChapterNumber: 2, ChapterID: 2, ChunkType: "content", ChunkIndex: 0},
+		{ID: "10003_2", Content: "第三章：主角修炼突破", ChapterNumber: 3, ChapterID: 3, ChunkType: "content", ChunkIndex: 0},
 	}
 
 	if err := vs.IndexChunks(ctx, novelID, chunks); err != nil {
@@ -133,7 +133,7 @@ func TestVectorStore_SearchWithFilter(t *testing.T) {
 	}
 
 	// Search with chapter filter
-	filter := &rag.SearchFilter{ChapterNumbers: []int{1, 2}}
+	filter := &rag.SearchFilter{ChapterIDs: []int64{1, 2}}
 	results, err := vs.Search(ctx, novelID, "主角", 10, filter)
 	if err != nil {
 		t.Fatalf("Search() with filter failed: %v", err)
@@ -141,8 +141,8 @@ func TestVectorStore_SearchWithFilter(t *testing.T) {
 
 	// All results should be from chapters 1 or 2
 	for _, r := range results {
-		if r.ChapterNumber != 1 && r.ChapterNumber != 2 {
-			t.Errorf("result from chapter %d, expected 1 or 2", r.ChapterNumber)
+		if r.ChapterID != 1 && r.ChapterID != 2 {
+			t.Errorf("result from chapter %d, expected 1 or 2", r.ChapterID)
 		}
 	}
 	t.Logf("Filter search returned %d results, all from chapters 1-2", len(results))
@@ -170,8 +170,8 @@ func TestVectorStore_DeleteChapterChunks(t *testing.T) {
 
 	// Index chunks
 	chunks := []rag.Chunk{
-		{ID: "10004_0", Content: "第一章内容：英雄出发", ChapterNumber: 1, ChunkType: "content", ChunkIndex: 0},
-		{ID: "10004_1", Content: "第二章内容：英雄归来", ChapterNumber: 2, ChunkType: "content", ChunkIndex: 0},
+		{ID: "10004_0", Content: "第一章内容：英雄出发", ChapterNumber: 1, ChapterID: 1, ChunkType: "content", ChunkIndex: 0},
+		{ID: "10004_1", Content: "第二章内容：英雄归来", ChapterNumber: 2, ChapterID: 2, ChunkType: "content", ChunkIndex: 0},
 	}
 	if err := vs.IndexChunks(ctx, novelID, chunks); err != nil {
 		t.Fatalf("IndexChunks() failed: %v", err)
@@ -194,7 +194,7 @@ func TestVectorStore_DeleteChapterChunks(t *testing.T) {
 	// Verify search only returns chapter 2
 	results, _ := vs.Search(ctx, novelID, "英雄", 10, nil)
 	for _, r := range results {
-		if r.ChapterNumber == 1 {
+		if r.ChapterID == 1 {
 			t.Error("found chunk from deleted chapter 1")
 		}
 	}
