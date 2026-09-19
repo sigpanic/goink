@@ -32,9 +32,9 @@ type ListByNovelOptions struct {
 
 const (
 	// chapterOrderAsc 按卷的可重排顺序和卷内顺序排序，未分卷章节置后。
-	chapterOrderAsc = "chapters.volume_id IS NULL ASC, volumes.sort_order ASC, chapters.sort_order ASC"
+	chapterOrderAsc = "chapters.volume_id IS NULL ASC, volumes.sort_order ASC, chapters.sort_order ASC, chapters.id ASC"
 	// chapterOrderDesc 是阅读顺序的倒序，用于 "desc" 与 GetRecent。
-	chapterOrderDesc = "chapters.volume_id IS NULL DESC, volumes.sort_order DESC, chapters.sort_order DESC"
+	chapterOrderDesc = "chapters.volume_id IS NULL DESC, volumes.sort_order DESC, chapters.sort_order DESC, chapters.id DESC"
 )
 
 // orderedByNovel 返回带卷排序信息的章节查询。必须按 volumes.sort_order 排序，
@@ -90,6 +90,23 @@ func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, e
 	return chapters, nil
 }
 
+// GetReadingNumberByID 返回章节在当前阅读顺序中的 1-based 位次。
+// 章节号由卷顺序、卷内 sort_order 和未分卷末尾规则实时计算，不依赖 chapter_number 列。
+func (s *Store) GetReadingNumberByID(ctx context.Context, novelID, chapterID int64) (int, error) {
+	var ids []int64
+	if err := s.orderedByNovel(ctx, novelID).
+		Order(chapterOrderAsc).
+		Pluck("chapters.id", &ids).Error; err != nil {
+		return 0, fmt.Errorf("chapter store: list reading order: %w", err)
+	}
+	for i, id := range ids {
+		if id == chapterID {
+			return i + 1, nil
+		}
+	}
+	return 0, fmt.Errorf("chapter store: get reading number: %w", gorm.ErrRecordNotFound)
+}
+
 // GetByNovelAndNumber 按 novel_id + chapter_number 取单章。
 func (s *Store) GetByNovelAndNumber(ctx context.Context, novelID int64, chapterNumber int) (*Chapter, error) {
 	var ch Chapter
@@ -134,23 +151,11 @@ func (s *Store) Create(ctx context.Context, tx *gorm.DB, novelID int64, volumeID
 			return err
 		}
 
-		var maxNum int
-		if err := tx.WithContext(ctx).Model(&Chapter{}).
-			Select("COALESCE(MAX(chapter_number), 0)").
-			Where("novel_id = ?", novelID).
-			Scan(&maxNum).Error; err != nil {
-			return fmt.Errorf("max chapter_number: %w", err)
-		}
-
-		if title == "" {
-			title = fmt.Sprintf("第%d章", maxNum+1)
-		}
 		created = &Chapter{
-			NovelID:       novelID,
-			ChapterNumber: maxNum + 1,
-			VolumeID:      volumeID,
-			SortOrder:     pos,
-			Title:         title,
+			NovelID:   novelID,
+			VolumeID:  volumeID,
+			SortOrder: pos,
+			Title:     title,
 		}
 		if err := tx.WithContext(ctx).Create(created).Error; err != nil {
 			return fmt.Errorf("insert chapter: %w", err)

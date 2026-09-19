@@ -175,9 +175,6 @@ func TestEditNewChannel_CreatesRecordAndFile(t *testing.T) {
 	if ch.SortOrder != 1 {
 		t.Errorf("sort_order = %d, want 1", ch.SortOrder)
 	}
-	if ch.ChapterNumber != 1 {
-		t.Errorf("chapter_number = %d, want 1", ch.ChapterNumber)
-	}
 	if ch.Title != "夜入皇城" {
 		t.Errorf("title = %q, want 夜入皇城", ch.Title)
 	}
@@ -206,12 +203,6 @@ func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
 	}
 	if ch.SortOrder != 3 { // 贴最后一卷尾：max(1,2)+1
 		t.Errorf("sort_order = %d, want 3", ch.SortOrder)
-	}
-	if ch.ChapterNumber != 3 {
-		t.Errorf("chapter_number = %d, want 3", ch.ChapterNumber)
-	}
-	if ch.Title != "第3章" { // 缺省标题按分配的章节号
-		t.Errorf("title = %q, want 第3章", ch.Title)
 	}
 }
 
@@ -255,8 +246,8 @@ func TestEditOutlineNewChannel_NoVolume(t *testing.T) {
 	if ch.VolumeID != nil {
 		t.Errorf("volume_id = %v, want nil", ch.VolumeID)
 	}
-	if ch.SortOrder != 1 || ch.ChapterNumber != 1 {
-		t.Errorf("sort_order = %d, chapter_number = %d, want 1/1", ch.SortOrder, ch.ChapterNumber)
+	if ch.SortOrder != 1 {
+		t.Errorf("sort_order = %d, want 1", ch.SortOrder)
 	}
 	if got := mustReadFile(t, novelFile(t, 1, fmt.Sprintf("outlines/id_%d.md", newID))); got != "# 未分卷大纲" {
 		t.Errorf("file content = %q", got)
@@ -309,8 +300,8 @@ func TestEditNewChannel_AppendsWithinTargetVolume(t *testing.T) {
 	newID := res.Data["chapter_id"].(int64)
 
 	newCh := fetchChapter(t, db, newID)
-	if newCh.SortOrder != 2 || newCh.ChapterNumber != 4 {
-		t.Errorf("new chapter sort_order=%d chapter_number=%d, want 2/4", newCh.SortOrder, newCh.ChapterNumber)
+	if newCh.SortOrder != 2 {
+		t.Errorf("new chapter sort_order=%d, want 2", newCh.SortOrder)
 	}
 	if got := fetchChapter(t, db, c2).SortOrder; got != 2 {
 		t.Errorf("c2 sort_order = %d, want 2 (other volume unchanged)", got)
@@ -362,9 +353,6 @@ func TestEditNewChannel_EmptyVolumeAfterUnassignedChapters(t *testing.T) {
 	ch := fetchChapter(t, db, newID)
 	if ch.SortOrder != 1 {
 		t.Errorf("sort_order = %d, want 1", ch.SortOrder)
-	}
-	if ch.ChapterNumber != 3 {
-		t.Errorf("chapter_number = %d, want 3", ch.ChapterNumber)
 	}
 }
 

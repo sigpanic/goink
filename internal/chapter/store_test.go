@@ -78,6 +78,52 @@ func TestChListAllByNovelOrdersVolumesThenUnassigned(t *testing.T) {
 	}
 }
 
+func TestChGetReadingNumberByIDUsesCompositeOrder(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	v1 := volume.Volume{NovelID: 1, Name: "第一卷", SortOrder: 2}
+	v2 := volume.Volume{NovelID: 1, Name: "第二卷", SortOrder: 1}
+	if err := db.Create(&v1).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&v2).Error; err != nil {
+		t.Fatal(err)
+	}
+	unassigned := Chapter{NovelID: 1, ChapterNumber: 1, SortOrder: 1}
+	v1Chapter := Chapter{NovelID: 1, ChapterNumber: 2, VolumeID: &v1.ID, SortOrder: 1}
+	v2Later := Chapter{NovelID: 1, ChapterNumber: 3, VolumeID: &v2.ID, SortOrder: 2}
+	v2First := Chapter{NovelID: 1, ChapterNumber: 4, VolumeID: &v2.ID, SortOrder: 1}
+	for _, ch := range []*Chapter{&unassigned, &v1Chapter, &v2Later, &v2First} {
+		if err := db.Create(ch).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	for _, tt := range []struct {
+		id   int64
+		want int
+	}{
+		{v2First.ID, 1},
+		{v2Later.ID, 2},
+		{v1Chapter.ID, 3},
+		{unassigned.ID, 4},
+	} {
+		got, err := s.GetReadingNumberByID(ctx, 1, tt.id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != tt.want {
+			t.Errorf("chapter %d reading number = %d, want %d", tt.id, got, tt.want)
+		}
+	}
+
+	if _, err := s.GetReadingNumberByID(ctx, 1, 999); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Errorf("missing chapter error = %v, want gorm.ErrRecordNotFound", err)
+	}
+}
+
 func TestChListByNovel_Desc(t *testing.T) {
 	db := openChDB(t)
 	s := NewStore(db, testChLogger())
@@ -167,8 +213,8 @@ func TestChCreateAppendsToExplicitVolume(t *testing.T) {
 	if created.VolumeID == nil || *created.VolumeID != v.ID {
 		t.Errorf("volume_id = %v, want %d", created.VolumeID, v.ID)
 	}
-	if created.SortOrder != 2 || created.ChapterNumber != 3 || created.Title != "第3章" {
-		t.Errorf("created = %+v, want volume sort/number/title = %d/3/第3章", created, 2)
+	if created.SortOrder != 2 {
+		t.Errorf("sort_order = %d, want 2", created.SortOrder)
 	}
 }
 
@@ -192,8 +238,8 @@ func TestChCreateAppendsToUnassignedGroup(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if created.VolumeID != nil || created.SortOrder != 3 || created.ChapterNumber != 3 {
-		t.Errorf("created = %+v, want unassigned sort/number = 3/3", created)
+	if created.VolumeID != nil || created.SortOrder != 3 {
+		t.Errorf("created = %+v, want unassigned sort_order = 3", created)
 	}
 }
 

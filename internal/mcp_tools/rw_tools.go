@@ -386,7 +386,6 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	}
 	if ref.IsNew {
 		data["chapter_id"] = ch.ID
-		data["chapter_number"] = ch.ChapterNumber
 		if ch.VolumeID != nil {
 			data["volume_id"] = *ch.VolumeID
 		} else {
@@ -400,10 +399,15 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	}
 	// 章节正文全量替换且内容较长时注入维护提醒
 	if !isOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
+		reminder := fmt.Sprintf("你刚刚完成了《%s》的全量替换。", ch.Title)
+		if number, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumberByID(ctx, tc.NovelID, ch.ID); err != nil {
+			tc.LoggerOrDefault().Warn("计算实时章节号失败", "chapter_id", ch.ID, "err", err)
+		} else {
+			reminder = fmt.Sprintf("你刚刚完成了《%s》（第%d章）的全量替换。", ch.Title, number)
+		}
 		injects = append(injects, InjectMessage{
-			Role: "user",
-			Content: fmt.Sprintf("你刚刚完成了《%s》（第%d章）的全量替换。请执行以下维护操作：\n1. 检查并更新角色设定（性格变化、新能力、身份转变等）\n2. 更新故事时间线（伏笔回收、新伏笔记录、章节计划推进）\n3. 更新读者认知（新悬念、已回收悬念）\n4. 更新故事弧线节点进度\n完成后向用户汇报修改摘要。",
-				ch.Title, ch.ChapterNumber),
+			Role:    "user",
+			Content: reminder + "请执行以下维护操作：\n1. 检查并更新角色设定（性格变化、新能力、身份转变等）\n2. 更新故事时间线（伏笔回收、新伏笔记录、章节计划推进）\n3. 更新读者认知（新悬念、已回收悬念）\n4. 更新故事弧线节点进度\n完成后向用户汇报修改摘要。",
 		})
 	}
 	if a.ChangeType == "line_range_replace" {
@@ -837,7 +841,7 @@ func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.C
 
 const editDescription = `编辑小说文件（章节正文、大纲、故事状态 goink.md 或技能文件）。支持三种编辑模式：full_replace（全文替换）、search_replace（查找替换）、line_range_replace（行范围替换）。
 
-新建章节或大纲：path 使用 new.md 形式（格式见 path 参数说明），且只能 full_replace；成功后返回值携带分配的 chapter_id、chapter_number、volume_id 与物理路径，后续编辑一律使用返回的物理路径。
+新建章节或大纲：path 使用 new.md 形式（格式见 path 参数说明），且只能 full_replace；成功后返回值携带分配的 chapter_id、volume_id 与物理路径，后续编辑一律使用返回的物理路径。
 
 各模式必填参数：
 - full_replace：new_content
