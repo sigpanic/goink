@@ -6,10 +6,24 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 
 - 只在当前启动的 worktree 中读取、编辑和运行命令。不要进入另一个 worktree 操作文件。
 - 当前仓库使用两个 worktree：`/home/nianhe/projects/todo`（`master`）和 `/home/nianhe/projects/goink`（`dev`）。以当前工作目录为准，不要硬编码切换到另一个目录。
-- Git 只允许执行只读操作：`status`、`diff`、`log`、`show`、`branch`、`tag`、`ls-files`、`blame`、`grep`、`rev-parse`、`rev-list`、`stash list` 等。
-- 未经用户明确许可，不要执行任何 Git 写操作，包括 `commit`、`push`、`pull`、`fetch`、`merge`、`rebase`、`reset`、`revert`、`checkout`、`stash`、`clean`、创建/删除分支或 tag。
-- 修改完成后不要自动 commit 或 push，也不要主动询问是否 commit；等待用户明确指示。
-- Commit message 使用英文、具体描述、无 emoji、无 `Co-Authored-By`。Issue 引用使用 body 末尾的 `Refs #NN`，不要使用 `fixes`、`closes` 或 `resolves`，除非用户明确要求关闭 issue。
+- 执行任何 Git 命令前，先确认当前 CWD 是本次任务的 worktree 根目录；不要把其他 worktree 的路径传给 Git 命令。
+- Git 默认只执行只读操作：`status`、`diff`、`log`、`show`、`branch`、`tag`、`ls-files`、`blame`、`grep`、`rev-parse`、`rev-list`、`stash list` 等。
+- 未经用户明确许可，不要执行任何 Git 写操作；执行前必须先向用户说明将执行的具体操作并获得许可。包括 `add`、`commit`、`push`、`pull`、`fetch`、`merge`、`rebase`、`reset`、`revert`、`checkout`、`stash`、`clean`、创建/删除分支或 tag，以及修改 Git 配置。
+- 修改完成后不要自动 `add`、commit 或 push，也不要主动询问“是否 commit”；完成代码后先停止并等待用户 review，只有用户明确指示后才进行 Git 写操作。
+- Commit message 使用英文、具体描述、无 emoji、无 `Co-Authored-By`，必须遵循 Conventional Commits：`<type>(<optional-scope>): <description>`。
+- 允许的 type 只有：`feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`。
+- Commit message 必须包含 subject 和 body；subject 后空一行，再用 body 说明改了什么以及为什么改，不能只有 subject。
+- Issue 引用使用 body 末尾的 `Refs #NN`，不要使用 `fixes`、`closes` 或 `resolves`，除非用户明确要求关闭 issue。
+
+## 开发流程与授权边界
+
+- 默认流程是：先讨论设计方案 → 编写或更新设计文档 → 设定实现与 commit 路线 → 用户确认 → 开始写代码 → 验证 → 等待用户 review → 用户明确授权后执行 Git 写操作。
+- 对涉及多个文件、数据结构、API、数据库、UI 流程或行为变化的任务，必须先说明设计、影响范围、风险和验证方案；用户确认前不要写代码。
+- 设计确认后，先把方案沉淀到合适的 `docs/` 文档，或在用户明确同意不写文档时跳过；不要只把重要设计留在对话里。
+- 开始实现前，列出预计的文件范围、实现步骤和 commit 拆分/路线；不要在没有路线的情况下随意边改边提交。
+- 未经用户明确允许，不要自行创建、修改或删除代码文件。可以进行只读检查、分析、提出方案和文档草稿；代码实现必须等用户确认。
+- 纯格式化、明显的拼写修正或用户明确要求“直接修复”的小改动可以直接处理，但仍需遵守其他规则，并在完成后等待 review。
+- 写完代码后报告变更和验证结果，停下来等待用户 review；不得因为测试通过就自动暂存、提交、推送或合并。
 
 ## 构建与验证
 
@@ -17,6 +31,7 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 - 前端命令必须先进入 `frontend/`：使用 `npm run build`、`npm run lint`、`npm run test`；不要在项目根目录运行 `npm install`。
 - 安装前端依赖时，在 `frontend/` 中执行 `npm install <pkg> --save`。
 - `.githooks/pre-commit` 会按 staged 文件范围执行验证：Go 变更触发 build/test/golangci-lint，前端变更触发 build/lint/test，文档和配置变更跳过。除非用户要求或需要诊断，通常不重复运行整套验证。
+- `commit-msg` hook 会校验 Conventional Commits，并要求 subject 与 body 之间有空行且 body 非空；提交前应主动遵守，不要依赖 hook 纠错。
 - 系统依赖（Ubuntu/Debian）：`libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc`。
 
 ## 代码库结构与约定
