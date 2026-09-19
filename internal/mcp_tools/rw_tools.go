@@ -35,7 +35,7 @@ type EditArgs struct {
 	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
 	Reason     string `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
-	Title      string `json:"title" jsonschema:"description=章节标题。new.md 新建时可选，缺省为“第N章”（N 为分配的章节号）；对已有章节/大纲传入时覆盖原标题（chapters/ 与 outlines/ 路径均生效）" validate:"omitempty"`
+	Title      string `json:"title" jsonschema:"description=章节标题。new.md 新建时可选；对已有章节/大纲传入时覆盖原标题（chapters/ 与 outlines/ 路径均生效）" validate:"omitempty"`
 }
 
 // EditTool 编辑文件（章节或故事状态），支持全文替换、查找替换、行范围替换。
@@ -247,6 +247,7 @@ func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContex
 //   - 新建走 new.md 通道：先建章节记录拿 id，再写物理文件；写文件失败补偿删记录
 func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolContext, ref chapterRef, isOutline bool) (*ToolResult, error) {
 	physical := physicalRWPath(isOutline, ref.ID)
+	chStore := chapter.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	var (
 		ch       *chapter.Chapter
@@ -254,7 +255,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	)
 	if ref.IsNew {
 		// 新建通道：只能 full_replace；卷可选——带卷校验归属，
-		// 不带卷由 createChapterRecord 解析默认卷（最后一卷，无卷则未分卷）
+		// 不带卷时默认最后一卷；无卷则归入未分卷组。
 		if a.ChangeType != "full_replace" {
 			return &ToolResult{Success: false, Error: "new.md 仅支持 full_replace（新建文件无原文可查改）"}, nil
 		}
@@ -301,9 +302,10 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	if proposed == current {
 		// 内容未变：title 有变化时仍执行标题更新，否则直接跳过
 		if !ref.IsNew && a.Title != "" && ch.Title != a.Title {
-			if err := updateChapterTitle(ctx, tc.DB, ch, a.Title); err != nil {
-				return nil, err
+			if err := chStore.UpdateTitle(ctx, tc.NovelID, ch.ID, a.Title); err != nil {
+				return nil, fmt.Errorf("update chapter title: %w", err)
 			}
+			ch.Title = a.Title
 			return &ToolResult{Success: true, Data: map[string]any{
 				"path":    physical,
 				"title":   a.Title,
@@ -346,7 +348,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 				volumeID = &last.ID
 			}
 		}
-		created, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).Create(ctx, nil, tc.NovelID, volumeID, a.Title)
+		created, err := chStore.Create(ctx, nil, tc.NovelID, volumeID, a.Title)
 		if err != nil {
 			return nil, fmt.Errorf("create chapter record: %w", err)
 		}
@@ -354,9 +356,10 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		// 物理路径按刚分配的章节 id 重新计算（ref.ID 对新建为 0）
 		physical = physicalRWPath(isOutline, ch.ID)
 	} else if a.Title != "" && ch.Title != a.Title {
-		if err := updateChapterTitle(ctx, tc.DB, ch, a.Title); err != nil {
-			return nil, err
+		if err := chStore.UpdateTitle(ctx, tc.NovelID, ch.ID, a.Title); err != nil {
+			return nil, fmt.Errorf("update chapter title: %w", err)
 		}
+		ch.Title = a.Title
 	}
 
 	// 写入物理文件；新建通道失败时补偿删除刚建的记录
@@ -400,7 +403,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	// 章节正文全量替换且内容较长时注入维护提醒
 	if !isOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
 		reminder := fmt.Sprintf("你刚刚完成了《%s》的全量替换。", ch.Title)
-		if number, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumberByID(ctx, tc.NovelID, ch.ID); err != nil {
+		if number, err := chStore.GetReadingNumberByID(ctx, tc.NovelID, ch.ID); err != nil {
 			tc.LoggerOrDefault().Warn("计算实时章节号失败", "chapter_id", ch.ID, "err", err)
 		} else {
 			reminder = fmt.Sprintf("你刚刚完成了《%s》（第%d章）的全量替换。", ch.Title, number)
@@ -790,15 +793,6 @@ func getChapterRecord(ctx context.Context, db *gorm.DB, novelID, id int64) (*cha
 		return nil, err
 	}
 	return &ch, nil
-}
-
-// updateChapterTitle 更新已有章节记录的标题，并同步内存中的记录值。
-func updateChapterTitle(ctx context.Context, db *gorm.DB, ch *chapter.Chapter, title string) error {
-	if err := db.WithContext(ctx).Model(ch).Update("title", title).Error; err != nil {
-		return fmt.Errorf("update chapter title: %w", err)
-	}
-	ch.Title = title
-	return nil
 }
 
 // deleteChapterRecord 补偿：新建通道写文件失败时删除刚建的记录，避免孤儿记录。

@@ -90,6 +90,19 @@ func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, e
 	return chapters, nil
 }
 
+// CountByNovel 返回小说当前的章节总数。
+// 阅读顺序中的章节号从 1 连续编号，因此该值也等于当前最大的展示章节号。
+func (s *Store) CountByNovel(ctx context.Context, novelID int64) (int, error) {
+	var count int64
+	if err := s.DB.WithContext(ctx).
+		Model(&Chapter{}).
+		Where("novel_id = ?", novelID).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("chapter store: count by novel: %w", err)
+	}
+	return int(count), nil
+}
+
 // GetReadingNumberByID 返回章节在当前阅读顺序中的 1-based 位次。
 // 章节号由卷顺序、卷内 sort_order 和未分卷末尾规则实时计算，不依赖 chapter_number 列。
 func (s *Store) GetReadingNumberByID(ctx context.Context, novelID, chapterID int64) (int, error) {
@@ -107,32 +120,16 @@ func (s *Store) GetReadingNumberByID(ctx context.Context, novelID, chapterID int
 	return 0, fmt.Errorf("chapter store: get reading number: %w", gorm.ErrRecordNotFound)
 }
 
-// GetByNovelAndNumber 按 novel_id + chapter_number 取单章。
-func (s *Store) GetByNovelAndNumber(ctx context.Context, novelID int64, chapterNumber int) (*Chapter, error) {
+// GetByID 按 novel_id + id 取单章。
+func (s *Store) GetByID(ctx context.Context, novelID, chapterID int64) (*Chapter, error) {
 	var ch Chapter
 	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
+		Where("novel_id = ? AND id = ?", novelID, chapterID).
 		First(&ch).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("chapter store: get by novel+number: %w", err)
-		}
-		return nil, fmt.Errorf("chapter store: get by novel+number: %w", err)
+		return nil, fmt.Errorf("chapter store: get by id: %w", err)
 	}
 	ch.FilePath = git.ChapterPath(ch.ID)
 	return &ch, nil
-}
-
-// GetLatestNumber 返回该小说当前最大的章节编号，无章节时返回 0。
-func (s *Store) GetLatestNumber(ctx context.Context, novelID int64) (int, error) {
-	var maxNum int
-	if err := s.DB.WithContext(ctx).
-		Model(&Chapter{}).
-		Where("novel_id = ?", novelID).
-		Select("COALESCE(MAX(chapter_number), 0)").
-		Scan(&maxNum).Error; err != nil {
-		return 0, fmt.Errorf("chapter store: latest number: %w", err)
-	}
-	return maxNum, nil
 }
 
 // Create 新建章节记录，并追加到指定卷或未分卷组的末尾。
@@ -199,10 +196,17 @@ func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chap
 	return chapters, nil
 }
 
-// UpdateTitle 更新章节标题。
-func (s *Store) UpdateTitle(ctx context.Context, novelID int64, chapterNumber int, title string) error {
-	return s.DB.WithContext(ctx).
+// UpdateTitle 按 novel_id + id 更新章节标题。
+func (s *Store) UpdateTitle(ctx context.Context, novelID, chapterID int64, title string) error {
+	result := s.DB.WithContext(ctx).
 		Model(&Chapter{}).
-		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
-		Update("title", title).Error
+		Where("novel_id = ? AND id = ?", novelID, chapterID).
+		Update("title", title)
+	if result.Error != nil {
+		return fmt.Errorf("chapter store: update title: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("chapter store: update title: %w", gorm.ErrRecordNotFound)
+	}
+	return nil
 }

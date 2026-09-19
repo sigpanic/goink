@@ -521,13 +521,13 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | 层 | 内容 | 状态 |
 |---|---|---|
 | **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | ✅ 已提交 |
-| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1 已提交；2.2 后续清理中；其余未做 |
+| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时章节号 + 卷名 | 🟡 vec 列已切，桥接与 chunk_id 未改；search 未改 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
 | **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）章节字段改 `*_chapter_id`；`get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
 | **L6 app 层** | `DeleteChapter`/`InsertChapter`/`MoveChapterToVolume`（含交叉引用检测拒绝）；volume CRUD（Create/Update/Delete/Get/Reorder）；`CreateChapter` 改走 volume store 分配 sort_order；`UpdateChapterTitle` 改按 id；novel export、content.go 同步 | ❌ 未做 |
 | **L7 前端** | 章节管理 tab（见第十二节） | ❌ 未做 |
-| **L1b 收尾** | model 删旧 num 字段 + migrate 1.7 DROP 列（**先 DROP INDEX 再 DROP COLUMN**）；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
+| **L1b 收尾** | migrate 1.7 DROP 旧 num 列（**先 DROP INDEX 再 DROP COLUMN**）；交叉引用 model 旧 num 字段在各自领域完成后移除；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
 
 **为什么 L0 必须在最前**：migrate 步骤（建 volume 表、初始化 sort_order）与 rw_tools 的 new.md 通道都依赖卷基建。原方案把它排在 PR2，导致 L5 自实现一份 `sort_order` 分配算法，L6 还得搬家。
 
@@ -539,7 +539,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 - **SQLite 不支持 `ALTER COLUMN`**：单独去 `NOT NULL` 需重建整表（create → copy → drop → rename），纯属白折腾
 - **不需要「双写兼容」**：不存在中间发行版（用户不会跑到半成品），代码无需「有 id 用 id、没 id 回退 num」的兼容逻辑
 
-**双字段为什么存在**：不是设计需要，是「代码还没改到」的产物。id 列已由 1.5 反查填好但暂无代码读它；num 列仍被 L2-L6 的代码读写。两者共存只因代码改造（L0/L2-L6）未完成。
+**双字段为什么存在**：不是设计需要，是「代码还没改到」的产物。id 列已由 1.5 反查填好但暂无代码读它；num 列仍被 L3-L6 的代码读写。两者共存只因代码改造（L0/L2-L6）未完成。
 
 **迁移反查与 model 解耦**：`crossref.go` / `rename.go` 读 `chapter_number` 用的是 raw SQL + 局部匿名结构体，不依赖 `chapter.Chapter`。因此删 model 字段与删 SQL 列是**两个独立约束**——前者只看编译，后者只看迁移步骤顺序。
 
@@ -564,8 +564,8 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
-| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | 🟡 |
-| 2.3 | `refactor(chapter): replace legacy number lookups` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id | ❌ |
+| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | ✅ |
+| 2.3 | `refactor(chapter): remove legacy number API` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
 | 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 #### L3 rag + search
@@ -614,13 +614,13 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 1.1 | `refactor(migrate): guard legacy num columns` | 1.5/1.6 补 num 列的 `HasColumn` 守卫（防 migrate_state 状态丢失后查不存在的列 → 启动失败） | ✅ |
-| 1.2 | `refactor(chapter): drop legacy num columns and fields` | ① 启用 migrate 1.7——先 DROP INDEX（`uk_novel_chapter` + writing_log 章节号索引）再 DROP COLUMN，删 chapter + 5 张交叉引用表旧 num 列；② model 移除 `chapter.ChapterNumber` 与 5 张交叉引用表旧 num 字段，清理全部引用（当前 272 处 / 43 文件） | ✅ |
+| 1.2 | `refactor(migrate): drop legacy num columns` | 启用 migrate 1.7——先 DROP INDEX（`uk_novel_chapter` + writing_log 章节号索引）再 DROP COLUMN，删 chapter + 5 张交叉引用表旧 num 列；交叉引用 model 字段在对应领域改完后移除。`chapter.ChapterNumber` 已在 L2 移除 | ❌ |
 
 **删列与删字段是两个独立约束，别绑在一起**：
 
 | 动作 | 唯一约束 |
 |---|---|
-| **删 model 字段** | 代码引用要改完（否则编译不过）。中间不运行应用，所以 not-null、INSERT 全不构成约束——**任何时候都能删** |
+| **删 model 字段** | 代码引用要改完，或明确将其作为后续领域的编译迁移清单。中间不运行应用，所以 not-null、INSERT 全不构成约束——**任何时候都能删** |
 | **删 SQL 列** | 迁移代码还要不要读它。1.5 反查读 num 列 + `chapters.chapter_number`；1.6 文件 rename 读 `chapters.chapter_number`（拼 `{num:03d}.md` 源路径）。1.7 必须在 1.5/1.6 之后 |
 
 迁移读 num 走 raw SQL + 匿名结构体（`crossref.go` / `rename.go`），**不依赖 model**——这也是两者独立的证据。

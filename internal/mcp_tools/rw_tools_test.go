@@ -81,14 +81,13 @@ func seedVolume(t *testing.T, db *gorm.DB, novelID int64, name string, sort int)
 	return v.ID
 }
 
-func seedChapter(t *testing.T, db *gorm.DB, novelID int64, vid *int64, num, sort int) int64 {
+func seedChapter(t *testing.T, db *gorm.DB, novelID int64, vid *int64, titleOrdinal, sort int) int64 {
 	t.Helper()
 	ch := chapter.Chapter{
-		NovelID:       novelID,
-		ChapterNumber: num,
-		VolumeID:      vid,
-		SortOrder:     sort,
-		Title:         fmt.Sprintf("第%d章", num),
+		NovelID:   novelID,
+		VolumeID:  vid,
+		SortOrder: sort,
+		Title:     fmt.Sprintf("第%d章", titleOrdinal),
 	}
 	if err := db.Create(&ch).Error; err != nil {
 		t.Fatalf("seed chapter: %v", err)

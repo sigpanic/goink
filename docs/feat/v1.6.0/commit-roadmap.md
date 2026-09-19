@@ -37,7 +37,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | **L5** | mcp_tools | 依赖 L2-L4 |
 | **L6** | app 层 | 依赖 L0 的 volume store |
 | **L7** | 前端 | 依赖 L6 的 API |
-| **L1b** | 收尾：删旧字段 | **最后**：删 SQL 列受迁移步骤顺序约束——1.7 必须在 1.5 反查、1.6 文件 rename 之后（它们要读 num 列）。删 model 字段则任何时候都行，只看代码引用是否改完 |
+| **L1b** | 收尾：删旧 SQL 列 | **最后**：删 SQL 列受迁移步骤顺序约束——1.7 必须在 1.5 反查、1.6 文件 rename 之后（它们要读 num 列）。`chapter.ChapterNumber` 随 L2 一次性移除 |
 
 **关于「解绑旧列约束」（原 L1a，已撤销）**：曾计划早期先去掉 `not null` / `uniqueIndex` 让代码停止写 num，已撤销：
 
@@ -45,7 +45,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 - **SQLite 不支持 `ALTER COLUMN`**：单独去 `NOT NULL` 需重建整表，纯属白折腾
 - **不需要「双写兼容」**：不存在中间发行版（用户不会跑到半成品），代码无需「有 id 用 id、没 id 回退 num」的兼容逻辑
 
-**双字段为什么存在**：不是设计需要，是「代码还没改到」的产物。id 列已由 1.5 反查填好但暂无代码读它；num 列仍被 L2-L6 的代码读写。两者共存只因代码改造（L0/L2-L6）未完成。
+**双字段为什么存在**：不是设计需要，是「代码还没改到」的产物。id 列已由 1.5 反查填好但暂无代码读它；num 列仍被 L3-L6 的代码读写。两者共存只因代码改造（L0/L2-L6）未完成。
 
 ## commit 路线
 
@@ -64,8 +64,8 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
-| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | 🟡 |
-| 2.3 | `refactor(chapter): replace legacy number lookups` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id | ❌ |
+| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | ✅ |
+| 2.3 | `refactor(chapter): remove legacy number API` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
 | 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 ### L3 rag + search
@@ -114,13 +114,13 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 1.1 | `refactor(migrate): guard legacy num columns` | 1.5/1.6 补 num 列的 `HasColumn` 守卫（防 migrate_state 状态丢失后查不存在的列 → 启动失败） | ✅ |
-| 1.2 | `refactor(chapter): drop legacy num columns and fields` | ① 启用 migrate 1.7——先 DROP INDEX（`uk_novel_chapter` + writing_log 章节号索引）再 DROP COLUMN，删 chapter + 5 张交叉引用表旧 num 列；② model 移除 `chapter.ChapterNumber` 与 5 张交叉引用表旧 num 字段，清理全部引用（当前 272 处 / 43 文件） | ✅ |
+| 1.2 | `refactor(migrate): drop legacy num columns` | 启用 migrate 1.7——先 DROP INDEX（`uk_novel_chapter` + writing_log 章节号索引）再 DROP COLUMN，删 chapter + 5 张交叉引用表旧 num 列；交叉引用 model 字段在对应领域改完后移除。`chapter.ChapterNumber` 已在 L2 移除 | ❌ |
 
 **删列与删字段是两个独立约束，别绑在一起**：
 
 | 动作 | 唯一约束 |
 |---|---|
-| **删 model 字段** | 代码引用要改完（否则编译不过）。中间不运行应用，所以 not-null、INSERT 全不构成约束——**任何时候都能删** |
+| **删 model 字段** | 代码引用要改完，或明确将其作为后续领域的编译迁移清单。中间不运行应用，所以 not-null、INSERT 全不构成约束——**任何时候都能删** |
 | **删 SQL 列** | 迁移代码还要不要读它。1.5 反查读 num 列 + `chapters.chapter_number`；1.6 文件 rename 读 `chapters.chapter_number`（拼 `{num:03d}.md` 源路径）。1.7 必须在 1.5/1.6 之后 |
 
 迁移读 num 走 raw SQL + 匿名结构体（`crossref.go` / `rename.go`），**不依赖 model**——这也是两者独立的证据。
@@ -133,7 +133,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 
 **数据迁移部分仍必须幂等可重跑**（1.4/1.5/1.6/1.7 的 step 内部自检），这是运行时破坏性操作，与代码 id 化是两回事。
 
-**迁移反查与 model 解耦**：`crossref.go` / `rename.go` 读 `chapter_number` 用的是 raw SQL + 局部匿名结构体，不依赖 `chapter.Chapter`。因此 1.3 删 model 字段**不会**让迁移步骤编译失败——已是现状，无需改动。
+**迁移反查与 model 解耦**：`crossref.go` / `rename.go` 读 `chapter_number` 用的是 raw SQL + 局部匿名结构体，不依赖 `chapter.Chapter`。因此 L2.3 删 model 字段**不会**让迁移步骤编译失败。
 
 ## 已完成
 
