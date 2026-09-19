@@ -10,6 +10,7 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 - Git 默认只执行只读操作：`status`、`diff`、`log`、`show`、`branch`、`tag`、`ls-files`、`blame`、`grep`、`rev-parse`、`rev-list`、`stash list` 等。
 - 未经用户明确许可，不要执行任何 Git 写操作；执行前必须先向用户说明将执行的具体操作并获得许可。包括 `add`、`commit`、`push`、`pull`、`fetch`、`merge`、`rebase`、`reset`、`revert`、`checkout`、`stash`、`clean`、创建/删除分支或 tag，以及修改 Git 配置。
 - 修改完成后不要自动 `add`、commit 或 push，也不要主动询问“是否 commit”；完成代码后先停止并等待用户 review，只有用户明确指示后才进行 Git 写操作。
+- 用户授权提交后，如 pre-commit、测试或其他验证发现问题并因此新增或修改任何文件，原提交授权不覆盖这些新改动；修复后必须停止，等待用户重新 review 并再次明确授权，不能自行继续 `add`、commit、amend、revert 或 reset。
 - Commit message 使用英文、具体描述、无 emoji、无 `Co-Authored-By`，必须遵循 Conventional Commits：`<type>(<optional-scope>): <description>`。
 - 允许的 type 只有：`feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`。
 - Commit message 必须包含 subject 和 body；subject 后空一行，再用 body 说明改了什么以及为什么改，不能只有 subject。
