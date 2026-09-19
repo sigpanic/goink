@@ -259,7 +259,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 			return &ToolResult{Success: false, Error: "new.md 仅支持 full_replace（新建文件无原文可查改）"}, nil
 		}
 		if ref.Vid != 0 {
-			v, err := resolveVolume(ctx, tc.DB, tc.NovelID, ref.Vid)
+			v, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).GetByID(ctx, nil, tc.NovelID, ref.Vid)
 			if err != nil {
 				return &ToolResult{Success: false, Error: err.Error()}, nil
 			}
@@ -336,7 +336,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 
 	// DB 记录维护：新建则建记录拿 id；已有且传 title 则更新标题
 	if ref.IsNew {
-		created, err := createChapterRecord(ctx, tc.DB, tc.NovelID, vid, a.Title)
+		created, err := createChapterRecord(ctx, tc, vid, a.Title)
 		if err != nil {
 			return nil, fmt.Errorf("create chapter record: %w", err)
 		}
@@ -765,34 +765,6 @@ func isSkillPath(p string) bool {
 
 // ── 章节记录 ──────────────────────────────────────────────
 
-// resolveVolume 校验卷存在且属于当前小说，返回卷记录。
-func resolveVolume(ctx context.Context, db *gorm.DB, novelID, vid int64) (volume.Volume, error) {
-	var v volume.Volume
-	err := db.WithContext(ctx).Where("id = ? AND novel_id = ?", vid, novelID).First(&v).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return v, fmt.Errorf("卷不存在（或不属于当前小说）: %d", vid)
-	}
-	return v, err
-}
-
-// lastVolume 返回小说中 sort_order 最大的卷（最后一卷），无卷返回 (nil, nil)。
-// 必须在事务内调用并传入 tx——本应用 SetMaxOpenConns(1)，
-// 事务内经外部连接查询会因连接池耗尽而死锁。
-func lastVolume(ctx context.Context, db *gorm.DB, novelID int64) (*volume.Volume, error) {
-	var v volume.Volume
-	err := db.WithContext(ctx).
-		Where("novel_id = ?", novelID).
-		Order("sort_order DESC").
-		First(&v).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &v, nil
-}
-
 // getChapterRecord 按章节 id 取当前小说的章节记录，不存在返回 (nil, nil)。
 func getChapterRecord(ctx context.Context, db *gorm.DB, novelID, id int64) (*chapter.Chapter, error) {
 	var ch chapter.Chapter
@@ -815,80 +787,38 @@ func updateChapterTitle(ctx context.Context, db *gorm.DB, ch *chapter.Chapter, t
 	return nil
 }
 
-// createChapterRecord 新建通道：事务内分配 sort_order（全局阅读序语义，贴卷尾）
-// 与 chapter_number（全小说 max+1，过渡期字段，唯一索引兜底并发），创建章节记录。
+// createChapterRecord 新建通道：分配 sort_order 与 chapter_number，创建章节记录。
 //
-// vid 语义：>0 为显式指定卷（调用方已校验归属）；0 为未指定卷——默认分进最后一卷，
+// vid 语义：>0 为显式指定卷；0 为未指定卷——默认分进最后一卷，
 // 整本书未建卷时创建未分卷章节（VolumeID=NULL）。
-//
-// sort_order 分配规则（全局阅读序 = ORDER BY sort_order）：
-//   - 目标卷有章节：取卷内 max(sort_order)+1，插入点之后的章节批量 +1 腾位
-//   - 目标卷为空：取目标卷之前各卷（按 volumes.sort_order）章节的 max+1；
-//     若仍为 0（全书还没有卷章节，如存量未分卷章节），退化为全局 max+1 追加到末尾
-//   - 未分卷新建：取全局 max(sort_order)+1，追加到全书末尾
-//   - 全书无章节：从 1 开始
-func createChapterRecord(ctx context.Context, db *gorm.DB, novelID, vid int64, title string) (*chapter.Chapter, error) {
+// sort_order 的分配规则见 volume.Store.AllocateChapterSortOrder。
+func createChapterRecord(ctx context.Context, tc ToolContext, vid int64, title string) (*chapter.Chapter, error) {
+	volStore := volume.NewStore(tc.DB, tc.LoggerOrDefault())
+
 	var created *chapter.Chapter
-	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		var v *volume.Volume
-		if vid != 0 {
-			vv, err := resolveVolume(ctx, tx, novelID, vid)
+	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// 未指定卷：默认最后一卷；整本书无卷则未分卷
+		targetVolumeID := vid
+		if targetVolumeID == 0 {
+			last, err := volStore.LastByNovel(ctx, tx, tc.NovelID)
 			if err != nil {
 				return err
 			}
-			v = &vv
-		} else {
-			// 未指定卷：默认最后一卷；整本书无卷则未分卷（v 保持 nil）
-			vv, err := lastVolume(ctx, tx, novelID)
-			if err != nil {
-				return err
+			if last != nil {
+				targetVolumeID = last.ID
 			}
-			v = vv
 		}
 
-		// 锚点：目标卷内最大 sort_order；空卷则取前面各卷的最大值
-		var anchor int
-		if v != nil {
-			if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
-				Select("COALESCE(MAX(sort_order), 0)").
-				Where("novel_id = ? AND volume_id = ?", novelID, v.ID).
-				Scan(&anchor).Error; err != nil {
-				return err
-			}
-			if anchor == 0 {
-				if err := tx.WithContext(ctx).Raw(
-					`SELECT COALESCE(MAX(c.sort_order), 0) FROM chapters c
-					 JOIN volumes v ON v.id = c.volume_id
-					 WHERE c.novel_id = ? AND v.novel_id = ? AND v.sort_order < ?`,
-					novelID, novelID, v.SortOrder).
-					Scan(&anchor).Error; err != nil {
-					return err
-				}
-			}
-		}
-		if anchor == 0 {
-			// 未分卷新建，或前面没有卷章节：追加到全书末尾
-			if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
-				Select("COALESCE(MAX(sort_order), 0)").
-				Where("novel_id = ?", novelID).
-				Scan(&anchor).Error; err != nil {
-				return err
-			}
-		}
-		pos := anchor + 1
-
-		// 腾位：插入点及之后的章节整体 +1（追加到全书末尾时影响 0 行）
-		if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
-			Where("novel_id = ? AND sort_order >= ?", novelID, pos).
-			Update("sort_order", gorm.Expr("sort_order + 1")).Error; err != nil {
+		pos, err := volStore.AllocateChapterSortOrder(ctx, tx, tc.NovelID, targetVolumeID)
+		if err != nil {
 			return err
 		}
 
-		// 章节号：全小说 max+1
+		// 章节号：全小说 max+1（过渡期字段，唯一索引兜底并发）
 		var nextNum int
 		if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
 			Select("COALESCE(MAX(chapter_number), 0)").
-			Where("novel_id = ?", novelID).
+			Where("novel_id = ?", tc.NovelID).
 			Scan(&nextNum).Error; err != nil {
 			return err
 		}
@@ -896,13 +826,13 @@ func createChapterRecord(ctx context.Context, db *gorm.DB, novelID, vid int64, t
 			title = fmt.Sprintf("第%d章", nextNum+1)
 		}
 		ch := &chapter.Chapter{
-			NovelID:       novelID,
+			NovelID:       tc.NovelID,
 			ChapterNumber: nextNum + 1,
 			SortOrder:     pos,
 			Title:         title,
 		}
-		if v != nil {
-			ch.VolumeID = &v.ID
+		if targetVolumeID != 0 {
+			ch.VolumeID = &targetVolumeID
 		}
 		if err := tx.Create(ch).Error; err != nil {
 			return err

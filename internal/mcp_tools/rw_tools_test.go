@@ -188,8 +188,8 @@ func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	v1 := seedVolume(t, db, 1, "第一卷", 1)
 	v2 := seedVolume(t, db, 1, "第二卷", 2)
-	seedChapter(t, db, 1, &v1, 1, 1)       // 第一卷 1 章
-	seedChapter(t, db, 1, &v2, 2, 2)       // 第二卷 2 章（最后一卷）
+	seedChapter(t, db, 1, &v1, 1, 1) // 第一卷 1 章
+	seedChapter(t, db, 1, &v2, 2, 2) // 第二卷 2 章（最后一卷）
 
 	res := execEdit(t, ctx, tc, editArgs("chapters/new.md", "full_replace", "新章内容。"))
 	if !res.Success {

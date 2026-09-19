@@ -32,6 +32,7 @@ import (
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -70,6 +71,7 @@ type App struct {
 	reader     *reader.Store
 	turnCommit *rollback.Store
 	writing    *writing.Store
+	volume     *volume.Store
 }
 
 // New 创建 App 实例。初始化在 OnStartup 中完成。
@@ -195,6 +197,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	a.reader = reader.NewStore(db, a.logger)
 	a.turnCommit = rollback.NewStore(db, a.logger)
 	a.writing = writing.NewStore(db, a.logger)
+	a.volume = volume.NewStore(db, a.logger)
 	s, err := skill.NewStore(a.logger, config.UserSkillsDir())
 	if err != nil {
 		a.logger.Error("初始化 skill store 失败", "err", err)
