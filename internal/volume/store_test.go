@@ -280,7 +280,7 @@ func TestAllocateFirstChapter(t *testing.T) {
 	}
 }
 
-// 卷内追加：取卷内 max+1，不影响其他章节。
+// 卷内追加：取卷内 max+1，不影响其他分组章节。
 func TestAllocateAppendsWithinVolume(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
@@ -295,7 +295,7 @@ func TestAllocateAppendsWithinVolume(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		// 卷内 max(1)+1 = 2，插在 2 位，原 sort>=2 的章节整体 +1
+		// 卷内 max(1)+1 = 2；其他卷不腾位。
 		if pos != 2 {
 			t.Errorf("pos = %d, want 2", pos)
 		}
@@ -309,12 +309,12 @@ func TestAllocateAppendsWithinVolume(t *testing.T) {
 	if sorts[1] != 1 {
 		t.Errorf("chapter1 sort = %d, want 1", sorts[1])
 	}
-	if sorts[2] != 3 {
-		t.Errorf("chapter2 sort = %d, want 3 (shifted)", sorts[2])
+	if sorts[2] != 2 {
+		t.Errorf("chapter2 sort = %d, want 2 (other volume unchanged)", sorts[2])
 	}
 }
 
-// 空卷插在前面：锚点取前卷章节的 max，插入后腾位。
+// 空卷的第一章从 1 开始，不受其他卷影响。
 func TestAllocateEmptyVolumeAfterExisting(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
@@ -329,8 +329,8 @@ func TestAllocateEmptyVolumeAfterExisting(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if pos != 3 { // 前卷 max(2)+1
-			t.Errorf("pos = %d, want 3", pos)
+		if pos != 1 {
+			t.Errorf("pos = %d, want 1", pos)
 		}
 		return nil
 	})
@@ -339,7 +339,7 @@ func TestAllocateEmptyVolumeAfterExisting(t *testing.T) {
 	}
 }
 
-// 空卷 + 存量未分卷章节：退化为全局 max+1（追加末尾），不插到最前。
+// 空卷 + 存量未分卷章节：空卷从自身的第一章开始。
 func TestAllocateEmptyVolumeAfterUnassigned(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
@@ -353,8 +353,8 @@ func TestAllocateEmptyVolumeAfterUnassigned(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if pos != 3 {
-			t.Errorf("pos = %d, want 3 (append at end)", pos)
+		if pos != 1 {
+			t.Errorf("pos = %d, want 1", pos)
 		}
 		return nil
 	})
@@ -363,13 +363,13 @@ func TestAllocateEmptyVolumeAfterUnassigned(t *testing.T) {
 	}
 }
 
-// 未分卷（volumeID=0）：全局 max+1。
+// 未分卷（volumeID=0）：只在未分卷组内取 max+1。
 func TestAllocateUnassigned(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
 	s := newTestStore(db)
 	v := mustCreate(t, db, 1, "第一卷")
-	seedChapter(t, db, 1, &v.ID, 1)
+	seedChapter(t, db, 1, &v.ID, 100)
 	seedChapter(t, db, 1, nil, 2)
 
 	err := db.Transaction(func(tx *gorm.DB) error {

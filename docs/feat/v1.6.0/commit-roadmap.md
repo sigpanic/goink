@@ -56,14 +56,14 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 0.1 | `feat(volume): add store with CRUD` | 新建 `internal/volume/store.go`：Create / Update / Delete / GetByID / ListByNovel / Reorder；方法以 `*gorm.DB` 为参数（调用方传 db 或 tx），不用 receiver 持连接风格——`SetMaxOpenConns(1)` 下事务内经外部连接查询会死锁 | ✅ |
-| 0.2 | `feat(volume): add chapter sort_order allocation` | 把 `sort_order` 分配算法从 `mcp_tools/rw_tools.go` 的 `createChapterRecord` 下沉：卷内 max+1 / 空卷取前卷 max+1 / 退化全局 max+1 / 腾位批量 +1 | ✅ |
+| 0.2 | `feat(volume): add chapter sort_order allocation` | 把 `sort_order` 分配算法从 `mcp_tools/rw_tools.go` 的 `createChapterRecord` 下沉：按目标分组（指定卷或未分卷）的 max+1 追加 | ✅ |
 | 0.3 | `refactor(rw_tools): call volume store` | rw_tools 的 `resolveVolume` / `lastVolume` / `createChapterRecord` 改为调用 volume store，删除自实现 | ✅ |
 
 ### L2 chapter.Store — 按 id / sort_order
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` / `GetRecent` 排序改 `volume_id ASC NULLS FIRST, sort_order ASC` | ❌ |
+| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ❌ |
 | 2.2 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
 | 2.3 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 

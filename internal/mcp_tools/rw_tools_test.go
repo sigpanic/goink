@@ -215,7 +215,7 @@ func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
 	}
 }
 
-// 不带卷的 new.md：整本书无卷时创建未分卷章节（VolumeID=NULL，全局末尾追加）。
+// 不带卷的 new.md：整本书无卷时创建未分卷章节（VolumeID=NULL，未分卷组末尾追加）。
 func TestEditNewChannel_NoVolume_Unassigned(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	seedChapter(t, db, 1, nil, 1, 1) // 存量未分卷章节 sort=1
@@ -233,7 +233,7 @@ func TestEditNewChannel_NoVolume_Unassigned(t *testing.T) {
 	if ch.VolumeID != nil {
 		t.Errorf("volume_id = %v, want nil", ch.VolumeID)
 	}
-	if ch.SortOrder != 2 { // 全局 max+1
+	if ch.SortOrder != 2 { // 未分卷组 max+1
 		t.Errorf("sort_order = %d, want 2", ch.SortOrder)
 	}
 	if got := mustReadFile(t, novelFile(t, 1, fmt.Sprintf("chapters/id_%d.md", newID))); got != "无卷新章。" {
@@ -291,10 +291,10 @@ func TestEditNewChannel_RequiresFullReplace(t *testing.T) {
 	}
 }
 
-// ── sort_order 全局语义 ──────────────────────────────────
+// ── sort_order 卷内语义 ──────────────────────────────────
 
-// 给前面的卷加章节：插入点之后的章节（含跨卷与未分卷）整体 +1。
-func TestEditNewChannel_ShiftsGlobalOrder(t *testing.T) {
+// 给前面的卷加章节：只在目标卷内追加，不影响其他卷或未分卷组。
+func TestEditNewChannel_AppendsWithinTargetVolume(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	vol1 := seedVolume(t, db, 1, "第一卷", 1)
 	vol2 := seedVolume(t, db, 1, "第二卷", 2)
@@ -312,18 +312,18 @@ func TestEditNewChannel_ShiftsGlobalOrder(t *testing.T) {
 	if newCh.SortOrder != 2 || newCh.ChapterNumber != 4 {
 		t.Errorf("new chapter sort_order=%d chapter_number=%d, want 2/4", newCh.SortOrder, newCh.ChapterNumber)
 	}
-	if got := fetchChapter(t, db, c2).SortOrder; got != 3 {
-		t.Errorf("c2 sort_order = %d, want 3 (shifted)", got)
+	if got := fetchChapter(t, db, c2).SortOrder; got != 2 {
+		t.Errorf("c2 sort_order = %d, want 2 (other volume unchanged)", got)
 	}
-	if got := fetchChapter(t, db, c3).SortOrder; got != 4 {
-		t.Errorf("c3 (unassigned) sort_order = %d, want 4 (shifted)", got)
+	if got := fetchChapter(t, db, c3).SortOrder; got != 3 {
+		t.Errorf("c3 (unassigned) sort_order = %d, want 3 (unchanged)", got)
 	}
 	if got := fetchChapter(t, db, c1).SortOrder; got != 1 {
 		t.Errorf("c1 sort_order = %d, want 1 (before insert point)", got)
 	}
 }
 
-// 给末尾的卷加章节：追加到全书末尾，不影响任何已有章节。
+// 给末尾的卷加章节：追加到该卷末尾，不影响其他分组。
 func TestEditNewChannel_AppendToLastVolume(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	vol1 := seedVolume(t, db, 1, "第一卷", 1)
@@ -341,12 +341,12 @@ func TestEditNewChannel_AppendToLastVolume(t *testing.T) {
 	if got := fetchChapter(t, db, newID).SortOrder; got != 3 {
 		t.Errorf("new chapter sort_order = %d, want 3", got)
 	}
-	if got := fetchChapter(t, db, c3).SortOrder; got != 4 {
-		t.Errorf("c3 sort_order = %d, want 4 (shifted)", got)
+	if got := fetchChapter(t, db, c3).SortOrder; got != 3 {
+		t.Errorf("c3 sort_order = %d, want 3 (unassigned unchanged)", got)
 	}
 }
 
-// 空卷 + 存量未分卷章节：退化为全局 max+1 追加到末尾（而不是插到最前）。
+// 空卷 + 存量未分卷章节：卷内第一章从 1 开始。
 func TestEditNewChannel_EmptyVolumeAfterUnassignedChapters(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	seedChapter(t, db, 1, nil, 1, 1)
@@ -360,8 +360,8 @@ func TestEditNewChannel_EmptyVolumeAfterUnassignedChapters(t *testing.T) {
 	newID := res.Data["chapter_id"].(int64)
 
 	ch := fetchChapter(t, db, newID)
-	if ch.SortOrder != 3 {
-		t.Errorf("sort_order = %d, want 3 (append at end)", ch.SortOrder)
+	if ch.SortOrder != 1 {
+		t.Errorf("sort_order = %d, want 1", ch.SortOrder)
 	}
 	if ch.ChapterNumber != 3 {
 		t.Errorf("chapter_number = %d, want 3", ch.ChapterNumber)

@@ -22,6 +22,7 @@ import (
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
 var dbSeq atomic.Int64
@@ -44,6 +45,7 @@ func openSearchDB(t *testing.T) *gorm.DB {
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},
+		&volume.Volume{},
 		&chapter.Chapter{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)

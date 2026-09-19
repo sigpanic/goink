@@ -218,59 +218,28 @@ func (s *Store) Reorder(ctx context.Context, tx *gorm.DB, novelID int64, volumeI
 	})
 }
 
-// AllocateChapterSortOrder 为「新建章节」分配 sort_order，返回插入位置 pos。
+// AllocateChapterSortOrder 为「新建章节」分配所属分组内的 sort_order，返回末尾位置。
 //
-// 分配规则（全局阅读序 = ORDER BY sort_order）：
-//   - 目标卷有章节：卷内 max(sort_order)+1，并把 pos 及之后的章节批量 +1 腾位
-//   - 目标卷为空：取目标卷之前各卷（按 volumes.sort_order）章节的 max+1
-//   - 上面仍为 0（全书还没有卷章节）：退化为全局 max+1，追加到末尾
-//   - volumeID 为 0（未分卷）：全局 max+1，追加到全书末尾
-//
+// 分组规则：volumeID > 0 时为对应卷；volumeID 为 0 时为未分卷组。
+// 新建章节总是追加到目标分组末尾，不影响其他卷或未分卷组的 sort_order。
 // 事务内必须传 tx。卷不存在时返回 ErrNotFound。
 func (s *Store) AllocateChapterSortOrder(ctx context.Context, tx *gorm.DB, novelID, volumeID int64) (int, error) {
 	db := s.pick(tx)
-	anchor := 0
+	q := db.WithContext(ctx).Table(chapterTable).Where("novel_id = ?", novelID)
 	if volumeID != 0 {
-		v, err := s.GetByID(ctx, tx, novelID, volumeID)
-		if err != nil {
+		if _, err := s.GetByID(ctx, tx, novelID, volumeID); err != nil {
 			return 0, err
 		}
-		if err := db.WithContext(ctx).Table(chapterTable).
-			Select("COALESCE(MAX(sort_order), 0)").
-			Where("novel_id = ? AND volume_id = ?", novelID, v.ID).
-			Scan(&anchor).Error; err != nil {
-			return 0, fmt.Errorf("volume store: max sort_order in volume: %w", err)
-		}
-		if anchor == 0 {
-			// 空卷：取该卷之前各卷章节的最大 sort_order
-			if err := db.WithContext(ctx).Raw(
-				`SELECT COALESCE(MAX(c.sort_order), 0) FROM chapters c
-				 JOIN volumes v ON v.id = c.volume_id
-				 WHERE c.novel_id = ? AND v.novel_id = ? AND v.sort_order < ?`,
-				novelID, novelID, v.SortOrder).
-				Scan(&anchor).Error; err != nil {
-				return 0, fmt.Errorf("volume store: max sort_order before volume: %w", err)
-			}
-		}
-	}
-	if anchor == 0 {
-		// 未分卷新建，或前面没有卷章节：追加到全书末尾
-		if err := db.WithContext(ctx).Table(chapterTable).
-			Select("COALESCE(MAX(sort_order), 0)").
-			Where("novel_id = ?", novelID).
-			Scan(&anchor).Error; err != nil {
-			return 0, fmt.Errorf("volume store: max sort_order: %w", err)
-		}
+		q = q.Where("volume_id = ?", volumeID)
+	} else {
+		q = q.Where("volume_id IS NULL")
 	}
 
-	pos := anchor + 1
-	// 腾位：插入点及之后的章节整体 +1（追加到全书末尾时影响 0 行）
-	if err := db.WithContext(ctx).Table(chapterTable).
-		Where("novel_id = ? AND sort_order >= ?", novelID, pos).
-		Update("sort_order", gorm.Expr("sort_order + 1")).Error; err != nil {
-		return 0, fmt.Errorf("volume store: shift sort_order: %w", err)
+	var maxSort int
+	if err := q.Select("COALESCE(MAX(sort_order), 0)").Scan(&maxSort).Error; err != nil {
+		return 0, fmt.Errorf("volume store: max sort_order in group: %w", err)
 	}
-	return pos, nil
+	return maxSort + 1, nil
 }
 
 // nameTaken 判断该小说内卷名是否已被占用（excludeID 用于重命名时排除自身）。

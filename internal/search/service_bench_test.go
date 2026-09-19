@@ -22,6 +22,7 @@ import (
 	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
 var benchDBNum atomic.Int64
@@ -40,6 +41,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		&setting.SettingItem{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
+		&volume.Volume{},
 		&chapter.Chapter{},
 	)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))

@@ -52,14 +52,14 @@
 |---|---|
 | 文件名 | `chapters/{id}.md` / `outlines/{id}.md` |
 | DB chapter 表 | 移除 chapter_number；新增 `volume_id *int64` + `sort_order int`；保留 `id, novel_id, title, summary, word_count, created_at, updated_at` |
-| 排序依据 | 默认 `volume_id ASC NULLS FIRST, sort_order ASC`（sort_order 是内部排序键，新建末尾 MAX+1，插入中间时批量 +1 后续） |
-| 章节号 | 不存 DB，列表查询时按 `(volume_id, sort_order)` 排序位次实时生成 1,2,3... |
+| 排序依据 | 默认 `volumes.sort_order ASC`、`chapters.sort_order ASC`，未分卷最后；`chapters.sort_order` 仅在所属分组（指定卷或未分卷）内排序 |
+| 章节号 | 不存 DB，列表查询时按卷顺序与卷内 `sort_order` 的位次实时生成 1,2,3... |
 | 交叉引用 | timeline/arc_node/reader 全改 `chapter_id int64` 外键 |
 | writing_log | chapter_number 改 chapter_id；删除章节后允许孤儿引用（不阻塞删除） |
 | character_relations | chapter_number 改 chapter_id |
 | AI 路径 | `chapters/{id}.md`，AI 直接用 id，rw_tools 零转译 |
 | 删除流程 | 仅前端入口；删文件 + 删 DB 记录 + 检测 timeline/arc_node/reader 引用（有则拒绝）；`delete_record` mcp_tool 不扩展支持 chapter 表 |
-| 跨卷移动 | 仅改 chapter.volume_id，零成本 |
+| 跨卷移动 | 更新 chapter.volume_id，并将 sort_order 追加到目标分组末尾 |
 | 分卷 | volume 表：`id/novel_id/name/sort_order/created_at/updated_at` |
 | AI 卷感知 | list_chapters 返回 `id + volume_name + 实时章节号 + 标题`；AI 新建章节时传 volume_name（rw_tools 经 chapters/new.md 反查 volume_id），可读写卷纲（volumes/{id}.md） |
 
@@ -69,7 +69,7 @@
 
 - **移除** `chapter_number` 字段及其唯一索引
 - **新增** `volume_id *int64`（可空外键，NULL 表示未分卷）
-- **新增** `sort_order int`（内部排序键，用户/AI 不可见；新建末尾 MAX+1，插入中间时批量 +1 后续）
+- **新增** `sort_order int`（所属分组内的内部排序键，用户/AI 不可见；新建追加到分组末尾，插入时仅腾挪该分组内后续章节）
 - 保留：id, novel_id, title, summary, word_count, created_at, updated_at
 
 **sort_order 与 chapter_number 的区别**：
@@ -340,23 +340,23 @@ AI 通道（经 rw_tools，非 mcp_tool）：
 
 ### 10.3 章节排序
 
-`list_chapters` 排序：`volume_id ASC NULLS FIRST, sort_order ASC`
+`list_chapters` 排序：`volumes.sort_order ASC`、`chapters.sort_order ASC`，未分卷最后。
 
-NULLS FIRST 表示未分卷的章节排在最前。
+未分卷章节作为待归类分组，排在全部已分卷章节之后。
 
 ### 10.4 跨卷移动
 
 - app 层：`MoveChapterToVolume(chapterID, volumeID int64) error`（volumeID=0 表示移出卷，置 NULL）
-- 仅改 `chapter.volume_id`，不动 sort_order 等其他字段
+- 更新 `chapter.volume_id`，并将 `sort_order` 分配为目标分组的末尾位置
 - 不影响章节号（实时算）
-- 移动到新卷末尾：可选调整 sort_order = 目标卷 MAX(sort_order) + 1
+- 移动到目标分组末尾：`sort_order = 目标分组 MAX(sort_order) + 1`
 
 ### 10.5 章节插入（新功能）
 
 - app 层：`InsertChapter(novelID, afterChapterID int64, volumeID *int64, title string) (*Chapter, error)`
 - 事务里：
   1. 取 afterChapter 的 sort_order = N
-  2. `UPDATE chapter SET sort_order = sort_order + 1 WHERE novel_id=? AND volume_id=? AND sort_order > N`
+  2. 仅在目标分组内腾位：有卷时 `WHERE novel_id=? AND volume_id=? AND sort_order > N`；未分卷时使用 `volume_id IS NULL`
   3. `INSERT` 新章 sort_order = N + 1
 - **仅前端**：AI 不调用 insert_chapter 工具（遵循"结构操作仅前端"原则）；前端章节管理 tab 提供插入入口，AI 想插入章节时通过回复告知用户去前端操作
 
@@ -429,8 +429,8 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 
 ### 12.3 章节列表分组渲染
 
-- 按 volume 分组：未分卷组（NULLS FIRST）+ 各卷组（按 sort_order）
-- 章节号实时显示（按卷内位次，1-based）
+- 按 volume 分组：各卷组（按 `volumes.sort_order`）+ 未分卷组（最后）
+- 章节号按完整阅读顺序的位次实时显示（1-based）
 - 每行 hover 显示操作菜单 [⋮]：删除、插入到此章前/后、移动到卷
 
 ### 12.4 章节删除入口
@@ -518,8 +518,8 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 
 | 层 | 内容 | 状态 |
 |---|---|---|
-| **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法。⚠️ 方法必须以 `*gorm.DB` 为参数（调用方传 db 或 tx）——严禁 receiver 持连接风格，本应用 `SetMaxOpenConns(1)`，事务内经外部连接查询会因连接池耗尽确定性死锁 | ❌ 未做（`internal/volume` 只有 types.go，sort_order 算法暂躺在 `mcp_tools`） |
-| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel`/`GetRecent` 改 `ORDER BY volume_id ASC NULLS FIRST, sort_order ASC`；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；方法风格整改为 `*gorm.DB` 参数 | ❌ 6 个方法全按 chapter_number |
+| **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | 🟡 当前工作区已完成，待 review |
+| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1 当前工作区已完成，待 review；其余未做 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时章节号 + 卷名 | 🟡 vec 列已切，桥接与 chunk_id 未改；search 未改 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
 | **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）章节字段改 `*_chapter_id`；`get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
@@ -527,7 +527,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | **L7 前端** | 章节管理 tab（见第十二节） | ❌ 未做 |
 | **L1b 收尾** | model 删旧 num 字段 + migrate 1.7 DROP 列（**先 DROP INDEX 再 DROP COLUMN**）；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
 
-**为什么 L0 必须在最前**：migrate 步骤（建 volume 表、初始化 sort_order）与 rw_tools 的 new.md 通道都依赖卷基建。原方案把它排在 PR2，导致 L5 自实现一份（`createChapterRecord` 里那套跨卷 sort_order 锚点算法），L6 还得搬家。
+**为什么 L0 必须在最前**：migrate 步骤（建 volume 表、初始化 sort_order）与 rw_tools 的 new.md 通道都依赖卷基建。原方案把它排在 PR2，导致 L5 自实现一份 `sort_order` 分配算法，L6 还得搬家。
 
 **为什么 L1b 必须在最后**：删 SQL 列受**迁移步骤顺序**约束——1.7 必须在 1.5 反查、1.6 文件 rename 之后（它们要读 num 列）。删 model 字段则任何时候都行，只看代码引用是否改完（否则编译不过）。
 
@@ -554,14 +554,14 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 0.1 | `feat(volume): add store with CRUD` | 新建 `internal/volume/store.go`：Create / Update / Delete / GetByID / ListByNovel / Reorder；方法以 `*gorm.DB` 为参数（调用方传 db 或 tx），不用 receiver 持连接风格 | ✅ |
-| 0.2 | `feat(volume): add chapter sort_order allocation` | 把 `sort_order` 分配算法从 `mcp_tools/rw_tools.go` 的 `createChapterRecord` 下沉：卷内 max+1 / 空卷取前卷 max+1 / 退化全局 max+1 / 腾位批量 +1 | ✅ |
+| 0.2 | `feat(volume): add chapter sort_order allocation` | 把 `sort_order` 分配算法从 `mcp_tools/rw_tools.go` 的 `createChapterRecord` 下沉：按目标分组（指定卷或未分卷）的 max+1 追加 | ✅ |
 | 0.3 | `refactor(rw_tools): call volume store` | rw_tools 的 `resolveVolume` / `lastVolume` / `createChapterRecord` 改为调用 volume store，删除自实现 | ✅ |
 
 #### L2 chapter.Store — 按 id / sort_order
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` / `GetRecent` 排序改 `volume_id ASC NULLS FIRST, sort_order ASC` | ❌ |
+| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ❌ |
 | 2.2 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
 | 2.3 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
@@ -656,4 +656,3 @@ migrate 的**代码**（framework + v160 steps）已随细粒度路线完成大�
 
 1. **章节号实时计算的语义**：删除第 3 章后第 4 章变第 3 章，AI 上下文里的"第 5 章"指向变化，仅靠 InjectMessage 提示是否足够？
 2. **migrate 自动备份保留份数**：保留最近 3 份是否合适？
-

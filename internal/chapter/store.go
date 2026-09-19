@@ -26,7 +26,23 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 // ListByNovelOptions 是 ListByNovel 的可选参数。零值即可直接使用（默认升序）。
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
-	Order      string // "asc"(默认) 或 "desc"，按 chapter_number 排序
+	Order      string // "asc"(默认) 或 "desc"，按阅读顺序排序
+}
+
+const (
+	// chapterOrderAsc 按卷的可重排顺序和卷内顺序排序，未分卷章节置后。
+	chapterOrderAsc = "chapters.volume_id IS NULL ASC, volumes.sort_order ASC, chapters.sort_order ASC"
+	// chapterOrderDesc 是阅读顺序的倒序，用于 "desc" 与 GetRecent。
+	chapterOrderDesc = "chapters.volume_id IS NULL DESC, volumes.sort_order DESC, chapters.sort_order DESC"
+)
+
+// orderedByNovel 返回带卷排序信息的章节查询。必须按 volumes.sort_order 排序，
+// 不能只按 chapters.volume_id，否则 ReorderVolumes 不会改变章节的阅读顺序。
+func (s *Store) orderedByNovel(ctx context.Context, novelID int64) *gorm.DB {
+	return s.DB.WithContext(ctx).
+		Model(&Chapter{}).
+		Joins("LEFT JOIN volumes ON volumes.id = chapters.volume_id").
+		Where("chapters.novel_id = ?", novelID)
 }
 
 // ListByNovel 分页列出某小说的章节。
@@ -34,12 +50,12 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	pp := opts.PageParams
 	pp.Normalize()
 
-	order := "chapter_number ASC"
+	order := chapterOrderAsc
 	if strings.ToLower(opts.Order) == "desc" {
-		order = "chapter_number DESC"
+		order = chapterOrderDesc
 	}
 
-	q := s.DB.WithContext(ctx).Model(&Chapter{}).Where("novel_id = ?", novelID)
+	q := s.orderedByNovel(ctx, novelID)
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -59,12 +75,11 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	return storage.NewPageResult(chapters, total, pp.Page, pp.Size), nil
 }
 
-// ListAllByNovel 返回某小说的全部章节（不分页），按 chapter_number 升序。
+// ListAllByNovel 返回某小说的全部章节（不分页），按阅读顺序升序。
 func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ?", novelID).
-		Order("chapter_number ASC").
+	if err := s.orderedByNovel(ctx, novelID).
+		Order(chapterOrderAsc).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: list all: %w", err)
 	}
@@ -105,9 +120,9 @@ func (s *Store) GetLatestNumber(ctx context.Context, novelID int64) (int, error)
 // SearchByNovel 按关键词搜索某小说的章节，匹配标题和摘要。
 func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, limit int) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND (title LIKE ? OR summary LIKE ?)", novelID, "%"+query+"%", "%"+query+"%").
-		Order("chapter_number ASC").
+	if err := s.orderedByNovel(ctx, novelID).
+		Where("chapters.title LIKE ? OR chapters.summary LIKE ?", "%"+query+"%", "%"+query+"%").
+		Order(chapterOrderAsc).
 		Limit(limit).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: search: %w", err)
@@ -118,12 +133,11 @@ func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, 
 	return chapters, nil
 }
 
-// GetRecent 取最近 N 章，按 chapter_number 降序。
+// GetRecent 取阅读顺序最后 N 章，按阅读顺序倒序返回。
 func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ?", novelID).
-		Order("chapter_number DESC").
+	if err := s.orderedByNovel(ctx, novelID).
+		Order(chapterOrderDesc).
 		Limit(limit).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: recent: %w", err)
