@@ -111,14 +111,14 @@ func TestValidPath(t *testing.T) {
 	invalid := []string{
 		"chapters/001.md",
 		"outlines/001.md",
-		"chapters/new",          // 缺扩展名
-		"chapters/id_1.md/",     // 尾部斜杠
-		"plans/weekly.md",       // 不支持的目录
-		"volumes/1.md",          // 卷纲不经过 edit/read
-		"skills/",               // 缺文件名
-		"skills/a/b.md",         // 多级技能名
-		"/etc/passwd",           // 绝对路径（builtin 前缀之外）
-		"~/.goink/other/x.md",   // 用户目录下非 skills 路径
+		"chapters/new",        // 缺扩展名
+		"chapters/id_1.md/",   // 尾部斜杠
+		"plans/weekly.md",     // 不支持的目录
+		"volumes/1.md",        // 卷纲不经过 edit/read
+		"skills/",             // 缺文件名
+		"skills/a/b.md",       // 多级技能名
+		"/etc/passwd",         // 绝对路径（builtin 前缀之外）
+		"~/.goink/other/x.md", // 用户目录下非 skills 路径
 	}
 	for _, p := range invalid {
 		if validPath(p) {
