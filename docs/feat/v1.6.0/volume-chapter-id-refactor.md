@@ -368,18 +368,20 @@ AI 通道（经 rw_tools，非 mcp_tool）：
 
 ### 11.2 选定方案：chapters/new.md 占位
 
-AI 新建章节时传 `chapters/new.md`（占位 path），rw_tools 后端建记录拿真实 id 写真实文件，响应返回真实 path：
+AI 新建章节时传 `chapters/new.md`，或显式指定目标卷的 `chapters/{volume_id}/new.md`。rw_tools 调用 chapter.Store 建记录拿真实 id，再写真实文件并返回真实 path：
 
 ```
-AI: edit(path="chapters/new.md", change_type="full_replace", new_content="...", title="初入江湖", volume_name="卷一")
+AI: edit(path="chapters/new.md", change_type="full_replace", new_content="...", title="初入江湖")
 rw_tools 内部:
   1. 识别 path == "chapters/new.md" → 新建模式
-  2. 反查 volume_name → volume_id（找不到则 NULL）
-  3. 建 chapter 记录（id 自增, sort_order = 该卷 MAX+1, volume_id, title）
+  2. 调用 chapter.Store.Create；路径指定卷时传对应 volume_id，未指定时自动选择最后一卷
+  3. 无任何卷时，记录的 volume_id 保持 NULL，并追加到未分卷组末尾
   4. 写文件 chapters/{id}.md
   5. 响应返回 {path: "chapters/{id}.md", id, chapter_number, volume_name}
 AI 后续: edit(path="chapters/{id}.md", ...)  // 用响应返回的真实 path
 ```
+
+`chapters.volume_id` 在数据库中只有 `NULL` 才表示未分卷；不使用 `0` 作为未分卷值。Go 的 `chapter.Store.Create` 使用 `*int64`：非 nil 为显式目标卷，nil 为明确的未分卷目标。rw_tools 遇到未指定卷的 `chapters/new.md` 时，先选择最后一卷再调用 Store；整本书无卷才传 nil，使记录写为 SQL NULL。
 
 ### 11.3 rw_tools upsert 逻辑删除
 
@@ -518,8 +520,8 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 
 | 层 | 内容 | 状态 |
 |---|---|---|
-| **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | 🟡 当前工作区已完成，待 review |
-| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1 当前工作区已完成，待 review；其余未做 |
+| **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | ✅ 已提交 |
+| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1 已提交；2.2 进行中；其余未做 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时章节号 + 卷名 | 🟡 vec 列已切，桥接与 chunk_id 未改；search 未改 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
 | **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）章节字段改 `*_chapter_id`；`get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
@@ -561,9 +563,10 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ❌ |
-| 2.2 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
-| 2.3 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
+| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
+| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配、过渡期 `chapter_number`、缺省标题与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷 | ❌ |
+| 2.3 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
+| 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 #### L3 rag + search
 

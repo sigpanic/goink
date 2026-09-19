@@ -220,17 +220,17 @@ func (s *Store) Reorder(ctx context.Context, tx *gorm.DB, novelID int64, volumeI
 
 // AllocateChapterSortOrder 为「新建章节」分配所属分组内的 sort_order，返回末尾位置。
 //
-// 分组规则：volumeID > 0 时为对应卷；volumeID 为 0 时为未分卷组。
+// 分组规则：volumeID 非 nil 时为对应卷；nil 时为未分卷组。
 // 新建章节总是追加到目标分组末尾，不影响其他卷或未分卷组的 sort_order。
 // 事务内必须传 tx。卷不存在时返回 ErrNotFound。
-func (s *Store) AllocateChapterSortOrder(ctx context.Context, tx *gorm.DB, novelID, volumeID int64) (int, error) {
+func (s *Store) AllocateChapterSortOrder(ctx context.Context, tx *gorm.DB, novelID int64, volumeID *int64) (int, error) {
 	db := s.pick(tx)
 	q := db.WithContext(ctx).Table(chapterTable).Where("novel_id = ?", novelID)
-	if volumeID != 0 {
-		if _, err := s.GetByID(ctx, tx, novelID, volumeID); err != nil {
+	if volumeID != nil {
+		if _, err := s.GetByID(ctx, tx, novelID, *volumeID); err != nil {
 			return 0, err
 		}
-		q = q.Where("volume_id = ?", volumeID)
+		q = q.Where("volume_id = ?", *volumeID)
 	} else {
 		q = q.Where("volume_id IS NULL")
 	}

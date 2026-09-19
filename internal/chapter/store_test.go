@@ -2,6 +2,7 @@ package chapter
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"testing"
@@ -140,6 +141,81 @@ func TestChGetLatestNumber_Empty(t *testing.T) {
 	n, _ := s.GetLatestNumber(ctx, 1)
 	if n != 0 {
 		t.Errorf("expected 0 for empty, got %d", n)
+	}
+}
+
+func TestChCreateAppendsToExplicitVolume(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	v := volume.Volume{NovelID: 1, Name: "第一卷", SortOrder: 1}
+	if err := db.Create(&v).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&Chapter{NovelID: 1, ChapterNumber: 1, VolumeID: &v.ID, SortOrder: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&Chapter{NovelID: 1, ChapterNumber: 2, SortOrder: 9}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := s.Create(ctx, nil, 1, &v.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.VolumeID == nil || *created.VolumeID != v.ID {
+		t.Errorf("volume_id = %v, want %d", created.VolumeID, v.ID)
+	}
+	if created.SortOrder != 2 || created.ChapterNumber != 3 || created.Title != "第3章" {
+		t.Errorf("created = %+v, want volume sort/number/title = %d/3/第3章", created, 2)
+	}
+}
+
+func TestChCreateAppendsToUnassignedGroup(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	v := volume.Volume{NovelID: 1, Name: "第一卷", SortOrder: 1}
+	if err := db.Create(&v).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&Chapter{NovelID: 1, ChapterNumber: 1, VolumeID: &v.ID, SortOrder: 100}).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&Chapter{NovelID: 1, ChapterNumber: 2, SortOrder: 2}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	created, err := s.Create(ctx, nil, 1, nil, "未分卷新章")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if created.VolumeID != nil || created.SortOrder != 3 || created.ChapterNumber != 3 {
+		t.Errorf("created = %+v, want unassigned sort/number = 3/3", created)
+	}
+}
+
+func TestChCreateRejectsForeignVolume(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	v := volume.Volume{NovelID: 2, Name: "别家卷", SortOrder: 1}
+	if err := db.Create(&v).Error; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Create(ctx, nil, 1, &v.ID, "新章"); !errors.Is(err, volume.ErrNotFound) {
+		t.Errorf("err = %v, want volume.ErrNotFound", err)
+	}
+
+	var count int64
+	if err := db.Model(&Chapter{}).Where("novel_id = ?", 1).Count(&count).Error; err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("chapter count = %d, want 0", count)
 	}
 }
 

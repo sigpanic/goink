@@ -266,7 +266,7 @@ func TestAllocateFirstChapter(t *testing.T) {
 	s := newTestStore(db)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, 0)
+		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, nil)
 		if err != nil {
 			return err
 		}
@@ -291,7 +291,7 @@ func TestAllocateAppendsWithinVolume(t *testing.T) {
 	seedChapter(t, db, 1, &v2.ID, 2)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, v1.ID)
+		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, &v1.ID)
 		if err != nil {
 			return err
 		}
@@ -325,7 +325,7 @@ func TestAllocateEmptyVolumeAfterExisting(t *testing.T) {
 	seedChapter(t, db, 1, &v1.ID, 2)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, v2.ID)
+		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, &v2.ID)
 		if err != nil {
 			return err
 		}
@@ -349,7 +349,7 @@ func TestAllocateEmptyVolumeAfterUnassigned(t *testing.T) {
 	v := mustCreate(t, db, 1, "新卷")
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, v.ID)
+		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, &v.ID)
 		if err != nil {
 			return err
 		}
@@ -363,7 +363,7 @@ func TestAllocateEmptyVolumeAfterUnassigned(t *testing.T) {
 	}
 }
 
-// 未分卷（volumeID=0）：只在未分卷组内取 max+1。
+// 未分卷（volumeID=nil）：只在未分卷组内取 max+1。
 func TestAllocateUnassigned(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
@@ -373,7 +373,7 @@ func TestAllocateUnassigned(t *testing.T) {
 	seedChapter(t, db, 1, nil, 2)
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, 0)
+		pos, err := s.AllocateChapterSortOrder(ctx, tx, 1, nil)
 		if err != nil {
 			return err
 		}
@@ -395,7 +395,7 @@ func TestAllocateUnknownVolume(t *testing.T) {
 	foreign := mustCreate(t, db, 2, "别家卷")
 
 	err := db.Transaction(func(tx *gorm.DB) error {
-		_, err := s.AllocateChapterSortOrder(ctx, tx, 1, foreign.ID)
+		_, err := s.AllocateChapterSortOrder(ctx, tx, 1, &foreign.ID)
 		return err
 	})
 	if !errors.Is(err, ErrNotFound) {

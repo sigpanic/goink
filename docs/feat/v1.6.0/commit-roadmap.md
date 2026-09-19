@@ -63,9 +63,10 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ❌ |
-| 2.2 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
-| 2.3 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
+| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
+| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配、过渡期 `chapter_number`、缺省标题与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷 | ❌ |
+| 2.3 | `refactor(chapter): GetByID replaces GetByNovelAndNumber` | `GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`（sort_order 分配已接管）；`UpdateTitle` 改按 id | ❌ |
+| 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 ### L3 rag + search
 

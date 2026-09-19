@@ -225,8 +225,8 @@ func TestEditNewChannel_NoVolume_Unassigned(t *testing.T) {
 		t.Fatalf("expected success, got: %s", res.Error)
 	}
 	newID := res.Data["chapter_id"].(int64)
-	if got := res.Data["volume_id"].(int64); got != 0 {
-		t.Errorf("volume_id = %v, want 0 (unassigned)", got)
+	if got := res.Data["volume_id"]; got != nil {
+		t.Errorf("volume_id = %v, want nil (unassigned)", got)
 	}
 
 	ch := fetchChapter(t, db, newID)

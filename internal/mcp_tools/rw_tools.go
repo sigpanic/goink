@@ -249,8 +249,8 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	physical := physicalRWPath(isOutline, ref.ID)
 
 	var (
-		ch  *chapter.Chapter
-		vid int64
+		ch       *chapter.Chapter
+		volumeID *int64
 	)
 	if ref.IsNew {
 		// 新建通道：只能 full_replace；卷可选——带卷校验归属，
@@ -263,7 +263,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 			if err != nil {
 				return &ToolResult{Success: false, Error: err.Error()}, nil
 			}
-			vid = v.ID
+			volumeID = &v.ID
 		}
 	} else {
 		// 已有章节：记录必须存在，新建走 new.md 通道
@@ -336,7 +336,17 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 
 	// DB 记录维护：新建则建记录拿 id；已有且传 title 则更新标题
 	if ref.IsNew {
-		created, err := createChapterRecord(ctx, tc, vid, a.Title)
+		// 未指定卷：默认最后一卷；整本书无卷则创建未分卷章节。
+		if volumeID == nil {
+			last, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).LastByNovel(ctx, nil, tc.NovelID)
+			if err != nil {
+				return nil, fmt.Errorf("resolve last volume: %w", err)
+			}
+			if last != nil {
+				volumeID = &last.ID
+			}
+		}
+		created, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).Create(ctx, nil, tc.NovelID, volumeID, a.Title)
 		if err != nil {
 			return nil, fmt.Errorf("create chapter record: %w", err)
 		}
@@ -377,11 +387,11 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	if ref.IsNew {
 		data["chapter_id"] = ch.ID
 		data["chapter_number"] = ch.ChapterNumber
-		var volID int64 // 未分卷为 0；默认卷解析发生在事务内，须从记录取
 		if ch.VolumeID != nil {
-			volID = *ch.VolumeID
+			data["volume_id"] = *ch.VolumeID
+		} else {
+			data["volume_id"] = nil
 		}
-		data["volume_id"] = volID
 	}
 
 	var injects []InjectMessage
@@ -785,65 +795,6 @@ func updateChapterTitle(ctx context.Context, db *gorm.DB, ch *chapter.Chapter, t
 	}
 	ch.Title = title
 	return nil
-}
-
-// createChapterRecord 新建通道：分配 sort_order 与 chapter_number，创建章节记录。
-//
-// vid 语义：>0 为显式指定卷；0 为未指定卷——默认分进最后一卷，
-// 整本书未建卷时创建未分卷章节（VolumeID=NULL）。
-// sort_order 的分配规则见 volume.Store.AllocateChapterSortOrder。
-func createChapterRecord(ctx context.Context, tc ToolContext, vid int64, title string) (*chapter.Chapter, error) {
-	volStore := volume.NewStore(tc.DB, tc.LoggerOrDefault())
-
-	var created *chapter.Chapter
-	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		// 未指定卷：默认最后一卷；整本书无卷则未分卷
-		targetVolumeID := vid
-		if targetVolumeID == 0 {
-			last, err := volStore.LastByNovel(ctx, tx, tc.NovelID)
-			if err != nil {
-				return err
-			}
-			if last != nil {
-				targetVolumeID = last.ID
-			}
-		}
-
-		pos, err := volStore.AllocateChapterSortOrder(ctx, tx, tc.NovelID, targetVolumeID)
-		if err != nil {
-			return err
-		}
-
-		// 章节号：全小说 max+1（过渡期字段，唯一索引兜底并发）
-		var nextNum int
-		if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
-			Select("COALESCE(MAX(chapter_number), 0)").
-			Where("novel_id = ?", tc.NovelID).
-			Scan(&nextNum).Error; err != nil {
-			return err
-		}
-		if title == "" {
-			title = fmt.Sprintf("第%d章", nextNum+1)
-		}
-		ch := &chapter.Chapter{
-			NovelID:       tc.NovelID,
-			ChapterNumber: nextNum + 1,
-			SortOrder:     pos,
-			Title:         title,
-		}
-		if targetVolumeID != 0 {
-			ch.VolumeID = &targetVolumeID
-		}
-		if err := tx.Create(ch).Error; err != nil {
-			return err
-		}
-		created = ch
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-	return created, nil
 }
 
 // deleteChapterRecord 补偿：新建通道写文件失败时删除刚建的记录，避免孤儿记录。

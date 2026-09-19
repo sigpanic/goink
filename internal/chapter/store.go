@@ -10,6 +10,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
 // Store 管理 Chapter 持久化。DB 导出供调用方做简单 CRUD。
@@ -115,6 +116,51 @@ func (s *Store) GetLatestNumber(ctx context.Context, novelID int64) (int, error)
 		return 0, fmt.Errorf("chapter store: latest number: %w", err)
 	}
 	return maxNum, nil
+}
+
+// Create 新建章节记录，并追加到指定卷或未分卷组的末尾。
+// volumeID 为 nil 时创建未分卷章节；非 nil 时必须属于该小说。
+// tx 可为 nil；传入时创建与 sort_order 分配使用同一事务。
+func (s *Store) Create(ctx context.Context, tx *gorm.DB, novelID int64, volumeID *int64, title string) (*Chapter, error) {
+	db := s.DB
+	if tx != nil {
+		db = tx
+	}
+
+	var created *Chapter
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		pos, err := volume.NewStore(s.DB, s.logger).AllocateChapterSortOrder(ctx, tx, novelID, volumeID)
+		if err != nil {
+			return err
+		}
+
+		var maxNum int
+		if err := tx.WithContext(ctx).Model(&Chapter{}).
+			Select("COALESCE(MAX(chapter_number), 0)").
+			Where("novel_id = ?", novelID).
+			Scan(&maxNum).Error; err != nil {
+			return fmt.Errorf("max chapter_number: %w", err)
+		}
+
+		if title == "" {
+			title = fmt.Sprintf("第%d章", maxNum+1)
+		}
+		created = &Chapter{
+			NovelID:       novelID,
+			ChapterNumber: maxNum + 1,
+			VolumeID:      volumeID,
+			SortOrder:     pos,
+			Title:         title,
+		}
+		if err := tx.WithContext(ctx).Create(created).Error; err != nil {
+			return fmt.Errorf("insert chapter: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("chapter store: create: %w", err)
+	}
+	return created, nil
 }
 
 // SearchByNovel 按关键词搜索某小说的章节，匹配标题和摘要。
