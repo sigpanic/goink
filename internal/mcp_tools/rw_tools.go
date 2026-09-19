@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/skill"
 	"github.com/sigpanic/goink/internal/text"
+	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -25,7 +27,7 @@ import (
 
 // EditArgs 是 edit 工具的参数。
 type EditArgs struct {
-	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节文件 chapters/001.md（3-6 位数字补齐）、大纲 outlines/001.md（3-6 位数字补齐）、故事状态 goink.md、技能 skills/<name>.md（小说级）或 ~/.goink/skills/<name>.md（用户级）" validate:"required"`
+	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
 	ChangeType string `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
 	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
 	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文（必填，传空会报错；若要清空整个文件请改用 line_range_replace(1, total_lines, \"\")，total_lines 从 read 返回获取）；search_replace 时为替换后的文本（传空则删除匹配到的文本）；line_range_replace 时为替换该行范围的新内容（传空则删除该范围行）" validate:"omitempty"`
@@ -33,7 +35,7 @@ type EditArgs struct {
 	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
 	Reason     string `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
-	Title      string `json:"title" jsonschema:"description=章节标题。新建章节时必填；对已有章节/大纲传入时将覆盖原标题（chapters/ 和 outlines/ 路径均生效）" validate:"omitempty"`
+	Title      string `json:"title" jsonschema:"description=章节标题。new.md 新建时可选，缺省为“第N章”（N 为分配的章节号）；对已有章节/大纲传入时覆盖原标题（chapters/ 与 outlines/ 路径均生效）" validate:"omitempty"`
 }
 
 // EditTool 编辑文件（章节或故事状态），支持全文替换、查找替换、行范围替换。
@@ -56,188 +58,174 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		return &ToolResult{Success: false, Error: "内置 skill 为只读，不可编辑"}, nil
 	}
 
-	// 1. 校验路径格式
+	// 章节/大纲路径走章节流程；其余（goink.md、技能文件）走通用文件流程
+	if ref, isOutline, ok := parseRWPath(a.Path); ok {
+		return t.editChapterLike(ctx, a, tc, ref, isOutline)
+	}
 	if !validPath(a.Path) {
-		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"}, nil
+		return &ToolResult{Success: false, Error: invalidPathHint}, nil
 	}
+	return t.editPlainFile(ctx, a, tc)
+}
 
-	// 2. 读取当前文件
-	current, err := git.ReadFile(tc.NovelID, a.Path)
+// invalidPathHint 是 edit/read 共用的非法路径提示。
+const invalidPathHint = "无效文件路径。章节正文 chapters/id_{id}.md、大纲 outlines/id_{id}.md、新建 chapters/{卷ID}/new.md 或 chapters/new.md、outlines/{卷ID}/new.md 或 outlines/new.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"
+
+// readFileForEdit 读取待编辑文件的当前内容。
+// 文件不存在时 full_replace 视为从空文件创建，其余模式返回 os.ErrNotExist。
+func readFileForEdit(novelID int64, path, changeType string) (string, error) {
+	content, err := git.ReadFile(novelID, path)
+	if err == nil {
+		return content, nil
+	}
+	if errors.Is(err, os.ErrNotExist) && changeType == "full_replace" {
+		return "", nil
+	}
+	return "", err
+}
+
+// fileReadError 将读取文件的已知业务错误转换为 ToolResult。
+// handled=false 表示非业务错误，交由上层作为系统错误返回。
+func fileReadError(path string, err error) (*ToolResult, bool) {
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return &ToolResult{Success: false, Error: "文件不存在: " + path}, true
+	case errors.Is(err, git.ErrPathEscape):
+		return &ToolResult{Success: false, Error: "路径非法: " + path}, true
+	default:
+		return nil, false
+	}
+}
+
+// approvalPayload 构造审批事件负载。title 非空时附带展示（标题将被修改）。
+func approvalPayload(path, current, proposed string, a *EditArgs) map[string]any {
+	payload := map[string]any{
+		"original":    current,
+		"modified":    proposed,
+		"path":        path,
+		"change_type": a.ChangeType,
+		"reason":      a.Reason,
+	}
+	if a.Title != "" {
+		payload["title"] = a.Title
+	}
+	return payload
+}
+
+// requestApproval 阻塞等待用户审批。
+// res 非 nil 表示审批被拒绝或操作被中断，调用方直接返回该结果；
+// err 表示审批通道自身的系统错误。
+func requestApproval(ctx context.Context, tc ToolContext, payload map[string]any) (feedback string, res *ToolResult, err error) {
+	if tc.Approver == nil {
+		return "", nil, nil
+	}
+	if tc.EmitApproval != nil {
+		tc.EmitApproval(tc.ToolID, "file_edit", payload)
+	}
+	ap, err := tc.Approver.RequestApproval(ctx, tc.ToolID, payload)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			if a.ChangeType == "full_replace" {
-				current = ""
-			} else {
-				return &ToolResult{Success: false, Error: "文件不存在: " + a.Path}, nil
-			}
-		} else if errors.Is(err, git.ErrPathEscape) {
-			return &ToolResult{Success: false, Error: "路径非法: " + a.Path}, nil
-		} else {
-			return nil, fmt.Errorf("read file %s: %w", a.Path, err)
+		if errors.Is(err, context.Canceled) {
+			return "", &ToolResult{Success: false, Error: "操作被中断"}, nil
 		}
+		return "", nil, fmt.Errorf("approval: %w", err)
+	}
+	if !ap.Approved {
+		info := "你的修改被用户拒绝"
+		if ap.Feedback != "" {
+			info += "。用户反馈：" + ap.Feedback
+		}
+		return "", &ToolResult{
+			Success: false,
+			Error:   "审批未通过",
+			Data: map[string]any{
+				"path":        payload["path"],
+				"change_type": payload["change_type"],
+				"approved":    false,
+			},
+			Inject: []InjectMessage{{Role: "user", Content: info}},
+		}, nil
+	}
+	return ap.Feedback, nil, nil
+}
+
+// writeApproved 写入前的并发冲突检查 + 落盘 + file:changed 事件。
+// res 非 nil 表示业务失败（并发冲突/路径非法），err 表示系统错误。
+func writeApproved(ctx context.Context, tc ToolContext, path, current, proposed string) (res *ToolResult, err error) {
+	// 写入前重读对比，阻止并发冲突
+	if fresh, err := git.ReadFile(tc.NovelID, path); err == nil && fresh != current {
+		return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
+	}
+	if err := git.WriteFile(tc.NovelID, path, proposed); err != nil {
+		if errors.Is(err, git.ErrPathEscape) {
+			return &ToolResult{Success: false, Error: "路径非法: " + path}, nil
+		}
+		return nil, fmt.Errorf("write file: %w", err)
+	}
+	emitFileChanged(ctx, tc.NovelID, path)
+	return nil, nil
+}
+
+// emitFileChanged 推送 file:changed 事件。wails runtime 在上下文缺失时
+// 会 log.Fatalf 终止进程，因此无 wails 运行时上下文（如测试环境）时静默跳过。
+func emitFileChanged(ctx context.Context, novelID int64, path string) {
+	if ctx == nil || ctx.Value("events") == nil {
+		return
+	}
+	wails.EventsEmit(ctx, "file:changed", map[string]any{
+		"novel_id": novelID,
+		"path":     path,
+	})
+}
+
+// physicalRWPath 章节正文的物理扁平路径（isOutline=false 时为章节，true 时为大纲）。
+func physicalRWPath(isOutline bool, id int64) string {
+	if isOutline {
+		return git.OutlinePath(id)
+	}
+	return git.ChapterPath(id)
+}
+
+// editPlainFile 编辑通用文件（goink.md、技能文件），无章节记录联动。
+func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContext) (*ToolResult, error) {
+	current, err := readFileForEdit(tc.NovelID, a.Path, a.ChangeType)
+	if err != nil {
+		if res, handled := fileReadError(a.Path, err); handled {
+			return res, nil
+		}
+		return nil, fmt.Errorf("read file %s: %w", a.Path, err)
 	}
 
-	// 3. 根据 change_type 生成新内容
 	proposed, err := applyChange(a, current)
 	if err != nil {
 		return &ToolResult{Success: false, Error: fmt.Sprintf("编辑操作失败: %s", err.Error())}, nil
 	}
-
 	if proposed == current {
-		return &ToolResult{
-			Success: true,
-			Data:    map[string]any{"path": a.Path, "message": "内容未变化，跳过"},
-		}, nil
+		return &ToolResult{Success: true, Data: map[string]any{"path": a.Path, "message": "内容未变化，跳过"}}, nil
 	}
 
-	// 4. 校验 skill 格式（在审批前，格式不对直接返回 LLM 修正）
+	// skill 格式校验（审批前，格式不对直接返回 LLM 修正）
 	if isSkillPath(a.Path) {
 		if _, err := skill.ParseBytes([]byte(proposed), ""); err != nil {
 			return &ToolResult{Success: false, Error: fmt.Sprintf("skill 格式错误: %s", err.Error())}, nil
 		}
 	}
 
-	// 5. 审批（阻塞等待用户确认）
-	var approvalFeedback string
-	if tc.Approver != nil {
-		payload := map[string]any{
-			"original":    current,
-			"modified":    proposed,
-			"path":        a.Path,
-			"change_type": a.ChangeType,
-			"reason":      a.Reason,
-		}
-		if tc.EmitApproval != nil {
-			tc.EmitApproval(tc.ToolID, "file_edit", payload)
-		}
-		approval, err := tc.Approver.RequestApproval(ctx, tc.ToolID, payload)
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				return &ToolResult{Success: false, Error: "操作被中断"}, nil
-			}
-			return nil, fmt.Errorf("approval: %w", err)
-		}
-		if !approval.Approved {
-			info := "你的修改被用户拒绝"
-			if approval.Feedback != "" {
-				info += "。用户反馈：" + approval.Feedback
-			}
-			return &ToolResult{
-				Success: false,
-				Error:   "审批未通过",
-				Data: map[string]any{
-					"path":        a.Path,
-					"change_type": a.ChangeType,
-					"approved":    false,
-				},
-				Inject: []InjectMessage{{Role: "user", Content: info}},
-			}, nil
-		}
-		approvalFeedback = approval.Feedback
+	feedback, res, err := requestApproval(ctx, tc, approvalPayload(a.Path, current, proposed, a))
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return res, nil
 	}
 
-	// 6. 章节/大纲 DB 记录维护（upsert：记录不存在则创建，存在且传了 title 则更新）
-	// 大纲无独立元数据表，寄生在 chapter 记录上，故 outline edit 也会触发本章记录创建。
-	// 不以文件是否存在区分 DB 处理——以 chapter 记录是否存在为准。
-	if isChapterPath(a.Path) || isOutlinePath(a.Path) {
-		chapNum := parseChapterNum(a.Path)
-		if chapNum == 0 {
-			chapNum = parseOutlineNum(a.Path)
-		}
-		if chapNum > 0 {
-			var ch chapter.Chapter
-			err := tc.DB.WithContext(ctx).
-				Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).
-				First(&ch).Error
-			if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
-				return nil, fmt.Errorf("query chapter record: %w", err)
-			}
-			if errors.Is(err, gorm.ErrRecordNotFound) {
-				title := a.Title
-				if title == "" {
-					title = fmt.Sprintf("第%d章", chapNum)
-				}
-				ch = chapter.Chapter{
-					NovelID:       tc.NovelID,
-					ChapterNumber: chapNum,
-					Title:         title,
-				}
-				if err := tc.DB.WithContext(ctx).Create(&ch).Error; err != nil {
-					return nil, fmt.Errorf("auto-create chapter record: %w", err)
-				}
-			} else if a.Title != "" && ch.Title != a.Title {
-				if err := tc.DB.WithContext(ctx).
-					Model(&ch).
-					Update("title", a.Title).Error; err != nil {
-					return nil, fmt.Errorf("update chapter title: %w", err)
-				}
-			}
-		}
+	if res, err := writeApproved(ctx, tc, a.Path, current, proposed); res != nil || err != nil {
+		return res, err
 	}
 
-	// 7. 写入前重读对比，阻止并发冲突
-	if fresh, err := git.ReadFile(tc.NovelID, a.Path); err == nil && fresh != current {
-		return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
-	}
-
-	// 8. 写入文件
-	if err := git.WriteFile(tc.NovelID, a.Path, proposed); err != nil {
-		if errors.Is(err, git.ErrPathEscape) {
-			return &ToolResult{Success: false, Error: "路径非法: " + a.Path}, nil
-		}
-		return nil, fmt.Errorf("write file: %w", err)
-	}
-
-	wails.EventsEmit(ctx, "file:changed", map[string]any{
-		"novel_id": tc.NovelID,
-		"path":     a.Path,
-	})
-
-	// 异步刷新章节向量 + 更新字数
-	if isChapterPath(a.Path) {
-		chapNum := parseChapterNum(a.Path)
-		rag.SubmitRefresh(tc.NovelID, chapNum, proposed)
-		if tc.SearchService != nil {
-			tc.SearchService.UpdateCachedChapter(tc.NovelID, chapNum, proposed)
-		}
-		stats := text.ComputeStats(proposed)
-
-		// 记录字数变化
-		var oldWC int
-		tc.DB.WithContext(ctx).
-			Model(&chapter.Chapter{}).
-			Select("COALESCE(word_count, 0)").
-			Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).
-			Scan(&oldWC)
-		if delta := stats.WordCount - oldWC; delta != 0 {
-			tc.DB.WithContext(ctx).Create(&writing.WritingLog{
-				Date:          time.Now().Format("2006-01-02"),
-				NovelID:       tc.NovelID,
-				ChapterNumber: chapNum,
-				WordDelta:     delta,
-			})
-		}
-
-		tc.DB.WithContext(ctx).
-			Model(&chapter.Chapter{}).
-			Where("novel_id = ? AND chapter_number = ?", tc.NovelID, chapNum).
-			Update("word_count", stats.WordCount)
-
-	}
-
-	// 9. inject 维护提醒（章节全量替换且 >500 字时）
 	var injects []InjectMessage
-	if approvalFeedback != "" {
-		injects = append(injects, InjectMessage{Role: "user", Content: "用户通过了审批并反馈：" + approvalFeedback})
+	if feedback != "" {
+		injects = append(injects, InjectMessage{Role: "user", Content: "用户通过了审批并反馈：" + feedback})
 	}
-	if a.ChangeType == "full_replace" && isChapterPath(a.Path) && len([]rune(proposed)) > 500 {
-		chapNum := parseChapterNum(a.Path)
-		injects = append(injects, InjectMessage{
-			Role:    "user",
-			Content: fmt.Sprintf("你刚刚完成了第%d章的全量替换。请执行以下维护操作：\n1. 检查并更新角色设定（性格变化、新能力、身份转变等）\n2. 更新故事时间线（伏笔回收、新伏笔记录、章节计划推进）\n3. 更新读者认知（新悬念、已回收悬念）\n4. 更新故事弧线节点进度\n完成后向用户汇报修改摘要。", chapNum),
-		})
-	}
-
 	data := map[string]any{
 		"path":        a.Path,
 		"change_type": a.ChangeType,
@@ -248,11 +236,172 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		data["before"] = linePreview(current, a.StartLine, a.EndLine)
 		data["after"] = linePreview(proposed, a.StartLine, afterEnd)
 	}
-	return &ToolResult{
-		Success: true,
-		Data:    data,
-		Inject:  injects,
-	}, nil
+	return &ToolResult{Success: true, Data: data, Inject: injects}, nil
+}
+
+// editChapterLike 编辑章节正文或大纲（含 new.md 新建通道）。
+//
+// 路径与存储的关系：
+//   - 物理文件永远按 id 扁平落盘（chapters/id_{id}.md / outlines/id_{id}.md），
+//     两级路径 chapters/{vid}/id_{id}.md 仅为容错别名，读写时归一化为扁平路径
+//   - 新建走 new.md 通道：先建章节记录拿 id，再写物理文件；写文件失败补偿删记录
+func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolContext, ref chapterRef, isOutline bool) (*ToolResult, error) {
+	physical := physicalRWPath(isOutline, ref.ID)
+
+	var (
+		ch  *chapter.Chapter
+		vid int64
+	)
+	if ref.IsNew {
+		// 新建通道：只能 full_replace；卷可选——带卷校验归属，
+		// 不带卷由 createChapterRecord 解析默认卷（最后一卷，无卷则未分卷）
+		if a.ChangeType != "full_replace" {
+			return &ToolResult{Success: false, Error: "new.md 仅支持 full_replace（新建文件无原文可查改）"}, nil
+		}
+		if ref.Vid != 0 {
+			v, err := resolveVolume(ctx, tc.DB, tc.NovelID, ref.Vid)
+			if err != nil {
+				return &ToolResult{Success: false, Error: err.Error()}, nil
+			}
+			vid = v.ID
+		}
+	} else {
+		// 已有章节：记录必须存在，新建走 new.md 通道
+		rec, err := getChapterRecord(ctx, tc.DB, tc.NovelID, ref.ID)
+		if err != nil {
+			return nil, fmt.Errorf("query chapter record: %w", err)
+		}
+		if rec == nil {
+			return &ToolResult{Success: false, Error: fmt.Sprintf("章节记录不存在: id=%d，新建请用 chapters/{卷ID}/new.md 或 chapters/new.md", ref.ID)}, nil
+		}
+		ch = rec
+	}
+
+	// 读取当前内容（new 通道视为空文件）
+	current := ""
+	if !ref.IsNew {
+		content, err := git.ReadFile(tc.NovelID, physical)
+		if err != nil {
+			// 大纲先行等工作流：记录存在但文件尚未落盘，full_replace 视为空文件创建
+			if !errors.Is(err, os.ErrNotExist) || a.ChangeType != "full_replace" {
+				if res, handled := fileReadError(physical, err); handled {
+					return res, nil
+				}
+				return nil, fmt.Errorf("read file %s: %w", physical, err)
+			}
+		} else {
+			current = content
+		}
+	}
+
+	proposed, err := applyChange(a, current)
+	if err != nil {
+		return &ToolResult{Success: false, Error: fmt.Sprintf("编辑操作失败: %s", err.Error())}, nil
+	}
+	if proposed == current {
+		// 内容未变：title 有变化时仍执行标题更新，否则直接跳过
+		if !ref.IsNew && a.Title != "" && ch.Title != a.Title {
+			if err := updateChapterTitle(ctx, tc.DB, ch, a.Title); err != nil {
+				return nil, err
+			}
+			return &ToolResult{Success: true, Data: map[string]any{
+				"path":    physical,
+				"title":   a.Title,
+				"message": "内容未变化，仅更新标题",
+			}}, nil
+		}
+		return &ToolResult{Success: true, Data: map[string]any{"path": physical, "message": "内容未变化，跳过"}}, nil
+	}
+
+	// 审批（new 通道展示虚拟路径，已有章节展示物理路径）
+	payloadPath := physical
+	if ref.IsNew {
+		payloadPath = a.Path
+	}
+	feedback, res, err := requestApproval(ctx, tc, approvalPayload(payloadPath, current, proposed, a))
+	if err != nil {
+		return nil, err
+	}
+	if res != nil {
+		return res, nil
+	}
+
+	// 并发冲突检查（new 通道写全新文件，跳过）。
+	// 必须在 DB 变更前执行，避免写入被拒时留下脏记录。
+	if !ref.IsNew {
+		if fresh, err := git.ReadFile(tc.NovelID, physical); err == nil && fresh != current {
+			return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
+		}
+	}
+
+	// DB 记录维护：新建则建记录拿 id；已有且传 title 则更新标题
+	if ref.IsNew {
+		created, err := createChapterRecord(ctx, tc.DB, tc.NovelID, vid, a.Title)
+		if err != nil {
+			return nil, fmt.Errorf("create chapter record: %w", err)
+		}
+		ch = created
+		// 物理路径按刚分配的章节 id 重新计算（ref.ID 对新建为 0）
+		physical = physicalRWPath(isOutline, ch.ID)
+	} else if a.Title != "" && ch.Title != a.Title {
+		if err := updateChapterTitle(ctx, tc.DB, ch, a.Title); err != nil {
+			return nil, err
+		}
+	}
+
+	// 写入物理文件；新建通道失败时补偿删除刚建的记录
+	if err := git.WriteFile(tc.NovelID, physical, proposed); err != nil {
+		if ref.IsNew {
+			if delErr := deleteChapterRecord(ctx, tc.DB, ch.ID); delErr != nil {
+				return nil, fmt.Errorf("write file: %w（补偿删除章节记录失败 record_id=%d: %v）", err, ch.ID, delErr)
+			}
+		}
+		if errors.Is(err, git.ErrPathEscape) {
+			return &ToolResult{Success: false, Error: "路径非法: " + physical}, nil
+		}
+		return nil, fmt.Errorf("write file: %w", err)
+	}
+
+	emitFileChanged(ctx, tc.NovelID, physical)
+
+	// 正文（非大纲）落盘后的维护链路：向量/搜索缓存/字数/写作日志
+	if !isOutline {
+		maintainChapterAfterEdit(ctx, tc, ch, proposed)
+	}
+
+	data := map[string]any{
+		"path":        physical,
+		"change_type": a.ChangeType,
+		"approved":    true,
+	}
+	if ref.IsNew {
+		data["chapter_id"] = ch.ID
+		data["chapter_number"] = ch.ChapterNumber
+		var volID int64 // 未分卷为 0；默认卷解析发生在事务内，须从记录取
+		if ch.VolumeID != nil {
+			volID = *ch.VolumeID
+		}
+		data["volume_id"] = volID
+	}
+
+	var injects []InjectMessage
+	if feedback != "" {
+		injects = append(injects, InjectMessage{Role: "user", Content: "用户通过了审批并反馈：" + feedback})
+	}
+	// 章节正文全量替换且内容较长时注入维护提醒
+	if !isOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
+		injects = append(injects, InjectMessage{
+			Role: "user",
+			Content: fmt.Sprintf("你刚刚完成了《%s》（第%d章）的全量替换。请执行以下维护操作：\n1. 检查并更新角色设定（性格变化、新能力、身份转变等）\n2. 更新故事时间线（伏笔回收、新伏笔记录、章节计划推进）\n3. 更新读者认知（新悬念、已回收悬念）\n4. 更新故事弧线节点进度\n完成后向用户汇报修改摘要。",
+				ch.Title, ch.ChapterNumber),
+		})
+	}
+	if a.ChangeType == "line_range_replace" {
+		afterEnd := a.StartLine + strings.Count(a.NewContent, "\n")
+		data["before"] = linePreview(current, a.StartLine, a.EndLine)
+		data["after"] = linePreview(proposed, a.StartLine, afterEnd)
+	}
+	return &ToolResult{Success: true, Data: data, Inject: injects}, nil
 }
 
 // linePreview 返回指定行范围的前后上下文预览，带行号。区间 1-based 闭区间。
@@ -527,41 +676,287 @@ func lineRangeReplace(content string, startLine, endLine int, newContent string)
 	return strings.Join(result, "\n"), nil
 }
 
-// ── 路径校验 ──────────────────────────────────────────────
+// ── 路径解析 ──────────────────────────────────────────────
 
-var pathRe = regexp.MustCompile(`^(chapters/\d{3,6}\.md|goink\.md|outlines/\d{3,6}\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
+// chapterRef 是章节/大纲虚拟路径的解析结果。
+//
+// v1.6.0 起章节文件按 id 命名，支持两种虚拟路径形态：
+//   - 扁平主格式：chapters/id_{id}.md
+//   - 两级容错格式：chapters/{vid}/id_{id}.md（vid 仅为容错别名）
+//
+// 新建走 new.md 通道：chapters/{vid}/new.md 或 chapters/new.md（不带卷默认最后一卷，
+// 整本书无卷则未分卷）。outlines 同理。
+type chapterRef struct {
+	ID    int64 // 章节记录 id；new 通道为 0
+	Vid   int64 // 路径中的卷 id；扁平格式或不带卷的 new 通道为 0
+	IsNew bool  // 是否 new.md 新建通道
+}
 
+var (
+	chapterPathRe = regexp.MustCompile(`^chapters/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
+	outlinePathRe = regexp.MustCompile(`^outlines/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
+	plainPathRe   = regexp.MustCompile(`^(goink\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
+)
+
+// parseRWPath 解析章节/大纲路径；非章节类路径返回 ok=false。
+func parseRWPath(p string) (ref chapterRef, isOutline bool, ok bool) {
+	if ref, ok := parseChapterRef(p); ok {
+		return ref, false, true
+	}
+	if ref, ok := parseOutlineRef(p); ok {
+		return ref, true, true
+	}
+	return chapterRef{}, false, false
+}
+
+// parseChapterRef 解析章节正文路径，非法返回 false。
+// 捕获组：m[1]=卷 id（可选），m[2]=章节 id（new 通道为空）。
+func parseChapterRef(p string) (chapterRef, bool) {
+	m := chapterPathRe.FindStringSubmatch(p)
+	if m == nil {
+		return chapterRef{}, false
+	}
+	return buildChapterRef(m)
+}
+
+// parseOutlineRef 解析章节大纲路径，非法返回 false。
+func parseOutlineRef(p string) (chapterRef, bool) {
+	m := outlinePathRe.FindStringSubmatch(p)
+	if m == nil {
+		return chapterRef{}, false
+	}
+	return buildChapterRef(m)
+}
+
+// buildChapterRef 从正则捕获组构造章节引用。
+// 数字段超出 int64 范围时解析失败，按非法路径处理。
+func buildChapterRef(m []string) (chapterRef, bool) {
+	ref := chapterRef{}
+	if m[1] != "" {
+		v, err := strconv.ParseInt(m[1], 10, 64)
+		if err != nil {
+			return chapterRef{}, false
+		}
+		ref.Vid = v
+	}
+	if m[2] == "" {
+		ref.IsNew = true
+	} else {
+		id, err := strconv.ParseInt(m[2], 10, 64)
+		if err != nil {
+			return chapterRef{}, false
+		}
+		ref.ID = id
+	}
+	return ref, true
+}
+
+// validPath 校验 edit/read 支持的全部路径形态。
 func validPath(p string) bool {
-	return pathRe.MatchString(p)
-}
-
-func isChapterPath(p string) bool {
-	return strings.HasPrefix(p, "chapters/")
-}
-
-func parseChapterNum(p string) int {
-	var n int
-	_, _ = fmt.Sscanf(p, "chapters/%d.md", &n)
-	return n
-}
-
-func isOutlinePath(p string) bool {
-	return strings.HasPrefix(p, "outlines/")
+	if _, _, ok := parseRWPath(p); ok {
+		return true
+	}
+	return plainPathRe.MatchString(p)
 }
 
 func isSkillPath(p string) bool {
 	return strings.HasPrefix(p, "skills/") || strings.HasPrefix(p, "~/.goink/skills/")
 }
 
-func parseOutlineNum(p string) int {
-	var n int
-	_, _ = fmt.Sscanf(p, "outlines/%d.md", &n)
-	return n
+// ── 章节记录 ──────────────────────────────────────────────
+
+// resolveVolume 校验卷存在且属于当前小说，返回卷记录。
+func resolveVolume(ctx context.Context, db *gorm.DB, novelID, vid int64) (volume.Volume, error) {
+	var v volume.Volume
+	err := db.WithContext(ctx).Where("id = ? AND novel_id = ?", vid, novelID).First(&v).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return v, fmt.Errorf("卷不存在（或不属于当前小说）: %d", vid)
+	}
+	return v, err
+}
+
+// lastVolume 返回小说中 sort_order 最大的卷（最后一卷），无卷返回 (nil, nil)。
+// 必须在事务内调用并传入 tx——本应用 SetMaxOpenConns(1)，
+// 事务内经外部连接查询会因连接池耗尽而死锁。
+func lastVolume(ctx context.Context, db *gorm.DB, novelID int64) (*volume.Volume, error) {
+	var v volume.Volume
+	err := db.WithContext(ctx).
+		Where("novel_id = ?", novelID).
+		Order("sort_order DESC").
+		First(&v).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &v, nil
+}
+
+// getChapterRecord 按章节 id 取当前小说的章节记录，不存在返回 (nil, nil)。
+func getChapterRecord(ctx context.Context, db *gorm.DB, novelID, id int64) (*chapter.Chapter, error) {
+	var ch chapter.Chapter
+	err := db.WithContext(ctx).Where("id = ? AND novel_id = ?", id, novelID).First(&ch).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &ch, nil
+}
+
+// updateChapterTitle 更新已有章节记录的标题，并同步内存中的记录值。
+func updateChapterTitle(ctx context.Context, db *gorm.DB, ch *chapter.Chapter, title string) error {
+	if err := db.WithContext(ctx).Model(ch).Update("title", title).Error; err != nil {
+		return fmt.Errorf("update chapter title: %w", err)
+	}
+	ch.Title = title
+	return nil
+}
+
+// createChapterRecord 新建通道：事务内分配 sort_order（全局阅读序语义，贴卷尾）
+// 与 chapter_number（全小说 max+1，过渡期字段，唯一索引兜底并发），创建章节记录。
+//
+// vid 语义：>0 为显式指定卷（调用方已校验归属）；0 为未指定卷——默认分进最后一卷，
+// 整本书未建卷时创建未分卷章节（VolumeID=NULL）。
+//
+// sort_order 分配规则（全局阅读序 = ORDER BY sort_order）：
+//   - 目标卷有章节：取卷内 max(sort_order)+1，插入点之后的章节批量 +1 腾位
+//   - 目标卷为空：取目标卷之前各卷（按 volumes.sort_order）章节的 max+1；
+//     若仍为 0（全书还没有卷章节，如存量未分卷章节），退化为全局 max+1 追加到末尾
+//   - 未分卷新建：取全局 max(sort_order)+1，追加到全书末尾
+//   - 全书无章节：从 1 开始
+func createChapterRecord(ctx context.Context, db *gorm.DB, novelID, vid int64, title string) (*chapter.Chapter, error) {
+	var created *chapter.Chapter
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var v *volume.Volume
+		if vid != 0 {
+			vv, err := resolveVolume(ctx, tx, novelID, vid)
+			if err != nil {
+				return err
+			}
+			v = &vv
+		} else {
+			// 未指定卷：默认最后一卷；整本书无卷则未分卷（v 保持 nil）
+			vv, err := lastVolume(ctx, tx, novelID)
+			if err != nil {
+				return err
+			}
+			v = vv
+		}
+
+		// 锚点：目标卷内最大 sort_order；空卷则取前面各卷的最大值
+		var anchor int
+		if v != nil {
+			if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
+				Select("COALESCE(MAX(sort_order), 0)").
+				Where("novel_id = ? AND volume_id = ?", novelID, v.ID).
+				Scan(&anchor).Error; err != nil {
+				return err
+			}
+			if anchor == 0 {
+				if err := tx.WithContext(ctx).Raw(
+					`SELECT COALESCE(MAX(c.sort_order), 0) FROM chapters c
+					 JOIN volumes v ON v.id = c.volume_id
+					 WHERE c.novel_id = ? AND v.novel_id = ? AND v.sort_order < ?`,
+					novelID, novelID, v.SortOrder).
+					Scan(&anchor).Error; err != nil {
+					return err
+				}
+			}
+		}
+		if anchor == 0 {
+			// 未分卷新建，或前面没有卷章节：追加到全书末尾
+			if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
+				Select("COALESCE(MAX(sort_order), 0)").
+				Where("novel_id = ?", novelID).
+				Scan(&anchor).Error; err != nil {
+				return err
+			}
+		}
+		pos := anchor + 1
+
+		// 腾位：插入点及之后的章节整体 +1（追加到全书末尾时影响 0 行）
+		if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
+			Where("novel_id = ? AND sort_order >= ?", novelID, pos).
+			Update("sort_order", gorm.Expr("sort_order + 1")).Error; err != nil {
+			return err
+		}
+
+		// 章节号：全小说 max+1
+		var nextNum int
+		if err := tx.WithContext(ctx).Model(&chapter.Chapter{}).
+			Select("COALESCE(MAX(chapter_number), 0)").
+			Where("novel_id = ?", novelID).
+			Scan(&nextNum).Error; err != nil {
+			return err
+		}
+		if title == "" {
+			title = fmt.Sprintf("第%d章", nextNum+1)
+		}
+		ch := &chapter.Chapter{
+			NovelID:       novelID,
+			ChapterNumber: nextNum + 1,
+			SortOrder:     pos,
+			Title:         title,
+		}
+		if v != nil {
+			ch.VolumeID = &v.ID
+		}
+		if err := tx.Create(ch).Error; err != nil {
+			return err
+		}
+		created = ch
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return created, nil
+}
+
+// deleteChapterRecord 补偿：新建通道写文件失败时删除刚建的记录，避免孤儿记录。
+// 事务内腾位产生的 sort_order 空洞无害（仅作排序键），不回滚。
+func deleteChapterRecord(ctx context.Context, db *gorm.DB, id int64) error {
+	return db.WithContext(ctx).Delete(&chapter.Chapter{}, id).Error
+}
+
+// maintainChapterAfterEdit 章节正文落盘后的维护链路：向量刷新、搜索缓存、字数统计。
+// 过渡期（v1.6）：向量/搜索/写作日志仍按 chapter_number 键控，用记录中的
+// ChapterNumber 桥接；4.3 整体切换 chapter_id 后移除桥接。
+func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.Chapter, content string) {
+	rag.SubmitRefresh(tc.NovelID, ch.ChapterNumber, content)
+	if tc.SearchService != nil {
+		tc.SearchService.UpdateCachedChapter(tc.NovelID, ch.ChapterNumber, content)
+	}
+
+	stats := text.ComputeStats(content)
+
+	var oldWC int
+	tc.DB.WithContext(ctx).Model(&chapter.Chapter{}).
+		Select("COALESCE(word_count, 0)").
+		Where("id = ?", ch.ID).
+		Scan(&oldWC)
+	if delta := stats.WordCount - oldWC; delta != 0 {
+		tc.DB.WithContext(ctx).Create(&writing.WritingLog{
+			Date:          time.Now().Format("2006-01-02"),
+			NovelID:       tc.NovelID,
+			ChapterNumber: ch.ChapterNumber,
+			WordDelta:     delta,
+		})
+	}
+
+	tc.DB.WithContext(ctx).Model(&chapter.Chapter{}).
+		Where("id = ?", ch.ID).
+		Update("word_count", stats.WordCount)
 }
 
 // ── 工具描述 ──────────────────────────────────────────────
 
 const editDescription = `编辑小说文件（章节正文、大纲、故事状态 goink.md 或技能文件）。支持三种编辑模式：full_replace（全文替换）、search_replace（查找替换）、line_range_replace（行范围替换）。
+
+新建章节或大纲：path 使用 new.md 形式（格式见 path 参数说明），且只能 full_replace；成功后返回值携带分配的 chapter_id、chapter_number、volume_id 与物理路径，后续编辑一律使用返回的物理路径。
 
 各模式必填参数：
 - full_replace：new_content
@@ -580,7 +975,7 @@ const editDescription = `编辑小说文件（章节正文、大纲、故事状�
 
 // ReadArgs 是 read 工具的参数。
 type ReadArgs struct {
-	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节文件 chapters/001.md（3-6 位数字补齐）、大纲 outlines/001.md（3-6 位数字补齐）、故事状态 goink.md、技能 skills/<name>.md（小说级）、~/.goink/skills/<name>.md（用户级）或 /builtin/skills/<name>.md（内置，只读）" validate:"required"`
+	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md；内置技能 /builtin/skills/<name>.md（只读）" validate:"required"`
 	IncludeLines *bool  `json:"include_lines" jsonschema:"default=true,description=是否包含行号前缀（如 123|）。默认 true，用于精确引用和行范围编辑。传 false 获取纯文本"`
 	StartLine    int    `json:"start_line" jsonschema:"default=1,description=起始行号 1-based 含此行，必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末。不传或传 0 均按默认 2000 处理" validate:"omitempty,min=0"`
@@ -607,21 +1002,60 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		return t.readBuiltinSkill(a, tc)
 	}
 
+	// 章节/大纲按 id 扁平路径读取（两级路径归一化）
+	if ref, isOutline, ok := parseRWPath(a.Path); ok {
+		return t.readChapterLike(ctx, a, tc, ref, isOutline)
+	}
 	if !validPath(a.Path) {
-		return &ToolResult{Success: false, Error: "无效文件路径，支持 chapters/001.md ~ chapters/999999.md、outlines/001.md ~ outlines/999999.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md、/builtin/skills/<name>.md（只读）"}, nil
+		return &ToolResult{Success: false, Error: invalidPathHint}, nil
 	}
 
 	content, err := git.ReadFile(tc.NovelID, a.Path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return &ToolResult{Success: false, Error: "文件不存在: " + a.Path}, nil
-		}
-		if errors.Is(err, git.ErrPathEscape) {
-			return &ToolResult{Success: false, Error: "路径非法: " + a.Path}, nil
+		if res, handled := fileReadError(a.Path, err); handled {
+			return res, nil
 		}
 		return nil, fmt.Errorf("read file %s: %w", a.Path, err)
 	}
+	return renderReadResult(a, a.Path, a.Path, content)
+}
 
+// readChapterLike 读取章节正文或大纲。
+// 物理文件永远按 id 扁平路径读，两级路径仅作容错别名归一化。
+func (t *ReadTool) readChapterLike(ctx context.Context, a *ReadArgs, tc ToolContext, ref chapterRef, isOutline bool) (*ToolResult, error) {
+	if ref.IsNew {
+		return &ToolResult{Success: false, Error: "new.md 仅用于 edit 新建章节/大纲，不可读取"}, nil
+	}
+
+	physical := git.ChapterPath(ref.ID)
+	suffix := ""
+	if isOutline {
+		physical = git.OutlinePath(ref.ID)
+		suffix = "（大纲）"
+	}
+
+	content, err := git.ReadFile(tc.NovelID, physical)
+	if err != nil {
+		if res, handled := fileReadError(physical, err); handled {
+			return res, nil
+		}
+		return nil, fmt.Errorf("read file %s: %w", physical, err)
+	}
+
+	display := physical
+	ch, err := getChapterRecord(ctx, tc.DB, tc.NovelID, ref.ID)
+	if err != nil {
+		return nil, fmt.Errorf("query chapter record: %w", err)
+	}
+	if ch != nil {
+		display = ch.Title + suffix
+	}
+
+	return renderReadResult(a, physical, display, content)
+}
+
+// renderReadResult 按行窗口切片并渲染读取结果（行号前缀、截断标记）。
+func renderReadResult(a *ReadArgs, path, display, content string) (*ToolResult, error) {
 	start := a.StartLine
 	if start == 0 {
 		start = 1
@@ -659,15 +1093,8 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		output = strings.Join(selected, "\n")
 	}
 
-	display := a.Path
-	if isChapterPath(a.Path) {
-		display = fmt.Sprintf("第%d章", parseChapterNum(a.Path))
-	} else if isOutlinePath(a.Path) {
-		display = fmt.Sprintf("第%d章大纲", parseOutlineNum(a.Path))
-	}
-
 	data := map[string]any{
-		"path":        a.Path,
+		"path":        path,
 		"display":     display,
 		"content":     output,
 		"total_lines": totalLines,
