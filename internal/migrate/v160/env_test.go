@@ -3,6 +3,7 @@
 package v160_test
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,18 +31,21 @@ func setupMigrateEnv(t *testing.T) string {
 	dataDir := t.TempDir()
 	t.Setenv("GOINK_TESTING", "1")
 	t.Setenv("GOINK_DATA_DIR", dataDir)
+	// 隔离用户全局 Git 配置（如 commit.gpgSign=true）；迁移会在临时小说仓库中
+	// 创建提交，测试不应依赖开发机的 GPG agent 或身份配置。
+	t.Setenv("HOME", t.TempDir())
 	platform.ResetDataDirCache()
 	config.Set(&config.AppConfig{})
 
-	bin, err := os.ReadFile(gitSrc)
-	if err != nil {
-		t.Fatal(err)
-	}
 	gitDst := filepath.Join(dataDir, "runtime", "git")
 	if err := os.MkdirAll(gitDst, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(gitDst, "git"), bin, 0o755); err != nil {
+	// 不能直接复制 git 可执行文件：Git 会据 argv[0] 推导自身的 libexec 路径，复制后
+	// 在临时 runtime 目录找不到资源。包装器保留系统 git 的真实位置，同时满足
+	// GOINK_TESTING 对 DataDir/runtime/git/git 的查找约定。
+	gitWrapper := fmt.Sprintf("#!/bin/sh\nexec %q \"$@\"\n", gitSrc)
+	if err := os.WriteFile(filepath.Join(gitDst, "git"), []byte(gitWrapper), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	return dataDir

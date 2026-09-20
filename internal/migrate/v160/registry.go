@@ -30,7 +30,7 @@ var registry = []engine.Step{
 	// 保留未来计划的阅读位置；它不是可改写为 chapter_id 的既有章节引用。
 	step{key: "3-reading-targets", run: migrateReadingTargets},
 	// commit 1.7：删旧列 + 收尾（框架写 done 即收尾）
-	// step{key: "4-drop-legacy", run: migrateDropLegacy},
+	step{key: "4-drop-legacy", run: migrateDropLegacy},
 }
 
 // init 自注册进 engine：migrate.Run 遍历 engine.Registry 统一执行，无需感知本包。

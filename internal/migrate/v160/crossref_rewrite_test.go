@@ -4,32 +4,26 @@ package v160_test
 
 import (
 	"log/slog"
+	"os"
+	"path/filepath"
 	"testing"
 
-	"github.com/sigpanic/goink/internal/chapter"
-	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/migrate"
-	"github.com/sigpanic/goink/internal/novel"
-	"github.com/sigpanic/goink/internal/reader"
-	"github.com/sigpanic/goink/internal/storyarc"
-	"github.com/sigpanic/goink/internal/timeline"
-	"github.com/sigpanic/goink/internal/writing"
 )
 
-// TestCrossrefRewriteMigration 模拟"1.1-1.4 已跑、1.5 未跑"的老用户库：
-// schema 已是迁移期状态（新列已存在但全 NULL / 0），数据仍是旧 num 引用。
-// 用真实 model AutoMigrate 建表 + 真实旧数据，完整跑 migrate.Run 链路，
-// 验证 5 张交叉引用表 num→id 重写，覆盖正常反查 / 孤儿 / num<=0 / NULL / 跨 novel / 幂等重跑。
-func TestCrossrefRewriteMigration(t *testing.T) {
-	setupMigrateEnv(t)
+// TestFullLegacyMigration 从 v1.6.0 前的实际表结构开始，只调用公开入口 migrate.Run：
+// 旧 *_chapter_id 仍存章节号；迁移须完成历史字段改名、num→id 重写、文件改名、删列，
+// 并留下可供当前 model 使用的 schema。
+func TestFullLegacyMigration(t *testing.T) {
+	dataDir := setupMigrateEnv(t)
 	db := openMigrateDB(t)
 	log := slog.Default()
 
-	// 真实 schema（迁移期双字段共存状态：新列已由 1.2 加好）
+	// 真正的旧版 schema，不预先添加 v1.6.0 的任何新列。
 	models := []any{
-		&novel.Novel{}, &chapter.Chapter{},
-		&timeline.TimelineEntry{}, &storyarc.StoryArc{}, &storyarc.ArcNode{},
-		&reader.ReaderPerspective{}, &writing.WritingLog{}, &character.CharacterRelation{},
+		&legacyNovel{}, &legacyChapter{},
+		&legacyTimelineEntry{}, &legacyStoryArc{}, &legacyArcNode{},
+		&legacyReaderPerspective{}, &legacyWritingLog{}, &legacyCharacterRelation{},
 	}
 	for _, m := range models {
 		if err := db.AutoMigrate(m); err != nil {
@@ -43,29 +37,13 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 			t.Fatalf("exec: %s\n%v", sql, err)
 		}
 	}
-	// 模拟 v1.6.0 前的持久化列；当前 model 只声明迁移后的字段。
-	for _, sql := range []string{
-		`ALTER TABLE chapters ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE time_entries ADD COLUMN target_chapter INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE time_entries ADD COLUMN source_chapter INTEGER DEFAULT 0`,
-		`ALTER TABLE time_entries ADD COLUMN resolved_chapter INTEGER DEFAULT 0`,
-		`ALTER TABLE arc_nodes ADD COLUMN target_chapter INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE arc_nodes ADD COLUMN actual_chapter INTEGER DEFAULT 0`,
-		`ALTER TABLE reader_perspectives ADD COLUMN planted_chapter INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE reader_perspectives ADD COLUMN revealed_chapter INTEGER DEFAULT 0`,
-		`ALTER TABLE writing_log ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`,
-		`ALTER TABLE character_relations ADD COLUMN chapter_number INTEGER`,
-	} {
-		exec(sql)
-	}
-
 	// 老数据：novel1 章 1/2/3（id 1/2/3），novel2 章 1（id 4，全局自增）
 	exec(`INSERT INTO novels (id, title) VALUES (1,'n1'),(2,'n2')`)
-	exec(`INSERT INTO chapters (id, novel_id, chapter_number, sort_order, title) VALUES
-		(1,1,1,0,'c1'),(2,1,2,0,'c2'),(3,1,3,0,'c3'),(4,2,1,0,'c1')`)
+	exec(`INSERT INTO chapters (id, novel_id, chapter_number, title) VALUES
+		(1,1,1,'c1'),(2,1,2,'c2'),(3,1,3,'c3'),(4,2,1,'c1')`)
 
-	// time_entries：target 保留为未来计划阅读位置；source/resolved 反查为稳定 ID。
-	exec(`INSERT INTO time_entries (id, novel_id, category, status, title, target_chapter, importance, source_chapter, resolved_chapter) VALUES
+	// time_entries：旧 source/resolved 的 _id 后缀是历史误名，存的仍是章节号。
+	exec(`INSERT INTO time_entries (id, novel_id, category, status, title, target_chapter, importance, source_chapter_id, resolved_chapter_id) VALUES
 		(1,1,'foreshadowing','pending','f1',2,3,1,0),
 		(2,1,'foreshadowing','resolved','f2',99,3,3,2),
 		(3,2,'foreshadowing','pending','f3',1,3,1,0)`)
@@ -77,14 +55,29 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 	exec(`INSERT INTO reader_perspectives (id, novel_id, type, content, planted_chapter, revealed_chapter) VALUES
 		(1,1,'known','p1',1,0),
 		(2,2,'suspense','p2',99,1)`)
-	// writing_log：行1 num=2→id2；行2 num=0（未定义）保持 NULL
-	exec(`INSERT INTO writing_log (id, date, novel_id, chapter_number, word_delta) VALUES
+	// writing_log：旧 chapter_id 实际存章节号；行2 num=0（未定义）保持 NULL。
+	exec(`INSERT INTO writing_log (id, date, novel_id, chapter_id, word_delta) VALUES
 		(1,'2026-01-01',1,2,100),
 		(2,'2026-01-01',1,0,-50)`)
-	// character_relations：行1 num=3→id3；行2 num=NULL 保持 NULL
-	exec(`INSERT INTO character_relations (id, novel_id, source_character_id, target_character_id, relation_describe, chapter_number, is_current) VALUES
+	// character_relations：旧 chapter_id 实际存章节号；行1 num=3→id3；行2 num=0 保持 NULL。
+	exec(`INSERT INTO character_relations (id, novel_id, source_character_id, target_character_id, relation_describe, chapter_id, is_current) VALUES
 		(1,1,1,2,'朋友',3,1),
-		(2,1,1,2,'旧识',NULL,0)`)
+		(2,1,1,2,'旧识',0,0)`)
+
+	// 真实小说仓库中的旧文件名，验证数据迁移与文件迁移在同一次 Run 中共同完成。
+	novelDir := filepath.Join(dataDir, "novels", "1")
+	for rel, content := range map[string]string{
+		"chapters/001.md": "chapter one",
+		"outlines/001.md": "outline one",
+	} {
+		path := filepath.Join(novelDir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 
 	// 完整迁移链路（含 1.5 数据重写 + 1.6 文件迁移）
 	if err := migrate.Run(db, log); err != nil {
@@ -138,6 +131,34 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM character_relations WHERE id=2 AND chapter_id IS NULL`); n != 1 {
 		t.Fatalf("character_relations 行2（NULL）错误: n=%d", n)
 	}
+	// 文件改名与旧列/索引清理：数据已经完成转换后，最终 schema 不再保留 num 作为回退来源。
+	if _, err := os.Stat(filepath.Join(novelDir, "chapters", "id_1.md")); err != nil {
+		t.Fatalf("章节文件未改名: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(novelDir, "outlines", "id_1.md")); err != nil {
+		t.Fatalf("大纲文件未改名: %v", err)
+	}
+	for _, legacy := range []struct{ table, column string }{
+		{"chapters", "chapter_number"},
+		{"time_entries", "target_chapter"}, {"time_entries", "source_chapter"}, {"time_entries", "resolved_chapter"},
+		{"arc_nodes", "target_chapter"}, {"arc_nodes", "actual_chapter"},
+		{"reader_perspectives", "planted_chapter"}, {"reader_perspectives", "revealed_chapter"},
+		{"writing_log", "chapter_number"}, {"character_relations", "chapter_number"},
+	} {
+		if db.Migrator().HasColumn(legacy.table, legacy.column) {
+			t.Fatalf("旧列仍存在: %s.%s", legacy.table, legacy.column)
+		}
+	}
+	for _, index := range []struct{ table, name string }{
+		{"chapters", "uk_novel_chapter"},
+	} {
+		if db.Migrator().HasIndex(index.table, index.name) {
+			t.Fatalf("旧索引仍存在: %s.%s", index.table, index.name)
+		}
+	}
+	if !db.Migrator().HasIndex("writing_log", "idx_writing_log_chapter_id") {
+		t.Fatal("writing_log.chapter_id 的当前索引应在迁移后存在")
+	}
 
 	// 幂等重跑：已填充的不重复改，结果不变
 	if err := migrate.Run(db, log); err != nil {
@@ -149,4 +170,106 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM reader_perspectives WHERE revealed_chapter_id=4`); n != 1 {
 		t.Fatalf("幂等重跑后 reader_perspectives 错误: n=%d", n)
 	}
+
+	// migrate_state 丢失后仍不能把最终的 chapter_id 误改成旧章节号列。
+	if err := db.Exec("DELETE FROM migrate_state").Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Run(db, log); err != nil {
+		t.Fatalf("状态丢失后 migrate.Run: %v", err)
+	}
+	if !db.Migrator().HasColumn("time_entries", "source_chapter_id") ||
+		db.Migrator().HasColumn("time_entries", "source_chapter") ||
+		!db.Migrator().HasColumn("writing_log", "chapter_id") ||
+		db.Migrator().HasColumn("writing_log", "chapter_number") {
+		t.Fatal("状态丢失后最终 id 列不应被改回旧 num 列")
+	}
 }
+
+// 下列结构体精确保留 v1.6.0 之前的章节关联命名：source_chapter_id、
+// writing_log.chapter_id 和 character_relations.chapter_id 的值都是章节号，
+// 用于验证 migrate.Run 最开始的历史字段改名没有被绕过。
+type legacyNovel struct {
+	ID    int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	Title string `gorm:"column:title;not null;index"`
+}
+
+func (legacyNovel) TableName() string { return "novels" }
+
+type legacyChapter struct {
+	ID            int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID       int64  `gorm:"column:novel_id;not null;uniqueIndex:uk_novel_chapter;index"`
+	ChapterNumber int    `gorm:"column:chapter_number;not null;uniqueIndex:uk_novel_chapter"`
+	Title         string `gorm:"column:title"`
+}
+
+func (legacyChapter) TableName() string { return "chapters" }
+
+type legacyTimelineEntry struct {
+	ID                int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID           int64  `gorm:"column:novel_id;not null;index"`
+	Category          string `gorm:"column:category;not null;index"`
+	Status            string `gorm:"column:status;not null;index"`
+	Title             string `gorm:"column:title;not null"`
+	TargetChapter     int    `gorm:"column:target_chapter;not null"`
+	Importance        int    `gorm:"column:importance;default:3"`
+	SourceChapterID   int64  `gorm:"column:source_chapter_id"`
+	ResolvedChapterID int64  `gorm:"column:resolved_chapter_id"`
+}
+
+func (legacyTimelineEntry) TableName() string { return "time_entries" }
+
+type legacyStoryArc struct {
+	ID      int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID int64  `gorm:"column:novel_id;not null;index"`
+	Name    string `gorm:"column:name;not null"`
+	ArcType string `gorm:"column:arc_type;not null;index"`
+	Status  string `gorm:"column:status;not null;index"`
+}
+
+func (legacyStoryArc) TableName() string { return "story_arcs" }
+
+type legacyArcNode struct {
+	ID            int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID       int64  `gorm:"column:novel_id;not null;index"`
+	StoryArcID    int64  `gorm:"column:story_arc_id;not null;index"`
+	Title         string `gorm:"column:title;not null"`
+	TargetChapter int    `gorm:"column:target_chapter;default:0"`
+	ActualChapter int    `gorm:"column:actual_chapter;default:0"`
+	Status        string `gorm:"column:status;not null;default:pending"`
+}
+
+func (legacyArcNode) TableName() string { return "arc_nodes" }
+
+type legacyReaderPerspective struct {
+	ID              int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID         int64  `gorm:"column:novel_id;not null;index"`
+	Type            string `gorm:"column:type;not null;index"`
+	Content         string `gorm:"column:content;not null"`
+	PlantedChapter  int    `gorm:"column:planted_chapter;not null"`
+	RevealedChapter int    `gorm:"column:revealed_chapter;default:0"`
+}
+
+func (legacyReaderPerspective) TableName() string { return "reader_perspectives" }
+
+type legacyWritingLog struct {
+	ID        int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	Date      string `gorm:"column:date;not null;index:idx_writing_date;size:10"`
+	NovelID   int64  `gorm:"column:novel_id;not null;default:0;index"`
+	ChapterID int64  `gorm:"column:chapter_id;not null;default:0;index"`
+	WordDelta int    `gorm:"column:word_delta;not null"`
+}
+
+func (legacyWritingLog) TableName() string { return "writing_log" }
+
+type legacyCharacterRelation struct {
+	ID                int64  `gorm:"column:id;primaryKey;autoIncrement"`
+	NovelID           int64  `gorm:"column:novel_id;not null;index"`
+	SourceCharacterID int64  `gorm:"column:source_character_id;not null;index"`
+	TargetCharacterID int64  `gorm:"column:target_character_id;not null;index"`
+	RelationDescribe  string `gorm:"column:relation_describe;not null"`
+	ChapterID         int64  `gorm:"column:chapter_id"`
+	IsCurrent         bool   `gorm:"column:is_current;not null;index"`
+}
+
+func (legacyCharacterRelation) TableName() string { return "character_relations" }

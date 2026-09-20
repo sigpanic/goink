@@ -68,14 +68,15 @@ func TestRenameFilesMigration(t *testing.T) {
 		return err == nil
 	}
 
-	// 1. sort_order 初始化 = chapter_number（含不连续 num=5）；不存在的 num 也初始化
-	var so []struct{ ID, Num, Sort int }
-	if err := db.Raw("SELECT id, chapter_number AS num, sort_order AS sort FROM chapters ORDER BY id").Scan(&so).Error; err != nil {
+	// 1. sort_order 初始化保留旧章节号顺序（含不连续 num=5）；旧列在迁移收尾已删除。
+	var so []struct{ ID, Sort int }
+	if err := db.Raw("SELECT id, sort_order AS sort FROM chapters ORDER BY id").Scan(&so).Error; err != nil {
 		t.Fatal(err)
 	}
+	wantSort := map[int]int{1: 1, 2: 2, 3: 3, 5: 5}
 	for _, r := range so {
-		if r.Sort != r.Num {
-			t.Fatalf("sort_order 错误: id=%d num=%d sort=%d", r.ID, r.Num, r.Sort)
+		if r.Sort != wantSort[r.ID] {
+			t.Fatalf("sort_order 错误: id=%d sort=%d want=%d", r.ID, r.Sort, wantSort[r.ID])
 		}
 	}
 

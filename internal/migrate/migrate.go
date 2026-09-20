@@ -69,37 +69,42 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		{"writing_log", "chapter_id", "chapter_number"},
 		{"character_relations", "chapter_id", "chapter_number"},
 	}
-	for _, r := range renameColumns {
-		// 表不存在（新库首次启动）→ 跳过，交给 AutoMigrate 建表
-		if !db.Migrator().HasTable(r.table) {
-			continue
-		}
-		colTypes, err := db.Migrator().ColumnTypes(r.table)
-		if err != nil {
-			return fmt.Errorf("migrate inspect %s columns: %w", r.table, err)
-		}
-		hasOld, hasNew := false, false
-		for _, ct := range colTypes {
-			switch ct.Name() {
-			case r.oldCol:
-				hasOld = true
-			case r.newCol:
-				hasNew = true
+	// chapter_number 是本轮历史字段改名的可靠边界：旧 Go schema 仍有它，最终
+	// id 化 schema 已删除它。若最终库的 migrate_state 丢失，不能再次把真正的
+	// *_chapter_id 改回旧的 num 列名。
+	if db.Migrator().HasTable("chapters") && db.Migrator().HasColumn("chapters", "chapter_number") {
+		for _, r := range renameColumns {
+			// 表不存在（新库首次启动）→ 跳过，交给 AutoMigrate 建表
+			if !db.Migrator().HasTable(r.table) {
+				continue
 			}
-		}
-		// 旧列不存在（已迁移或新库）→ 跳过
-		if !hasOld {
-			continue
-		}
-		// 新旧列同时存在 → 异常状态，跳过避免冲突
-		if hasNew {
-			log.Warn("迁移：字段改名跳过（新旧列同时存在，异常状态）", "table", r.table, "old", r.oldCol, "new", r.newCol)
-			continue
-		}
-		// 正常路径：旧列存在 + 新列不存在 → RENAME
-		sql := fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", r.table, r.oldCol, r.newCol)
-		if err := db.Exec(sql).Error; err != nil {
-			return fmt.Errorf("migrate rename %s.%s→%s: %w", r.table, r.oldCol, r.newCol, err)
+			colTypes, err := db.Migrator().ColumnTypes(r.table)
+			if err != nil {
+				return fmt.Errorf("migrate inspect %s columns: %w", r.table, err)
+			}
+			hasOld, hasNew := false, false
+			for _, ct := range colTypes {
+				switch ct.Name() {
+				case r.oldCol:
+					hasOld = true
+				case r.newCol:
+					hasNew = true
+				}
+			}
+			// 旧列不存在（已迁移或新库）→ 跳过
+			if !hasOld {
+				continue
+			}
+			// 新旧列同时存在 → 异常状态，跳过避免冲突
+			if hasNew {
+				log.Warn("迁移：字段改名跳过（新旧列同时存在，异常状态）", "table", r.table, "old", r.oldCol, "new", r.newCol)
+				continue
+			}
+			// 正常路径：旧列存在 + 新列不存在 → RENAME
+			sql := fmt.Sprintf("ALTER TABLE %s RENAME COLUMN %s TO %s", r.table, r.oldCol, r.newCol)
+			if err := db.Exec(sql).Error; err != nil {
+				return fmt.Errorf("migrate rename %s.%s→%s: %w", r.table, r.oldCol, r.newCol, err)
+			}
 		}
 	}
 
@@ -140,6 +145,14 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		if err := engine.RunSteps(db, log, m.Name, m.Steps); err != nil {
 			return err
 		}
+	}
+
+	// SQLite 的 RENAME COLUMN 会保留旧索引名。例如历史 writing_log.chapter_id
+	// 改为 chapter_number 后，旧索引仍叫 idx_writing_log_chapter_id；首次 AutoMigrate
+	// 因同名不补建当前 chapter_id 的索引，drop-legacy 删除旧列时便会一并删掉它。
+	// 所有迁移步骤完成后再次按当前 model 对齐，补回这类被历史 DDL 遮蔽或删除的索引。
+	if err := db.AutoMigrate(models...); err != nil {
+		return fmt.Errorf("migrate: 迁移后 schema 对齐: %w", err)
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
