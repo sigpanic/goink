@@ -41,7 +41,7 @@ func TestChListAllByNovel(t *testing.T) {
 	db.Create(&second)
 	db.Create(&Chapter{NovelID: 2, SortOrder: 1, Title: "另一部"})
 
-	chapters, _ := s.ListAllByNovel(ctx, 1)
+	chapters, _ := s.ListAllByNovel(ctx, nil, 1)
 	if len(chapters) != 2 {
 		t.Errorf("expected 2, got %d", len(chapters))
 	}
@@ -50,6 +50,29 @@ func TestChListAllByNovel(t *testing.T) {
 	}
 	if chapters[0].ReadingNumber != 1 || chapters[1].ReadingNumber != 2 {
 		t.Errorf("reading numbers = %d/%d, want 1/2", chapters[0].ReadingNumber, chapters[1].ReadingNumber)
+	}
+}
+
+func TestChListAllByNovelUsesProvidedTransaction(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	tx := db.Begin()
+	if tx.Error != nil {
+		t.Fatal(tx.Error)
+	}
+	t.Cleanup(func() { tx.Rollback() })
+	if err := tx.Create(&Chapter{NovelID: 1, SortOrder: 1, Title: "事务内章节"}).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	chapters, err := s.ListAllByNovel(ctx, tx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(chapters) != 1 || chapters[0].Title != "事务内章节" {
+		t.Errorf("chapters = %+v, want transaction-local chapter", chapters)
 	}
 }
 
@@ -67,7 +90,7 @@ func TestChCountByNovel(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	count, err := s.CountByNovel(ctx, 1)
+	count, err := s.CountByNovel(ctx, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -90,7 +113,7 @@ func TestChMissingIDsByNovel(t *testing.T) {
 		}
 	}
 
-	missing, err := s.MissingIDsByNovel(ctx, 1, []int64{
+	missing, err := s.MissingIDsByNovel(ctx, nil, 1, []int64{
 		ownedSecond.ID, ownedFirst.ID, ownedSecond.ID, otherNovel.ID, 999, 0,
 	})
 	if err != nil {
@@ -107,7 +130,7 @@ func TestChMissingIDsByNovel(t *testing.T) {
 		}
 	}
 
-	empty, err := s.MissingIDsByNovel(ctx, 1, nil)
+	empty, err := s.MissingIDsByNovel(ctx, nil, 1, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -139,7 +162,7 @@ func TestChListAllByNovelOrdersVolumesThenUnassigned(t *testing.T) {
 		}
 	}
 
-	chapters, err := s.ListAllByNovel(ctx, 1)
+	chapters, err := s.ListAllByNovel(ctx, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +206,7 @@ func TestChGetReadingNumberByIDUsesCompositeOrder(t *testing.T) {
 		{v1Chapter.ID, 3},
 		{unassigned.ID, 4},
 	} {
-		got, err := s.GetReadingNumberByID(ctx, 1, tt.id)
+		got, err := s.GetReadingNumberByID(ctx, nil, 1, tt.id)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -192,7 +215,7 @@ func TestChGetReadingNumberByIDUsesCompositeOrder(t *testing.T) {
 		}
 	}
 
-	if _, err := s.GetReadingNumberByID(ctx, 1, 999); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if _, err := s.GetReadingNumberByID(ctx, nil, 1, 999); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Errorf("missing chapter error = %v, want gorm.ErrRecordNotFound", err)
 	}
 }
@@ -214,7 +237,7 @@ func TestChGetReadingNumbersByNovelUsesCompositeOrder(t *testing.T) {
 		}
 	}
 
-	numbers, err := s.GetReadingNumbersByNovel(ctx, 1)
+	numbers, err := s.GetReadingNumbersByNovel(ctx, nil, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +256,7 @@ func TestChListByNovel_Desc(t *testing.T) {
 	db.Create(&first)
 	db.Create(&second)
 
-	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Size: -1}})
+	result, _ := s.ListByNovel(ctx, nil, 1, ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Size: -1}})
 	if result.Items[0].ID != first.ID {
 		t.Errorf("desc: first chapter id = %d, want %d", result.Items[0].ID, first.ID)
 	}
@@ -250,7 +273,7 @@ func TestChGetByID(t *testing.T) {
 	want := Chapter{NovelID: 1, Title: "高潮"}
 	db.Create(&want)
 
-	ch, err := s.GetByID(ctx, 1, want.ID)
+	ch, err := s.GetByID(ctx, nil, 1, want.ID)
 	if err != nil {
 		t.Fatalf("GetByID: %v", err)
 	}
@@ -267,7 +290,7 @@ func TestChGetByID_NotFound(t *testing.T) {
 	s := NewStore(db, testChLogger())
 	ctx := context.Background()
 
-	_, err := s.GetByID(ctx, 1, 999)
+	_, err := s.GetByID(ctx, nil, 1, 999)
 	if err == nil {
 		t.Error("expected error for not found")
 	}
@@ -283,17 +306,17 @@ func TestChUpdateTitle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := s.UpdateTitle(ctx, 1, ch.ID, "新标题"); err != nil {
+	if err := s.UpdateTitle(ctx, nil, 1, ch.ID, "新标题"); err != nil {
 		t.Fatalf("UpdateTitle: %v", err)
 	}
-	got, err := s.GetByID(ctx, 1, ch.ID)
+	got, err := s.GetByID(ctx, nil, 1, ch.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Title != "新标题" {
 		t.Errorf("title = %q, want 新标题", got.Title)
 	}
-	if err := s.UpdateTitle(ctx, 2, ch.ID, "不应更新"); !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err := s.UpdateTitle(ctx, nil, 2, ch.ID, "不应更新"); !errors.Is(err, gorm.ErrRecordNotFound) {
 		t.Errorf("foreign novel error = %v, want gorm.ErrRecordNotFound", err)
 	}
 }
@@ -382,7 +405,7 @@ func TestChGetRecent(t *testing.T) {
 		db.Create(&Chapter{NovelID: 1, SortOrder: sortOrder})
 	}
 
-	recent, _ := s.GetRecent(ctx, 1, 2)
+	recent, _ := s.GetRecent(ctx, nil, 1, 2)
 	if len(recent) != 2 {
 		t.Fatalf("expected 2, got %d", len(recent))
 	}
@@ -417,7 +440,7 @@ func TestChGetRecentUsesReverseCompositeReadingOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	recent, err := s.GetRecent(ctx, 1, 2)
+	recent, err := s.GetRecent(ctx, nil, 1, 2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -437,7 +460,7 @@ func TestChSearchByNovelOrdersBySortOrder(t *testing.T) {
 	db.Create(&Chapter{NovelID: 1, SortOrder: 2, Title: "相同"})
 	db.Create(&Chapter{NovelID: 1, SortOrder: 1, Title: "相同"})
 
-	chapters, err := s.SearchByNovel(ctx, 1, "相同", 10)
+	chapters, err := s.SearchByNovel(ctx, nil, 1, "相同", 10)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +478,7 @@ func TestListByNovel_Pagination(t *testing.T) {
 		db.Create(&Chapter{NovelID: 1, SortOrder: 11 - i})
 	}
 
-	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
+	result, _ := s.ListByNovel(ctx, nil, 1, ListByNovelOptions{
 		PageParams: storage.PageParams{Page: 2, Size: 3},
 	})
 	if result.Page != 2 {

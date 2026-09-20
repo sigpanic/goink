@@ -316,7 +316,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	if proposed == current {
 		// 内容未变：title 有变化时仍执行标题更新，否则直接跳过
 		if !ref.IsNew && a.Title != "" && ch.Title != a.Title {
-			if err := chStore.UpdateTitle(ctx, tc.NovelID, ch.ID, a.Title); err != nil {
+			if err := chStore.UpdateTitle(ctx, nil, tc.NovelID, ch.ID, a.Title); err != nil {
 				return nil, fmt.Errorf("update chapter title: %w", err)
 			}
 			ch.Title = a.Title
@@ -370,7 +370,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		// 物理路径按刚分配的章节 id 重新计算（ref.ID 对新建为 0）
 		physical = physicalRWPath(ref.IsOutline, ch.ID)
 	} else if a.Title != "" && ch.Title != a.Title {
-		if err := chStore.UpdateTitle(ctx, tc.NovelID, ch.ID, a.Title); err != nil {
+		if err := chStore.UpdateTitle(ctx, nil, tc.NovelID, ch.ID, a.Title); err != nil {
 			return nil, fmt.Errorf("update chapter title: %w", err)
 		}
 		ch.Title = a.Title
@@ -417,7 +417,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	// 章节正文全量替换且内容较长时注入维护提醒
 	if !ref.IsOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
 		reminder := fmt.Sprintf("你刚刚完成了《%s》的全量替换。", ch.Title)
-		if number, err := chStore.GetReadingNumberByID(ctx, tc.NovelID, ch.ID); err != nil {
+		if number, err := chStore.GetReadingNumberByID(ctx, nil, tc.NovelID, ch.ID); err != nil {
 			tc.LoggerOrDefault().Warn("计算实时章节号失败", "chapter_id", ch.ID, "err", err)
 		} else {
 			reminder = fmt.Sprintf("你刚刚完成了《%s》（第%d章）的全量替换。", ch.Title, number)

@@ -157,7 +157,7 @@ func (q *RefreshQueue) doRefresh(task RefreshTask) {
 
 func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 
-	ch, err := q.chStore.GetByID(ctx, task.NovelID, task.ChapterID)
+	ch, err := q.chStore.GetByID(ctx, nil, task.NovelID, task.ChapterID)
 	if err != nil {
 		q.logger.Warn("查章节失败，跳过向量刷新", "novel_id", task.NovelID, "chapter_id", task.ChapterID, "err", err)
 		return
@@ -186,7 +186,7 @@ func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 
 // RebuildNovel 无条件全量重建一部小说的向量索引。
 func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
-	chapters, err := q.chStore.ListAllByNovel(ctx, novelID)
+	chapters, err := q.chStore.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("rag: list chapters for rebuild: %w", err)
 	}
@@ -275,7 +275,7 @@ func (q *RefreshQueue) RebuildAll(ctx context.Context) error {
 
 // rebuildNovelIfIncomplete 对一部小说做覆盖度检查并按需重建/补建/清理。
 func (q *RefreshQueue) rebuildNovelIfIncomplete(ctx context.Context, novelID int64) error {
-	chapters, err := q.chStore.ListAllByNovel(ctx, novelID)
+	chapters, err := q.chStore.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("rag: list chapters: %w", err)
 	}

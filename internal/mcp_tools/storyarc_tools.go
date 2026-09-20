@@ -43,7 +43,7 @@ func (t *GetStoryArcsTool) Execute(ctx context.Context, args any, tc ToolContext
 	a.NormalizePage()
 
 	store := storyarc.NewStore(tc.DB, tc.LoggerOrDefault())
-	readingNumbers, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumbersByNovel(ctx, tc.NovelID)
+	readingNumbers, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumbersByNovel(ctx, nil, tc.NovelID)
 	if err != nil {
 		return nil, err
 	}

@@ -11,7 +11,7 @@ import (
 // ensureChapterIDsInNovel 确认章节 ID 均属于当前小说。
 // chapter_id 是逻辑外键，App 写入交叉引用前必须显式校验其归属。
 func (a *App) ensureChapterIDsInNovel(novelID int64, ids []int64) error {
-	missing, err := a.chapter.MissingIDsByNovel(a.ctx, novelID, ids)
+	missing, err := a.chapter.MissingIDsByNovel(a.ctx, nil, novelID, ids)
 	if err != nil {
 		return fmt.Errorf("check chapter ownership: %w", err)
 	}
@@ -36,7 +36,7 @@ type CreateChapterInput struct {
 
 // GetChapters 返回指定小说的章节列表，含文件路径。
 func (a *App) GetChapters(novelID int64) ([]chapter.Chapter, error) {
-	chapters, err := a.chapter.ListAllByNovel(a.ctx, novelID)
+	chapters, err := a.chapter.ListAllByNovel(a.ctx, nil, novelID)
 	if err != nil {
 		return nil, err
 	}
@@ -46,12 +46,12 @@ func (a *App) GetChapters(novelID int64) ([]chapter.Chapter, error) {
 // GetMaxChapterNumber 返回该小说当前章节总数，无章节时返回 0。前端确定写作进度用。
 // 展示章节号由阅读顺序实时计算，最大展示章节号等于章节总数。
 func (a *App) GetMaxChapterNumber(novelID int64) (int, error) {
-	return a.chapter.CountByNovel(a.ctx, novelID)
+	return a.chapter.CountByNovel(a.ctx, nil, novelID)
 }
 
 // UpdateChapterTitle 更新章节标题。
 func (a *App) UpdateChapterTitle(novelID, chapterID int64, title string) error {
-	return a.chapter.UpdateTitle(a.ctx, novelID, chapterID, title)
+	return a.chapter.UpdateTitle(a.ctx, nil, novelID, chapterID, title)
 }
 
 // CreateChapter 创建新章节。同时创建空正文文件。
@@ -77,7 +77,7 @@ func (a *App) CreateChapter(input CreateChapterInput) (*chapter.Chapter, error) 
 		return nil, fmt.Errorf("failed to create chapter: %w", err)
 	}
 
-	readingNumber, err := a.chapter.GetReadingNumberByID(a.ctx, input.NovelID, ch.ID)
+	readingNumber, err := a.chapter.GetReadingNumberByID(a.ctx, nil, input.NovelID, ch.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create chapter: %w", err)
 	}

@@ -245,7 +245,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 
 // loadChapters 加载指定 Novel 的章节，支持按 ID 过滤
 func (e *Extractor) loadChapters(ctx context.Context, novelID int64, ids []int64) ([]ChapterSource, error) {
-	dbChapters, err := e.Chapters.ListAllByNovel(ctx, novelID)
+	dbChapters, err := e.Chapters.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return nil, err
 	}

@@ -15,7 +15,7 @@ func ensureChapterIDsInNovel(ctx context.Context, tc ToolContext, ids []int64) (
 		return nil, nil
 	}
 
-	missingIDs, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).MissingIDsByNovel(ctx, tc.NovelID, ids)
+	missingIDs, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).MissingIDsByNovel(ctx, nil, tc.NovelID, ids)
 	if err != nil {
 		return nil, fmt.Errorf("query chapters: %w", err)
 	}

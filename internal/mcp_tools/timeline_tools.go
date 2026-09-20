@@ -47,7 +47,7 @@ func (t *GetTimelineTool) Execute(ctx context.Context, args any, tc ToolContext)
 	store := timeline.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	if a.CurrentChapterID > 0 {
-		currentReadingNumber, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumberByID(ctx, tc.NovelID, a.CurrentChapterID)
+		currentReadingNumber, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumberByID(ctx, nil, tc.NovelID, a.CurrentChapterID)
 		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return &ToolResult{Success: false, Error: fmt.Sprintf("章节 %d 不存在或不属于当前小说", a.CurrentChapterID)}, nil

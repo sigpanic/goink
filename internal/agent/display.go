@@ -200,11 +200,20 @@ func chapterID(args map[string]any) (int64, bool) {
 	if v, ok := args["chapter_id"]; ok {
 		switch n := v.(type) {
 		case float64:
-			return int64(n), n > 0 && n == float64(int64(n))
+			if n > 0 && n == float64(int64(n)) {
+				return int64(n), true
+			}
+			return 0, false
 		case int:
-			return int64(n), n > 0
+			if n > 0 {
+				return int64(n), true
+			}
+			return 0, false
 		case int64:
-			return n, n > 0
+			if n > 0 {
+				return n, true
+			}
+			return 0, false
 		}
 	}
 	// rw 工具使用 path 参数，如 "chapters/id_42.md" 或 "outlines/7/id_42.md"。
@@ -225,7 +234,7 @@ func isOutlinePath(args map[string]any) bool {
 }
 
 func (a *Agent) lookupChapterBrief(ctx context.Context, novelID, chapterID int64) string {
-	ch, err := a.chapterStore.GetByID(ctx, novelID, chapterID)
+	ch, err := a.chapterStore.GetByID(ctx, nil, novelID, chapterID)
 	if err != nil {
 		return fmt.Sprintf("章节（ID: %d）", chapterID)
 	}

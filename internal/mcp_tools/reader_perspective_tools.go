@@ -65,7 +65,7 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 		}
 	}
 
-	readingNumbers, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumbersByNovel(ctx, tc.NovelID)
+	readingNumbers, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumbersByNovel(ctx, nil, tc.NovelID)
 	if err != nil {
 		return nil, err
 	}

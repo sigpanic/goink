@@ -39,7 +39,7 @@ func (t *GetChapterListTool) Execute(ctx context.Context, args any, tc ToolConte
 	a.NormalizePage()
 
 	chStore := chapter.NewStore(tc.DB, tc.LoggerOrDefault())
-	result, err := chStore.ListByNovel(ctx, tc.NovelID, chapter.ListByNovelOptions{
+	result, err := chStore.ListByNovel(ctx, nil, tc.NovelID, chapter.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
 		Order:      "desc",
 	})

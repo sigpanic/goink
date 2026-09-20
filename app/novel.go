@@ -236,7 +236,7 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 		return nil // 用户取消
 	}
 
-	chapters, err := a.chapter.ListAllByNovel(a.ctx, novelID)
+	chapters, err := a.chapter.ListAllByNovel(a.ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}

@@ -90,7 +90,7 @@ func (s *Service) SearchAll(ctx context.Context, novelID int64, query string) ([
 // searchEntities 在各实体 store 上执行 LIKE 搜索。
 func (s *Service) searchEntities(ctx context.Context, novelID int64, query string) []Result {
 	var results []Result
-	readingNumbers, err := s.chapStore.GetReadingNumbersByNovel(ctx, novelID)
+	readingNumbers, err := s.chapStore.GetReadingNumbersByNovel(ctx, nil, novelID)
 	if err != nil {
 		s.logger.Warn("chapter list for entity search failed", "err", err)
 		readingNumbers = nil
@@ -301,7 +301,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	}
 
 	// 章节
-	chapters, err := s.chapStore.SearchByNovel(ctx, novelID, query, EntityLimit)
+	chapters, err := s.chapStore.SearchByNovel(ctx, nil, novelID, query, EntityLimit)
 	if err != nil {
 		s.logger.Warn("chapter title search failed", "err", err)
 	} else {
@@ -320,13 +320,6 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	}
 
 	return results
-}
-
-func chapterReference(chapterID *int64, readingNumbers map[int64]int) (int64, int) {
-	if chapterID == nil {
-		return 0, 0
-	}
-	return *chapterID, readingNumbers[*chapterID]
 }
 
 // searchContent 在章节正文中做精确字符串匹配，使用内存缓存避免重复读文件。
@@ -352,7 +345,7 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 	}
 	var matches []match
 
-	allChapters, err := s.chapStore.ListAllByNovel(ctx, novelID)
+	allChapters, err := s.chapStore.ListAllByNovel(ctx, nil, novelID)
 	chapterIDs := make([]int64, 0, len(chapMap))
 	if err != nil {
 		s.logger.Warn("chapter list for search content failed; searching cached content without metadata", "err", err)
@@ -464,7 +457,7 @@ func (s *Service) ensureContentCache(novelID int64) {
 		return
 	}
 
-	chapters, err := s.chapStore.ListAllByNovel(context.Background(), novelID)
+	chapters, err := s.chapStore.ListAllByNovel(context.Background(), nil, novelID)
 	if err != nil {
 		s.logger.Warn("搜索缓存: 获取章节列表失败", "novel_id", novelID, "err", err)
 		return
@@ -521,7 +514,7 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 
 	reranked := rag.MMRRerank(query, filtered, RagTopK, 0.7)
 
-	allChapters, err := s.chapStore.ListAllByNovel(ctx, novelID)
+	allChapters, err := s.chapStore.ListAllByNovel(ctx, nil, novelID)
 	chapMeta := make(map[int64]chapter.Chapter)
 	if err != nil {
 		s.logger.Warn("chapter list for RAG search failed", "err", err)

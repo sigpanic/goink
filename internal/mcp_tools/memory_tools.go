@@ -90,7 +90,7 @@ func (t *SearchStoryMemoryTool) Execute(ctx context.Context, args any, tc ToolCo
 	reranked := rag.MMRRerank(a.Query, filtered, a.TopK, 0.7)
 
 	// 4. 查询章节元数据
-	chapters, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).ListAllByNovel(ctx, tc.NovelID)
+	chapters, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).ListAllByNovel(ctx, nil, tc.NovelID)
 	if err != nil {
 		return nil, fmt.Errorf("查询章节元数据失败: %w", err)
 	}
