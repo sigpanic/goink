@@ -116,14 +116,13 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 	content := trimSpace(params.Content)
 	summary := trimSpace(params.Summary)
 	title := trimSpace(params.ChapterTitle)
-	if title == "" {
-		title = fmt.Sprintf("第%d章", params.ChapterNumber)
+	if title == "" && params.ReadingNumber > 0 {
+		title = fmt.Sprintf("第%d章", params.ReadingNumber)
 	}
 
 	baseMeta := map[string]any{
-		"chapter_number": params.ChapterNumber,
-		"chapter_id":     params.ChapterID,
-		"chapter_title":  title,
+		"chapter_id":    params.ChapterID,
+		"chapter_title": title,
 	}
 
 	var chunks []Chunk
@@ -131,13 +130,12 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 	// summary chunk
 	if summary != "" {
 		chunks = append(chunks, Chunk{
-			ID:            fmt.Sprintf("%d_summary", params.ChapterNumber),
-			Content:       summary,
-			ChapterNumber: params.ChapterNumber,
-			ChapterID:     params.ChapterID,
-			ChunkType:     "summary",
-			ChunkIndex:    0,
-			Metadata:      baseMeta,
+			ID:         fmt.Sprintf("%d_summary", params.ChapterID),
+			Content:    summary,
+			ChapterID:  params.ChapterID,
+			ChunkType:  "summary",
+			ChunkIndex: 0,
+			Metadata:   baseMeta,
 		})
 	}
 
@@ -157,13 +155,12 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 	brief := strings.Join(briefParts, "\n")
 	if brief != "" {
 		chunks = append(chunks, Chunk{
-			ID:            fmt.Sprintf("%d_brief", params.ChapterNumber),
-			Content:       brief,
-			ChapterNumber: params.ChapterNumber,
-			ChapterID:     params.ChapterID,
-			ChunkType:     "chapter_brief",
-			ChunkIndex:    0,
-			Metadata:      baseMeta,
+			ID:         fmt.Sprintf("%d_brief", params.ChapterID),
+			Content:    brief,
+			ChapterID:  params.ChapterID,
+			ChunkType:  "chapter_brief",
+			ChunkIndex: 0,
+			Metadata:   baseMeta,
 		})
 	}
 
@@ -171,14 +168,13 @@ func BuildChapterChunks(params ChapterChunkParams, t *Tokenizer) []Chunk {
 	chunkTexts, positions := SplitText(params.Content, DefaultChunkSize, DefaultOverlap, t)
 	for i, chunk := range chunkTexts {
 		chunks = append(chunks, Chunk{
-			ID:            fmt.Sprintf("%d_%d", params.ChapterNumber, i),
-			Content:       chunk,
-			ChapterNumber: params.ChapterNumber,
-			ChapterID:     params.ChapterID,
-			ChunkType:     "content",
-			ChunkIndex:    i,
-			StartRunePos:  positions[i],
-			Metadata:      baseMeta,
+			ID:           fmt.Sprintf("%d_%d", params.ChapterID, i),
+			Content:      chunk,
+			ChapterID:    params.ChapterID,
+			ChunkType:    "content",
+			ChunkIndex:   i,
+			StartRunePos: positions[i],
+			Metadata:     baseMeta,
 		})
 	}
 

@@ -14,18 +14,11 @@ import (
 	"github.com/sigpanic/goink/internal/novel"
 )
 
-// RefreshTask 是一次向量刷新任务。
-// 调用方按章节号语义提交（ChapterNumber），consumer 反查 ch.ID 后填充 ChapterID，
-// 后续删除/索引一律用 ChapterID（chapters.id 外键）。
-//
-// TODO(v1.6.0): 反查是过渡设计——v1.6.0 支持删除/重排后章节号实时计算且不再存 DB，
-// 反查会失效并引入竞态（去重窗口内章节号过期）。commit 3.1 将调用方（rw_tools/content）
-// 路径解析改为 id 后，SubmitRefresh 改按 chapterID 提交，删除此反查与 ChapterNumber 字段。
+// RefreshTask 是一次向量刷新任务，以 chapters.id 稳定定位章节。
 type RefreshTask struct {
-	NovelID       int64
-	ChapterNumber int
-	ChapterID     int64 // 反查 ch.ID 后填充（过渡期）
-	Content       string
+	NovelID   int64
+	ChapterID int64
+	Content   string
 }
 
 // RefreshQueue 异步管理向量刷新，支持去重和限速。
@@ -74,11 +67,11 @@ func GetRefreshQueue() *RefreshQueue {
 }
 
 // SubmitRefresh 提交异步向量刷新任务。若 RefreshQueue 未初始化则静默跳过。
-func SubmitRefresh(novelID int64, chapterNumber int, content string) {
+func SubmitRefresh(novelID, chapterID int64, content string) {
 	if rq == nil {
 		return
 	}
-	rq.Submit(RefreshTask{NovelID: novelID, ChapterNumber: chapterNumber, Content: content})
+	rq.Submit(RefreshTask{NovelID: novelID, ChapterID: chapterID, Content: content})
 }
 
 // ── 实例方法 ──────────────────────────────────────────────
@@ -100,12 +93,12 @@ func (q *RefreshQueue) Submit(task RefreshTask) {
 	select {
 	case q.ch <- task:
 	default:
-		q.logger.Warn("向量刷新队列已满，丢弃任务", "chapter_number", task.ChapterNumber)
+		q.logger.Warn("向量刷新队列已满，丢弃任务", "chapter_id", task.ChapterID)
 	}
 }
 
 func pendingKey(task RefreshTask) string {
-	return fmt.Sprintf("%d:%d", task.NovelID, task.ChapterNumber)
+	return fmt.Sprintf("%d:%d", task.NovelID, task.ChapterID)
 }
 
 // consumer 是后台消费者，500ms 内同一章节的重复提交合并为一次。
@@ -164,22 +157,19 @@ func (q *RefreshQueue) doRefresh(task RefreshTask) {
 
 func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 
-	ch, err := q.chStore.GetByNovelAndNumber(ctx, task.NovelID, task.ChapterNumber)
+	ch, err := q.chStore.GetByID(ctx, task.NovelID, task.ChapterID)
 	if err != nil {
-		q.logger.Warn("查章节失败，跳过向量刷新", "novel_id", task.NovelID, "chapter_number", task.ChapterNumber, "err", err)
+		q.logger.Warn("查章节失败，跳过向量刷新", "novel_id", task.NovelID, "chapter_id", task.ChapterID, "err", err)
 		return
 	}
-	// TODO(v1.6.0): 反查 ch.ID 是过渡实现（见 RefreshTask 注释），commit 3.1 改按 id 提交后删除。
-	// 当前阶段（章节号稳定）无竞态；此后删除/索引一律用 chapter_id 外键。
-	task.ChapterID = ch.ID
 
 	if err := q.vs.DeleteChapterChunks(ctx, task.NovelID, task.ChapterID); err != nil {
 		q.logger.Warn("删除章节旧向量失败", "chapter_id", task.ChapterID, "err", err)
 	}
 
 	params := ChapterChunkParams{
-		ChapterNumber: task.ChapterNumber,
 		ChapterID:     task.ChapterID,
+		ReadingNumber: ch.ReadingNumber,
 		ChapterTitle:  ch.Title,
 		Content:       task.Content,
 		Summary:       ch.Summary,
@@ -208,7 +198,6 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 		}
 		return nil
 	}
-
 	if err := q.vs.DeleteNovel(ctx, novelID); err != nil {
 		return fmt.Errorf("rag: rebuild: delete old vectors: %w", err)
 	}
@@ -225,8 +214,8 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 		}
 
 		params := ChapterChunkParams{
-			ChapterNumber: ch.ChapterNumber,
 			ChapterID:     ch.ID,
+			ReadingNumber: ch.ReadingNumber,
 			ChapterTitle:  ch.Title,
 			Content:       content,
 			Summary:       ch.Summary,
@@ -356,8 +345,8 @@ func (q *RefreshQueue) rebuildChapter(ctx context.Context, novelID int64, ch cha
 		return fmt.Errorf("rag: read chapter file: %w", err)
 	}
 	params := ChapterChunkParams{
-		ChapterNumber: ch.ChapterNumber,
 		ChapterID:     ch.ID,
+		ReadingNumber: ch.ReadingNumber,
 		ChapterTitle:  ch.Title,
 		Content:       content,
 		Summary:       ch.Summary,

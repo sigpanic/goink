@@ -521,8 +521,8 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | 层 | 内容 | 状态 |
 |---|---|---|
 | **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | ✅ 已提交 |
-| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
-| **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时章节号 + 卷名 | 🟡 vec 列已切，桥接与 chunk_id 未改；search 未改 |
+| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`，动态展示字段统一为 `ReadingNumber` / `reading_number`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
+| **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量，并同步 RAG e2e；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时 `ReadingNumber` / `reading_number` + 卷名 | 🟡 进行中 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
 | **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）章节字段改 `*_chapter_id`；`get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
 | **L6 app 层** | `DeleteChapter`/`InsertChapter`/`MoveChapterToVolume`（含交叉引用检测拒绝）；volume CRUD（Create/Update/Delete/Get/Reorder）；`CreateChapter` 改走 volume store 分配 sort_order；`UpdateChapterTitle` 改按 id；novel export、content.go 同步 | ❌ 未做 |
@@ -565,16 +565,16 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 |---|---|---|---|
 | 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
 | 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | ✅ |
-| 2.3 | `refactor(chapter): remove legacy number API` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
+| 2.3 | `refactor(chapter): remove legacy number API` | 新增单章/批量 `GetReadingNumberByID` / `GetReadingNumbersByNovel`，按当前阅读序实时算章号；各章节查询在非持久化 `Chapter.ReadingNumber` 回填展示编号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
 | 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 #### L3 rag + search
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 3.1 | `refactor(rag): chunk_id keyed by chapter id` | `splitter.go` 的 chunk_id 去掉内嵌章节号（`"%d_summary"` / `"%d_brief"` / `"%d_%d"` → id-based） | ❌ |
-| 3.2 | `refactor(rag): SubmitRefresh takes chapter id` | `SubmitRefresh` 改按 chapter_id 提交；删 `refresh_queue` 的 num→id 反查桥接；`RefreshTask` 去 `ChapterNumber` | ❌ |
-| 3.3 | `refactor(search): ChapterNum becomes ChapterID` | `search.Service` 字段 `ChapterNum` → `ChapterID`；展示按 id 反查实时章节号 + 卷名拼"卷一·第10章" | ❌ |
+| 3.1 | `refactor(rag): chunk_id keyed by chapter id` | `splitter.go` 的 chunk_id 去掉内嵌章节号（`"%d_summary"` / `"%d_brief"` / `"%d_%d"` → id-based） | 🟡 |
+| 3.2 | `refactor(rag): SubmitRefresh takes chapter id` | `SubmitRefresh` 改按 chapter_id 提交；删 `refresh_queue` 的 num→id 反查桥接；`RefreshTask` 去 `ChapterNumber` | 🟡 |
+| 3.3 | `refactor(search): ChapterNum becomes ChapterID` | `search.Service` 的缓存和结果定位字段改 `ChapterID`；展示按 id 反查实时 `ReadingNumber`，不再持有旧编号 | 🟡 |
 
 #### L4 其他内部包
 

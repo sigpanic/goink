@@ -6,7 +6,8 @@ type Result struct {
 	ID            int64   `json:"id"`             // 实体 ID（content/rag 为 0）
 	Title         string  `json:"title"`          // 主显示名
 	Subtitle      string  `json:"subtitle"`       // 副标题（类型标签等）
-	ChapterNum    int     `json:"chapter_num"`    // 关联章节号
+	ChapterID     int64   `json:"chapter_id"`     // 关联章节 ID；0 表示无关联章节
+	ReadingNumber int     `json:"reading_number"` // 关联章节在当前阅读顺序中的展示编号
 	FilePath      string  `json:"file_path"`      // 章节文件路径
 	MatchPrefix   string  `json:"match_prefix"`   // 命中前上下文（纯文本）
 	MatchHit      string  `json:"match_hit"`      // 命中的文本（纯文本）

@@ -75,8 +75,8 @@ func indexChapter(t *testing.T, vs *rag.VectorStore, novelID int64, chapterNum i
 	}
 
 	params := rag.ChapterChunkParams{
-		ChapterNumber: chapterNum,
 		ChapterID:     int64(chapterNum),
+		ReadingNumber: chapterNum,
 		ChapterTitle:  title,
 		Content:       content,
 		Summary:       summary,
@@ -131,7 +131,7 @@ func TestChineseContent_FullPipeline(t *testing.T) {
 	t.Logf("Search returned %d results:", len(results))
 	for i, r := range results {
 		t.Logf("  [%d] chunk=%s type=%s ch=%d relevance=%.4f content=%.60s...",
-			i, r.ChunkID, r.SourceType, r.ChapterNumber, r.Relevance, r.Content)
+			i, r.ChunkID, r.SourceType, r.ChapterID, r.Relevance, r.Content)
 	}
 
 	// Verify the top result contains original Chinese content

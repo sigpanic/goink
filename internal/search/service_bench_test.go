@@ -61,7 +61,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 
 	// 插入章节元数据
 	for i := 1; i <= chapters; i++ {
-		db.Create(&chapter.Chapter{NovelID: novelID, ChapterNumber: i, Title: "第" + strconv.Itoa(i) + "章"})
+		db.Create(&chapter.Chapter{NovelID: novelID, SortOrder: i, Title: "第" + strconv.Itoa(i) + "章"})
 	}
 
 	// 插入实体数据
@@ -82,12 +82,12 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 
 	// 懒加载方式直接注入缓存，跳过文件 IO
 	svc.mu.Lock()
-	chapMap := make(map[int]string, chapters)
+	chapMap := make(map[int64]string, chapters)
 	for i := 1; i <= chapters; i++ {
 		if i == targetChapter {
-			chapMap[i] = targetContent
+			chapMap[int64(i)] = targetContent
 		} else {
-			chapMap[i] = contentPerChapter
+			chapMap[int64(i)] = contentPerChapter
 		}
 	}
 	svc.cache[novelID] = chapMap

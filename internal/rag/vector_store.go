@@ -155,11 +155,6 @@ func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, t
 			whereClauses = append(whereClauses,
 				fmt.Sprintf("chapter_id IN (%s)", strings.Join(placeholders, ",")))
 		}
-		if len(filter.ChapterNumbers) > 0 {
-			// v1.6.0 后 vec 表已无 chapter_number 列，此过滤不再可用。
-			// 调用方应改用 ChapterIDs（commit 4.3 迁移）。
-			s.log.Warn("rag: Search filter.ChapterNumbers deprecated, use ChapterIDs", "values", filter.ChapterNumbers)
-		}
 		if len(filter.ChunkTypes) > 0 {
 			placeholders := make([]string, len(filter.ChunkTypes))
 			for i, t := range filter.ChunkTypes {

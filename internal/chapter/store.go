@@ -70,6 +70,11 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		if order == chapterOrderAsc {
+			chapters[i].ReadingNumber = pp.Offset() + i + 1
+		} else {
+			chapters[i].ReadingNumber = int(total) - pp.Offset() - i
+		}
 	}
 
 	s.logger.Debug("chapter store: listed", "novel_id", novelID, "total", total, "page", pp.Page)
@@ -86,6 +91,7 @@ func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, e
 	}
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].ReadingNumber = i + 1
 	}
 	return chapters, nil
 }
@@ -120,6 +126,21 @@ func (s *Store) GetReadingNumberByID(ctx context.Context, novelID, chapterID int
 	return 0, fmt.Errorf("chapter store: get reading number: %w", gorm.ErrRecordNotFound)
 }
 
+// GetReadingNumbersByNovel 返回小说中每个章节在当前阅读顺序中的 1-based 位次。
+func (s *Store) GetReadingNumbersByNovel(ctx context.Context, novelID int64) (map[int64]int, error) {
+	var ids []int64
+	if err := s.orderedByNovel(ctx, novelID).
+		Order(chapterOrderAsc).
+		Pluck("chapters.id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: list reading order: %w", err)
+	}
+	numbers := make(map[int64]int, len(ids))
+	for i, id := range ids {
+		numbers[id] = i + 1
+	}
+	return numbers, nil
+}
+
 // GetByID 按 novel_id + id 取单章。
 func (s *Store) GetByID(ctx context.Context, novelID, chapterID int64) (*Chapter, error) {
 	var ch Chapter
@@ -129,6 +150,11 @@ func (s *Store) GetByID(ctx context.Context, novelID, chapterID int64) (*Chapter
 		return nil, fmt.Errorf("chapter store: get by id: %w", err)
 	}
 	ch.FilePath = git.ChapterPath(ch.ID)
+	readingNumber, err := s.GetReadingNumberByID(ctx, novelID, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	ch.ReadingNumber = readingNumber
 	return &ch, nil
 }
 
@@ -178,6 +204,13 @@ func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, 
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
 	}
+	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, novelID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range chapters {
+		chapters[i].ReadingNumber = readingNumbers[chapters[i].ID]
+	}
 	return chapters, nil
 }
 
@@ -192,6 +225,13 @@ func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chap
 	}
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+	}
+	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, novelID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range chapters {
+		chapters[i].ReadingNumber = readingNumbers[chapters[i].ID]
 	}
 	return chapters, nil
 }

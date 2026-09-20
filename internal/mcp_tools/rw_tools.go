@@ -802,12 +802,11 @@ func deleteChapterRecord(ctx context.Context, db *gorm.DB, id int64) error {
 }
 
 // maintainChapterAfterEdit 章节正文落盘后的维护链路：向量刷新、搜索缓存、字数统计。
-// 过渡期（v1.6）：向量/搜索/写作日志仍按 chapter_number 键控，用记录中的
-// ChapterNumber 桥接；4.3 整体切换 chapter_id 后移除桥接。
+// 向量与搜索按 chapter_id 键控；写作日志将在其所属领域迁移时切换。
 func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.Chapter, content string) {
-	rag.SubmitRefresh(tc.NovelID, ch.ChapterNumber, content)
+	rag.SubmitRefresh(tc.NovelID, ch.ID, content)
 	if tc.SearchService != nil {
-		tc.SearchService.UpdateCachedChapter(tc.NovelID, ch.ChapterNumber, content)
+		tc.SearchService.UpdateCachedChapter(tc.NovelID, ch.ID, content)
 	}
 
 	stats := text.ComputeStats(content)

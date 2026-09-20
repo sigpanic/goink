@@ -143,7 +143,8 @@ func TestSplitText_Overlap(t *testing.T) {
 func TestBuildChapterChunks(t *testing.T) {
 	tok := testTokenizer(t)
 	params := ChapterChunkParams{
-		ChapterNumber: 1,
+		ChapterID:     101,
+		ReadingNumber: 1,
 		ChapterTitle:  "初入江湖",
 		Content:       "张三背着行囊踏进了江湖。\n\n这是他人生的新篇章。故事从这里开始。",
 		Summary:       "主角离开家乡，开始了江湖之旅。",
@@ -162,14 +163,14 @@ func TestBuildChapterChunks(t *testing.T) {
 			if c.Content != params.Summary {
 				t.Errorf("summary content mismatch: %q", c.Content)
 			}
-			if c.ID != "1_summary" {
+			if c.ID != "101_summary" {
 				t.Errorf("summary ID mismatch: %q", c.ID)
 			}
 			if c.Metadata == nil {
 				t.Error("summary chunk missing metadata")
 			} else {
-				if v, ok := c.Metadata["chapter_number"].(int); !ok || v != 1 {
-					t.Errorf("summary chapter_number: %v", c.Metadata["chapter_number"])
+				if v, ok := c.Metadata["chapter_id"].(int64); !ok || v != 101 {
+					t.Errorf("summary chapter_id: %v", c.Metadata["chapter_id"])
 				}
 			}
 		case "chapter_brief":
@@ -177,7 +178,7 @@ func TestBuildChapterChunks(t *testing.T) {
 			if !strings.Contains(c.Content, params.ChapterTitle) {
 				t.Errorf("brief missing title: %q", c.Content)
 			}
-			if c.ID != "1_brief" {
+			if c.ID != "101_brief" {
 				t.Errorf("brief ID mismatch: %q", c.ID)
 			}
 		}
@@ -207,7 +208,8 @@ func TestBuildChapterChunks(t *testing.T) {
 func TestBuildChapterChunks_NoSummary(t *testing.T) {
 	tok := testTokenizer(t)
 	params := ChapterChunkParams{
-		ChapterNumber: 2,
+		ChapterID:     102,
+		ReadingNumber: 2,
 		ChapterTitle:  "",
 		Content:       "正文内容正文内容。",
 		Summary:       "",
@@ -236,7 +238,8 @@ func TestBuildChapterChunks_NoSummary(t *testing.T) {
 func TestBuildChapterChunks_EmptyContent(t *testing.T) {
 	tok := testTokenizer(t)
 	params := ChapterChunkParams{
-		ChapterNumber: 3,
+		ChapterID:     103,
+		ReadingNumber: 3,
 		ChapterTitle:  "空章",
 		Content:       "",
 		Summary:       "",

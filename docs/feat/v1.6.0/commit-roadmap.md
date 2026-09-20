@@ -65,16 +65,16 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 |---|---|---|---|
 | 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
 | 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | ✅ |
-| 2.3 | `refactor(chapter): remove legacy number API` | 新增 `GetReadingNumberByID`，按当前阅读序实时算章号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
+| 2.3 | `refactor(chapter): remove legacy number API` | 新增单章/批量 `GetReadingNumberByID` / `GetReadingNumbersByNovel`，按当前阅读序实时算章号；各章节查询在非持久化 `Chapter.ReadingNumber`（JSON：`reading_number`）回填展示编号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
 | 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
 
 ### L3 rag + search
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 3.1 | `refactor(rag): chunk_id keyed by chapter id` | `splitter.go` 的 chunk_id 去掉内嵌章节号（`"%d_summary"` / `"%d_brief"` / `"%d_%d"` → id-based）；改完需重建向量 | ❌ |
-| 3.2 | `refactor(rag): SubmitRefresh takes chapter id` | `SubmitRefresh` 改按 chapter_id 提交；删 `refresh_queue` 的 num→id 反查桥接；`RefreshTask` 去 `ChapterNumber` | ❌ |
-| 3.3 | `refactor(search): ChapterNum becomes ChapterID` | `search.Service` 字段 `ChapterNum` → `ChapterID`；展示按 id 反查实时章节号 + 卷名拼"卷一·第10章" | ❌ |
+| 3.1 | `refactor(rag): chunk_id keyed by chapter id` | `splitter.go` 的 chunk_id 去掉内嵌章节号（`"%d_summary"` / `"%d_brief"` / `"%d_%d"` → id-based）；改完需重建向量；同步 `internal/e2e` 中 RAG 的 VectorStore、RefreshQueue、中文管线测试 | 🟡 |
+| 3.2 | `refactor(rag): SubmitRefresh takes chapter id` | `SubmitRefresh` 改按 chapter_id 提交；删 `refresh_queue` 的 num→id 反查桥接；`RefreshTask` 去 `ChapterNumber` | 🟡 |
+| 3.3 | `refactor(search): ChapterNum becomes ChapterID` | `search.Service` 的缓存和结果定位字段改 `ChapterID`；展示按 id 反查实时 `ReadingNumber`（JSON：`reading_number`），不再持有旧编号；章节元数据与搜索结果统一该展示字段名称 | 🟡 |
 
 ### L4 其他内部包
 

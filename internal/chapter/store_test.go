@@ -48,6 +48,9 @@ func TestChListAllByNovel(t *testing.T) {
 	if chapters[0].ID != second.ID {
 		t.Errorf("first chapter id = %d, want %d", chapters[0].ID, second.ID)
 	}
+	if chapters[0].ReadingNumber != 1 || chapters[1].ReadingNumber != 2 {
+		t.Errorf("reading numbers = %d/%d, want 1/2", chapters[0].ReadingNumber, chapters[1].ReadingNumber)
+	}
 }
 
 func TestChCountByNovel(t *testing.T) {
@@ -154,6 +157,32 @@ func TestChGetReadingNumberByIDUsesCompositeOrder(t *testing.T) {
 	}
 }
 
+func TestChGetReadingNumbersByNovelUsesCompositeOrder(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	v := volume.Volume{NovelID: 1, Name: "第一卷", SortOrder: 1}
+	if err := db.Create(&v).Error; err != nil {
+		t.Fatal(err)
+	}
+	assigned := Chapter{NovelID: 1, VolumeID: &v.ID, SortOrder: 1}
+	unassigned := Chapter{NovelID: 1, SortOrder: 1}
+	for _, ch := range []*Chapter{&assigned, &unassigned} {
+		if err := db.Create(ch).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	numbers, err := s.GetReadingNumbersByNovel(ctx, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if numbers[assigned.ID] != 1 || numbers[unassigned.ID] != 2 {
+		t.Errorf("reading numbers = %#v, want assigned=1 unassigned=2", numbers)
+	}
+}
+
 func TestChListByNovel_Desc(t *testing.T) {
 	db := openChDB(t)
 	s := NewStore(db, testChLogger())
@@ -167,6 +196,9 @@ func TestChListByNovel_Desc(t *testing.T) {
 	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Order: "desc", PageParams: storage.PageParams{Size: -1}})
 	if result.Items[0].ID != first.ID {
 		t.Errorf("desc: first chapter id = %d, want %d", result.Items[0].ID, first.ID)
+	}
+	if result.Items[0].ReadingNumber != 2 || result.Items[1].ReadingNumber != 1 {
+		t.Errorf("desc reading numbers = %d/%d, want 2/1", result.Items[0].ReadingNumber, result.Items[1].ReadingNumber)
 	}
 }
 
@@ -184,6 +216,9 @@ func TestChGetByID(t *testing.T) {
 	}
 	if ch.Title != "高潮" {
 		t.Errorf("expected 高潮, got %s", ch.Title)
+	}
+	if ch.ReadingNumber != 1 {
+		t.Errorf("reading number = %d, want 1", ch.ReadingNumber)
 	}
 }
 
@@ -393,6 +428,9 @@ func TestListByNovel_Pagination(t *testing.T) {
 	for i, ch := range result.Items {
 		if ch.SortOrder != want[i] {
 			t.Errorf("page item %d sort_order = %d, want %d", i, ch.SortOrder, want[i])
+		}
+		if ch.ReadingNumber != want[i] {
+			t.Errorf("page item %d reading number = %d, want %d", i, ch.ReadingNumber, want[i])
 		}
 	}
 }

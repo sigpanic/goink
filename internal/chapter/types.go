@@ -18,6 +18,8 @@ type Chapter struct {
 	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"   json:"created_at"`
 	UpdatedAt time.Time `gorm:"column:updated_at;autoUpdateTime"   json:"updated_at"`
 	FilePath  string    `gorm:"-"                                  json:"file_path"` // 不存 DB，由 git.ChapterPath 计算
+	// ReadingNumber 是当前阅读顺序的展示编号，不持久化。
+	ReadingNumber int `gorm:"-" json:"reading_number"`
 }
 
 // TableName 指定 GORM 表名。
