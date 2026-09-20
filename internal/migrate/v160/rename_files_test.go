@@ -35,6 +35,8 @@ func TestRenameFilesMigration(t *testing.T) {
 			t.Fatalf("exec: %s\n%v", sql, err)
 		}
 	}
+	// 当前 model 已移除旧列；显式补回以模拟 1.6 尚未执行的历史库。
+	exec(`ALTER TABLE chapters ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`)
 
 	// 老数据：novel1 章 1/2/3 + num 不连续的 5（无文件，测源不存在跳过）
 	exec(`INSERT INTO novels (id, title) VALUES (1,'n1')`)
@@ -131,5 +133,21 @@ func TestRenameFilesMigration(t *testing.T) {
 	}
 	if uncommitted {
 		t.Fatal("幂等重跑后 git 不应有新增变更")
+	}
+}
+
+// TestRenameFilesMigrationSkipsNewSchema 验证全新安装的 schema 已无旧列时，
+// 文件迁移不会在迁移状态缺失时查询 chapter_number。
+func TestRenameFilesMigrationSkipsNewSchema(t *testing.T) {
+	setupMigrateEnv(t)
+	db := openMigrateDB(t)
+	for _, model := range []any{&novel.Novel{}, &chapter.Chapter{}} {
+		if err := db.AutoMigrate(model); err != nil {
+			t.Fatalf("AutoMigrate %T: %v", model, err)
+		}
+	}
+
+	if err := migrate.Run(db, slog.Default()); err != nil {
+		t.Fatalf("migrate.Run on new schema: %v", err)
 	}
 }

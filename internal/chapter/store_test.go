@@ -76,6 +76,46 @@ func TestChCountByNovel(t *testing.T) {
 	}
 }
 
+func TestChMissingIDsByNovel(t *testing.T) {
+	db := openChDB(t)
+	s := NewStore(db, testChLogger())
+	ctx := context.Background()
+
+	ownedFirst := Chapter{NovelID: 1, SortOrder: 1}
+	ownedSecond := Chapter{NovelID: 1, SortOrder: 2}
+	otherNovel := Chapter{NovelID: 2, SortOrder: 1}
+	for _, ch := range []*Chapter{&ownedFirst, &ownedSecond, &otherNovel} {
+		if err := db.Create(ch).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	missing, err := s.MissingIDsByNovel(ctx, 1, []int64{
+		ownedSecond.ID, ownedFirst.ID, ownedSecond.ID, otherNovel.ID, 999, 0,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []int64{otherNovel.ID, 999, 0}
+	if len(missing) != len(want) {
+		t.Fatalf("missing IDs = %v, want %v", missing, want)
+	}
+	for i, id := range want {
+		if missing[i] != id {
+			t.Errorf("missing IDs = %v, want %v", missing, want)
+			break
+		}
+	}
+
+	empty, err := s.MissingIDsByNovel(ctx, 1, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(empty) != 0 {
+		t.Errorf("missing IDs for empty input = %v, want empty", empty)
+	}
+}
+
 func TestChListAllByNovelOrdersVolumesThenUnassigned(t *testing.T) {
 	db := openChDB(t)
 	s := NewStore(db, testChLogger())

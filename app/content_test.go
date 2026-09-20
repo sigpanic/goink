@@ -44,20 +44,20 @@ func TestSaveContent_ChapterPath(t *testing.T) {
 	novelID := novel.ID
 
 	// Create chapter in DB first (SaveContent updates word_count for chapter paths)
-	_, err := app.CreateChapter(CreateChapterInput{NovelID: novelID, Title: "Test Chapter"})
+	ch, err := app.CreateChapter(CreateChapterInput{NovelID: novelID, Title: "Test Chapter"})
 	require.NoError(t, err)
 
 	chapterContent := "This is chapter one content with some words."
 	err = app.SaveContent(SaveContentInput{
 		NovelID: novelID,
-		Path:    "chapters/001.md",
+		Path:    ch.FilePath,
 		Content: chapterContent,
 	})
 	require.NoError(t, err)
 
 	// Verify file exists on disk
 	novelDir := config.NovelDirPath(novelID)
-	filePath := filepath.Join(novelDir, "chapters", "001.md")
+	filePath := filepath.Join(novelDir, ch.FilePath)
 	data, err := os.ReadFile(filePath)
 	require.NoError(t, err)
 	assert.Equal(t, chapterContent, string(data))

@@ -18,7 +18,7 @@ import (
 // migrateRenameFiles（commit 1.6）：
 //  1. chapter.sort_order 初始化 = chapter_number（保留原顺序）
 //  2. 每个 novel 仓库建 volumes/ 目录 + .gitkeep（卷纲 volumes/{id}.md 落位）
-//  3. 章节文件 rename：chapters/{num:03d}.md → chapters/{id}.md、outlines/{num:03d}.md → outlines/{id}.md
+//  3. 章节文件 rename：chapters/{num:03d}.md → chapters/id_{id}.md、outlines/{num:03d}.md → outlines/id_{id}.md
 //  4. 按 novel 各自 git commit
 //
 // 依赖 chapter_number 列仍存在（commit 1.7 才删），因此必须排在 drop-legacy 之前。
@@ -31,6 +31,12 @@ import (
 //
 // 单个 novel 失败只告警不阻塞（7.5），step 整体幂等，下次启动重跑剩余部分。
 func migrateRenameFiles(db *gorm.DB, log *slog.Logger) error {
+	// 新装库已由当前 model 直接建成 id 化 schema，没有旧文件或 chapter_number 可迁移。
+	// 迁移状态丢失时也必须安全跳过，不能查询已经删除的旧列。
+	if !db.Migrator().HasTable("chapters") || !db.Migrator().HasColumn("chapters", "chapter_number") {
+		return nil
+	}
+
 	// 1. sort_order 初始化 = chapter_number
 	if err := db.Exec("UPDATE chapters SET sort_order = chapter_number WHERE sort_order = 0").Error; err != nil {
 		return fmt.Errorf("migrate v160: 初始化 sort_order: %w", err)
@@ -64,7 +70,7 @@ func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 		}
 	}
 
-	// 3. 章节/大纲文件 rename：{num:03d} → {id}（源按旧 num 命名，目标按新 id 命名）
+// 3. 章节/大纲文件 rename：{num:03d} → id_{id}（源按旧 num 命名，目标按新 id 命名）
 	type chRow struct {
 		ID            int64
 		ChapterNumber int

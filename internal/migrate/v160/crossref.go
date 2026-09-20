@@ -79,8 +79,9 @@ func migrateCrossRefData(db *gorm.DB, log *slog.Logger) error {
 			continue // 该表不存在（新库）→ 跳过
 		}
 		for _, p := range tc.pairs {
-			// 新 id 列不存在（理论不该发生：AutoMigrate 已加列）→ 跳过该列
-			if !db.Migrator().HasColumn(tc.table, p.idCol) {
+			// 新 id 列或旧 num 列不存在时跳过该列：新库不会有旧列；迁移状态
+			// 丢失后重跑也不能查询已删除的旧列。
+			if !db.Migrator().HasColumn(tc.table, p.idCol) || !db.Migrator().HasColumn(tc.table, p.numCol) {
 				continue
 			}
 			// 待迁移行：id 列仍为 NULL 且 num > 0

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"regexp"
-	"strconv"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/chapter"
@@ -47,8 +45,6 @@ func (a *App) GetContent(novelID int64, path string) (string, error) {
 	return content, nil
 }
 
-var chPathRe = regexp.MustCompile(`^chapters/(\d{1,6})\.md$`)
-
 // SaveContent 保存小说仓库中指定路径的文件内容。
 func (a *App) SaveContent(input SaveContentInput) error {
 	if isSkillPath(input.Path) {
@@ -61,11 +57,11 @@ func (a *App) SaveContent(input SaveContentInput) error {
 		return err
 	}
 
-	if m := chPathRe.FindStringSubmatch(input.Path); m != nil {
-		chapNum, _ := strconv.Atoi(m[1])
-		rag.SubmitRefresh(input.NovelID, chapNum, input.Content)
+	if ref, ok := git.ParseChapterLikePath(input.Path); ok && !ref.IsOutline && !ref.IsNew && ref.VolumeID == 0 {
+		chapterID := ref.ID
+		rag.SubmitRefresh(input.NovelID, chapterID, input.Content)
 		if svc := a.searchService.Load(); svc != nil {
-			svc.UpdateCachedChapter(input.NovelID, chapNum, input.Content)
+			svc.UpdateCachedChapter(input.NovelID, chapterID, input.Content)
 		}
 		stats := text.ComputeStats(input.Content)
 
@@ -74,17 +70,17 @@ func (a *App) SaveContent(input SaveContentInput) error {
 		a.chapter.DB.WithContext(a.ctx).
 			Model(&chapter.Chapter{}).
 			Select("COALESCE(word_count, 0)").
-			Where("novel_id = ? AND chapter_number = ?", input.NovelID, chapNum).
+			Where("novel_id = ? AND id = ?", input.NovelID, chapterID).
 			Scan(&oldWC)
 		if delta := stats.WordCount - oldWC; delta != 0 && a.writing != nil {
-			a.writing.LogDelta(a.ctx, input.NovelID, chapNum, delta)
+			a.writing.LogDelta(a.ctx, input.NovelID, chapterID, delta)
 		}
 
 		if err := a.chapter.DB.WithContext(a.ctx).
 			Model(&chapter.Chapter{}).
-			Where("novel_id = ? AND chapter_number = ?", input.NovelID, chapNum).
+			Where("novel_id = ? AND id = ?", input.NovelID, chapterID).
 			Update("word_count", stats.WordCount).Error; err != nil {
-			a.logger.Warn("更新字数失败", "novel_id", input.NovelID, "chapter", chapNum, "err", err)
+			a.logger.Warn("更新字数失败", "novel_id", input.NovelID, "chapter_id", chapterID, "err", err)
 		}
 	}
 

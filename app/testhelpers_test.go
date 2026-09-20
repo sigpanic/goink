@@ -32,6 +32,7 @@ import (
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -90,6 +91,7 @@ func setupTestApp(t *testing.T) *App {
 	turnCommitStore := rollback.NewStore(db, logger)
 	writingStore := writing.NewStore(db, logger)
 	styleStore := style.NewStore(db, logger)
+	volumeStore := volume.NewStore(db, logger)
 
 	skillStore, err := skill.NewStore(logger, filepath.Join(tmpDir, "skills"))
 	require.NoError(t, err, "init skill store")
@@ -141,6 +143,7 @@ func setupTestApp(t *testing.T) *App {
 		reader:     readerStore,
 		turnCommit: turnCommitStore,
 		writing:    writingStore,
+		volume:     volumeStore,
 	}
 
 	return app
@@ -163,4 +166,15 @@ func createTestNovel(t *testing.T, app *App) *novel.Novel {
 	require.NoError(t, os.MkdirAll(novelDir, 0o755), "create novel dir")
 
 	return n
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}
+
+func createTestChapter(t *testing.T, app *App, novelID int64) *chapter.Chapter {
+	t.Helper()
+	ch, err := app.CreateChapter(CreateChapterInput{NovelID: novelID, Title: "Test Chapter"})
+	require.NoError(t, err, "create test chapter")
+	return ch
 }

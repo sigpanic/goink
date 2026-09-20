@@ -100,7 +100,7 @@ func ParseVolumePath(path string) (int64, bool) {
 }
 
 // ── 文件读写 ──────────────────────────────────────────────
-// path 为相对于小说仓库根目录的路径，如 "chapters/001.md"、"goink.md"。
+// path 为相对于小说仓库根目录的路径，如 "chapters/id_1.md"、"goink.md"。
 
 func ReadFile(novelID int64, path string) (string, error) {
 	fullPath, err := ResolvePath(path, novelID)

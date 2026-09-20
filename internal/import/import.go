@@ -116,10 +116,10 @@ func doImport(ctx context.Context, logger *slog.Logger, db *gorm.DB, result *Res
 		for i, ch := range result.Chapters {
 			chapNum := i + 1
 			chap := chapter.Chapter{
-				NovelID:       n.ID,
-				ChapterNumber: chapNum,
-				Title:         ch.Title,
-				WordCount:     text.ComputeStats(ch.Content).WordCount,
+				NovelID:   n.ID,
+				SortOrder: chapNum,
+				Title:     ch.Title,
+				WordCount: text.ComputeStats(ch.Content).WordCount,
 			}
 			if err := tx.Create(&chap).Error; err != nil {
 				return fmt.Errorf("创建第%d章元数据失败: %w", chapNum, err)

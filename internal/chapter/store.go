@@ -109,6 +109,44 @@ func (s *Store) CountByNovel(ctx context.Context, novelID int64) (int, error) {
 	return int(count), nil
 }
 
+// MissingIDsByNovel 返回不存在或不属于指定小说的章节 ID。
+// 返回值按输入中的首次出现顺序排列，重复 ID 只返回一次。
+func (s *Store) MissingIDsByNovel(ctx context.Context, novelID int64, ids []int64) ([]int64, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	unique := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	var found []int64
+	if err := s.DB.WithContext(ctx).
+		Model(&Chapter{}).
+		Where("novel_id = ? AND id IN ?", novelID, unique).
+		Pluck("id", &found).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: find IDs by novel: %w", err)
+	}
+	foundSet := make(map[int64]struct{}, len(found))
+	for _, id := range found {
+		foundSet[id] = struct{}{}
+	}
+
+	missing := make([]int64, 0, len(unique))
+	for _, id := range unique {
+		if _, ok := foundSet[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return missing, nil
+}
+
 // GetReadingNumberByID 返回章节在当前阅读顺序中的 1-based 位次。
 // 章节号由卷顺序、卷内 sort_order 和未分卷末尾规则实时计算，不依赖 chapter_number 列。
 func (s *Store) GetReadingNumberByID(ctx context.Context, novelID, chapterID int64) (int, error) {

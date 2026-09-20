@@ -38,7 +38,7 @@ var registry = []engine.Step{
 func init() {
 	engine.Register(engine.Migration{
 		Name:        migration,
-		Description: "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/{id}.md、删除旧 num 列",
+		Description: "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
 		Destructive: true,
 		Steps:       registry,
 	})

@@ -248,7 +248,7 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 	for _, ch := range chapters {
 		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ID))
 		if err != nil {
-			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ChapterNumber, err)
+			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ReadingNumber, err)
 		}
 		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
 	}

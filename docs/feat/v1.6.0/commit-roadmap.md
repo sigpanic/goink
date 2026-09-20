@@ -32,11 +32,11 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 |---|---|---|
 | **L0** | `internal/volume` store 基建 | 最前：migrate 步骤与 rw_tools 的 new.md 通道都依赖卷基建 |
 | **L2** | chapter.Store 按 id / sort_order | L0 之后：sort_order 分配已由 store 接管 |
-| **L3** | rag + search | 依赖 L2 的按 id 查询 |
-| **L4** | 其他内部包（export / pattern / agent） | 依赖 L2 |
+| **L3** | rag + search | ✅ 已完成；依赖 L2 的按 id 查询 |
+| **L4** | 其他内部包（export / pattern / agent） | ✅ 已完成；依赖 L2 |
 | **L5** | mcp_tools | 依赖 L2-L4 |
-| **L6** | app 层 | 依赖 L0 的 volume store |
-| **L7** | 前端 | 依赖 L6 的 API |
+| **L6** | app 层 | 当前只迁移既有后端通路；新功能 API 后置 |
+| **L7** | 前端 | 后置到后端迁移与新功能 API 完成后 |
 | **L1b** | 收尾：删旧 SQL 列 | **最后**：删 SQL 列受迁移步骤顺序约束——1.7 必须在 1.5 反查、1.6 文件 rename 之后（它们要读 num 列）。`chapter.ChapterNumber` 随 L2 一次性移除 |
 
 **关于「解绑旧列约束」（原 L1a，已撤销）**：曾计划早期先去掉 `not null` / `uniqueIndex` 让代码停止写 num，已撤销：
@@ -91,25 +91,25 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | 5.1 | `refactor(mcp_tools): cross-ref tools use chapter_id` | timeline / storyarc 的未来计划位置改 `target_reading_number`；所有已发生章节字段改 `*_chapter_id`，AI 直接传 id 不转译 | ❌ |
 | 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回分页元数据及按卷分组的 Markdown 目录；每章展示稳定 id、实时 reading_number、标题和字数 | ❌ |
 | 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
-| 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ❌ |
+| 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ✅ |
 | 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
-| 5.4b | `fix(reader): keep planted chapter references nullable` | `planted_chapter_id` 保持可空，迁移反查失败为 NULL；MCP/search 对缺失引用降级展示。MCP 写入具体章节 ID 时共享批量归属守卫；章节引用维持逻辑外键，不加数据库 FK | ✅ |
+| 5.4b | `fix(reader): keep planted chapter references nullable` | `planted_chapter_id` 保持可空，迁移反查失败为 NULL；MCP/search 对缺失引用降级展示。`chapter.Store` 统一批量归属查询，MCP/App 各自转换错误；章节引用维持逻辑外键，不加数据库 FK | ✅ |
 
 ### L6 app 层
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 6.1 | `feat(volume): app-layer CRUD` | app: CreateVolume / UpdateVolume / DeleteVolume / GetVolumes / ReorderVolumes（删卷前检查关联章节）；wails 绑定自动生成 | ❌ |
-| 6.2 | `feat(chapter): app-layer delete/insert/move` | app: DeleteChapter（交叉引用检测拒绝 + 删文件 + 删记录 + RAG 清理）/ InsertChapter / MoveChapterToVolume；wails 绑定自动生成 | ❌ |
-| 6.3 | `refactor(chapter): CreateChapter allocates sort_order` | `CreateChapter` 改走 volume store 分配 sort_order（当前用 `GetLatestNumber`）；`UpdateChapterTitle` 改按 id；novel export / content.go 同步 | ❌ |
+| 6.1 | `refactor(app): migrate existing chapter flows to IDs` | 既有章节、reader、timeline、story arc 的 App API，以及正文保存刷新与字数日志、导入、导出全部改按 chapter id；未来位置继续用 `reading_number`；新建默认追加到最后一卷，无卷则追加未分卷；App 写入引用批量校验章节归属；v160 对缺失旧列安全跳过 | ✅ |
+| 6.2 | `feat(volume): app-layer CRUD` | app: CreateVolume / UpdateVolume / DeleteVolume / GetVolumes / ReorderVolumes（删卷前检查关联章节）；后置，wails 绑定自动生成 | ❌ |
+| 6.3 | `feat(chapter): app-layer delete/insert/move` | app: DeleteChapter（交叉引用检测拒绝 + 删文件 + 删记录 + RAG 清理）/ InsertChapter / MoveChapterToVolume；后置 | ❌ |
 
 ### L7 前端
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 7.1 | `feat(frontend): chapter management tab skeleton` | 新增独立 tab"章节管理"：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 主骨架；现有 ChapterList 保留；i18n key | ✅ |
-| 7.2 | `feat(frontend): volume management panel` | 卷管理面板：CRUD UI + 排序；按卷分组渲染 | ✅ |
-| 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ✅ |
+| 7.1 | `feat(frontend): chapter management tab skeleton` | 新增独立 tab"章节管理"：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 主骨架；现有 ChapterList 保留；i18n key | ✅（后端 API 对接后置） |
+| 7.2 | `feat(frontend): volume management panel` | 卷管理面板：CRUD UI + 排序；按卷分组渲染 | ✅（后端 API 对接后置） |
+| 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ✅（后端 API 对接后置） |
 
 ### L1b 收尾 — 删旧字段
 

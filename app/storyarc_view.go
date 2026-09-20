@@ -31,7 +31,7 @@ func (a *App) GetStoryArcs(novelID int64) ([]storyarc.StoryArc, error) {
 func (a *App) GetArcNodes(novelID int64) ([]storyarc.ArcNode, error) {
 	result, err := a.storyarc.ListNodesByNovel(a.ctx, novelID, storyarc.ListNodesOptions{
 		PageParams: storage.PageParams{Size: -1},
-		Order:      "story_arc_id, target_chapter ASC, id ASC",
+		Order:      "story_arc_id, target_reading_number ASC, id ASC",
 	})
 	if err != nil {
 		return nil, err
@@ -124,24 +124,24 @@ func (a *App) DeleteStoryArc(novelID int64, arcID int64) error {
 
 // CreateArcNodeInput 是 CreateArcNode 的参数。
 type CreateArcNodeInput struct {
-	StoryArcID    int64  `json:"story_arc_id"`          // 所属弧线 ID，必填
-	Title         string `json:"title"`                 // 节点标题，必填
-	Description   string `json:"description,omitempty"` // 节点详情
-	TargetChapter int    `json:"target_chapter"`        // 预计章节号，必填
+	StoryArcID          int64  `json:"story_arc_id"`          // 所属弧线 ID，必填
+	Title               string `json:"title"`                 // 节点标题，必填
+	Description         string `json:"description,omitempty"` // 节点详情
+	TargetReadingNumber int    `json:"target_reading_number"` // 预计发生的阅读位置，必填
 }
 
 // CreateArcNode 创建弧线节点。
 func (a *App) CreateArcNode(novelID int64, input CreateArcNodeInput) (*storyarc.ArcNode, error) {
-	if input.Title == "" || input.StoryArcID == 0 || input.TargetChapter == 0 {
+	if input.Title == "" || input.StoryArcID == 0 || input.TargetReadingNumber == 0 {
 		return nil, fmt.Errorf("节点标题、所属弧线、目标章节不能为空")
 	}
 	node := storyarc.ArcNode{
-		NovelID:       novelID,
-		StoryArcID:    input.StoryArcID,
-		Title:         input.Title,
-		Description:   input.Description,
-		TargetChapter: input.TargetChapter,
-		Status:        "pending",
+		NovelID:             novelID,
+		StoryArcID:          input.StoryArcID,
+		Title:               input.Title,
+		Description:         input.Description,
+		TargetReadingNumber: input.TargetReadingNumber,
+		Status:              "pending",
 	}
 	if err := a.storyarc.DB.WithContext(a.ctx).Create(&node).Error; err != nil {
 		return nil, fmt.Errorf("create arc node: %w", err)
@@ -151,11 +151,11 @@ func (a *App) CreateArcNode(novelID int64, input CreateArcNodeInput) (*storyarc.
 
 // UpdateArcNodeInput 采用 PUT 语义：前端全量传，后端全量覆盖。
 type UpdateArcNodeInput struct {
-	Title         string `json:"title"`
-	Description   string `json:"description"`
-	TargetChapter int    `json:"target_chapter"`
-	ActualChapter int    `json:"actual_chapter"`
-	Status        string `json:"status"` // "pending" | "completed" | "abandoned"
+	Title               string `json:"title"`
+	Description         string `json:"description"`
+	TargetReadingNumber int    `json:"target_reading_number"`
+	ActualChapterID     *int64 `json:"actual_chapter_id"`
+	Status              string `json:"status"` // "pending" | "completed" | "abandoned"
 }
 
 // UpdateArcNode 更新弧线节点。PUT 全量覆盖用户可编辑字段。
@@ -166,10 +166,15 @@ func (a *App) UpdateArcNode(novelID int64, nodeID int64, input UpdateArcNodeInpu
 		First(&node).Error; err != nil {
 		return fmt.Errorf("update arc node: %w", err)
 	}
+	if input.ActualChapterID != nil {
+		if err := a.ensureChapterIDsInNovel(novelID, []int64{*input.ActualChapterID}); err != nil {
+			return err
+		}
+	}
 	node.Title = input.Title
 	node.Description = input.Description
-	node.TargetChapter = input.TargetChapter
-	node.ActualChapter = input.ActualChapter
+	node.TargetReadingNumber = input.TargetReadingNumber
+	node.ActualChapterID = input.ActualChapterID
 	node.Status = input.Status
 	if err := a.storyarc.DB.WithContext(a.ctx).Save(&node).Error; err != nil {
 		return fmt.Errorf("update arc node: %w", err)

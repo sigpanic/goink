@@ -21,17 +21,19 @@ func TestCreateReaderPerspective(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	chapter := createTestChapter(t, app, novelID)
 
 	p, err := app.CreateReaderPerspective(novelID, CreateReaderPerspectiveInput{
-		Type:           "known",
-		Content:        "The protagonist is an orphan",
-		PlantedChapter: 1,
-		RelatedTruth:   "Parents are alive and in hiding",
+		Type:             "known",
+		Content:          "The protagonist is an orphan",
+		PlantedChapterID: chapter.ID,
+		RelatedTruth:     "Parents are alive and in hiding",
 	})
 	require.NoError(t, err)
 	assert.Equal(t, "known", p.Type)
 	assert.Equal(t, "The protagonist is an orphan", p.Content)
-	assert.Equal(t, 1, p.PlantedChapter)
+	require.NotNil(t, p.PlantedChapterID)
+	assert.Equal(t, chapter.ID, *p.PlantedChapterID)
 	assert.Equal(t, "Parents are alive and in hiding", p.RelatedTruth)
 	assert.Equal(t, novelID, p.NovelID)
 }
@@ -58,18 +60,20 @@ func TestGetReaderPerspectives_AfterCreate(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	chapter1 := createTestChapter(t, app, novelID)
+	chapter2 := createTestChapter(t, app, novelID)
 
 	_, err := app.CreateReaderPerspective(novelID, CreateReaderPerspectiveInput{
-		Type:           "known",
-		Content:        "Reader knows the hero's name",
-		PlantedChapter: 1,
+		Type:             "known",
+		Content:          "Reader knows the hero's name",
+		PlantedChapterID: chapter1.ID,
 	})
 	require.NoError(t, err)
 
 	_, err = app.CreateReaderPerspective(novelID, CreateReaderPerspectiveInput{
-		Type:           "suspense",
-		Content:        "Who is the traitor?",
-		PlantedChapter: 3,
+		Type:             "suspense",
+		Content:          "Who is the traitor?",
+		PlantedChapterID: chapter2.ID,
 	})
 	require.NoError(t, err)
 
@@ -82,24 +86,28 @@ func TestUpdateReaderPerspective(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	planted := createTestChapter(t, app, novelID)
+	revealed := createTestChapter(t, app, novelID)
 
 	p, err := app.CreateReaderPerspective(novelID, CreateReaderPerspectiveInput{
-		Type:           "suspense",
-		Content:        "Who killed the king?",
-		PlantedChapter: 2,
+		Type:             "suspense",
+		Content:          "Who killed the king?",
+		PlantedChapterID: planted.ID,
 	})
 	require.NoError(t, err)
 
 	err = app.UpdateReaderPerspective(p.ID, novelID, UpdateReaderPerspectiveInput{
-		RevealedChapter: 8,
-		Content:         "Who killed the king? (resolved)",
+		PlantedChapterID:  int64Ptr(planted.ID),
+		RevealedChapterID: int64Ptr(revealed.ID),
+		Content:           "Who killed the king? (resolved)",
 	})
 	require.NoError(t, err)
 
 	perspectives, err := app.GetReaderPerspectives(novelID)
 	require.NoError(t, err)
 	require.Len(t, perspectives, 1)
-	assert.Equal(t, 8, perspectives[0].RevealedChapter)
+	require.NotNil(t, perspectives[0].RevealedChapterID)
+	assert.Equal(t, revealed.ID, *perspectives[0].RevealedChapterID)
 	assert.Equal(t, "Who killed the king? (resolved)", perspectives[0].Content)
 }
 
@@ -107,11 +115,12 @@ func TestDeleteReaderPerspective(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	chapter := createTestChapter(t, app, novelID)
 
 	p, err := app.CreateReaderPerspective(novelID, CreateReaderPerspectiveInput{
-		Type:           "misconception",
-		Content:        "Reader thinks the mentor is good",
-		PlantedChapter: 1,
+		Type:             "misconception",
+		Content:          "Reader thinks the mentor is good",
+		PlantedChapterID: chapter.ID,
 	})
 	require.NoError(t, err)
 
@@ -121,4 +130,19 @@ func TestDeleteReaderPerspective(t *testing.T) {
 	perspectives, err := app.GetReaderPerspectives(novelID)
 	require.NoError(t, err)
 	assert.Empty(t, perspectives)
+}
+
+func TestCreateReaderPerspective_RejectsForeignChapter(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	otherNovel := createTestNovel(t, app)
+	otherChapter := createTestChapter(t, app, otherNovel.ID)
+
+	_, err := app.CreateReaderPerspective(novel.ID, CreateReaderPerspectiveInput{
+		Type:             "known",
+		Content:          "跨小说章节",
+		PlantedChapterID: otherChapter.ID,
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "不属于当前小说")
 }
