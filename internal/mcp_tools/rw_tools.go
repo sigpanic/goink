@@ -8,7 +8,6 @@ import (
 	"os"
 	"regexp"
 	"strings"
-	"time"
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
@@ -764,12 +763,7 @@ func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.C
 		Where("id = ?", ch.ID).
 		Scan(&oldWC)
 	if delta := stats.WordCount - oldWC; delta != 0 {
-		tc.DB.WithContext(ctx).Create(&writing.WritingLog{
-			Date:          time.Now().Format("2006-01-02"),
-			NovelID:       tc.NovelID,
-			ChapterNumber: ch.ChapterNumber,
-			WordDelta:     delta,
-		})
+		writing.NewStore(tc.DB, tc.LoggerOrDefault()).LogDelta(ctx, tc.NovelID, ch.ID, delta)
 	}
 
 	tc.DB.WithContext(ctx).Model(&chapter.Chapter{}).

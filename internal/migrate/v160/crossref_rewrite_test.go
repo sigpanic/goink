@@ -53,6 +53,7 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 		`ALTER TABLE arc_nodes ADD COLUMN actual_chapter INTEGER DEFAULT 0`,
 		`ALTER TABLE reader_perspectives ADD COLUMN planted_chapter INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE reader_perspectives ADD COLUMN revealed_chapter INTEGER DEFAULT 0`,
+		`ALTER TABLE writing_log ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE character_relations ADD COLUMN chapter_number INTEGER`,
 	} {
 		exec(sql)

@@ -5,13 +5,12 @@ import "time"
 // WritingLog 记录每次保存的字数变化。正数表示新增，负数表示删除。
 // 多行同一天的不同保存各自独立，查询时按 date GROUP BY SUM(word_delta)。
 type WritingLog struct {
-	ID            int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	Date          string    `gorm:"column:date;not null;index:idx_writing_date;size:10"` // "2006-01-02"
-	NovelID       int64     `gorm:"column:novel_id;not null;default:0;index"`
-	ChapterNumber int       `gorm:"column:chapter_number;not null;default:0;index"` // v1.6.0 迁移期保留，commit 1.7 删除
-	ChapterID     *int64    `gorm:"column:chapter_id;index"`                        // v1.6.0 新增：chapters.id 外键（nullable，删章节后允许孤儿）；commit 1.5 由 ChapterNumber 反查填充
-	WordDelta     int       `gorm:"column:word_delta;not null"`
-	CreatedAt     time.Time `gorm:"column:created_at;autoCreateTime"`
+	ID        int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	Date      string    `gorm:"column:date;not null;index:idx_writing_date;size:10"` // "2006-01-02"
+	NovelID   int64     `gorm:"column:novel_id;not null;default:0;index"`
+	ChapterID *int64    `gorm:"column:chapter_id;index"` // chapters.id；nullable 兼容迁移反查失败的历史记录，删章节后允许孤儿
+	WordDelta int       `gorm:"column:word_delta;not null"`
+	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
 func (WritingLog) TableName() string { return "writing_log" }
