@@ -93,10 +93,10 @@ describe("ChapterList", () => {
     const user = userEvent.setup();
     const chapters = [
       {
-        id: 1,
-        chapter_number: 1,
+        id: 42,
+        reading_number: 1,
         title: "Chapter One",
-        file_path: "chapters/001.md",
+        file_path: "chapters/id_42.md",
         word_count: 0,
       },
     ];
@@ -128,6 +128,13 @@ describe("ChapterList", () => {
 
     // Trigger commit by pressing Enter
     await user.type(titleInput, "{Enter}");
+
+    await vi.waitFor(() => {
+      expect(mockUpdateChapterTitle).toHaveBeenCalledWith({
+        chapterID: 42,
+        title: "New Title",
+      });
+    });
 
     // Verify toastError was called
     await vi.waitFor(() => {

@@ -164,12 +164,12 @@ export default function SearchPanel({
   function selectResult(r: SearchResult) {
     if (r.type === "content" || r.type === "rag" || r.type === "chapter") {
       const displayTitle = r.title
-        ? t("search.chapterN", { n: r.chapter_num }) + ` ${r.title}`
-        : t("search.chapterN", { n: r.chapter_num });
+        ? t("search.chapterN", { n: r.reading_number }) + ` ${r.title}`
+        : t("search.chapterN", { n: r.reading_number });
       onNavigateChapter(
         r.file_path,
         displayTitle,
-        r.chapter_num,
+        r.reading_number,
         r.match_position ?? 0,
         r.match_len ?? 0,
       );
@@ -244,7 +244,7 @@ export default function SearchPanel({
                     const isSelected = flatIdx === selectedIdx;
                     return (
                       <button
-                        key={`${r.type}-${r.id || i}-${r.chapter_num}`}
+                        key={`${r.type}-${r.id || i}-${r.chapter_id}`}
                         onClick={() => selectResult(r)}
                         className={`w-full text-left px-3 py-1.5 hover:bg-muted/50 transition-colors ${
                           isSelected ? "bg-muted" : ""

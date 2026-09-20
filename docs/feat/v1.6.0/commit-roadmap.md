@@ -107,6 +107,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
+| 7.0 | `refactor(frontend): consume stable chapter references` | 先迁移既有 UI，不新增章节管理能力：章节列表/Pattern 用 `reading_number` 展示、`chapter_id` 写入；Reader、Timeline、Story arc 的已发生章节引用改 `*_chapter_id`，未来位置改 `target_reading_number`；搜索和聊天展示同步字段。按界面领域分多次提交，完成后恢复前端构建。 | 🟡 进行中 |
 | 7.1 | `feat(frontend): chapter management tab skeleton` | 新增独立 tab"章节管理"：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 主骨架；现有 ChapterList 保留；i18n key | ✅（后端 API 对接后置） |
 | 7.2 | `feat(frontend): volume management panel` | 卷管理面板：CRUD UI + 排序；按卷分组渲染 | ✅（后端 API 对接后置） |
 | 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ✅（后端 API 对接后置） |
@@ -149,6 +150,15 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | rag：vec 表列改 chapter_id（DROP 重建） | `162ccee` |
 | model：volume / migrate_state 表；chapter 加 volume_id + sort_order；5 张交叉引用表加 `*_id` 列 | 各 commit |
 | rw_tools：id 化 + new.md 通道 | `3f5c6b3` |
+
+### 与 migrate 的关系
+
+migrate 的**代码**（framework + v160 steps）已随细粒度路线完成大半（1.4/1.5/1.6 已落地），只有 1.7 待启用。剩余工作是**代码层 id 化**（L0-L7），与 migrate 步骤并行不冲突：
+
+- migrate 负责把**存量数据**从 num 迁到 id（已基本完成）
+- L0-L7 负责让**代码**只认 id（进行中）
+
+两者必须同时生效才能跑起来 —— 这是原 PR1 要求「一起合并」的根本原因。
 
 ## 不做的事
 

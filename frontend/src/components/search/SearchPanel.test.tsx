@@ -135,11 +135,12 @@ describe("SearchPanel", () => {
     mockSearchAll.mockResolvedValue([
       {
         type: "chapter",
-        id: 0,
+        id: 42,
+        chapter_id: 42,
         title: "第一章",
         panel_id: "",
-        file_path: "chapters/001.md",
-        chapter_num: 1,
+        file_path: "chapters/id_42.md",
+        reading_number: 1,
       },
     ]);
     renderPanel();
@@ -148,7 +149,13 @@ describe("SearchPanel", () => {
     });
     const item = await screen.findByText("第一章");
     fireEvent.click(item);
-    expect(mockNavigateChapter).toHaveBeenCalled();
+    expect(mockNavigateChapter).toHaveBeenCalledWith(
+      "chapters/id_42.md",
+      expect.any(String),
+      1,
+      0,
+      0,
+    );
   });
 
   it("does not fetch when novelId is 0", () => {

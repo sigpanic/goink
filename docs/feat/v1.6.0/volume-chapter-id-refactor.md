@@ -490,155 +490,19 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 - 不重排章节号（删除留"实时连续"效果，章节号不存 DB）
 - 不修改 system 消息字段命名（仅改 DB 与工具层）
 
-## 十五、实施步骤（自底向上平推）
+## 十五、迁移顺序约束
 
-> 本节已于实施中修正。原「细粒度 commit + PR1/PR2 拆分」方案被放弃，改为**自底向上分层平推**。
+实现、提交拆分与实时进度统一维护在 [commit-roadmap.md](./commit-roadmap.md)。本节只记录不能被拆分顺序破坏的终态约束：
 
-### 15.1 为什么放弃细粒度 commit
+1. 交叉引用重写和章节文件改名都依赖旧 `chapter_number`，必须先于旧列删除执行。
+2. 旧 SQL 列删除必须先删除相关唯一索引；该步骤不可逆，迁移前必须完成自动备份。
+3. 迁移反查通过 raw SQL 和局部匿名结构体读取旧列，不依赖当前 GORM model。因此 model 删除与 SQL 列删除是独立动作。
+4. 每个迁移步骤必须幂等。即使 `migrate_state` 丢失，旧列已被删除时，重跑的旧列读取步骤也必须安全跳过。
+5. 不引入双写或 num→id 运行时回退：迁移完成后的正常代码只接受稳定 ID；阅读编号仅按当前顺序实时派生。
 
-原方案要求每个 commit 可独立编译，导致底层与上层互相等待：
+### 15.4 commit 路线
 
-- 底层函数签名要 id，但上层此刻只有 num（从 path 解析）→ 底层先改则编译不过
-- 上层先改，则要先把 num 解析成 id → 需要底层已支持 id
-
-为绕开死结，中间态被硬造出来：双字段共存、num→id 反查桥接、TODO 标注何时删除。代价是同一处改两遍，且过渡代码本身要额外维护。
-
-而 PR1 本身就要求「#1-#4 必须一起合并，中间状态编译失败」——**既然中途必然不可编译，维护「每个 commit 可编译」的假象没有意义**。
-
-改为自底向上平推：一层改完直接改下一层，中途任意时刻编译不过都接受，最后统一恢复可编译。
-
-### 15.2 hook 处理
-
-pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必然失败。两种处理：
-
-- 中间层提交用 `git commit --no-verify` 临时跳过
-- 或把同一层的改动合并成少数几个大 commit，只在层边界提交
-
-**注意**：`--no-verify` 只对中间层使用；进入下一层前应确认本层已自洽（哪怕上层还没跟上）。
-
-### 15.3 分层顺序与当前进度
-
-自底向上，下层不依赖上层：
-
-| 层 | 内容 | 状态 |
-|---|---|---|
-| **L0 基建** | `internal/volume` store：CRUD + `sort_order` 分配算法 | ✅ 已提交 |
-| **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`，动态展示字段统一为 `ReadingNumber` / `reading_number`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1–2.3 已提交；2.4 待定 |
-| **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量，并同步 RAG e2e；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时 `ReadingNumber` / `reading_number` + 卷名 | ✅ 已完成 |
-| **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ✅ 已完成 |
-| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 以 id 过滤及关联、以实时 reading_number 展示；reader 的历史缺失引用为 NULL；delete_tools 无旧编号引用 | ✅ 已完成 |
-| **L6 app 层** | 既有章节、reader、timeline、story arc API，以及正文保存刷新与字数日志、导入、导出已迁移到 chapter id；`DeleteChapter`/`InsertChapter`/`MoveChapterToVolume` 与 volume CRUD 后置 | ✅ 既有通路完成 |
-| **L7 前端** | 章节管理 UI 骨架已存在；待后端迁移和新功能 API 收口后再对接 | 🟡 后置 |
-| **L1b 收尾** | migrate 1.7 DROP 旧 num 列（**先 DROP INDEX 再 DROP COLUMN**）；交叉引用 model 旧 num 字段在各自领域完成后移除；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
-
-**为什么 L0 必须在最前**：migrate 步骤（建 volume 表、初始化 sort_order）与 rw_tools 的 new.md 通道都依赖卷基建。原方案把它排在 PR2，导致 L5 自实现一份 `sort_order` 分配算法，L6 还得搬家。
-
-**为什么 L1b 必须在最后**：删 SQL 列受**迁移步骤顺序**约束——1.7 必须在 1.5 反查、1.6 文件 rename 之后（它们要读 num 列）。删 model 字段则任何时候都行，只看代码引用是否改完（否则编译不过）。
-
-**关于「解绑旧列约束」（原 L1a，已撤销）**：曾计划早期先去掉 `not null` / `uniqueIndex` 约束让代码停止写 num，已撤销：
-
-- **不需要**：中间不运行应用，没有任何 INSERT 发生，not-null 约束在重构期不构成约束
-- **SQLite 不支持 `ALTER COLUMN`**：单独去 `NOT NULL` 需重建整表（create → copy → drop → rename），纯属白折腾
-- **不需要「双写兼容」**：不存在中间发行版（用户不会跑到半成品），代码无需「有 id 用 id、没 id 回退 num」的兼容逻辑
-
-**双字段为什么存在**：不是设计需要，是「代码还没改到」的产物。id 列已由 1.5 反查填好但暂无代码读它；num 列仍被 L3-L6 的代码读写。两者共存只因代码改造（L0/L2-L6）未完成。
-
-**迁移反查与 model 解耦**：`crossref.go` / `rename.go` 读 `chapter_number` 用的是 raw SQL + 局部匿名结构体，不依赖 `chapter.Chapter`。因此删 model 字段与删 SQL 列是**两个独立约束**——前者只看编译，后者只看迁移步骤顺序。
-
-**坑：1.5/1.6 缺 num 列守卫**：`crossref.go` 只守了 idCol 存在，未守 numCol；`rename.go` 直接 `SELECT chapter_number`。若 1.7 已删列而 migrate_state 状态丢失（手动清表 / 异常恢复），这两步会因查不存在的列而失败 → 应用启动失败。触发条件窄但守卫成本极低。
-
-### 15.4 细粒度 commit 路线
-
-保留小粒度 commit（每个 commit 做一件事、可独立 review）。**放弃的只是「每个 commit 必须可编译」这个约束** —— 中间层提交用 `--no-verify` 跳过 hook。
-
-「可编译」列标注该 commit 后代码能否通过 `go build`；层内相邻的 ❌ 可合并提交，层边界是 review 的自然分界。
-
-#### L0 基建 — `internal/volume` store
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 0.1 | `feat(volume): add store with CRUD` | 新建 `internal/volume/store.go`：Create / Update / Delete / GetByID / ListByNovel / Reorder；方法以 `*gorm.DB` 为参数（调用方传 db 或 tx），不用 receiver 持连接风格 | ✅ |
-| 0.2 | `feat(volume): add chapter sort_order allocation` | 把 `sort_order` 分配算法从 `mcp_tools/rw_tools.go` 的 `createChapterRecord` 下沉：按目标分组（指定卷或未分卷）的 max+1 追加 | ✅ |
-| 0.3 | `refactor(rw_tools): call volume store` | rw_tools 的 `resolveVolume` / `lastVolume` / `createChapterRecord` 改为调用 volume store，删除自实现 | ✅ |
-
-#### L2 chapter.Store — 按 id / sort_order
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 2.1 | `refactor(chapter): list queries order by sort_order` | `ListByNovel` / `ListAllByNovel` / `SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order` 升序，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回 | ✅ |
-| 2.2 | `refactor(chapter): create records through store` | 新增 `chapter.Store.Create`：在同一事务中处理目标分组的 `sort_order` 分配与记录创建；rw_tools 直接调用，删除 `createChapterRecord`，并在未指定卷时选择最后一卷；不再为新记录分配旧 `chapter_number` | ✅ |
-| 2.3 | `refactor(chapter): remove legacy number API` | 新增单章/批量 `GetReadingNumberByID` / `GetReadingNumbersByNovel`，按当前阅读序实时算章号；各章节查询在非持久化 `Chapter.ReadingNumber` 回填展示编号；`CountByNovel` 返回总章节数（即最大展示章节号）；`GetByNovelAndNumber` → `GetByID`；删 `GetLatestNumber`；`UpdateTitle` 改按 id；`chapter.Chapter` 删除 `ChapterNumber`。其他领域调用方留待各自迁移，因此本提交预期不可编译 | 🟡 |
-| 2.4 | `refactor(chapter): store methods take *gorm.DB` | 方法风格整改为 `*gorm.DB` 参数（同 L0 约束，`SetMaxOpenConns(1)` 下事务安全） | ❌ |
-
-#### L3 rag + search
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 3.1 | `refactor(rag): chunk_id keyed by chapter id` | `splitter.go` 的 chunk_id 去掉内嵌章节号（`"%d_summary"` / `"%d_brief"` / `"%d_%d"` → id-based） | 🟡 |
-| 3.2 | `refactor(rag): SubmitRefresh takes chapter id` | `SubmitRefresh` 改按 chapter_id 提交；删 `refresh_queue` 的 num→id 反查桥接；`RefreshTask` 去 `ChapterNumber` | 🟡 |
-| 3.3 | `refactor(search): ChapterNum becomes ChapterID` | `search.Service` 的缓存和结果定位字段改 `ChapterID`；展示按 id 反查实时 `ReadingNumber`，不再持有旧编号 | 🟡 |
-
-#### L4 其他内部包
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 4.1 | `refactor(export): chapter number computed at render` | epub / txt / markdown 的章节号来源改 id + 实时算 | ❌ |
-| 4.2 | `refactor(pattern): chapter fields use id` | `pattern` 的 extract / prompts / types 章节字段改 id | ❌ |
-| 4.3 | `refactor(agent): display computes chapter number` | `agent/display.go` 章节号展示改实时算 | ❌ |
-
-#### L5 mcp_tools
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 5.1 | `refactor(mcp_tools): cross-ref tools use chapter_id` | timeline / storyarc 的未来计划位置改 `target_reading_number`；所有已发生章节字段改 `*_chapter_id`，AI 直接传 id 不转译 | ❌ |
-| 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回分页元数据及按卷分组的 Markdown 目录；每章展示稳定 id、实时 reading_number、标题和字数 | ❌ |
-| 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
-| 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ✅ |
-| 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
-| 5.4b | `fix(reader): keep planted chapter references nullable` | `planted_chapter_id` 保持可空，迁移反查失败为 NULL；MCP/search 对缺失引用降级展示。`chapter.Store` 统一批量归属查询，MCP/App 各自转换错误；章节引用维持逻辑外键，不加数据库 FK | ✅ |
-
-#### L6 app 层
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 6.1 | `refactor(app): migrate existing chapter flows to IDs` | 既有章节、reader、timeline、story arc 的 App API，以及正文保存刷新与字数日志、导入、导出全部改按 chapter id；未来位置继续用 `reading_number`；新建默认追加到最后一卷，无卷则追加未分卷；App 写入引用批量校验章节归属；v160 对缺失旧列安全跳过 | ✅ |
-| 6.2 | `feat(volume): app-layer CRUD` | app: CreateVolume / UpdateVolume / DeleteVolume / GetVolumes / ReorderVolumes（删卷前检查关联章节）；后置，wails 绑定自动生成 | ❌ |
-| 6.3 | `feat(chapter): app-layer delete/insert/move` | app: DeleteChapter（交叉引用检测拒绝 + 删文件 + 删记录 + RAG 清理）/ InsertChapter / MoveChapterToVolume；后置 | ❌ |
-
-#### L7 前端
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 7.1 | `feat(frontend): chapter management tab skeleton` | 新增独立 tab"章节管理"：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 主骨架；现有 ChapterList 保留；i18n key | ✅ |
-| 7.2 | `feat(frontend): volume management panel` | 卷管理面板：CRUD UI + 排序；按卷分组渲染 | ✅ |
-| 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ✅ |
-
-#### L1b 收尾 — 删旧字段
-
-| # | Commit message | 做什么 | 可编译 |
-|---|---|---|---|
-| 1.1 | `refactor(migrate): guard legacy num columns` | 1.5/1.6 补 num 列的 `HasColumn` 守卫（防 migrate_state 状态丢失后查不存在的列 → 启动失败） | ✅ |
-| 1.2 | `refactor(migrate): drop legacy num columns` | 启用 migrate 1.7——先 DROP INDEX（`uk_novel_chapter` + writing_log 章节号索引）再 DROP COLUMN，删 chapter + 5 张交叉引用表旧 num 列；交叉引用 model 字段在对应领域改完后移除。`chapter.ChapterNumber` 已在 L2 移除 | ❌ |
-
-**删列与删字段是两个独立约束，别绑在一起**：
-
-| 动作 | 唯一约束 |
-|---|---|
-| **删 model 字段** | 代码引用要改完，或明确将其作为后续领域的编译迁移清单。中间不运行应用，所以 not-null、INSERT 全不构成约束——**任何时候都能删** |
-| **删 SQL 列** | 迁移代码还要不要读它。1.5 反查读 num 列 + `chapters.chapter_number`；1.6 文件 rename 读 `chapters.chapter_number`（拼 `{num:03d}.md` 源路径）。1.7 必须在 1.5/1.6 之后 |
-
-迁移读 num 走 raw SQL + 匿名结构体（`crossref.go` / `rename.go`），**不依赖 model**——这也是两者独立的证据。
-
-放同一个 commit 只是因为它们服务于同一个终态，不是因为互相绑定。
-
-### 15.5 与 migrate 的关系
-
-migrate 的**代码**（framework + v160 steps）已随细粒度路线完成大半（1.4/1.5/1.6 已落地），只有 1.7 待启用。剩余工作是**代码层 id 化**（L0-L7），与 migrate 步骤并行不冲突：
-
-- migrate 负责把**存量数据**从 num 迁到 id（已基本完成）
-- L0-L7 负责让**代码**只认 id（进行中）
-
-两者必须同时生效才能跑起来 —— 这是原 PR1 要求「一起合并」的根本原因。
+commit 路线（分层顺序、细粒度 commit 表格、删列与删字段约束、进度追踪与待确认）统一维护在 [commit-roadmap.md](./commit-roadmap.md)，本节不再重复。
 
 ## 十六、已决与待确认
 
@@ -650,7 +514,7 @@ migrate 的**代码**（framework + v160 steps）已随细粒度路线完成大�
 4. **自动备份**（7.6）：migrate 前自动备份到 `platform.DataDir()/backups/{timestamp}/`
 5. **delete_record 不扩展**（第九节）：AI 不能删章节，删章节仅前端
 6. **结构操作仅前端**：不新增 insert/move/delete chapter mcp_tool
-7. **实施顺序**（第十五节）：**自底向上分层平推**（L0 基建 → L1a 解绑 → L2 chapter.Store → L3 rag+search → L4 其他内部包 → L5 mcp_tools → L6 app → L7 前端 → **L1b 删旧字段**），允许中途编译失败，中间层提交用 `--no-verify` 跳过 hook。删列（L1b）必须在最后：删列不可逆，任何一层没改完就删列，运行时会读到不存在的列。原「7 个细粒度 commit + PR1/PR2 拆分」方案已放弃（原因见 15.1）
+7. **实施顺序**：**自底向上分层平推**（L0 基建 → L2 chapter.Store → L3 rag+search → L4 其他内部包 → L5 mcp_tools → L6 app → L7 前端 → **L1b 删旧字段**），允许中途编译失败，中间层提交用 `--no-verify` 跳过 hook。删列（L1b）必须在最后：删列不可逆，任何一层没改完就删列，运行时会读到不存在的列。原「7 个细粒度 commit + PR1/PR2 拆分」方案已放弃，commit 路线统一见 [commit-roadmap.md](./commit-roadmap.md)
 8. **migrate 执行模式**：启动时同步等待（应用启动时跑 migrate，跑完进主界面；大数据量启动慢但简单）
 9. **migrate_state 表**（5.8）：自建迁移状态表（migration+step 两级），按步骤 running/done/failed 记录，不用 HasColumn 做 flag（避免中途中断误判）；不引入 golang-migrate（与 GORM AutoMigrate 冲突）
 10. **文件迁移**（7.3）：逐个 os.Rename + git commit 两阶段，不用 cp+rm 三阶段，不用 git mv（非原子）；EXDEV 时退化 cp+rm
@@ -661,5 +525,4 @@ migrate 的**代码**（framework + v160 steps）已随细粒度路线完成大�
 
 ### 待确认
 
-1. **章节号实时计算的语义**：删除第 3 章后第 4 章变第 3 章，AI 上下文里的"第 5 章"指向变化，仅靠 InjectMessage 提示是否足够？
-2. **migrate 自动备份保留份数**：保留最近 3 份是否合适？
+待确认项统一维护在 [commit-roadmap.md](./commit-roadmap.md)。

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -25,6 +25,8 @@ import { useDeleteTimelineEntry } from "./useDeleteTimelineEntry";
 import { useCreateTimelineEntry } from "./useCreateTimelineEntry";
 import { useUpdateTimelineEntry } from "./useUpdateTimelineEntry";
 import { useSaveChapterPlan } from "./useSaveChapterPlan";
+import { useChapters } from "@/components/chapter/useChapters";
+import { buildChapterReferenceMap } from "@/components/chapter/chapterReferenceMap";
 // useMaxChapterNumber 跨领域复用：storyarc 4.3 先建，timeline 共用
 // （GetMaxChapterNumber 同一 API，maxChapterKeys 共享缓存）。
 import { useMaxChapterNumber } from "../storyarc/useMaxChapterNumber";
@@ -72,23 +74,22 @@ type EditMode =
 type EditForm = {
   title: string;
   content: string;
-  target_chapter: number;
+  target_reading_number: number;
   importance: number;
   status: string;
-  resolved_chapter: number;
+  resolved_chapter_id?: number;
   // create-only
   category?: string;
-  source_chapter?: number;
+  source_chapter_id?: number;
   source?: string;
 };
 
 const EDIT_FORM_EMPTY: EditForm = {
   title: "",
   content: "",
-  target_chapter: 1,
+  target_reading_number: 1,
   importance: 3,
   status: "pending",
-  resolved_chapter: 0,
 };
 
 export default function TimelineView({ novelId }: Props) {
@@ -101,6 +102,11 @@ export default function TimelineView({ novelId }: Props) {
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不挂 useEffect。
   const entriesQuery = useTimelineEntries(novelId);
   const plansQuery = useChapterPlans(novelId);
+  const { data: chapters = [] } = useChapters(novelId);
+  const chapterReferences = useMemo(
+    () => buildChapterReferenceMap(chapters),
+    [chapters],
+  );
   const maxChQuery = useMaxChapterNumber(novelId);
   // 4.4.2/4.4.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
   // onSuccess 失效对应 query（entry CRUD 失效 timeline；plan CRUD 失效 chapter-plans；
@@ -130,6 +136,12 @@ export default function TimelineView({ novelId }: Props) {
   // 4b: 高亮声明式——focus 触发后由 state 驱动 className（参考 CharacterListView highlightedId）。
   const [highlightedId, setHighlightedId] = useState<number | null>(null);
 
+  const readingNumberForChapterID = useCallback(
+    (chapterID: number | undefined) =>
+      chapterReferences.readingNumberByChapterID.get(chapterID ?? 0) ?? 0,
+    [chapterReferences],
+  );
+
   // 4.4.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
     const max = maxChQuery.data ?? 0;
@@ -142,7 +154,11 @@ export default function TimelineView({ novelId }: Props) {
     if (!focusEntryId || focusEntryId <= 0 || entries.length === 0) return;
     const entry = entries.find((e) => e.id === focusEntryId);
     if (!entry) return;
-    setWindowCenter(entry.target_chapter || entry.source_chapter || 1);
+    setWindowCenter(
+      entry.target_reading_number ||
+        readingNumberForChapterID(entry.source_chapter_id) ||
+        1,
+    );
     setHighlightedId(focusEntryId);
     const el = document.querySelector<HTMLElement>(
       `[data-entry-id="${focusEntryId}"]`,
@@ -150,7 +166,7 @@ export default function TimelineView({ novelId }: Props) {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     const timer = setTimeout(() => setHighlightedId(null), 2000);
     return () => clearTimeout(timer);
-  }, [focusEntryId, entries, focus?.nonce]);
+  }, [focusEntryId, entries, focus?.nonce, readingNumberForChapterID]);
 
   const windowFrom = Math.max(1, windowCenter - ENTRY_WINDOW);
   const windowTo = windowCenter + ENTRY_WINDOW;
@@ -171,7 +187,7 @@ export default function TimelineView({ novelId }: Props) {
   const grouped = useMemo(() => {
     const map = new Map<number, timeline.TimelineEntry[]>();
     for (const e of filteredEntries) {
-      const ch = e.target_chapter;
+      const ch = e.target_reading_number;
       if (!map.has(ch)) map.set(ch, []);
       map.get(ch)!.push(e);
     }
@@ -256,7 +272,10 @@ export default function TimelineView({ novelId }: Props) {
   // ── CRUD handlers ────────────────────────────────────
 
   function openCreate() {
-    setForm({ ...EDIT_FORM_EMPTY, target_chapter: Math.max(1, windowCenter) });
+    setForm({
+      ...EDIT_FORM_EMPTY,
+      target_reading_number: Math.max(1, windowCenter),
+    });
     setCreateCat("foreshadowing");
     setEditMode({ type: "create" });
   }
@@ -265,10 +284,10 @@ export default function TimelineView({ novelId }: Props) {
     setForm({
       title: entry.title,
       content: entry.content || "",
-      target_chapter: entry.target_chapter,
+      target_reading_number: entry.target_reading_number,
       importance: entry.importance,
       status: entry.status,
-      resolved_chapter: entry.resolved_chapter,
+      resolved_chapter_id: entry.resolved_chapter_id,
     });
     setEditMode({ type: "edit", entry });
   }
@@ -298,7 +317,7 @@ export default function TimelineView({ novelId }: Props) {
       toastError(t("timeline.pleaseEnterTitle"));
       return;
     }
-    if (!form.target_chapter) {
+    if (!form.target_reading_number) {
       toastError(t("timeline.pleaseEnterTargetChapter"));
       return;
     }
@@ -308,9 +327,8 @@ export default function TimelineView({ novelId }: Props) {
         category: createCat,
         title: form.title,
         content: form.content,
-        target_chapter: form.target_chapter,
+        target_reading_number: form.target_reading_number,
         importance: form.importance,
-        source_chapter: 0,
         source: "user",
       });
       setEditMode(null);
@@ -326,6 +344,17 @@ export default function TimelineView({ novelId }: Props) {
       toastError(t("timeline.pleaseEnterTitle"));
       return;
     }
+    const resolvedChapterID =
+      form.status === "resolved"
+        ? form.resolved_chapter_id ??
+          chapterReferences.chapterIDByReadingNumber.get(
+            form.target_reading_number,
+          )
+        : undefined;
+    if (form.status === "resolved" && resolvedChapterID == null) {
+      toastError(t("timeline.chapterNotFound"));
+      return;
+    }
     // 4.4.3: 走 mutation（onSuccess 失效 timeline），删 setSaving/bumpRefresh。
     // 全量回传 input 所有字段（§6 等价 PUT）。
     try {
@@ -334,13 +363,10 @@ export default function TimelineView({ novelId }: Props) {
         input: {
           title: form.title,
           content: form.content,
-          target_chapter: form.target_chapter,
+          target_reading_number: form.target_reading_number,
           importance: form.importance,
           status: form.status,
-          resolved_chapter:
-            form.status === "resolved"
-              ? form.resolved_chapter || form.target_chapter
-              : 0,
+          resolved_chapter_id: resolvedChapterID,
         },
       });
       setEditMode(null);
@@ -370,6 +396,17 @@ export default function TimelineView({ novelId }: Props) {
     entry: timeline.TimelineEntry,
     newStatus: string,
   ) {
+    const resolvedChapterID =
+      newStatus === "resolved"
+        ? entry.resolved_chapter_id ??
+          chapterReferences.chapterIDByReadingNumber.get(
+            entry.target_reading_number,
+          )
+        : undefined;
+    if (newStatus === "resolved" && resolvedChapterID == null) {
+      toastError(t("timeline.chapterNotFound"));
+      return;
+    }
     // 4.4.3: 走 updateMutation（onSuccess 失效 timeline），删 setSaving/bumpRefresh。
     // 全量回传 input 所有字段（§6 等价 PUT）：其他字段传 entry 原值，status 传 newStatus。
     try {
@@ -378,10 +415,10 @@ export default function TimelineView({ novelId }: Props) {
         input: {
           title: entry.title,
           content: entry.content || "",
-          target_chapter: entry.target_chapter,
+          target_reading_number: entry.target_reading_number,
           importance: entry.importance,
           status: newStatus,
-          resolved_chapter: newStatus === "resolved" ? entry.target_chapter : 0,
+          resolved_chapter_id: resolvedChapterID,
         },
       });
     } catch (err) {
@@ -447,11 +484,11 @@ export default function TimelineView({ novelId }: Props) {
             </label>
             <input
               type="number"
-              value={form.target_chapter}
+              value={form.target_reading_number}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  target_chapter: parseInt(e.target.value) || 1,
+                  target_reading_number: parseInt(e.target.value) || 1,
                 }))
               }
               min={1}
@@ -836,22 +873,26 @@ export default function TimelineView({ novelId }: Props) {
                                   </span>
                                   <span>
                                     {t("timeline.targetChapterN", {
-                                      n: entry.target_chapter,
+                                      n: entry.target_reading_number,
                                     })}
                                   </span>
-                                  {entry.source_chapter > 0 && (
+                                  {entry.source_chapter_id != null && (
                                     <span>
                                       ·{" "}
                                       {t("timeline.plantedInChapter", {
-                                        n: entry.source_chapter,
+                                        n: readingNumberForChapterID(
+                                          entry.source_chapter_id,
+                                        ),
                                       })}
                                     </span>
                                   )}
-                                  {entry.resolved_chapter > 0 && (
+                                  {entry.resolved_chapter_id != null && (
                                     <span className="text-tag-green-foreground">
                                       ·{" "}
                                       {t("timeline.recoveredInChapter", {
-                                        n: entry.resolved_chapter,
+                                        n: readingNumberForChapterID(
+                                          entry.resolved_chapter_id,
+                                        ),
                                       })}
                                     </span>
                                   )}

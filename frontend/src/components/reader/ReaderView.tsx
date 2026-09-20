@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -22,6 +22,8 @@ import { useReaderPerspectives } from "./useReaderPerspectives";
 import { useDeleteReaderPerspective } from "./useDeleteReaderPerspective";
 import { useCreateReaderPerspective } from "./useCreateReaderPerspective";
 import { useUpdateReaderPerspective } from "./useUpdateReaderPerspective";
+import { useChapters } from "@/components/chapter/useChapters";
+import { buildChapterReferenceMap } from "@/components/chapter/chapterReferenceMap";
 
 interface Props {
   novelId: number;
@@ -64,16 +66,16 @@ type EditForm = {
   type: string;
   content: string;
   related_truth: string;
-  planted_chapter: number;
-  revealed_chapter: number;
+  planted_reading_number: number;
+  revealed_reading_number: number;
 };
 
 const EMPTY_FORM: EditForm = {
   type: "known",
   content: "",
   related_truth: "",
-  planted_chapter: 1,
-  revealed_chapter: 0,
+  planted_reading_number: 1,
+  revealed_reading_number: 0,
 };
 
 function typeMeta(type: string, t: (key: string) => string) {
@@ -119,6 +121,11 @@ export default function ReaderView({ novelId }: Props) {
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不挂 useEffect。
   const entriesQuery = useReaderPerspectives(novelId);
   const entries = entriesQuery.data ?? [];
+  const { data: chapters = [] } = useChapters(novelId);
+  const chapterReferences = useMemo(
+    () => buildChapterReferenceMap(chapters),
+    [chapters],
+  );
   const loading = entriesQuery.isLoading;
   const loadFailed = entriesQuery.isError;
   // 4.5.2/4.5.3: CRUD 走 mutation，deleting/saving 由 mutation.isPending 推导（不再用 useState）。
@@ -139,21 +146,29 @@ export default function ReaderView({ novelId }: Props) {
   const [form, setForm] = useState<EditForm>(EMPTY_FORM);
   const [deleteTarget, setDeleteTarget] = useState<number | null>(null);
 
+  const readingNumberForChapterID = useCallback(
+    (chapterID: number | undefined) =>
+      chapterReferences.readingNumberByChapterID.get(chapterID ?? 0) ?? 0,
+    [chapterReferences],
+  );
+
   // 4.5.1: entries 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   // 保持原语义：(prev) => prev || maxCh（仅当 prev 为 0 时才设，不覆盖 focusId 联动已设的值）。
   useEffect(() => {
     if (entries.length > 0) {
-      const maxCh = Math.max(...entries.map((e) => e.planted_chapter));
+      const maxCh = Math.max(
+        ...entries.map((e) => readingNumberForChapterID(e.planted_chapter_id)),
+      );
       if (maxCh > 0) setWindowCenter((prev) => prev || maxCh);
     }
-  }, [entries]);
+  }, [entries, readingNumberForChapterID]);
 
   // 4b: focus 定位——窗口对齐 + 自动展开 + 声明式高亮 + 滚动。
   useEffect(() => {
     if (!focusId || focusId <= 0 || entries.length === 0) return;
     const entry = entries.find((e) => e.id === focusId);
     if (!entry) return;
-    setWindowCenter(entry.planted_chapter);
+    setWindowCenter(readingNumberForChapterID(entry.planted_chapter_id));
     setExpandedId(focusId);
     setHighlightedId(focusId);
     document
@@ -161,28 +176,28 @@ export default function ReaderView({ novelId }: Props) {
       ?.scrollIntoView({ behavior: "smooth", block: "center" });
     const timer = setTimeout(() => setHighlightedId(null), 2000);
     return () => clearTimeout(timer);
-  }, [focusId, entries, focus?.nonce]);
+  }, [focusId, entries, focus?.nonce, readingNumberForChapterID]);
 
   const filtered = useMemo(() => {
     let items = entries;
     if (typeFilter !== "all")
       items = items.filter((e) => e.type === typeFilter);
     if (statusFilter === "unrevealed")
-      items = items.filter((e) => e.revealed_chapter === 0);
+      items = items.filter((e) => e.revealed_chapter_id == null);
     if (statusFilter === "revealed")
-      items = items.filter((e) => e.revealed_chapter > 0);
+      items = items.filter((e) => e.revealed_chapter_id != null);
     return items;
   }, [entries, typeFilter, statusFilter]);
 
   const groupedDesc = useMemo(() => {
     const map = new Map<number, reader.ReaderPerspective[]>();
     for (const e of filtered) {
-      const ch = e.planted_chapter;
+      const ch = readingNumberForChapterID(e.planted_chapter_id);
       if (!map.has(ch)) map.set(ch, []);
       map.get(ch)!.push(e);
     }
     return [...map.entries()].sort(([a], [b]) => b - a);
-  }, [filtered]);
+  }, [filtered, readingNumberForChapterID]);
 
   const windowFrom = Math.max(1, windowCenter - WINDOW);
   const windowTo = windowCenter;
@@ -207,7 +222,10 @@ export default function ReaderView({ novelId }: Props) {
   // ── CRUD handlers ────────────────────────────────────
 
   function openCreate() {
-    setForm({ ...EMPTY_FORM, planted_chapter: Math.max(1, windowCenter) });
+    setForm({
+      ...EMPTY_FORM,
+      planted_reading_number: Math.max(1, windowCenter),
+    });
     setEditMode({ type: "create" });
   }
 
@@ -216,8 +234,10 @@ export default function ReaderView({ novelId }: Props) {
       type: item.type,
       content: item.content,
       related_truth: item.related_truth || "",
-      planted_chapter: item.planted_chapter,
-      revealed_chapter: item.revealed_chapter,
+      planted_reading_number: readingNumberForChapterID(item.planted_chapter_id),
+      revealed_reading_number: readingNumberForChapterID(
+        item.revealed_chapter_id,
+      ),
     });
     setEditMode({ type: "edit", item });
   }
@@ -231,14 +251,31 @@ export default function ReaderView({ novelId }: Props) {
       toastError(t("reader.pleaseSelectType"));
       return;
     }
+    const plantedChapterID = chapterReferences.chapterIDByReadingNumber.get(
+      form.planted_reading_number,
+    );
+    if (plantedChapterID == null) {
+      toastError(t("reader.chapterNotFound"));
+      return;
+    }
+    const revealedChapterID =
+      form.revealed_reading_number > 0
+        ? chapterReferences.chapterIDByReadingNumber.get(
+            form.revealed_reading_number,
+          )
+        : undefined;
+    if (form.revealed_reading_number > 0 && revealedChapterID == null) {
+      toastError(t("reader.chapterNotFound"));
+      return;
+    }
     // 4.5.3: 走 mutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
     try {
       const created = await createMutation.mutateAsync({
         type: form.type,
         content: form.content,
-        planted_chapter: form.planted_chapter,
+        planted_chapter_id: plantedChapterID,
         related_truth: form.related_truth,
-        revealed_chapter: form.revealed_chapter,
+        revealed_chapter_id: revealedChapterID,
       });
       setEditMode(null);
       setForm(EMPTY_FORM);
@@ -255,6 +292,23 @@ export default function ReaderView({ novelId }: Props) {
       toastError(t("reader.pleaseEnterContent"));
       return;
     }
+    const plantedChapterID = chapterReferences.chapterIDByReadingNumber.get(
+      form.planted_reading_number,
+    );
+    if (plantedChapterID == null) {
+      toastError(t("reader.chapterNotFound"));
+      return;
+    }
+    const revealedChapterID =
+      form.revealed_reading_number > 0
+        ? chapterReferences.chapterIDByReadingNumber.get(
+            form.revealed_reading_number,
+          )
+        : undefined;
+    if (form.revealed_reading_number > 0 && revealedChapterID == null) {
+      toastError(t("reader.chapterNotFound"));
+      return;
+    }
     const entryId = editMode.item.id;
     // 4.5.3: 走 mutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
     // 全量回传 input 所有字段（§6 等价 PUT）。
@@ -265,8 +319,8 @@ export default function ReaderView({ novelId }: Props) {
           type: form.type,
           content: form.content,
           related_truth: form.related_truth,
-          planted_chapter: form.planted_chapter,
-          revealed_chapter: form.revealed_chapter,
+          planted_chapter_id: plantedChapterID,
+          revealed_chapter_id: revealedChapterID,
         },
       });
       setEditMode(null);
@@ -297,7 +351,7 @@ export default function ReaderView({ novelId }: Props) {
 
   async function handleQuickReveal(item: reader.ReaderPerspective) {
     // 4.5.3: 走 updateMutation（onSuccess 失效 reader），删 setSaving/bumpRefresh。
-    // 全量回传 input 所有字段（§6 等价 PUT）：其他字段传 item 原值，revealed_chapter 传 item.planted_chapter（标记已揭示）。
+    // 全量回传 input 所有字段（§6 等价 PUT）：其他字段传 item 原值，揭示章节设为种下章节。
     try {
       await updateMutation.mutateAsync({
         id: item.id,
@@ -305,8 +359,8 @@ export default function ReaderView({ novelId }: Props) {
           type: item.type,
           content: item.content,
           related_truth: item.related_truth || "",
-          planted_chapter: item.planted_chapter,
-          revealed_chapter: item.planted_chapter,
+          planted_chapter_id: item.planted_chapter_id,
+          revealed_chapter_id: item.planted_chapter_id,
         },
       });
     } catch (err) {
@@ -373,11 +427,11 @@ export default function ReaderView({ novelId }: Props) {
             </label>
             <input
               type="number"
-              value={form.planted_chapter}
+              value={form.planted_reading_number}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  planted_chapter: parseInt(e.target.value) || 1,
+                  planted_reading_number: parseInt(e.target.value) || 1,
                 }))
               }
               min={1}
@@ -390,11 +444,11 @@ export default function ReaderView({ novelId }: Props) {
             </label>
             <input
               type="number"
-              value={form.revealed_chapter}
+              value={form.revealed_reading_number}
               onChange={(e) =>
                 setForm((f) => ({
                   ...f,
-                  revealed_chapter: parseInt(e.target.value) || 0,
+                  revealed_reading_number: parseInt(e.target.value) || 0,
                 }))
               }
               min={0}
@@ -497,12 +551,12 @@ export default function ReaderView({ novelId }: Props) {
                 {t(f.label)}
                 {f.key === "unrevealed" && (
                   <span className="ml-1 text-muted-foreground">
-                    ({entries.filter((e) => e.revealed_chapter === 0).length})
+                    ({entries.filter((e) => e.revealed_chapter_id == null).length})
                   </span>
                 )}
                 {f.key === "revealed" && (
                   <span className="ml-1 text-muted-foreground">
-                    ({entries.filter((e) => e.revealed_chapter > 0).length})
+                    ({entries.filter((e) => e.revealed_chapter_id != null).length})
                   </span>
                 )}
               </button>
@@ -595,7 +649,7 @@ export default function ReaderView({ novelId }: Props) {
                         editMode?.type === "edit" &&
                         editMode.item.id === entry.id;
                       const isExpanded = expandedId === entry.id && !isEditing;
-                      const isRevealed = entry.revealed_chapter > 0;
+                      const isRevealed = entry.revealed_chapter_id != null;
 
                       return isEditing ? (
                         <div
@@ -678,7 +732,9 @@ export default function ReaderView({ novelId }: Props) {
                                 {isRevealed ? (
                                   <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium bg-tag-green text-tag-green-foreground">
                                     {t("reader.recoveredInChapter", {
-                                      n: entry.revealed_chapter,
+                                      n: readingNumberForChapterID(
+                                        entry.revealed_chapter_id,
+                                      ),
                                     })}
                                   </span>
                                 ) : (
@@ -690,7 +746,9 @@ export default function ReaderView({ novelId }: Props) {
                               <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
                                 <span>
                                   {t("reader.plantedInChapter", {
-                                    n: entry.planted_chapter,
+                                    n: readingNumberForChapterID(
+                                      entry.planted_chapter_id,
+                                    ),
                                   })}
                                 </span>
                                 {entry.related_truth && (
@@ -759,14 +817,16 @@ export default function ReaderView({ novelId }: Props) {
                                   </p>
                                 </div>
                               )}
-                              {entry.revealed_chapter > 0 && (
+                              {entry.revealed_chapter_id != null && (
                                 <div>
                                   <p className="text-xs text-muted-foreground mb-1">
                                     {t("reader.recoveredChapterLabel")}
                                   </p>
                                   <p className="text-xs text-muted-foreground">
                                     {t("reader.chapterN", {
-                                      n: entry.revealed_chapter,
+                                      n: readingNumberForChapterID(
+                                        entry.revealed_chapter_id,
+                                      ),
                                     })}
                                   </p>
                                 </div>

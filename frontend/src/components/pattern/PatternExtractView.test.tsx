@@ -130,12 +130,12 @@ describe("PatternExtractView", () => {
 
   it("displays chapter cards", async () => {
     mockGetChapters.mockResolvedValue([
-      { id: 1, chapter_number: 1, title: "Ch1", word_count: 100 },
-      { id: 2, chapter_number: 2, title: "Ch2", word_count: 200 },
-      { id: 3, chapter_number: 3, title: "Ch3", word_count: 300 },
-      { id: 4, chapter_number: 4, title: "Ch4", word_count: 400 },
-      { id: 5, chapter_number: 5, title: "Ch5", word_count: 500 },
-      { id: 6, chapter_number: 6, title: "Ch6", word_count: 600 },
+      { id: 1, reading_number: 1, title: "Ch1", word_count: 100 },
+      { id: 2, reading_number: 2, title: "Ch2", word_count: 200 },
+      { id: 3, reading_number: 3, title: "Ch3", word_count: 300 },
+      { id: 4, reading_number: 4, title: "Ch4", word_count: 400 },
+      { id: 5, reading_number: 5, title: "Ch5", word_count: 500 },
+      { id: 6, reading_number: 6, title: "Ch6", word_count: 600 },
     ]);
     mockGetModels.mockResolvedValue([
       {
@@ -192,10 +192,10 @@ describe("PatternExtractView", () => {
 
   it("disables extract button when fewer than 5 chapters", async () => {
     mockGetChapters.mockResolvedValue([
-      { id: 1, chapter_number: 1, title: "Ch1", word_count: 100 },
-      { id: 2, chapter_number: 2, title: "Ch2", word_count: 200 },
-      { id: 3, chapter_number: 3, title: "Ch3", word_count: 300 },
-      { id: 4, chapter_number: 4, title: "Ch4", word_count: 400 },
+      { id: 1, reading_number: 1, title: "Ch1", word_count: 100 },
+      { id: 2, reading_number: 2, title: "Ch2", word_count: 200 },
+      { id: 3, reading_number: 3, title: "Ch3", word_count: 300 },
+      { id: 4, reading_number: 4, title: "Ch4", word_count: 400 },
     ]);
     mockGetModels.mockResolvedValue([
       {
@@ -215,12 +215,12 @@ describe("PatternExtractView", () => {
   it("switches to session view when extract clicked", async () => {
     const user = userEvent.setup();
     mockGetChapters.mockResolvedValue([
-      { id: 1, chapter_number: 1, title: "Ch1", word_count: 100 },
-      { id: 2, chapter_number: 2, title: "Ch2", word_count: 200 },
-      { id: 3, chapter_number: 3, title: "Ch3", word_count: 300 },
-      { id: 4, chapter_number: 4, title: "Ch4", word_count: 400 },
-      { id: 5, chapter_number: 5, title: "Ch5", word_count: 500 },
-      { id: 6, chapter_number: 6, title: "Ch6", word_count: 600 },
+      { id: 1, reading_number: 1, title: "Ch1", word_count: 100 },
+      { id: 2, reading_number: 2, title: "Ch2", word_count: 200 },
+      { id: 3, reading_number: 3, title: "Ch3", word_count: 300 },
+      { id: 4, reading_number: 4, title: "Ch4", word_count: 400 },
+      { id: 5, reading_number: 5, title: "Ch5", word_count: 500 },
+      { id: 6, reading_number: 6, title: "Ch6", word_count: 600 },
     ]);
     mockGetModels.mockResolvedValue([
       {
