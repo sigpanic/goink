@@ -23,8 +23,8 @@ func testNovel() *novel.Novel {
 
 func testChapters() []ChapterWithContent {
 	return []ChapterWithContent{
-		{Chapter: chapter.Chapter{ChapterNumber: 1, Title: "开头"}, Content: "这是第一章的正文内容。\n\n第二段。"},
-		{Chapter: chapter.Chapter{ChapterNumber: 2, Title: "发展"}, Content: "第二章内容。\n\n继续推进剧情。"},
+		{Chapter: chapter.Chapter{ID: 42, ReadingNumber: 1, Title: "开头"}, Content: "这是第一章的正文内容。\n\n第二段。"},
+		{Chapter: chapter.Chapter{ID: 84, ReadingNumber: 2, Title: "发展"}, Content: "第二章内容。\n\n继续推进剧情。"},
 	}
 }
 
@@ -69,7 +69,7 @@ func TestExportMarkdown(t *testing.T) {
 
 func TestExportMarkdown_ChapterWithoutTitle(t *testing.T) {
 	chs := []ChapterWithContent{
-		{Chapter: chapter.Chapter{ChapterNumber: 3, Title: ""}, Content: "第三章内容。"},
+		{Chapter: chapter.Chapter{ID: 99, ReadingNumber: 3, Title: ""}, Content: "第三章内容。"},
 	}
 	data, _, err := ExportNovel(testNovel(), chs, "markdown", "")
 	if err != nil {
