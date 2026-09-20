@@ -26,7 +26,7 @@ import (
 
 // EditArgs 是 edit 工具的参数。
 type EditArgs struct {
-	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
+	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；卷纲：volumes/{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
 	ChangeType string `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
 	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
 	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文（必填，传空会报错；若要清空整个文件请改用 line_range_replace(1, total_lines, \"\")，total_lines 从 read 返回获取）；search_replace 时为替换后的文本（传空则删除匹配到的文本）；line_range_replace 时为替换该行范围的新内容（传空则删除该范围行）" validate:"omitempty"`
@@ -57,6 +57,10 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 		return &ToolResult{Success: false, Error: "内置 skill 为只读，不可编辑"}, nil
 	}
 
+	if volumeID, ok := git.ParseVolumePath(a.Path); ok {
+		return t.editVolumeOutline(ctx, a, tc, volumeID)
+	}
+
 	// 章节/大纲路径走章节流程；其余（goink.md、技能文件）走通用文件流程
 	if ref, ok := git.ParseChapterLikePath(a.Path); ok {
 		return t.editChapterLike(ctx, a, tc, ref)
@@ -68,7 +72,7 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 }
 
 // invalidPathHint 是 edit/read 共用的非法路径提示。
-const invalidPathHint = "无效文件路径。章节正文 chapters/id_{id}.md、大纲 outlines/id_{id}.md、新建 chapters/{卷ID}/new.md 或 chapters/new.md、outlines/{卷ID}/new.md 或 outlines/new.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"
+const invalidPathHint = "无效文件路径。章节正文 chapters/id_{id}.md、大纲 outlines/id_{id}.md、卷纲 volumes/{卷ID}.md、新建 chapters/{卷ID}/new.md 或 chapters/new.md、outlines/{卷ID}/new.md 或 outlines/new.md、goink.md、skills/<name>.md、~/.goink/skills/<name>.md"
 
 // readFileForEdit 读取待编辑文件的当前内容。
 // 文件不存在时 full_replace 视为从空文件创建，其余模式返回 os.ErrNotExist。
@@ -236,6 +240,18 @@ func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContex
 		data["after"] = linePreview(proposed, a.StartLine, afterEnd)
 	}
 	return &ToolResult{Success: true, Data: data, Inject: injects}, nil
+}
+
+// editVolumeOutline 编辑已有卷的卷纲文件。文件可首次由 full_replace 创建，
+// 但卷记录必须存在且属于当前小说，避免落盘孤儿卷纲。
+func (t *EditTool) editVolumeOutline(ctx context.Context, a *EditArgs, tc ToolContext, volumeID int64) (*ToolResult, error) {
+	if _, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).GetByID(ctx, nil, tc.NovelID, volumeID); err != nil {
+		if errors.Is(err, volume.ErrNotFound) {
+			return &ToolResult{Success: false, Error: err.Error()}, nil
+		}
+		return nil, fmt.Errorf("query volume: %w", err)
+	}
+	return t.editPlainFile(ctx, a, tc)
 }
 
 // editChapterLike 编辑章节正文或大纲（含 new.md 新建通道）。
@@ -701,6 +717,9 @@ func validPath(p string) bool {
 	if _, ok := git.ParseChapterLikePath(p); ok {
 		return true
 	}
+	if _, ok := git.ParseVolumePath(p); ok {
+		return true
+	}
 	return plainPathRe.MatchString(p)
 }
 
@@ -760,9 +779,10 @@ func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.C
 
 // ── 工具描述 ──────────────────────────────────────────────
 
-const editDescription = `编辑小说文件（章节正文、大纲、故事状态 goink.md 或技能文件）。支持三种编辑模式：full_replace（全文替换）、search_replace（查找替换）、line_range_replace（行范围替换）。
+const editDescription = `编辑小说文件（章节正文、大纲、卷纲、故事状态 goink.md 或技能文件）。支持三种编辑模式：full_replace（全文替换）、search_replace（查找替换）、line_range_replace（行范围替换）。
 
 新建章节或大纲：path 使用 new.md 形式（格式见 path 参数说明），且只能 full_replace；成功后返回值携带分配的 chapter_id、volume_id 与物理路径，后续编辑一律使用返回的物理路径。
+卷纲：path 使用 volumes/{卷ID}.md；卷必须存在，full_replace 可首次创建对应卷纲文件。
 
 各模式必填参数：
 - full_replace：new_content
@@ -781,7 +801,7 @@ const editDescription = `编辑小说文件（章节正文、大纲、故事状�
 
 // ReadArgs 是 read 工具的参数。
 type ReadArgs struct {
-	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md；内置技能 /builtin/skills/<name>.md（只读）" validate:"required"`
+	Path         string `json:"path" jsonschema:"required,description=要读取的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；卷纲：volumes/{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md；内置技能 /builtin/skills/<name>.md（只读）" validate:"required"`
 	IncludeLines *bool  `json:"include_lines" jsonschema:"default=true,description=是否包含行号前缀（如 123|）。默认 true，用于精确引用和行范围编辑。传 false 获取纯文本"`
 	StartLine    int    `json:"start_line" jsonschema:"default=1,description=起始行号 1-based 含此行，必须 <= end_line" validate:"omitempty,min=1"`
 	EndLine      int    `json:"end_line" jsonschema:"default=2000,description=结束行号 1-based 含此行，超出自动截到文末。不传或传 0 均按默认 2000 处理" validate:"omitempty,min=0"`
@@ -806,6 +826,10 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	// builtin skill 走 store 内存
 	if strings.HasPrefix(a.Path, "/builtin/skills/") {
 		return t.readBuiltinSkill(a, tc)
+	}
+
+	if volumeID, ok := git.ParseVolumePath(a.Path); ok {
+		return t.readVolumeOutline(ctx, a, tc, volumeID)
 	}
 
 	// 章节/大纲按 id 扁平路径读取（两级路径归一化）
@@ -858,6 +882,27 @@ func (t *ReadTool) readChapterLike(ctx context.Context, a *ReadArgs, tc ToolCont
 	}
 
 	return renderReadResult(a, physical, display, content)
+}
+
+// readVolumeOutline 读取已有卷的卷纲文件，并以卷名作为展示标题。
+func (t *ReadTool) readVolumeOutline(ctx context.Context, a *ReadArgs, tc ToolContext, volumeID int64) (*ToolResult, error) {
+	v, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).GetByID(ctx, nil, tc.NovelID, volumeID)
+	if err != nil {
+		if errors.Is(err, volume.ErrNotFound) {
+			return &ToolResult{Success: false, Error: err.Error()}, nil
+		}
+		return nil, fmt.Errorf("query volume: %w", err)
+	}
+
+	path := git.VolumePath(volumeID)
+	content, err := git.ReadFile(tc.NovelID, path)
+	if err != nil {
+		if res, handled := fileReadError(path, err); handled {
+			return res, nil
+		}
+		return nil, fmt.Errorf("read file %s: %w", path, err)
+	}
+	return renderReadResult(a, path, v.Name+"（卷纲）", content)
 }
 
 // renderReadResult 按行窗口切片并渲染读取结果（行号前缀、截断标记）。
@@ -939,7 +984,7 @@ func (t *ReadTool) readBuiltinSkill(a *ReadArgs, tc ToolContext) (*ToolResult, e
 
 // ── 工具描述 ──────────────────────────────────────────────
 
-const readDescription = `读取小说文件或技能文件。
+const readDescription = `读取小说文件、卷纲或技能文件。
 
 特性：
 - 默认添加行号前缀，方便后续 edit 工具进行 line_range_replace 和 search_replace

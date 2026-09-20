@@ -55,6 +55,7 @@ type ChapterPathRef struct {
 }
 
 var chapterLikePathRe = regexp.MustCompile(`^(chapters|outlines)/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
+var volumePathRe = regexp.MustCompile(`^volumes/([1-9][0-9]*)\.md$`)
 
 // ParseChapterLikePath 解析 rw_tools 支持的章节正文或大纲虚拟路径。
 // 支持扁平主格式和带卷 ID 的容错别名；旧的纯数字章节号路径不被接受。
@@ -83,6 +84,19 @@ func ParseChapterLikePath(path string) (ChapterPathRef, bool) {
 	}
 	ref.ID = id
 	return ref, true
+}
+
+// ParseVolumePath 解析卷纲虚拟路径。卷 ID 必须是规范的正整数表示。
+func ParseVolumePath(path string) (int64, bool) {
+	matches := volumePathRe.FindStringSubmatch(path)
+	if matches == nil {
+		return 0, false
+	}
+	volumeID, err := strconv.ParseInt(matches[1], 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return volumeID, true
 }
 
 // ── 文件读写 ──────────────────────────────────────────────

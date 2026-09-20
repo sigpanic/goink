@@ -44,3 +44,29 @@ func TestParseChapterLikePath(t *testing.T) {
 		})
 	}
 }
+
+func TestParseVolumePath(t *testing.T) {
+	cases := []struct {
+		name string
+		path string
+		want int64
+		ok   bool
+	}{
+		{"volume outline", "volumes/12.md", 12, true},
+		{"large ID", "volumes/999999999999.md", 999999999999, true},
+		{"zero ID", "volumes/0.md", 0, false},
+		{"leading zero", "volumes/012.md", 0, false},
+		{"negative ID", "volumes/-1.md", 0, false},
+		{"chapter path", "chapters/id_12.md", 0, false},
+		{"wrong extension", "volumes/12.txt", 0, false},
+		{"overflow", "volumes/99999999999999999999.md", 0, false},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := ParseVolumePath(tt.path)
+			if ok != tt.ok || got != tt.want {
+				t.Errorf("ParseVolumePath(%q) = (%d, %t), want (%d, %t)", tt.path, got, ok, tt.want, tt.ok)
+			}
+		})
+	}
+}

@@ -477,6 +477,48 @@ func TestReadNewMD_Rejected(t *testing.T) {
 	}
 }
 
+func TestVolumeOutlineReadWrite(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	volumeID := seedVolume(t, db, tc.NovelID, "第一卷", 1)
+	path := fmt.Sprintf("volumes/%d.md", volumeID)
+
+	created := execEdit(t, ctx, tc, editArgs(path, "full_replace", "# 入城卷\n- 目标：进京"))
+	if !created.Success {
+		t.Fatalf("create volume outline failed: %s", created.Error)
+	}
+	if got := created.Data["path"]; got != path {
+		t.Errorf("path = %v, want %s", got, path)
+	}
+	if got := mustReadFile(t, novelFile(t, tc.NovelID, path)); got != "# 入城卷\n- 目标：进京" {
+		t.Errorf("volume outline = %q", got)
+	}
+
+	read := execRead(t, ctx, tc, path)
+	if !read.Success {
+		t.Fatalf("read volume outline failed: %s", read.Error)
+	}
+	if got := read.Data["display"]; got != "第一卷（卷纲）" {
+		t.Errorf("display = %v, want 第一卷（卷纲）", got)
+	}
+	if got := read.Data["content"]; got != "1|# 入城卷\n2|- 目标：进京" {
+		t.Errorf("content = %q", got)
+	}
+	if got := chapterCount(t, db, tc.NovelID); got != 0 {
+		t.Errorf("chapter count = %d, want 0", got)
+	}
+}
+
+func TestVolumeOutlineRejectsUnknownVolume(t *testing.T) {
+	_, tc, ctx := setupRWEnv(t)
+	res := execEdit(t, ctx, tc, editArgs("volumes/99.md", "full_replace", "# 孤儿卷纲"))
+	if res.Success {
+		t.Fatal("expected unknown volume to be rejected")
+	}
+	if !contains(res.Error, "卷不存在") {
+		t.Errorf("error = %s, want missing volume error", res.Error)
+	}
+}
+
 func TestReadChapter_DisplayTitleAndTolerance(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	vol := seedVolume(t, db, 1, "第一卷", 1)
