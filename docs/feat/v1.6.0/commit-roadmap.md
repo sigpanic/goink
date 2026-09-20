@@ -92,7 +92,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回分页元数据及按卷分组的 Markdown 目录；每章展示稳定 id、实时 reading_number、标题和字数 | ❌ |
 | 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
 | 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ❌ |
-| 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id；delete_tools 同步 | ❌ |
+| 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
 
 ### L6 app 层
 

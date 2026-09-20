@@ -524,7 +524,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`，动态展示字段统一为 `ReadingNumber` / `reading_number`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量，并同步 RAG e2e；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时 `ReadingNumber` / `reading_number` + 卷名 | 🟡 进行中 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
-| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
+| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 以 id 过滤及关联、以实时 reading_number 展示；delete_tools 无旧编号引用 | ✅ 已完成 |
 | **L6 app 层** | `DeleteChapter`/`InsertChapter`/`MoveChapterToVolume`（含交叉引用检测拒绝）；volume CRUD（Create/Update/Delete/Get/Reorder）；`CreateChapter` 改走 volume store 分配 sort_order；`UpdateChapterTitle` 改按 id；novel export、content.go 同步 | ❌ 未做 |
 | **L7 前端** | 章节管理 tab（见第十二节） | ❌ 未做 |
 | **L1b 收尾** | migrate 1.7 DROP 旧 num 列（**先 DROP INDEX 再 DROP COLUMN**）；交叉引用 model 旧 num 字段在各自领域完成后移除；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
@@ -592,7 +592,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回分页元数据及按卷分组的 Markdown 目录；每章展示稳定 id、实时 reading_number、标题和字数 | ❌ |
 | 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
 | 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ❌ |
-| 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id；delete_tools 同步 | ❌ |
+| 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
 
 #### L6 app 层
 
