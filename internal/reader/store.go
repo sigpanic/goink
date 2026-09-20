@@ -26,7 +26,7 @@ type ListByNovelOptions struct {
 	PageParams storage.PageParams
 	Search     string // 空字符串=不过滤，按 content LIKE OR related_truth LIKE 模糊匹配
 	Type       string // 空字符串=不过滤，"known"/"suspense"/"misconception"
-	Order      string // 空字符串=默认 type, planted_chapter ASC
+	Order      string // 空字符串=默认 type, planted_chapter_id ASC
 }
 
 // ListByNovel 分页列出某小说的读者认知条目，支持搜索和按类型过滤。
@@ -51,7 +51,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 
 	order := opts.Order
 	if order == "" {
-		order = "type, planted_chapter ASC"
+		order = "type, planted_chapter_id ASC"
 	}
 	var items []ReaderPerspective
 	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&items).Error; err != nil {
@@ -67,8 +67,8 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 func (s *Store) ListActive(ctx context.Context, novelID int64) ([]ReaderPerspective, error) {
 	var items []ReaderPerspective
 	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND revealed_chapter = 0", novelID).
-		Order("type, planted_chapter ASC").
+		Where("novel_id = ? AND revealed_chapter_id IS NULL", novelID).
+		Order("type, planted_chapter_id ASC").
 		Find(&items).Error; err != nil {
 		return nil, fmt.Errorf("reader store: list active: %w", err)
 	}

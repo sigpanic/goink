@@ -166,7 +166,7 @@ func TestSearchEntities_Timeline(t *testing.T) {
 	svc := newTestService(db)
 	ctx := context.Background()
 
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三复仇", Content: "复仇之路", TargetChapter: 20, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三复仇", Content: "复仇之路", TargetReadingNumber: 20, Status: "pending"})
 
 	results := svc.searchEntities(ctx, 1, "复仇")
 	if len(results) != 1 {
@@ -291,7 +291,7 @@ func TestSearchAll_EntitiesOnly(t *testing.T) {
 	ctx := context.Background()
 
 	db.Create(&character.Character{NovelID: 1, Name: "张三"})
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三出场", Content: "", TargetChapter: 5, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三出场", Content: "", TargetReadingNumber: 5, Status: "pending"})
 
 	results, err := svc.SearchAll(ctx, 1, "张三")
 	if err != nil {
@@ -444,7 +444,7 @@ func TestSearchAll_ResultOrder(t *testing.T) {
 
 	// 创建多类型数据，验证实体结果在 RAG 之前
 	db.Create(&character.Character{NovelID: 1, Name: "测试角色"})
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "user_directive", Title: "测试指令", Content: "", TargetChapter: 3, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "user_directive", Title: "测试指令", Content: "", TargetReadingNumber: 3, Status: "pending"})
 
 	results, err := svc.SearchAll(ctx, 1, "测试")
 	if err != nil {
@@ -623,12 +623,12 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "foreshadowing", Status: "pending",
 		Title: "青龙刀的传说", Content: "王五提起传说中的青龙刀，暗示其与张三的身世有关",
-		TargetChapter: 5, SourceChapter: 1, Importance: 5, Source: "ai",
+		TargetReadingNumber: 5, Importance: 5, Source: "ai",
 	})
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "user_directive", Status: "pending",
 		Title: "决战黑木崖", Content: "张三需要在黑木崖与李四展开最终决战",
-		TargetChapter: 10, Importance: 4, Source: "user",
+		TargetReadingNumber: 10, Importance: 4, Source: "user",
 	})
 
 	// ── 故事弧 ──────────────────────────────────────────

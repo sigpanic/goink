@@ -23,12 +23,10 @@ type tableCols struct {
 // vec_novel_{id} 不在此列：commit 1.3 已用 DROP 重建 + RebuildAll 覆盖度检查处理。
 var crossRefTables = []tableCols{
 	{table: "time_entries", pairs: []colPair{
-		{"target_chapter", "target_chapter_id"},
 		{"source_chapter", "source_chapter_id"},
 		{"resolved_chapter", "resolved_chapter_id"},
 	}},
 	{table: "arc_nodes", pairs: []colPair{
-		{"target_chapter", "target_chapter_id"},
 		{"actual_chapter", "actual_chapter_id"},
 	}},
 	{table: "reader_perspectives", pairs: []colPair{
@@ -51,6 +49,9 @@ var crossRefTables = []tableCols{
 //   - 反查失败（该章节号不存在，如 LLM 估算的未来章 / 已删除章节）→ id 保持 NULL + 汇总告警
 //   - 列不存在（新库 / 尚未加列）→ 跳过该列
 func migrateCrossRefData(db *gorm.DB, log *slog.Logger) error {
+	if !db.Migrator().HasTable("chapters") || !db.Migrator().HasColumn("chapters", "chapter_number") {
+		return nil
+	}
 	// chapters 反查映射：(novel_id, chapter_number) → id。（novel_id, chapter_number）有唯一索引，无歧义。
 	type chKey struct {
 		novelID int64

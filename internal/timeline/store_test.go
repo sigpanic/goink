@@ -35,10 +35,10 @@ func TestTlListByNovel_All(t *testing.T) {
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
 
-	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔A", TargetChapter: 10, Category: "foreshadowing", Status: "pending", Importance: 3})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔B", TargetChapter: 20, Category: "foreshadowing", Status: "pending", Importance: 5})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔C", TargetChapter: 30, Category: "foreshadowing", Status: "pending", Importance: 1})
-	db.Create(&TimelineEntry{NovelID: 2, Title: "其他小说", TargetChapter: 1, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔A", TargetReadingNumber: 10, Category: "foreshadowing", Status: "pending", Importance: 3})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔B", TargetReadingNumber: 20, Category: "foreshadowing", Status: "pending", Importance: 5})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "伏笔C", TargetReadingNumber: 30, Category: "foreshadowing", Status: "pending", Importance: 1})
+	db.Create(&TimelineEntry{NovelID: 2, Title: "其他小说", TargetReadingNumber: 1, Status: "pending"})
 
 	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
 		PageParams: storage.PageParams{Size: -1},
@@ -78,7 +78,7 @@ func TestTlListBefore(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 1; i <= 10; i++ {
-		db.Create(&TimelineEntry{NovelID: 1, Title: "e", TargetChapter: i, Status: "pending"})
+		db.Create(&TimelineEntry{NovelID: 1, Title: "e", TargetReadingNumber: i, Status: "pending"})
 	}
 
 	result, _ := s.ListBefore(ctx, 1, 6, 3)
@@ -86,8 +86,8 @@ func TestTlListBefore(t *testing.T) {
 		t.Errorf("expected 3, got %d", len(result))
 	}
 	for _, e := range result {
-		if e.TargetChapter >= 6 {
-			t.Errorf("all should be < 6, got target=%d", e.TargetChapter)
+		if e.TargetReadingNumber >= 6 {
+			t.Errorf("all should be < 6, got target=%d", e.TargetReadingNumber)
 		}
 	}
 }
@@ -97,9 +97,9 @@ func TestTlListPendingBefore(t *testing.T) {
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
 
-	db.Create(&TimelineEntry{NovelID: 1, Title: "pending", TargetChapter: 5, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "resolved", TargetChapter: 3, Status: "resolved"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "future", TargetChapter: 10, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "pending", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "resolved", TargetReadingNumber: 3, Status: "resolved"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "future", TargetReadingNumber: 10, Status: "pending"})
 
 	result, _ := s.ListPendingBefore(ctx, 1, 8)
 	if len(result) != 1 {
@@ -112,9 +112,9 @@ func TestTlListAfter(t *testing.T) {
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
 
-	db.Create(&TimelineEntry{NovelID: 1, Title: "past", TargetChapter: 5, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "now", TargetChapter: 10, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "future", TargetChapter: 15, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "past", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "now", TargetReadingNumber: 10, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "future", TargetReadingNumber: 15, Status: "pending"})
 
 	result, _ := s.ListAfter(ctx, 1, 10)
 	if len(result) != 2 {
@@ -128,7 +128,7 @@ func TestTlListByNovel_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 1; i <= 5; i++ {
-		db.Create(&TimelineEntry{NovelID: 1, Title: "e", TargetChapter: i, Status: "pending"})
+		db.Create(&TimelineEntry{NovelID: 1, Title: "e", TargetReadingNumber: i, Status: "pending"})
 	}
 
 	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
@@ -150,7 +150,7 @@ func TestTlCreateEntry(t *testing.T) {
 
 	entry := TimelineEntry{
 		NovelID: 1, Title: "伏笔A", Category: "foreshadowing",
-		TargetChapter: 10, Importance: 5, Status: "pending",
+		TargetReadingNumber: 10, Importance: 5, Status: "pending",
 		DetailJSON: `{"key":"val"}`,
 	}
 	if err := db.WithContext(ctx).Create(&entry).Error; err != nil {
@@ -174,7 +174,7 @@ func TestTlUpdateEntry(t *testing.T) {
 	db := openTlDB(t)
 	ctx := context.Background()
 
-	entry := TimelineEntry{NovelID: 1, Title: "旧伏笔", Content: "旧内容", Status: "pending", TargetChapter: 5}
+	entry := TimelineEntry{NovelID: 1, Title: "旧伏笔", Content: "旧内容", Status: "pending", TargetReadingNumber: 5}
 	db.WithContext(ctx).Create(&entry)
 
 	type UpdateInput struct {
@@ -201,7 +201,7 @@ func TestTlDeleteEntry(t *testing.T) {
 	db := openTlDB(t)
 	ctx := context.Background()
 
-	entry := TimelineEntry{NovelID: 1, Title: "待删伏笔", Category: "foreshadowing", TargetChapter: 3, Status: "pending"}
+	entry := TimelineEntry{NovelID: 1, Title: "待删伏笔", Category: "foreshadowing", TargetReadingNumber: 3, Status: "pending"}
 	db.WithContext(ctx).Create(&entry)
 
 	if err := db.WithContext(ctx).Where("id = ?", entry.ID).Delete(&TimelineEntry{}).Error; err != nil {
@@ -221,9 +221,9 @@ func TestTlListByNovel_Search(t *testing.T) {
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
 
-	db.Create(&TimelineEntry{NovelID: 1, Title: "复仇", TargetChapter: 5, Category: "foreshadowing", Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "决战", Content: "复仇的高潮", TargetChapter: 10, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "尾声", TargetChapter: 15, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "复仇", TargetReadingNumber: 5, Category: "foreshadowing", Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "决战", Content: "复仇的高潮", TargetReadingNumber: 10, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "尾声", TargetReadingNumber: 15, Status: "pending"})
 
 	// 搜 title（"复仇"命中 title 字段一次）
 	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Search: "复仇"})
@@ -249,9 +249,9 @@ func TestTlListByNovel_Order(t *testing.T) {
 	s := NewStore(db, testTlLogger())
 	ctx := context.Background()
 
-	db.Create(&TimelineEntry{NovelID: 1, Title: "C", TargetChapter: 15, Importance: 1, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "A", TargetChapter: 5, Importance: 5, Status: "pending"})
-	db.Create(&TimelineEntry{NovelID: 1, Title: "B", TargetChapter: 10, Importance: 3, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "C", TargetReadingNumber: 15, Importance: 1, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "A", TargetReadingNumber: 5, Importance: 5, Status: "pending"})
+	db.Create(&TimelineEntry{NovelID: 1, Title: "B", TargetReadingNumber: 10, Importance: 3, Status: "pending"})
 
 	// 默认排序：target_chapter ASC, importance DESC
 	r, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{

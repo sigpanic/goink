@@ -43,20 +43,32 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 			t.Fatalf("exec: %s\n%v", sql, err)
 		}
 	}
+	// 模拟 v1.6.0 前的持久化列；当前 model 只声明迁移后的字段。
+	for _, sql := range []string{
+		`ALTER TABLE chapters ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE time_entries ADD COLUMN target_chapter INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE time_entries ADD COLUMN source_chapter INTEGER DEFAULT 0`,
+		`ALTER TABLE time_entries ADD COLUMN resolved_chapter INTEGER DEFAULT 0`,
+		`ALTER TABLE arc_nodes ADD COLUMN target_chapter INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE arc_nodes ADD COLUMN actual_chapter INTEGER DEFAULT 0`,
+		`ALTER TABLE reader_perspectives ADD COLUMN planted_chapter INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE reader_perspectives ADD COLUMN revealed_chapter INTEGER DEFAULT 0`,
+		`ALTER TABLE character_relations ADD COLUMN chapter_number INTEGER`,
+	} {
+		exec(sql)
+	}
 
 	// 老数据：novel1 章 1/2/3（id 1/2/3），novel2 章 1（id 4，全局自增）
 	exec(`INSERT INTO novels (id, title) VALUES (1,'n1'),(2,'n2')`)
 	exec(`INSERT INTO chapters (id, novel_id, chapter_number, sort_order, title) VALUES
 		(1,1,1,0,'c1'),(2,1,2,0,'c2'),(3,1,3,0,'c3'),(4,2,1,0,'c1')`)
 
-	// time_entries：行1 正常反查（target=2→id2, source=1→id1, resolved=0 保持 NULL）；
-	// 行2 孤儿（target=99→NULL）+ 正常（source=3→id3, resolved=2→id2）；
-	// 行3 跨 novel（novel2 的 target=1→id4, source=1→id4）
+	// time_entries：target 保留为未来计划阅读位置；source/resolved 反查为稳定 ID。
 	exec(`INSERT INTO time_entries (id, novel_id, category, status, title, target_chapter, importance, source_chapter, resolved_chapter) VALUES
 		(1,1,'foreshadowing','pending','f1',2,3,1,0),
 		(2,1,'foreshadowing','resolved','f2',99,3,3,2),
 		(3,2,'foreshadowing','pending','f3',1,3,1,0)`)
-	// arc_nodes：行1 target=3→id3, actual=0 保持 NULL；行2 孤儿 target=99→NULL, actual=1→id1
+	// arc_nodes：target 保留为未来计划阅读位置，actual 反查为稳定 ID。
 	exec(`INSERT INTO arc_nodes (id, novel_id, story_arc_id, title, target_chapter, actual_chapter, status) VALUES
 		(1,1,1,'a1',3,0,'pending'),
 		(2,1,1,'a2',99,1,'pending')`)
@@ -88,20 +100,20 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 	}
 
 	// time_entries
-	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=1 AND target_chapter_id=2 AND source_chapter_id=1 AND resolved_chapter_id IS NULL`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=1 AND target_reading_number=2 AND source_chapter_id=1 AND resolved_chapter_id IS NULL`); n != 1 {
 		t.Fatalf("time_entries 行1 错误: n=%d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=2 AND target_chapter_id IS NULL AND source_chapter_id=3 AND resolved_chapter_id=2`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=2 AND target_reading_number=99 AND source_chapter_id=3 AND resolved_chapter_id=2`); n != 1 {
 		t.Fatalf("time_entries 行2（孤儿/填充）错误: n=%d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=3 AND target_chapter_id=4 AND source_chapter_id=4`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM time_entries WHERE id=3 AND target_reading_number=1 AND source_chapter_id=4`); n != 1 {
 		t.Fatalf("time_entries 行3（跨 novel）错误: n=%d", n)
 	}
 	// arc_nodes
-	if n := count(`SELECT COUNT(*) FROM arc_nodes WHERE id=1 AND target_chapter_id=3 AND actual_chapter_id IS NULL`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM arc_nodes WHERE id=1 AND target_reading_number=3 AND actual_chapter_id IS NULL`); n != 1 {
 		t.Fatalf("arc_nodes 行1 错误: n=%d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM arc_nodes WHERE id=2 AND target_chapter_id IS NULL AND actual_chapter_id=1`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM arc_nodes WHERE id=2 AND target_reading_number=99 AND actual_chapter_id=1`); n != 1 {
 		t.Fatalf("arc_nodes 行2（孤儿）错误: n=%d", n)
 	}
 	// reader_perspectives
@@ -130,7 +142,7 @@ func TestCrossrefRewriteMigration(t *testing.T) {
 	if err := migrate.Run(db, log); err != nil {
 		t.Fatalf("幂等重跑 migrate.Run: %v", err)
 	}
-	if n := count(`SELECT COUNT(*) FROM time_entries WHERE target_chapter_id=2`); n != 1 {
+	if n := count(`SELECT COUNT(*) FROM time_entries WHERE target_reading_number=2`); n != 1 {
 		t.Fatalf("幂等重跑后数据被重复修改: n=%d", n)
 	}
 	if n := count(`SELECT COUNT(*) FROM reader_perspectives WHERE revealed_chapter_id=4`); n != 1 {

@@ -145,14 +145,12 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 		s.logger.Warn("timeline search failed", "err", err)
 	} else if tlResult != nil {
 		for _, e := range tlResult.Items {
-			chapterID, readingNumber := chapterReference(e.TargetChapterID, readingNumbers)
 			results = append(results, Result{
 				Type:          "timeline",
 				ID:            e.ID,
 				Title:         e.Title,
 				Subtitle:      e.Category, // 英文原值，前端 t("timeline."+subtitle) 翻译
-				ChapterID:     chapterID,
-				ReadingNumber: readingNumber,
+				ReadingNumber: e.TargetReadingNumber,
 				PanelID:       "timeline",
 			})
 		}
@@ -182,7 +180,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	nodesResult, err := s.arcStore.ListNodesByNovel(ctx, novelID, storyarc.ListNodesOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
-		Order:      "story_arc_id, target_chapter ASC, id ASC", // 显式锚定 + 补 story_arc_id 前缀，避免同弧线节点被打散
+		Order:      "story_arc_id, target_reading_number ASC, id ASC", // 显式锚定 + 补 story_arc_id 前缀，避免同弧线节点被打散
 	})
 	if err != nil {
 		s.logger.Warn("arc node search failed", "err", err)
@@ -197,14 +195,12 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 		}
 		for _, node := range nodesResult.Items {
 			subtitle := arcNameMap[node.StoryArcID]
-			chapterID, readingNumber := chapterReference(node.TargetChapterID, readingNumbers)
 			results = append(results, Result{
 				Type:          "arc_node",
 				ID:            node.ID,
 				Title:         node.Title,
 				Subtitle:      subtitle,
-				ChapterID:     chapterID,
-				ReadingNumber: readingNumber,
+				ReadingNumber: node.TargetReadingNumber,
 				PanelID:       "storyarcs",
 			})
 		}
@@ -214,7 +210,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	readersResult, err := s.readerStore.ListByNovel(ctx, novelID, reader.ListByNovelOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
-		Order:      "type, planted_chapter ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
+		Order:      "type, planted_chapter_id ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
 	})
 	if err != nil {
 		s.logger.Warn("reader search failed", "err", err)
@@ -224,7 +220,8 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 			if runes := []rune(title); len(runes) > 40 {
 				title = string(runes[:40]) + "…"
 			}
-			chapterID, readingNumber := chapterReference(r.PlantedChapterID, readingNumbers)
+			chapterID := r.PlantedChapterID
+			readingNumber := readingNumbers[chapterID]
 			results = append(results, Result{
 				Type:          "reader",
 				ID:            r.ID,

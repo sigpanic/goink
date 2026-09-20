@@ -98,7 +98,7 @@ func (s *Store) ListByArcs(ctx context.Context, arcIDs []int64) ([]ArcNode, erro
 	var nodes []ArcNode
 	if err := s.DB.WithContext(ctx).
 		Where("story_arc_id IN ?", arcIDs).
-		Order("story_arc_id, target_chapter ASC, id ASC").
+		Order("story_arc_id, target_reading_number ASC, id ASC").
 		Find(&nodes).Error; err != nil {
 		return nil, fmt.Errorf("storyarc store: list by arcs: %w", err)
 	}
@@ -132,7 +132,7 @@ func (s *Store) ListNodesByNovel(ctx context.Context, novelID int64, opts ListNo
 
 	order := opts.Order
 	if order == "" {
-		order = "story_arc_id, target_chapter ASC, id ASC" // 与废弃的 ListNodesByChapterRange 一致，同弧线节点聚簇连续
+		order = "story_arc_id, target_reading_number ASC, id ASC" // 与废弃的 ListNodesByChapterRange 一致，同弧线节点聚簇连续
 	}
 	var nodes []ArcNode
 	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&nodes).Error; err != nil {
@@ -150,8 +150,8 @@ func (s *Store) ListNodesBeforeByArc(ctx context.Context, arcIDs []int64, chapte
 	for _, id := range arcIDs {
 		var nodes []ArcNode
 		if err := s.DB.WithContext(ctx).
-			Where("story_arc_id = ? AND target_chapter < ?", id, chapterNum).
-			Order("target_chapter DESC").
+			Where("story_arc_id = ? AND target_reading_number < ?", id, chapterNum).
+			Order("target_reading_number DESC").
 			Limit(limit).
 			Find(&nodes).Error; err != nil {
 			return nil, fmt.Errorf("storyarc store: nodes before arc %d: %w", id, err)
@@ -167,8 +167,8 @@ func (s *Store) ListPendingNodesBeforeByArc(ctx context.Context, arcIDs []int64,
 	for _, id := range arcIDs {
 		var nodes []ArcNode
 		if err := s.DB.WithContext(ctx).
-			Where("story_arc_id = ? AND target_chapter < ? AND status = ?", id, chapterNum, "pending").
-			Order("target_chapter ASC").
+			Where("story_arc_id = ? AND target_reading_number < ? AND status = ?", id, chapterNum, "pending").
+			Order("target_reading_number ASC").
 			Limit(100).
 			Find(&nodes).Error; err != nil {
 			return nil, fmt.Errorf("storyarc store: pending before arc %d: %w", id, err)
@@ -184,8 +184,8 @@ func (s *Store) ListNodesAfterByArc(ctx context.Context, arcIDs []int64, chapter
 	for _, id := range arcIDs {
 		var nodes []ArcNode
 		if err := s.DB.WithContext(ctx).
-			Where("story_arc_id = ? AND target_chapter >= ?", id, chapterNum).
-			Order("target_chapter ASC").
+			Where("story_arc_id = ? AND target_reading_number >= ?", id, chapterNum).
+			Order("target_reading_number ASC").
 			Limit(100).
 			Find(&nodes).Error; err != nil {
 			return nil, fmt.Errorf("storyarc store: nodes after arc %d: %w", id, err)
@@ -202,7 +202,7 @@ func (s *Store) GetBreakpoint(ctx context.Context, arcID int64) (before []ArcNod
 	var pendings []ArcNode
 	if err := s.DB.WithContext(ctx).
 		Where("story_arc_id = ? AND status = ?", arcID, "pending").
-		Order("target_chapter ASC, id ASC").
+		Order("target_reading_number ASC, id ASC").
 		Limit(2).
 		Find(&pendings).Error; err != nil {
 		return nil, nil, fmt.Errorf("storyarc store: breakpoint pending: %w", err)
@@ -212,7 +212,7 @@ func (s *Store) GetBreakpoint(ctx context.Context, arcID int64) (before []ArcNod
 	var beforeDesc []ArcNode
 	if err := s.DB.WithContext(ctx).
 		Where("story_arc_id = ? AND status IN ?", arcID, []string{"completed", "abandoned"}).
-		Order("target_chapter DESC, id DESC").
+		Order("target_reading_number DESC, id DESC").
 		Limit(2).
 		Find(&beforeDesc).Error; err != nil {
 		return nil, nil, fmt.Errorf("storyarc store: breakpoint before: %w", err)

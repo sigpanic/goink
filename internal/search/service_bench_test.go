@@ -70,7 +70,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		db.Create(&character.Character{NovelID: novelID, Name: name})
 		db.Create(&location.Location{NovelID: novelID, Name: name})
 	}
-	db.Create(&timeline.TimelineEntry{NovelID: novelID, Category: "foreshadowing", Title: "伏笔", Content: "线索", TargetChapter: 100, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: novelID, Category: "foreshadowing", Title: "伏笔", Content: "线索", TargetReadingNumber: 100, Status: "pending"})
 	db.Create(&storyarc.StoryArc{NovelID: novelID, Name: "主线", ArcType: "main", Status: "active"})
 
 	// 构造每章 3000 字的重复模板正文

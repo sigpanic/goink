@@ -38,7 +38,7 @@
 |---|---|---|
 | 文件系统 | `chapters/{chapter_number:03d}.md` | 改用 `chapters/id_{id}.md`（id_ 前缀隔离旧 num 命名空间，rename 判断结构性可靠） |
 | DB chapter 表 | 含 `chapter_number int` 字段，(novel_id, chapter_number) 唯一索引 | 移除 chapter_number，新增 volume_id |
-| DB 交叉引用表 | timeline/arc_node/reader/character_relations 用章节号 int | 全改 chapter_id int64 外键 |
+| DB 交叉引用表 | timeline/arc_node/reader/character_relations 用章节号 int | 已发生的具体章节全改 chapter_id int64 外键；未来计划位置保留阅读序号 |
 | DB writing_log | chapter_number int | 改 chapter_id int64（删除后允许孤儿） |
 | git.ChapterPath | `ChapterPath(num int) string` | `ChapterPath(id int64) string` |
 | rw_tools 路径解析 | `parseChapterNum` 直接拿 num 拼 path | 改为 `parseChapterID` 直寻文件零转译；新建走 `chapters/new.md` 占位 |
@@ -54,7 +54,7 @@
 | DB chapter 表 | 移除 chapter_number；新增 `volume_id *int64` + `sort_order int`；保留 `id, novel_id, title, summary, word_count, created_at, updated_at` |
 | 排序依据 | 默认 `volumes.sort_order ASC`、`chapters.sort_order ASC`，未分卷最后；`chapters.sort_order` 仅在所属分组（指定卷或未分卷）内排序 |
 | 章节号 | 不存 DB，列表查询时按卷顺序与卷内 `sort_order` 的位次实时生成 1,2,3... |
-| 交叉引用 | timeline/arc_node/reader 全改 `chapter_id int64` 外键 |
+| 交叉引用 | timeline/arc_node/reader 的已发生章节全改 `chapter_id int64` 外键；未来计划位置存 `target_reading_number` |
 | writing_log | chapter_number 改 chapter_id；删除章节后允许孤儿引用（不阻塞删除） |
 | character_relations | chapter_number 改 chapter_id |
 | AI 路径 | `chapters/{id}.md`，AI 直接用 id，rw_tools 零转译 |
@@ -89,7 +89,7 @@
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
-| `target_chapter int` | `target_chapter_id int64` | int → int64 nullable |
+| `target_chapter int` | `target_reading_number int` | 保留为未来计划的阅读位置；不是章节引用 |
 | `source_chapter int` | `source_chapter_id int64` | int → int64 nullable |
 | `resolved_chapter int` | `resolved_chapter_id int64` | int → int64 nullable |
 
@@ -97,7 +97,7 @@
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
-| `target_chapter int` | `target_chapter_id int64` | int → int64 nullable |
+| `target_chapter int` | `target_reading_number int` | 保留为未来计划的阅读位置；不是章节引用 |
 | `actual_chapter int` | `actual_chapter_id int64` | int → int64 nullable（标记完成时填入的实际发生章节） |
 
 ### 5.5 reader_perspectives 表（GORM 表名，结构体 ReaderPerspective）
@@ -268,13 +268,13 @@ AI 看到的 path 是 `chapters/{id}.md`（不补零，id 语义）。AI 从 lis
 
 ### 8.4 写入工具（timeline/arc_node/reader/character_relation）
 
-AI 调用 `create_timeline_entry(target_chapter_id=12)` 时**直接传 id=12**，工具内不做 num→id 转译，直接存 `target_chapter_id` 列。
+AI 对已发生章节调用工具时直接传 `*_chapter_id`，工具内不做 num→id 转译，直接存对应外键列。
 
-AI 从 list_chapters 看到 `{id:12, chapter_number:10, volume_name:"卷一"}` → 想在第10章埋伏笔 → 传 `target_chapter_id=12`。
+未来计划没有对应的章节 ID：AI 从 list_chapters 看到 `{id:12, reading_number:10, volume_name:"卷一"}` 后，若计划在第 20 章回收伏笔，传 `target_reading_number=20`；若记录此刻种下伏笔，则传 `source_chapter_id=12`。ID 用于稳定引用，阅读序号只用于理解和预测位置。
 
 ### 8.5 读取/搜索
 
-`internal/search/service.go` 的 `ChapterNum` 字段改为 `ChapterID`（int64），DB 取出 `target_chapter_id` 直接填入；展示给 AI 时按 chapter_id 反查实时章节号 + 卷名拼成"卷一·第10章"显示。
+`internal/search/service.go` 的具体章节引用字段改为 `ChapterID`（int64），展示时按 chapter_id 反查实时阅读序号 + 卷名；timeline 和 arc node 的未来目标没有 chapter_id，直接展示其 `target_reading_number`。
 
 ### 8.6 AI 拿到的快照 num 可能失效问题
 
@@ -295,8 +295,8 @@ AI 从 list_chapters 看到 `{id:12, chapter_number:10, volume_name:"卷一"}` �
 1. 接收 `chapter_id` 参数
 2. 查 chapter 记录确认存在且属于当前 novel
 3. 检测交叉引用：
-   - `timeline_entry` 的 `target_chapter_id` / `source_chapter_id` / `resolved_chapter_id`
-   - `arc_node.target_chapter_id`
+   - `timeline_entry` 的 `source_chapter_id` / `resolved_chapter_id`
+   - `arc_node.actual_chapter_id`
    - `reader_perspective_entry.planted_chapter_id` / `revealed_chapter_id`
    - `character_relations.chapter_id`
    - 任一存在引用 → **拒绝删除**，返回引用清单（沿用 [delete_tools.go](../../../internal/mcp_tools/delete_tools.go) 对 character 关联的处理模式）
@@ -524,7 +524,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`，动态展示字段统一为 `ReadingNumber` / `reading_number`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量，并同步 RAG e2e；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时 `ReadingNumber` / `reading_number` + 卷名 | 🟡 进行中 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
-| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）章节字段改 `*_chapter_id`；`get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
+| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 章节过滤改 id；delete_tools 同步 | 🟡 rw_tools 已 id 化，其余未改 |
 | **L6 app 层** | `DeleteChapter`/`InsertChapter`/`MoveChapterToVolume`（含交叉引用检测拒绝）；volume CRUD（Create/Update/Delete/Get/Reorder）；`CreateChapter` 改走 volume store 分配 sort_order；`UpdateChapterTitle` 改按 id；novel export、content.go 同步 | ❌ 未做 |
 | **L7 前端** | 章节管理 tab（见第十二节） | ❌ 未做 |
 | **L1b 收尾** | migrate 1.7 DROP 旧 num 列（**先 DROP INDEX 再 DROP COLUMN**）；交叉引用 model 旧 num 字段在各自领域完成后移除；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
@@ -588,7 +588,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
-| 5.1 | `refactor(mcp_tools): cross-ref tools use chapter_id` | timeline / storyarc / reader / character_relations 工具的章节字段改 `*_chapter_id`，AI 直接传 id 不转译 | ❌ |
+| 5.1 | `refactor(mcp_tools): cross-ref tools use chapter_id` | timeline / storyarc 的未来计划位置改 `target_reading_number`；所有已发生章节字段改 `*_chapter_id`，AI 直接传 id 不转译 | ❌ |
 | 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回 id + 实时 chapter_number + volume_name + title | ❌ |
 | 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（正则 + 读写分支） | ❌ |
 | 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id；delete_tools 同步 | ❌ |

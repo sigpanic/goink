@@ -79,8 +79,8 @@ func TestArcListByArcs(t *testing.T) {
 
 	arc := StoryArc{NovelID: 1, Name: "主线", Status: "active", Importance: 5}
 	db.Create(&arc)
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点1", TargetChapter: 5, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点2", TargetChapter: 10, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点1", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点2", TargetReadingNumber: 10, Status: "pending"})
 
 	nodes, _ := s.ListByArcs(ctx, []int64{arc.ID})
 	if len(nodes) != 2 {
@@ -93,10 +93,10 @@ func TestArcListNodesByNovel(t *testing.T) {
 	s := NewStore(db, testArcLogger())
 	ctx := context.Background()
 
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "早", TargetChapter: 5, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "中", TargetChapter: 10, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "晚", TargetChapter: 15, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 2, StoryArcID: 1, Title: "其他小说", TargetChapter: 1, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "早", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "中", TargetReadingNumber: 10, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "晚", TargetReadingNumber: 15, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 2, StoryArcID: 1, Title: "其他小说", TargetReadingNumber: 1, Status: "pending"})
 
 	result, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{
 		PageParams: storage.PageParams{Size: -1},
@@ -114,7 +114,7 @@ func TestArcNodesBeforeByArc(t *testing.T) {
 	arc := StoryArc{NovelID: 1, Name: "主线", Status: "active", Importance: 5}
 	db.Create(&arc)
 	for i := 1; i <= 10; i++ {
-		db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "n", TargetChapter: i, Status: "pending"})
+		db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "n", TargetReadingNumber: i, Status: "pending"})
 	}
 
 	result, _ := s.ListNodesBeforeByArc(ctx, []int64{arc.ID}, 6, 3)
@@ -131,9 +131,9 @@ func TestArcPendingNodesBeforeByArc(t *testing.T) {
 
 	arc := StoryArc{NovelID: 1, Name: "主线", Status: "active", Importance: 5}
 	db.Create(&arc)
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "pending", TargetChapter: 3, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "done", TargetChapter: 5, Status: "completed"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "future", TargetChapter: 10, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "pending", TargetReadingNumber: 3, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "done", TargetReadingNumber: 5, Status: "completed"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "future", TargetReadingNumber: 10, Status: "pending"})
 
 	result, _ := s.ListPendingNodesBeforeByArc(ctx, []int64{arc.ID}, 8)
 	if len(result[arc.ID]) != 1 {
@@ -148,8 +148,8 @@ func TestArcNodesAfterByArc(t *testing.T) {
 
 	arc := StoryArc{NovelID: 1, Name: "主线", Status: "active", Importance: 5}
 	db.Create(&arc)
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "past", TargetChapter: 5, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "now", TargetChapter: 10, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "past", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "now", TargetReadingNumber: 10, Status: "pending"})
 
 	result, _ := s.ListNodesAfterByArc(ctx, []int64{arc.ID}, 10)
 	if len(result[arc.ID]) != 1 {
@@ -164,10 +164,10 @@ func TestArcGetBreakpoint(t *testing.T) {
 
 	arc := StoryArc{NovelID: 1, Name: "暂停弧", Status: "paused", Importance: 3}
 	db.Create(&arc)
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "完成1", TargetChapter: 3, Status: "completed"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "完成2", TargetChapter: 5, Status: "completed"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "断点", TargetChapter: 8, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "下一个", TargetChapter: 12, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "完成1", TargetReadingNumber: 3, Status: "completed"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "完成2", TargetReadingNumber: 5, Status: "completed"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "断点", TargetReadingNumber: 8, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "下一个", TargetReadingNumber: 12, Status: "pending"})
 
 	before, pending, err := s.GetBreakpoint(ctx, arc.ID)
 	if err != nil {
@@ -237,8 +237,8 @@ func TestArcDelete(t *testing.T) {
 
 	arc := StoryArc{NovelID: 1, Name: "待删弧线", ArcType: "sub", Status: "active", Importance: 2}
 	db.WithContext(ctx).Create(&arc)
-	db.WithContext(ctx).Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点1", TargetChapter: 3, Status: "pending"})
-	db.WithContext(ctx).Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点2", TargetChapter: 7, Status: "pending"})
+	db.WithContext(ctx).Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点1", TargetReadingNumber: 3, Status: "pending"})
+	db.WithContext(ctx).Create(&ArcNode{NovelID: 1, StoryArcID: arc.ID, Title: "节点2", TargetReadingNumber: 7, Status: "pending"})
 
 	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		if err := tx.Where("story_arc_id = ?", arc.ID).Delete(&ArcNode{}).Error; err != nil {
@@ -267,7 +267,7 @@ func TestArcNodeCreate(t *testing.T) {
 	db := openArcDB(t)
 	ctx := context.Background()
 
-	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "关键节点", TargetChapter: 5, Status: "pending"}
+	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "关键节点", TargetReadingNumber: 5, Status: "pending"}
 	if err := db.WithContext(ctx).Create(&node).Error; err != nil {
 		t.Fatalf("create: %v", err)
 	}
@@ -289,15 +289,16 @@ func TestArcNodeUpdate(t *testing.T) {
 	db := openArcDB(t)
 	ctx := context.Background()
 
-	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "旧节点", TargetChapter: 3, Status: "pending"}
+	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "旧节点", TargetReadingNumber: 3, Status: "pending"}
 	db.WithContext(ctx).Create(&node)
 
 	type UpdateInput struct {
-		Title         string `json:"title,omitempty"`
-		Status        string `json:"status,omitempty"`
-		ActualChapter int    `json:"actual_chapter,omitempty"`
+		Title           string `json:"title,omitempty"`
+		Status          string `json:"status,omitempty"`
+		ActualChapterID *int64 `json:"actual_chapter_id,omitempty"`
 	}
-	input := UpdateInput{Status: "completed", ActualChapter: 3}
+	actualID := int64(3)
+	input := UpdateInput{Status: "completed", ActualChapterID: &actualID}
 	if err := db.WithContext(ctx).Model(&ArcNode{}).Where("id = ?", node.ID).Updates(&input).Error; err != nil {
 		t.Fatalf("update: %v", err)
 	}
@@ -307,8 +308,8 @@ func TestArcNodeUpdate(t *testing.T) {
 	if updated.Status != "completed" {
 		t.Errorf("status: expected completed, got %s", updated.Status)
 	}
-	if updated.ActualChapter != 3 {
-		t.Errorf("actual_chapter: expected 3, got %d", updated.ActualChapter)
+	if updated.ActualChapterID == nil || *updated.ActualChapterID != 3 {
+		t.Errorf("actual_chapter_id: expected 3, got %v", updated.ActualChapterID)
 	}
 }
 
@@ -316,7 +317,7 @@ func TestArcNodeDelete(t *testing.T) {
 	db := openArcDB(t)
 	ctx := context.Background()
 
-	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "待删节点", TargetChapter: 5, Status: "pending"}
+	node := ArcNode{NovelID: 1, StoryArcID: 1, Title: "待删节点", TargetReadingNumber: 5, Status: "pending"}
 	db.WithContext(ctx).Create(&node)
 
 	if err := db.WithContext(ctx).Where("id = ?", node.ID).Delete(&ArcNode{}).Error; err != nil {
@@ -391,9 +392,9 @@ func TestArcListNodesByNovel_Search(t *testing.T) {
 	s := NewStore(db, testArcLogger())
 	ctx := context.Background()
 
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "发现真相", TargetChapter: 5, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "决战", TargetChapter: 10, Status: "pending", Description: "最终对决"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "尾声", TargetChapter: 15, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "发现真相", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "决战", TargetReadingNumber: 10, Status: "pending", Description: "最终对决"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "尾声", TargetReadingNumber: 15, Status: "pending"})
 
 	// 搜 title（只匹配 title，description 不含"真相"）
 	r, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{Search: "真相"})
@@ -419,9 +420,9 @@ func TestArcListNodesByNovel_Order(t *testing.T) {
 	s := NewStore(db, testArcLogger())
 	ctx := context.Background()
 
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "C", TargetChapter: 15, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "A", TargetChapter: 5, Status: "pending"})
-	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "B", TargetChapter: 10, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "C", TargetReadingNumber: 15, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "A", TargetReadingNumber: 5, Status: "pending"})
+	db.Create(&ArcNode{NovelID: 1, StoryArcID: 1, Title: "B", TargetReadingNumber: 10, Status: "pending"})
 
 	// 默认排序：target_chapter ASC
 	r, _ := s.ListNodesByNovel(ctx, 1, ListNodesOptions{
