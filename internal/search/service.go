@@ -220,7 +220,10 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 			if runes := []rune(title); len(runes) > 40 {
 				title = string(runes[:40]) + "…"
 			}
-			chapterID := r.PlantedChapterID
+			var chapterID int64
+			if r.PlantedChapterID != nil {
+				chapterID = *r.PlantedChapterID
+			}
 			readingNumber := readingNumbers[chapterID]
 			results = append(results, Result{
 				Type:          "reader",

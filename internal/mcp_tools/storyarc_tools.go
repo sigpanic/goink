@@ -404,6 +404,13 @@ func (t *UpdateArcNodeTool) Execute(ctx context.Context, args any, tc ToolContex
 		}
 		return nil, fmt.Errorf("query node: %w", err)
 	}
+	chapterIDs := make([]int64, 0, 1)
+	if a.ActualChapterID != nil {
+		chapterIDs = append(chapterIDs, *a.ActualChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	if err := json.Unmarshal(tc.RawArgs, &node); err != nil {
 		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil

@@ -69,8 +69,14 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 	if err != nil {
 		return nil, err
 	}
+	readingNumberFor := func(chapterID *int64) int {
+		if chapterID == nil {
+			return 0
+		}
+		return readingNumbers[*chapterID]
+	}
 	byLatestPlanting := func(a, b reader.ReaderPerspective) int {
-		return readingNumbers[b.PlantedChapterID] - readingNumbers[a.PlantedChapterID]
+		return readingNumberFor(b.PlantedChapterID) - readingNumberFor(a.PlantedChapterID)
 	}
 	slices.SortFunc(knownItems, byLatestPlanting)
 	if len(knownItems) > 60 {
@@ -102,11 +108,14 @@ func formatReaderPerspective(known, suspenses, misconceptions []reader.ReaderPer
 	ref := func(e reader.ReaderPerspective) string {
 		return fmt.Sprintf(" `[entry_id:%d]`", e.ID)
 	}
-	chapterLabel := func(chapterID int64) string {
-		if readingNumber, ok := readingNumbers[chapterID]; ok {
-			return fmt.Sprintf("第%d章 [chapter_id:%d]", readingNumber, chapterID)
+	chapterLabel := func(chapterID *int64) string {
+		if chapterID == nil {
+			return "章节信息缺失"
 		}
-		return fmt.Sprintf("章节 [chapter_id:%d]", chapterID)
+		if readingNumber, ok := readingNumbers[*chapterID]; ok {
+			return fmt.Sprintf("第%d章 [chapter_id:%d]", readingNumber, *chapterID)
+		}
+		return fmt.Sprintf("章节 [chapter_id:%d]", *chapterID)
 	}
 
 	// 已知信息
@@ -190,17 +199,25 @@ func (t *CreateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 			return &ToolResult{Success: false, Error: "misconception 类型必须提供 related_truth（实际真相）"}, nil
 		}
 	}
+	chapterIDs := make([]int64, 0, len(a.Entries))
+	for _, item := range a.Entries {
+		chapterIDs = append(chapterIDs, item.PlantedChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	var ids []int64
 	var failedName string
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Entries {
+			chapterID := item.PlantedChapterID
 			rp := reader.ReaderPerspective{
 				NovelID:          tc.NovelID,
 				Type:             item.Type,
 				Content:          item.Content,
-				PlantedChapterID: item.PlantedChapterID,
+				PlantedChapterID: &chapterID,
 				RelatedTruth:     item.RelatedTruth,
 			}
 			if err := tx.Create(&rp).Error; err != nil {
@@ -277,6 +294,15 @@ func (t *UpdateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 
 	if err := json.Unmarshal(tc.RawArgs, &entry); err != nil {
 		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
+	}
+	chapterIDs := make([]int64, 0, 2)
+	for _, chapterID := range []*int64{a.PlantedChapterID, a.RevealedChapterID} {
+		if chapterID != nil {
+			chapterIDs = append(chapterIDs, *chapterID)
+		}
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
 	}
 
 	if err := tc.DB.WithContext(ctx).Save(&entry).Error; err != nil {

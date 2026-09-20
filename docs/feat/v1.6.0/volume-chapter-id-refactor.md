@@ -19,13 +19,13 @@
 | Python 版 | / | `source_chapter_id` 等 | chapters.id 真外键 |
 | Go 版迁移时（v1.2.0 之前） | 改用 num 语义 | 沿用 `source_chapter_id` | 章节号（字段名与语义不一致） |
 | v1.2.0 | 纯字段改名 | `source_chapter` 等 | 章节号（语义未变，字段名匹配语义） |
-| **本方案** | 逆转 Go 版迁移时的 id→num 决策 | 改回 `_id` 后缀 | chapters.id 真外键 |
+| **本方案** | 逆转 Go 版迁移时的 id→num 决策 | 改回 `_id` 后缀 | chapters.id 稳定逻辑引用 |
 
 **关键澄清**：
 - v1.2.0 是纯字段改名（_id → _chapter_number），语义未变；本方案不否定 v1.2.0 的改名
 - 本方案逆转的是**Go 版迁移时把 id 语义改成 num 语义**的决策（v1.2.0 之前就发生了）
 - **AI 暴露层改用 id**：逆转 v1.2.0 的"AI 用 num"决策——AI 直接用 `chapters/{id}.md` 寻文件零转译；list_chapters 同时返回 id + chapter_number，AI 用 id 操作、用 num 理解"第几章"
-- 本方案改造的是**DB 内部存储与交叉引用 + AI 暴露层**：DB 用 chapter_id 外键删除/移动零成本，AI 用 id 直寻文件零转译
+- 本方案改造的是**DB 内部存储与交叉引用 + AI 暴露层**：DB 用 chapter_id 稳定引用支持删除/移动检查，AI 用 id 直寻文件零转译
 
 **结论**：本方案做三件事——
 1. DB 内部存储从 num 改回 id（逆转 Go 版迁移时的 id→num 决策）
@@ -38,7 +38,7 @@
 |---|---|---|
 | 文件系统 | `chapters/{chapter_number:03d}.md` | 改用 `chapters/id_{id}.md`（id_ 前缀隔离旧 num 命名空间，rename 判断结构性可靠） |
 | DB chapter 表 | 含 `chapter_number int` 字段，(novel_id, chapter_number) 唯一索引 | 移除 chapter_number，新增 volume_id |
-| DB 交叉引用表 | timeline/arc_node/reader/character_relations 用章节号 int | 已发生的具体章节全改 chapter_id int64 外键；未来计划位置保留阅读序号 |
+| DB 交叉引用表 | timeline/arc_node/reader/character_relations 用章节号 int | 已发生的具体章节全改 chapter_id int64 逻辑引用；未来计划位置保留阅读序号 |
 | DB writing_log | chapter_number int | 改 chapter_id int64（删除后允许孤儿） |
 | git.ChapterPath | `ChapterPath(num int) string` | `ChapterPath(id int64) string` |
 | rw_tools 路径解析 | `parseChapterNum` 直接拿 num 拼 path | 改为 `parseChapterID` 直寻文件零转译；新建走 `chapters/new.md` 占位 |
@@ -104,8 +104,10 @@
 
 | 旧字段 | 新字段 | 类型变化 |
 |---|---|---|
-| `planted_chapter int` | `planted_chapter_id int64` | int → int64 |
+| `planted_chapter int` | `planted_chapter_id *int64` | int → 可空 int64；反查失败为 NULL |
 | `revealed_chapter int` | `revealed_chapter_id int64` | int → int64 nullable |
+
+章节 ID 引用采用**逻辑外键**，不声明 SQLite `FOREIGN KEY`：现有删除语义要求 chapter 的交叉引用先由应用层汇总并拒绝删除，而 writing_log 允许保留历史孤儿；单列 FK 也无法保证 chapter 与引用记录的 `novel_id` 一致。MCP 写入具体章节 ID 时通过共享的批量归属守卫校验，迁移反查失败则保留 NULL。
 
 ### 5.6 writing_log 表
 
@@ -524,7 +526,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | **L2 chapter.Store** | 全部按 id / sort_order：`ListByNovel`/`ListAllByNovel`/`SearchByNovel` 按卷、`volumes.sort_order`、`chapters.sort_order`，未分卷最后；`GetRecent` 取该顺序末尾 N 章并倒序返回；`Create` 接管新建章节记录且不再分配旧 num；`GetByNovelAndNumber`→`GetByID`；删 `GetLatestNumber`（改由 sort_order 分配）；`UpdateTitle` 改按 id；`Chapter` model 删除 `ChapterNumber`，动态展示字段统一为 `ReadingNumber` / `reading_number`。方法风格整改为 `*gorm.DB` 参数 | 🟡 2.1、2.2 已提交；2.3 进行中 |
 | **L3 rag + search** | rag：`SubmitRefresh` 改按 chapter_id 提交，删 num→id 反查桥接，**chunk_id 去掉内嵌章节号**（`"%d_summary"` 等 → id-based）后重建向量，并同步 RAG e2e；search：字段 `ChapterNum`→`ChapterID`，展示按 id 反查实时 `ReadingNumber` / `reading_number` + 卷名 | 🟡 进行中 |
 | **L4 其他内部包** | export（epub/txt/markdown）、pattern（extract/prompts/types）、agent/display | ❌ 全用 num |
-| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 以 id 过滤及关联、以实时 reading_number 展示；delete_tools 无旧编号引用 | ✅ 已完成 |
+| **L5 mcp_tools** | 交叉引用工具（timeline/storyarc/reader/character_relations）已发生章节字段改 `*_chapter_id`，未来计划位置改 `target_reading_number`；`get_chapter_list` 返回 id + 实时 reading_number + volume_name + title；rw_tools 支持卷纲 `volumes/{id}.md`；memory_tools 以 id 过滤及关联、以实时 reading_number 展示；reader 的历史缺失引用为 NULL；delete_tools 无旧编号引用 | ✅ 已完成 |
 | **L6 app 层** | `DeleteChapter`/`InsertChapter`/`MoveChapterToVolume`（含交叉引用检测拒绝）；volume CRUD（Create/Update/Delete/Get/Reorder）；`CreateChapter` 改走 volume store 分配 sort_order；`UpdateChapterTitle` 改按 id；novel export、content.go 同步 | ❌ 未做 |
 | **L7 前端** | 章节管理 tab（见第十二节） | ❌ 未做 |
 | **L1b 收尾** | migrate 1.7 DROP 旧 num 列（**先 DROP INDEX 再 DROP COLUMN**）；交叉引用 model 旧 num 字段在各自领域完成后移除；1.5/1.6 补 num 列的 `HasColumn` 守卫 | ❌ |
@@ -593,6 +595,7 @@ pre-commit hook 会跑 `go build`/`go test`/`golangci-lint`，中间层提交必
 | 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
 | 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ❌ |
 | 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
+| 5.4b | `fix(reader): keep planted chapter references nullable` | `planted_chapter_id` 保持可空，迁移反查失败为 NULL；MCP/search 对缺失引用降级展示。MCP 写入具体章节 ID 时共享批量归属守卫；章节引用维持逻辑外键，不加数据库 FK | ✅ |
 
 #### L6 app 层
 

@@ -312,6 +312,13 @@ func (t *UpdateCharacterRelationshipTool) Execute(ctx context.Context, args any,
 	_, hasRelationID := m["relation_id"]
 	_, hasSource := m["source_character_id"]
 	_, hasTarget := m["target_character_id"]
+	chapterIDs := make([]int64, 0, 1)
+	if a.ChapterID != nil {
+		chapterIDs = append(chapterIDs, *a.ChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	switch {
 	case hasRelationID && !hasSource && !hasTarget:

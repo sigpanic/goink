@@ -156,6 +156,15 @@ func (t *CreateTimelineEntryTool) NewArgs() any      { return &CreateTimelineEnt
 
 func (t *CreateTimelineEntryTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*CreateTimelineEntryArgs)
+	chapterIDs := make([]int64, 0, len(a.Entries))
+	for _, item := range a.Entries {
+		if item.SourceChapterID != nil {
+			chapterIDs = append(chapterIDs, *item.SourceChapterID)
+		}
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	var ids []int64
 	var failedName string
@@ -250,6 +259,13 @@ func (t *UpdateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 			return &ToolResult{Success: false, Error: fmt.Sprintf("条目 %d 不存在", a.EntryID)}, nil
 		}
 		return nil, fmt.Errorf("query timeline entry: %w", err)
+	}
+	chapterIDs := make([]int64, 0, 1)
+	if a.ResolvedChapterID != nil {
+		chapterIDs = append(chapterIDs, *a.ResolvedChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
 	}
 
 	if err := json.Unmarshal(tc.RawArgs, &entry); err != nil {
