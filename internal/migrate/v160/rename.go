@@ -70,7 +70,7 @@ func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 		}
 	}
 
-// 3. 章节/大纲文件 rename：{num:03d} → id_{id}（源按旧 num 命名，目标按新 id 命名）
+	// 3. 章节/大纲文件 rename：{num:03d} → id_{id}（源按旧 num 命名，目标按新 id 命名）
 	type chRow struct {
 		ID            int64
 		ChapterNumber int

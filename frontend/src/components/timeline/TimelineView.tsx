@@ -346,10 +346,10 @@ export default function TimelineView({ novelId }: Props) {
     }
     const resolvedChapterID =
       form.status === "resolved"
-        ? form.resolved_chapter_id ??
+        ? (form.resolved_chapter_id ??
           chapterReferences.chapterIDByReadingNumber.get(
             form.target_reading_number,
-          )
+          ))
         : undefined;
     if (form.status === "resolved" && resolvedChapterID == null) {
       toastError(t("timeline.chapterNotFound"));
@@ -398,10 +398,10 @@ export default function TimelineView({ novelId }: Props) {
   ) {
     const resolvedChapterID =
       newStatus === "resolved"
-        ? entry.resolved_chapter_id ??
+        ? (entry.resolved_chapter_id ??
           chapterReferences.chapterIDByReadingNumber.get(
             entry.target_reading_number,
-          )
+          ))
         : undefined;
     if (newStatus === "resolved" && resolvedChapterID == null) {
       toastError(t("timeline.chapterNotFound"));

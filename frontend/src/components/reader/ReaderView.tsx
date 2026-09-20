@@ -234,7 +234,9 @@ export default function ReaderView({ novelId }: Props) {
       type: item.type,
       content: item.content,
       related_truth: item.related_truth || "",
-      planted_reading_number: readingNumberForChapterID(item.planted_chapter_id),
+      planted_reading_number: readingNumberForChapterID(
+        item.planted_chapter_id,
+      ),
       revealed_reading_number: readingNumberForChapterID(
         item.revealed_chapter_id,
       ),
@@ -551,12 +553,22 @@ export default function ReaderView({ novelId }: Props) {
                 {t(f.label)}
                 {f.key === "unrevealed" && (
                   <span className="ml-1 text-muted-foreground">
-                    ({entries.filter((e) => e.revealed_chapter_id == null).length})
+                    (
+                    {
+                      entries.filter((e) => e.revealed_chapter_id == null)
+                        .length
+                    }
+                    )
                   </span>
                 )}
                 {f.key === "revealed" && (
                   <span className="ml-1 text-muted-foreground">
-                    ({entries.filter((e) => e.revealed_chapter_id != null).length})
+                    (
+                    {
+                      entries.filter((e) => e.revealed_chapter_id != null)
+                        .length
+                    }
+                    )
                   </span>
                 )}
               </button>

@@ -10,13 +10,8 @@ import { chapterKeys } from "@/lib/queryKeys";
 export function useUpdateChapterTitle(novelId: number) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      chapterID,
-      title,
-    }: {
-      chapterID: number;
-      title: string;
-    }) => UpdateChapterTitle(novelId, chapterID, title),
+    mutationFn: ({ chapterID, title }: { chapterID: number; title: string }) =>
+      UpdateChapterTitle(novelId, chapterID, title),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
     },
