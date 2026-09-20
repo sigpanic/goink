@@ -109,7 +109,7 @@ func setupTestApp(t *testing.T) *App {
 	cancelMgr := agent.NewCancelManager()
 
 	// Agent.
-	ag := agent.New(llmClient, registry, sessionStore, db, approvals, logger, skillStore, cancelMgr)
+	ag := agent.New(llmClient, registry, sessionStore, chapterStore, db, approvals, logger, skillStore, cancelMgr)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)

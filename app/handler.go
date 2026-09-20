@@ -225,7 +225,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 
 	// 10. 创建 Agent 实例（全局复用）
 	a.cancelMgr = agent.NewCancelManager()
-	a.agent = agent.New(a.llmClient, a.registry, a.session, a.db, a.approvals, a.logger, a.skill, a.cancelMgr)
+	a.agent = agent.New(a.llmClient, a.registry, a.session, a.chapter, a.db, a.approvals, a.logger, a.skill, a.cancelMgr)
 
 	// 10.5 初始化 style store（全局风格素材）
 	a.style = style.NewStore(db, a.logger)

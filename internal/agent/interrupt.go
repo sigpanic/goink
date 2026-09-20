@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/sigpanic/goink/internal/llm"
@@ -9,7 +10,7 @@ import (
 
 // flushInterruptedTools 排干 stream 中待执行的 tool_call_end 事件，
 // 不真正执行工具，直接标记为"操作被中断"并入 toolOutputs。
-func (a *Agent) flushInterruptedTools(stream <-chan llm.StreamEvent, opts *RunOptions, toolOutputs *[]toolOutput) {
+func (a *Agent) flushInterruptedTools(ctx context.Context, stream <-chan llm.StreamEvent, opts *RunOptions, toolOutputs *[]toolOutput) {
 	for {
 		done := false
 		select {
@@ -21,7 +22,7 @@ func (a *Agent) flushInterruptedTools(stream <-chan llm.StreamEvent, opts *RunOp
 				id := event.Delta.ToolID
 				rawArgs := event.Delta.ArgumentsJSON
 				args := parseArgs(rawArgs)
-				display := a.buildDisplay(name, args, mcp_tools.PhaseFailed, opts.NovelID)
+				display := a.buildDisplay(ctx, name, args, mcp_tools.PhaseFailed, opts.NovelID)
 				*toolOutputs = append(*toolOutputs, toolOutput{
 					name:         name,
 					id:           id,

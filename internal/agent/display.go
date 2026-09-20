@@ -1,9 +1,10 @@
 package agent
 
 import (
+	"context"
 	"fmt"
-	"strings"
 
+	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
@@ -117,8 +118,8 @@ var resultFieldTools = map[string]bool{
 
 // buildDisplay 根据 tool_name + args + phase 生成前端展示文本。
 // executing 阶段加 "正在" 前缀，completed/failed/cancelled 去掉。
-// chapter 工具通过 novelID + chapter_number 查 DB 获取章节标题。
-func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.DisplayPhase, novelID int64) *mcp_tools.DisplayInfo {
+// chapter 工具通过 novelID + chapter_id 查 DB 获取章节标题和实时阅读编号。
+func (a *Agent) buildDisplay(ctx context.Context, name string, args map[string]any, phase mcp_tools.DisplayPhase, novelID int64) *mcp_tools.DisplayInfo {
 	baseText := toolDisplayNames[name]
 	if baseText == "" {
 		baseText = name
@@ -145,8 +146,11 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 
 	// chapter 工具：查 DB 取章节标题
 	if chapterTools[name] {
-		if cn, ok := chapterNumber(args); ok {
-			label := a.lookupChapterBrief(novelID, cn)
+		if chapterID, ok := chapterID(args); ok {
+			label := a.lookupChapterBrief(ctx, novelID, chapterID)
+			if isOutlinePath(args) {
+				label += "大纲"
+			}
 			switch name {
 			case "edit":
 				baseText = "编辑 " + label
@@ -165,18 +169,6 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 			}
 		}
 
-		// rw 工具的 outlines/ 路径特殊处理
-		if path, ok := args["path"].(string); ok && strings.HasPrefix(path, "outlines/") {
-			var n int
-			_, _ = fmt.Sscanf(path, "outlines/%d.md", &n)
-			label := fmt.Sprintf("第%d章大纲", n)
-			switch name {
-			case "edit":
-				baseText = "编辑 " + label
-			case "read":
-				baseText = "查看 " + label
-			}
-		}
 	}
 
 	// delete_record：根据 args.table 细化展示文本（如 "删除角色" / "删除地点关系"）
@@ -201,44 +193,46 @@ func (a *Agent) buildDisplay(name string, args map[string]any, phase mcp_tools.D
 	}
 }
 
-func chapterNumber(args map[string]any) (int, bool) {
+func chapterID(args map[string]any) (int64, bool) {
 	if args == nil {
 		return 0, false
 	}
-	for _, key := range []string{"chapter_number", "chapter_id"} {
-		if v, ok := args[key]; ok {
-			switch n := v.(type) {
-			case float64:
-				return int(n), true
-			case int:
-				return n, true
-			}
+	if v, ok := args["chapter_id"]; ok {
+		switch n := v.(type) {
+		case float64:
+			return int64(n), n > 0 && n == float64(int64(n))
+		case int:
+			return int64(n), n > 0
+		case int64:
+			return n, n > 0
 		}
 	}
-	// edit 工具使用 path 参数，如 "chapters/001.md"
+	// rw 工具使用 path 参数，如 "chapters/id_42.md" 或 "outlines/7/id_42.md"。
 	if path, ok := args["path"].(string); ok {
-		var n int
-		if _, err := fmt.Sscanf(path, "chapters/%d.md", &n); err == nil && n > 0 {
-			return n, true
-		}
+		ref, ok := git.ParseChapterLikePath(path)
+		return ref.ID, ok && !ref.IsNew && ref.ID > 0
 	}
 	return 0, false
 }
 
-type chapterTitleRow struct {
-	Title string `gorm:"column:title"`
+func isOutlinePath(args map[string]any) bool {
+	path, ok := args["path"].(string)
+	if !ok {
+		return false
+	}
+	ref, ok := git.ParseChapterLikePath(path)
+	return ok && !ref.IsNew && ref.IsOutline
 }
 
-func (a *Agent) lookupChapterBrief(novelID int64, chapterNumber int) string {
-	var row chapterTitleRow
-	err := a.db.Table("chapters").
-		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
-		Select("title").
-		Scan(&row).Error
-	if err != nil || row.Title == "" {
-		return fmt.Sprintf("第%d章", chapterNumber)
+func (a *Agent) lookupChapterBrief(ctx context.Context, novelID, chapterID int64) string {
+	ch, err := a.chapterStore.GetByID(ctx, novelID, chapterID)
+	if err != nil {
+		return fmt.Sprintf("章节（ID: %d）", chapterID)
 	}
-	return fmt.Sprintf("第%d章 %s", chapterNumber, row.Title)
+	if ch.Title == "" {
+		return fmt.Sprintf("第%d章", ch.ReadingNumber)
+	}
+	return fmt.Sprintf("第%d章 %s", ch.ReadingNumber, ch.Title)
 }
 
 func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {

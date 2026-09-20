@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -59,8 +58,8 @@ func (t *EditTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	}
 
 	// 章节/大纲路径走章节流程；其余（goink.md、技能文件）走通用文件流程
-	if ref, isOutline, ok := parseRWPath(a.Path); ok {
-		return t.editChapterLike(ctx, a, tc, ref, isOutline)
+	if ref, ok := git.ParseChapterLikePath(a.Path); ok {
+		return t.editChapterLike(ctx, a, tc, ref)
 	}
 	if !validPath(a.Path) {
 		return &ToolResult{Success: false, Error: invalidPathHint}, nil
@@ -245,8 +244,8 @@ func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContex
 //   - 物理文件永远按 id 扁平落盘（chapters/id_{id}.md / outlines/id_{id}.md），
 //     两级路径 chapters/{vid}/id_{id}.md 仅为容错别名，读写时归一化为扁平路径
 //   - 新建走 new.md 通道：先建章节记录拿 id，再写物理文件；写文件失败补偿删记录
-func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolContext, ref chapterRef, isOutline bool) (*ToolResult, error) {
-	physical := physicalRWPath(isOutline, ref.ID)
+func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolContext, ref git.ChapterPathRef) (*ToolResult, error) {
+	physical := physicalRWPath(ref.IsOutline, ref.ID)
 	chStore := chapter.NewStore(tc.DB, tc.LoggerOrDefault())
 
 	var (
@@ -259,8 +258,8 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		if a.ChangeType != "full_replace" {
 			return &ToolResult{Success: false, Error: "new.md 仅支持 full_replace（新建文件无原文可查改）"}, nil
 		}
-		if ref.Vid != 0 {
-			v, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).GetByID(ctx, nil, tc.NovelID, ref.Vid)
+		if ref.VolumeID != 0 {
+			v, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).GetByID(ctx, nil, tc.NovelID, ref.VolumeID)
 			if err != nil {
 				return &ToolResult{Success: false, Error: err.Error()}, nil
 			}
@@ -354,7 +353,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		}
 		ch = created
 		// 物理路径按刚分配的章节 id 重新计算（ref.ID 对新建为 0）
-		physical = physicalRWPath(isOutline, ch.ID)
+		physical = physicalRWPath(ref.IsOutline, ch.ID)
 	} else if a.Title != "" && ch.Title != a.Title {
 		if err := chStore.UpdateTitle(ctx, tc.NovelID, ch.ID, a.Title); err != nil {
 			return nil, fmt.Errorf("update chapter title: %w", err)
@@ -378,7 +377,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	emitFileChanged(ctx, tc.NovelID, physical)
 
 	// 正文（非大纲）落盘后的维护链路：向量/搜索缓存/字数/写作日志
-	if !isOutline {
+	if !ref.IsOutline {
 		maintainChapterAfterEdit(ctx, tc, ch, proposed)
 	}
 
@@ -401,7 +400,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		injects = append(injects, InjectMessage{Role: "user", Content: "用户通过了审批并反馈：" + feedback})
 	}
 	// 章节正文全量替换且内容较长时注入维护提醒
-	if !isOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
+	if !ref.IsOutline && a.ChangeType == "full_replace" && len([]rune(proposed)) > 500 {
 		reminder := fmt.Sprintf("你刚刚完成了《%s》的全量替换。", ch.Title)
 		if number, err := chStore.GetReadingNumberByID(ctx, tc.NovelID, ch.ID); err != nil {
 			tc.LoggerOrDefault().Warn("计算实时章节号失败", "chapter_id", ch.ID, "err", err)
@@ -695,82 +694,11 @@ func lineRangeReplace(content string, startLine, endLine int, newContent string)
 
 // ── 路径解析 ──────────────────────────────────────────────
 
-// chapterRef 是章节/大纲虚拟路径的解析结果。
-//
-// v1.6.0 起章节文件按 id 命名，支持两种虚拟路径形态：
-//   - 扁平主格式：chapters/id_{id}.md
-//   - 两级容错格式：chapters/{vid}/id_{id}.md（vid 仅为容错别名）
-//
-// 新建走 new.md 通道：chapters/{vid}/new.md 或 chapters/new.md（不带卷默认最后一卷，
-// 整本书无卷则未分卷）。outlines 同理。
-type chapterRef struct {
-	ID    int64 // 章节记录 id；new 通道为 0
-	Vid   int64 // 路径中的卷 id；扁平格式或不带卷的 new 通道为 0
-	IsNew bool  // 是否 new.md 新建通道
-}
-
-var (
-	chapterPathRe = regexp.MustCompile(`^chapters/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
-	outlinePathRe = regexp.MustCompile(`^outlines/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
-	plainPathRe   = regexp.MustCompile(`^(goink\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
-)
-
-// parseRWPath 解析章节/大纲路径；非章节类路径返回 ok=false。
-func parseRWPath(p string) (ref chapterRef, isOutline bool, ok bool) {
-	if ref, ok := parseChapterRef(p); ok {
-		return ref, false, true
-	}
-	if ref, ok := parseOutlineRef(p); ok {
-		return ref, true, true
-	}
-	return chapterRef{}, false, false
-}
-
-// parseChapterRef 解析章节正文路径，非法返回 false。
-// 捕获组：m[1]=卷 id（可选），m[2]=章节 id（new 通道为空）。
-func parseChapterRef(p string) (chapterRef, bool) {
-	m := chapterPathRe.FindStringSubmatch(p)
-	if m == nil {
-		return chapterRef{}, false
-	}
-	return buildChapterRef(m)
-}
-
-// parseOutlineRef 解析章节大纲路径，非法返回 false。
-func parseOutlineRef(p string) (chapterRef, bool) {
-	m := outlinePathRe.FindStringSubmatch(p)
-	if m == nil {
-		return chapterRef{}, false
-	}
-	return buildChapterRef(m)
-}
-
-// buildChapterRef 从正则捕获组构造章节引用。
-// 数字段超出 int64 范围时解析失败，按非法路径处理。
-func buildChapterRef(m []string) (chapterRef, bool) {
-	ref := chapterRef{}
-	if m[1] != "" {
-		v, err := strconv.ParseInt(m[1], 10, 64)
-		if err != nil {
-			return chapterRef{}, false
-		}
-		ref.Vid = v
-	}
-	if m[2] == "" {
-		ref.IsNew = true
-	} else {
-		id, err := strconv.ParseInt(m[2], 10, 64)
-		if err != nil {
-			return chapterRef{}, false
-		}
-		ref.ID = id
-	}
-	return ref, true
-}
+var plainPathRe = regexp.MustCompile(`^(goink\.md|skills/[^/]+\.md|~/.goink/skills/[^/]+\.md)$`)
 
 // validPath 校验 edit/read 支持的全部路径形态。
 func validPath(p string) bool {
-	if _, _, ok := parseRWPath(p); ok {
+	if _, ok := git.ParseChapterLikePath(p); ok {
 		return true
 	}
 	return plainPathRe.MatchString(p)
@@ -881,8 +809,8 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 	}
 
 	// 章节/大纲按 id 扁平路径读取（两级路径归一化）
-	if ref, isOutline, ok := parseRWPath(a.Path); ok {
-		return t.readChapterLike(ctx, a, tc, ref, isOutline)
+	if ref, ok := git.ParseChapterLikePath(a.Path); ok {
+		return t.readChapterLike(ctx, a, tc, ref)
 	}
 	if !validPath(a.Path) {
 		return &ToolResult{Success: false, Error: invalidPathHint}, nil
@@ -900,14 +828,14 @@ func (t *ReadTool) Execute(ctx context.Context, args any, tc ToolContext) (*Tool
 
 // readChapterLike 读取章节正文或大纲。
 // 物理文件永远按 id 扁平路径读，两级路径仅作容错别名归一化。
-func (t *ReadTool) readChapterLike(ctx context.Context, a *ReadArgs, tc ToolContext, ref chapterRef, isOutline bool) (*ToolResult, error) {
+func (t *ReadTool) readChapterLike(ctx context.Context, a *ReadArgs, tc ToolContext, ref git.ChapterPathRef) (*ToolResult, error) {
 	if ref.IsNew {
 		return &ToolResult{Success: false, Error: "new.md 仅用于 edit 新建章节/大纲，不可读取"}, nil
 	}
 
 	physical := git.ChapterPath(ref.ID)
 	suffix := ""
-	if isOutline {
+	if ref.IsOutline {
 		physical = git.OutlinePath(ref.ID)
 		suffix = "（大纲）"
 	}
