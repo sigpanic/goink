@@ -21,14 +21,21 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	// 1. GOINK_TESTING must be set (ensures ResolveGit/ResolveOnnxLib skip system fallback)
+	// 1. GOINK_TESTING must be set (marks the test environment)
 	if os.Getenv("GOINK_TESTING") == "" {
 		fmt.Fprintln(os.Stderr, "FATAL: GOINK_TESTING env var not set; E2E tests require GOINK_TESTING=1")
 		os.Exit(1)
 	}
 	fmt.Println("OK: GOINK_TESTING is set")
 
-	// 2. ResolveGit() must find bundled git (not system git)
+	// 2. GOINK_E2E_STRICT must be set (makes ResolveGit/ResolveOnnxLib skip system fallback)
+	if os.Getenv("GOINK_E2E_STRICT") == "" {
+		fmt.Fprintln(os.Stderr, "FATAL: GOINK_E2E_STRICT env var not set; E2E tests require GOINK_E2E_STRICT=1")
+		os.Exit(1)
+	}
+	fmt.Println("OK: GOINK_E2E_STRICT is set")
+
+	// 3. ResolveGit() must find bundled git (not system git)
 	gitBin, err := platform.ResolveGit()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: ResolveGit() failed: %v\n", err)
@@ -45,7 +52,7 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Println("OK: git path is under DataDir (bundled)")
 
-	// 3. Verify the resolved git binary actually works
+	// 4. Verify the resolved git binary actually works
 	cmd := exec.Command(gitBin, "--version")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
@@ -54,7 +61,7 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Printf("OK: bundled git works: %s", string(out))
 
-	// 4. ResolveOnnxLib() must find ONNX runtime (bundled, not system)
+	// 5. ResolveOnnxLib() must find ONNX runtime (bundled, not system)
 	onnxLib, err := platform.ResolveOnnxLib()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: ResolveOnnxLib() failed: %v\n", err)
@@ -68,7 +75,7 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Println("OK: ONNX lib path is under DataDir (bundled)")
 
-	// 5. Model files must exist
+	// 6. Model files must exist
 	modelsDir := config.ModelsDir()
 	modelPath := filepath.Join(modelsDir, "model.onnx")
 	if _, err := os.Stat(modelPath); err != nil {
@@ -82,17 +89,17 @@ func TestMain(m *testing.M) {
 	}
 	fmt.Printf("OK: models dir -> %s\n", modelsDir)
 
-	// 6. Set global config so config.DataDirPath() etc. work
+	// 7. Set global config so config.DataDirPath() etc. work
 	cfg := &config.AppConfig{DataDir: platform.DataDir()}
 	config.Set(cfg)
 
-	// 7. Set ONNX shared library path (required before any onnxruntime_go calls)
+	// 8. Set ONNX shared library path (required before any onnxruntime_go calls)
 	ort.SetSharedLibraryPath(onnxLib)
 
-	// 8. Initialize ONNX embedder (singleton, only first call works)
+	// 9. Initialize ONNX embedder (singleton, only first call works)
 	rag.InitEmbedder(modelsDir, slog.Default())
 
-	// 9. Open shared SQLite database for VectorStore and GORM operations
+	// 10. Open shared SQLite database for VectorStore and GORM operations
 	dbPath := filepath.Join(platform.DataDir(), "e2e-shared.db")
 	sharedDB, err = storage.Open(dbPath, slog.Default())
 	if err != nil {
@@ -104,7 +111,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	// 10. Initialize VectorStore (singleton, only first call works)
+	// 11. Initialize VectorStore (singleton, only first call works)
 	embedder, err := rag.GetEmbedder()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "FATAL: GetEmbedder() failed: %v\n", err)

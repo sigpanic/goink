@@ -15,6 +15,7 @@ jobs:
     env:
       CGO_ENABLED: 1
       GOINK_TESTING: 1
+      GOINK_E2E_STRICT: 1
     steps:
       - uses: actions/checkout@v4
 
