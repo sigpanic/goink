@@ -42,6 +42,12 @@ func setupRWEnv(t *testing.T) (*gorm.DB, mcp_tools.ToolContext, context.Context)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// 显式关闭连接：Windows 无法删除仍被占用的 db 文件，不关会让 t.TempDir() 清理失败。
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := db.AutoMigrate(&chapter.Chapter{}, &volume.Volume{}, &writing.WritingLog{}); err != nil {
 		t.Fatal(err)
 	}
