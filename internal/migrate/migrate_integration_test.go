@@ -3,7 +3,6 @@
 package migrate_test
 
 import (
-	"fmt"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -167,18 +166,12 @@ func setupMigrationIntegrationEnv(t *testing.T) string {
 	dataDir := t.TempDir()
 	t.Setenv("GOINK_TESTING", "1")
 	t.Setenv("GOINK_DATA_DIR", dataDir)
+	// 迁移会 git commit 文件改名，必须有真实 git；测试模式默认只认 DataDir 下的
+	// bundled git，故显式注入系统 git，而非伪造一份 bundled 布局（Windows 上伪造不出来）。
+	t.Setenv("GOINK_GIT_BIN", gitSrc)
 	t.Setenv("HOME", t.TempDir())
 	platform.ResetDataDirCache()
 	config.Set(&config.AppConfig{})
-
-	gitDir := filepath.Join(dataDir, "runtime", "git")
-	if err := os.MkdirAll(gitDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	gitWrapper := fmt.Sprintf("#!/bin/sh\nexec %q \"$@\"\n", gitSrc)
-	if err := os.WriteFile(filepath.Join(gitDir, "git"), []byte(gitWrapper), 0o755); err != nil {
-		t.Fatal(err)
-	}
 	return dataDir
 }
 

@@ -29,7 +29,19 @@ func AppDir() (string, error) {
 //
 // 当环境变量 GOINK_TESTING=1 时，仅从 DataDir 的 bundled 路径查找，
 // 不 fallback 到系统 PATH，找不到直接报错。用于 E2E 测试确保使用 bundled git。
+//
+// 当环境变量 GOINK_GIT_BIN 非空时，优先返回它指定的路径（需通过 git --version 验证），
+// 优先级高于以上所有查找顺序。与 GOINK_DATA_DIR 同级：供测试显式注入 git，
+// 使「处于测试」与「严格解析」解耦，无需伪造一份 bundled git 布局。
 func ResolveGit() (string, error) {
+	// 0. 显式注入：测试指定 git 路径，优先级最高，验证失败直接报错不静默 fallback
+	if bin := os.Getenv("GOINK_GIT_BIN"); bin != "" {
+		if err := verifyGit(bin); err != nil {
+			return "", fmt.Errorf("git: GOINK_GIT_BIN 指定的 git 不可用 (%s): %w", bin, err)
+		}
+		return bin, nil
+	}
+
 	// GOINK_TESTING 模式：只查 DataDir bundled 路径，不做任何 fallback
 	if os.Getenv("GOINK_TESTING") != "" {
 		path := dataDirBundledGitPath()
