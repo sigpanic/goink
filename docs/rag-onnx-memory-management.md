@@ -37,7 +37,10 @@ RebuildNovel              RebuildAll
 本地补丁模块，只新增 `RunOptions.AddRunConfigEntry`，其余源码保持上游版本不变。
 `go.mod` 使用本地 `replace`，避免依赖 `unsafe` 读取第三方包私有字段。
 
-后续上游若提供等价 API，应删除本地补丁并恢复官方 module 依赖。
+上游自 v1.34.0（2026-08-18，PR #145）起已提供该方法，但本项目有意停留在
+v1.30.1 + 本地补丁，暂不升级：绑定与 ORT runtime 版本强耦合，且 ORT 1.29 引入
+POSIX telemetry 与 glibc 2.28 下限。详见
+`third_party/onnxruntime_go/PATCHES.md`。
 
 ## 实测基线
 
