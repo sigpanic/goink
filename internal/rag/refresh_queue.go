@@ -184,8 +184,20 @@ func (q *RefreshQueue) doRefreshWithCtx(ctx context.Context, task RefreshTask) {
 	}
 }
 
-// RebuildNovel 无条件全量重建一部小说的向量索引。
+// RebuildNovel 无条件全量重建一部小说的向量索引，并在任务结束后整理推理内存。
 func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
+	didInfer := false
+	defer func() {
+		if didInfer {
+			q.compactEmbeddingMemory()
+		}
+	}()
+	return q.rebuildNovel(ctx, novelID, &didInfer)
+}
+
+// rebuildNovel 执行单部小说重建，不单独整理推理内存。
+// RebuildAll 通过它连续处理多部小说，最后只 compact 一次。
+func (q *RefreshQueue) rebuildNovel(ctx context.Context, novelID int64, didInfer *bool) error {
 	chapters, err := q.chStore.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("rag: list chapters for rebuild: %w", err)
@@ -224,6 +236,7 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 		batch = append(batch, chunks...)
 
 		if len(batch) >= maxBatchSize {
+			*didInfer = true
 			if err := q.vs.IndexChunks(ctx, novelID, batch); err != nil {
 				return fmt.Errorf("rag: index batch: %w", err)
 			}
@@ -241,6 +254,7 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 	}
 
 	if len(batch) > 0 {
+		*didInfer = true
 		if err := q.vs.IndexChunks(ctx, novelID, batch); err != nil {
 			return fmt.Errorf("rag: index final batch: %w", err)
 		}
@@ -259,13 +273,20 @@ func (q *RefreshQueue) RebuildNovel(ctx context.Context, novelID int64) error {
 // 覆盖度依据：vec 表 DISTINCT chapter_id 集合 vs chapters 表实际 id 集合。
 // 幂等且可中断续跑：重建到一半被关闭，下次启动覆盖度检查发现缺失章节继续补建。
 func (q *RefreshQueue) RebuildAll(ctx context.Context) error {
+	didInfer := false
+	defer func() {
+		if didInfer {
+			q.compactEmbeddingMemory()
+		}
+	}()
+
 	var novels []novel.Novel
 	if err := q.novelStore.DB.WithContext(ctx).Find(&novels).Error; err != nil {
 		return fmt.Errorf("rag: list novels: %w", err)
 	}
 
 	for _, n := range novels {
-		if err := q.rebuildNovelIfIncomplete(ctx, n.ID); err != nil {
+		if err := q.rebuildNovelIfIncomplete(ctx, n.ID, &didInfer); err != nil {
 			q.logger.Warn("向量完整性检查失败，跳过", "novel_id", n.ID, "err", err)
 			continue
 		}
@@ -274,7 +295,7 @@ func (q *RefreshQueue) RebuildAll(ctx context.Context) error {
 }
 
 // rebuildNovelIfIncomplete 对一部小说做覆盖度检查并按需重建/补建/清理。
-func (q *RefreshQueue) rebuildNovelIfIncomplete(ctx context.Context, novelID int64) error {
+func (q *RefreshQueue) rebuildNovelIfIncomplete(ctx context.Context, novelID int64, didInfer *bool) error {
 	chapters, err := q.chStore.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("rag: list chapters: %w", err)
@@ -290,7 +311,7 @@ func (q *RefreshQueue) rebuildNovelIfIncomplete(ctx context.Context, novelID int
 	// 全空：首次全量重建（批量路径，比逐章补建少 N 次 delete/embed 调用）
 	if len(indexedIDs) == 0 {
 		q.logger.Info("向量为空，首次全量索引", "novel_id", novelID, "chapters", len(chapters))
-		return q.RebuildNovel(ctx, novelID)
+		return q.rebuildNovel(ctx, novelID, didInfer)
 	}
 
 	validSet := make(map[int64]struct{}, len(chapters))
@@ -329,12 +350,23 @@ func (q *RefreshQueue) rebuildNovelIfIncomplete(ctx context.Context, novelID int
 	if len(missing) > 0 {
 		q.logger.Info("检测到缺失章节，增量补建", "novel_id", novelID, "missing", len(missing))
 		for _, ch := range missing {
+			*didInfer = true
 			if err := q.rebuildChapter(ctx, novelID, ch); err != nil {
 				q.logger.Warn("增量补建章节失败", "novel_id", novelID, "chapter_id", ch.ID, "err", err)
 			}
 		}
 	}
 	return nil
+}
+
+// compactEmbeddingMemory 使用独立短超时执行内存整理，避免重建 context 已取消时
+// 跳过 native 内存释放。整理失败不影响已经完成的索引结果。
+func (q *RefreshQueue) compactEmbeddingMemory() {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err := q.vs.CompactEmbeddingMemory(ctx); err != nil {
+		q.logger.Warn("整理 ONNX CPU 内存池失败", "err", err)
+	}
 }
 
 // rebuildChapter 增量重建单个章节的向量：删除旧 chunks 后重新索引该章。

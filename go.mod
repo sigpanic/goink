@@ -2,6 +2,8 @@ module github.com/sigpanic/goink
 
 go 1.25.0
 
+replace github.com/yalue/onnxruntime_go => ./third_party/onnxruntime_go
+
 require (
 	codeberg.org/readeck/go-readability/v2 v2.1.2
 	github.com/JohannesKaufmann/html-to-markdown v1.6.0

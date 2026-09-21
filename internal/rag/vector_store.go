@@ -125,6 +125,12 @@ func (s *VectorStore) IndexChunks(ctx context.Context, novelID int64, chunks []C
 	return nil
 }
 
+// CompactEmbeddingMemory 释放完整重建留下的 ONNX CPU arena 扩展块。
+// 普通查询和增量索引不应逐次调用，以免反复释放和重新分配推理内存。
+func (s *VectorStore) CompactEmbeddingMemory(ctx context.Context) error {
+	return s.embedder.Compact(ctx)
+}
+
 // Search 在指定小说的向量索引中执行语义检索。
 func (s *VectorStore) Search(ctx context.Context, novelID int64, query string, topK int, filter *SearchFilter) ([]SearchResult, error) {
 	if err := s.ensureTable(ctx, novelID); err != nil {

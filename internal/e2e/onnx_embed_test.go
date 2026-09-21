@@ -112,6 +112,25 @@ func TestOnnxEmbedder_BatchEmbed(t *testing.T) {
 	t.Logf("EmbedBatch OK: %d vectors, all 512-dim, L2 normalized", len(vecs))
 }
 
+func TestOnnxEmbedder_Compact(t *testing.T) {
+	embedder, err := rag.GetEmbedder()
+	if err != nil {
+		t.Fatalf("GetEmbedder() failed: %v", err)
+	}
+
+	ctx := context.Background()
+	if err := embedder.Compact(ctx); err != nil {
+		t.Fatalf("Compact() failed: %v", err)
+	}
+	vec, err := embedder.Embed(ctx, "内存整理后的推理应继续正常工作")
+	if err != nil {
+		t.Fatalf("Embed() after Compact failed: %v", err)
+	}
+	if len(vec) != 512 {
+		t.Fatalf("expected 512 dimensions after Compact, got %d", len(vec))
+	}
+}
+
 func TestOnnxEmbedder_Consistency(t *testing.T) {
 	embedder, err := rag.GetEmbedder()
 	if err != nil {
