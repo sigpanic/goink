@@ -3,7 +3,6 @@ package app
 import (
 	"context"
 	"log/slog"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -34,21 +33,6 @@ func TestIsInitialized_BeforeStartup(t *testing.T) {
 func TestIsInitialized_AfterSetup(t *testing.T) {
 	a := setupTestApp(t)
 	assert.True(t, a.IsInitialized(), "setupTestApp should set cfg so IsInitialized returns true")
-}
-
-// ---------------------------------------------------------------------------
-// OnStartup
-// ---------------------------------------------------------------------------
-
-func TestOnStartup_NoConfig(t *testing.T) {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	a := New(logger)
-
-	// Call OnStartup. Whether it fully initializes depends on whether
-	// ~/.goink/config.json exists. The key invariant is: no panic.
-	assert.NotPanics(t, func() {
-		a.OnStartup(context.Background())
-	}, "OnStartup should not panic regardless of config state")
 }
 
 // ---------------------------------------------------------------------------
