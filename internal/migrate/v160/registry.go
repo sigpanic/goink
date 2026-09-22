@@ -20,7 +20,7 @@ type step struct {
 func (s step) Key() string                             { return s.key }
 func (s step) Run(db *gorm.DB, log *slog.Logger) error { return s.run(db, log) }
 
-// registry 是本次迁移的步骤列表。
+// registry 是本次迁移的后置步骤列表。
 // key 在本 migration 内独立计数（N-描述），与 commit 编号解耦；按依赖顺序排列。
 var registry = []engine.Step{
 	// commit 1.5：交叉引用数据 num→id 重写
@@ -33,13 +33,20 @@ var registry = []engine.Step{
 	step{key: "4-drop-legacy", run: migrateDropLegacy},
 }
 
+// needsMigration 识别 v1.6.0 前的章节号 schema。chapter_number 是本次迁移的
+// 唯一历史输入列；最终 schema 已删除它，因此 migrate_state 丢失后不会重跑。
+func needsMigration(db *gorm.DB) (bool, error) {
+	return db.Migrator().HasTable("chapters") && db.Migrator().HasColumn("chapters", "chapter_number"), nil
+}
+
 // init 自注册进 engine：migrate.Run 遍历 engine.Registry 统一执行，无需感知本包。
 // Destructive：本次迁移含数据重写 + 文件 rename + 删旧列，属破坏性迁移，需自动备份。
 func init() {
 	engine.Register(engine.Migration{
-		Name:        migration,
-		Description: "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
-		Destructive: true,
-		Steps:       registry,
+		Name:            migration,
+		Description:     "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
+		Destructive:     true,
+		NeedsMigration:  needsMigration,
+		PostSchemaSteps: registry,
 	})
 }

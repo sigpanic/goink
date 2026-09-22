@@ -132,15 +132,15 @@
 - `status`：`"running"` / `"done"` / `"failed"`，单步骤状态
 - `started_at` / `finished_at`：时间戳，便于排查
 
-migrate.Run 流程（注册表驱动，框架见 internal/migrate/step.go，v1.6.0 步骤实现见 internal/migrate/v160 子包）：
-- 先 AutoMigrate 建 migrate_state 表（backup 的组判断依赖它存在）
-- 只对 `Destructive: true` 的迁移备份：查本迁移组（`migration = "v1.6.0-..."`）是否全部 done：全 done 则跳过备份；否则备份（按迁移名目录，临时目录原子 rename）。纯增量迁移（仅加列）不备份
-- 框架遍历注册表步骤：已 done 跳过；未 done 置 running → 执行（步骤内部幂等）→ done / failed
-- 新库短路：chapters 表不存在 → 所有 step 直接 INSERT done
+migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具体版本迁移见 `internal/migrate/v120` / `v160` 子包）：
+- 每个迁移声明 `NeedsMigration`、`PreSchemaSteps`、`PostSchemaSteps`。前置步骤在当前 model AutoMigrate 前运行（如历史字段 rename），后置步骤在其后运行（如数据重写、文件迁移、删旧列）
+- 先仅建 `migrate_state`，再在原始 schema 上为全部迁移生成计划：已有未完成状态则续跑；无状态的既有库由该迁移自己的 `NeedsMigration` 识别历史 schema；新库或已是最终 schema 的库仅登记 done
+- 只对计划执行且 `Destructive: true` 的迁移备份；随后按注册顺序运行所有前置步骤、AutoMigrate 当前 models、再运行所有后置步骤
+- 无需执行的迁移在一个数据库事务内一次性登记全部 done，避免进程中断留下半组状态
 
-**新用户处理**：新库短路直接全 done，不跑任何 migrate 步骤。
+**新用户与状态丢失**：新库不执行历史步骤；最终 schema 即使 `migrate_state` 丢失，也会由各迁移的 schema 检测判定为无需执行，只补回 done 状态。
 
-**为什么不用 HasColumn 做 flag**：migrate 步骤7删了 chapter_number 列后，如果中途中断（如步骤6文件 rename 未完成），重启后 HasColumn(chapter, chapter_number) 不存在会误判"已迁移"，导致文件 rename 永远不完成。migrate_state 表独立追踪整体状态，跟 schema 列状态解耦，更可靠。
+**schema 检测的职责**：`NeedsMigration` 仅用于“没有任何该迁移状态的既有库”的首次识别；一旦已有状态，恢复完全由 `migrate_state` 驱动。每个 step 仍保留自身的列/数据检查以保证幂等。检测遇到新旧列混杂等无法安全识别的状态必须返回错误，不能猜测后执行破坏性操作。
 
 **为什么不用 golang-migrate 等标准库**：与本项目 GORM AutoMigrate 模式冲突（两套 migrate 系统打架），且 SQL-first 难表达复杂逻辑迁移（num→id 反查+文件 rename）。自建 migrate_state 表本质是 golang-migrate schema_migrations 表的轻量灵活版，跟现有 migrate.go 模式一致。
 

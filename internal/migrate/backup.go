@@ -22,8 +22,7 @@ import (
 //   - migrate_state 中本迁移组（migration = migration）有记录且全部 done → 跳过
 //   - 备份目录 backups/{migration}/ 已存在（完整备份）→ 跳过
 //   - DB 文件不存在（无数据库文件）→ 跳过
-//   - 无 chapters 表（全新库，无历史数据）→ 跳过，避免备份空库
-//     （注意：SQLite 连接即建文件，GlobalDBPath() 在新库时也已存在，"DB 文件不存在"守卫挡不住新库）
+//   - 新库由迁移计划直接登记 done，不会调用本函数；本函数只处理已计划执行的迁移
 //
 // 备份内容（全量拷贝）：novel-agent.db + novels/（含每个 novel 的 git 仓库）。
 // 备份目录 = backups/{migration}/，与 migrate_state 的 migration 标识对应，未来迁移各占一目录互不覆盖。
@@ -44,12 +43,6 @@ func backupBeforeMigrate(db *gorm.DB, log *slog.Logger, migration string) error 
 	// DB 不存在（无数据库文件）→ 无需备份
 	if _, err := os.Stat(config.GlobalDBPath()); err != nil {
 		log.Info("无数据库文件，跳过备份")
-		return nil
-	}
-
-	// 全新库（无 chapters 表，无历史数据）→ 无需备份，避免备份空库
-	if !db.Migrator().HasTable("chapters") {
-		log.Info("新库，跳过备份")
 		return nil
 	}
 

@@ -18,11 +18,75 @@ import (
 	"github.com/sigpanic/goink/internal/platform"
 )
 
-// TestRunMigratesLegacyDatabaseEndToEnd 是 migrate.Run 的总集成契约：从 v1.6.0
-// 之前的真实 SQLite schema、真实数据和旧文件命名开始，只调用一次公开入口，验证
-// 历史字段改名、v160 数据转换、文件/Git 迁移和最终 schema。后续新增迁移步骤时，
-// 应在这里补充初始结构、样本数据和最终断言。
-func TestRunMigratesLegacyDatabaseEndToEnd(t *testing.T) {
+func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
+	setupMigrationIntegrationEnv(t)
+	db := openMigrationIntegrationDB(t)
+
+	if err := migrate.Run(db, slog.Default()); err != nil {
+		t.Fatalf("migrate.Run: %v", err)
+	}
+	if !db.Migrator().HasTable("chapters") {
+		t.Fatal("新库应创建当前 chapters schema")
+	}
+	for _, migration := range []struct {
+		name string
+		want int64
+	}{
+		{"v1.2.0-chapter-number-column-names", 2},
+		{"v1.6.0-chapter-id-refactor", 4},
+	} {
+		var done int64
+		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
+			t.Fatal(err)
+		}
+		if done != migration.want {
+			t.Fatalf("新库 %s done steps = %d, want %d", migration.name, done, migration.want)
+		}
+	}
+}
+
+func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
+	setupMigrationIntegrationEnv(t)
+	db := openMigrationIntegrationDB(t)
+	for _, query := range []string{
+		`CREATE TABLE novels (id INTEGER PRIMARY KEY, title TEXT NOT NULL, dir_path TEXT)`,
+		`CREATE TABLE chapters (id INTEGER PRIMARY KEY, novel_id INTEGER NOT NULL, sort_order INTEGER NOT NULL DEFAULT 0)`,
+	} {
+		if err := db.Exec(query).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := migrate.Run(db, slog.Default()); err != nil {
+		t.Fatalf("migrate.Run: %v", err)
+	}
+	if db.Migrator().HasColumn("novels", "dir_path") {
+		t.Fatal("最终章节 schema 中残留的 novels.dir_path 应被清理")
+	}
+	for _, migration := range []struct {
+		name string
+		want int64
+	}{
+		{"v1.2.0-chapter-number-column-names", 2},
+		{"v1.6.0-chapter-id-refactor", 4},
+	} {
+		var done int64
+		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
+			t.Fatal(err)
+		}
+		if done != migration.want {
+			t.Fatalf("%s done steps = %d, want %d", migration.name, done, migration.want)
+		}
+	}
+}
+
+// TestRunMigratesOldestSupportedDatabaseEndToEnd 是 migrate.Run 的黑盒总契约：从
+// 最早仍受当前迁移链支持的 SQLite schema、真实数据和旧文件命名开始，只调用一次
+// 公开入口，验证最终数据库、数据、文件、Git 和 migrate_state。
+//
+// 新增 migration 时，必须在这里补充其历史输入和最终断言，持续证明整条升级链可从
+// 最早受支持旧库升级到当前版本。各版本包内的测试则保留为定位具体步骤边界的白盒测试。
+func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	dataDir := setupMigrationIntegrationEnv(t)
 	db := openMigrationIntegrationDB(t)
 	execSQL := func(query string) {
@@ -32,10 +96,10 @@ func TestRunMigratesLegacyDatabaseEndToEnd(t *testing.T) {
 		}
 	}
 
-	// v1.6.0 前的全部相关旧表。source/resolved/writing/character 的 *_id
-	// 在该版本只是章节号的误名；这里故意不预建任何 v1.6.0 新列。
+	// 最早受支持 schema 的全部迁移相关旧表。source/resolved/writing/character 的
+	// *_id 在该版本只是章节号的误名；这里故意不预建任何 v1.6.0 新列。
 	for _, query := range []string{
-		`CREATE TABLE novels (id INTEGER PRIMARY KEY, title TEXT NOT NULL, genre TEXT, description TEXT, created_at DATETIME, updated_at DATETIME)`,
+		`CREATE TABLE novels (id INTEGER PRIMARY KEY, title TEXT NOT NULL, genre TEXT, description TEXT, dir_path TEXT, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE TABLE chapters (id INTEGER PRIMARY KEY, novel_id INTEGER NOT NULL, chapter_number INTEGER NOT NULL, title TEXT, summary TEXT, word_count INTEGER DEFAULT 0, created_at DATETIME, updated_at DATETIME)`,
 		`CREATE UNIQUE INDEX uk_novel_chapter ON chapters(novel_id, chapter_number)`,
 		`CREATE TABLE time_entries (id INTEGER PRIMARY KEY, novel_id INTEGER NOT NULL, category TEXT NOT NULL, status TEXT NOT NULL, title TEXT NOT NULL, content TEXT, detail_json TEXT, target_chapter INTEGER NOT NULL, importance INTEGER DEFAULT 3, source_chapter_id INTEGER, source TEXT, resolved_chapter_id INTEGER, created_at DATETIME, updated_at DATETIME)`,
@@ -115,6 +179,7 @@ func TestRunMigratesLegacyDatabaseEndToEnd(t *testing.T) {
 	}
 
 	for _, legacy := range []struct{ table, column string }{
+		{"novels", "dir_path"},
 		{"chapters", "chapter_number"},
 		{"time_entries", "target_chapter"}, {"time_entries", "source_chapter"}, {"time_entries", "resolved_chapter"},
 		{"arc_nodes", "target_chapter"}, {"arc_nodes", "actual_chapter"},
@@ -139,6 +204,9 @@ func TestRunMigratesLegacyDatabaseEndToEnd(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND status = 'done'`); n != 4 {
 		t.Fatalf("v160 迁移步骤完成数 = %d, want 4", n)
 	}
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.2.0-chapter-number-column-names' AND status = 'done'`); n != 2 {
+		t.Fatalf("v120 迁移步骤完成数 = %d, want 2", n)
+	}
 
 	if err := migrate.Run(db, slog.Default()); err != nil {
 		t.Fatalf("幂等 migrate.Run: %v", err)
@@ -154,6 +222,9 @@ func TestRunMigratesLegacyDatabaseEndToEnd(t *testing.T) {
 		!db.Migrator().HasColumn("writing_log", "chapter_id") ||
 		db.Migrator().HasColumn("writing_log", "chapter_number") {
 		t.Fatal("状态丢失重跑不应回退最终的 id schema")
+	}
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 6 {
+		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 6", n)
 	}
 }
 
