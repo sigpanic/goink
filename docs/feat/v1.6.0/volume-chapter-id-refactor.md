@@ -226,13 +226,12 @@ migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具
 
 migrate 触发时第一步先备份，避免破坏性变更失败后无法恢复：
 
-- 备份根目录：`filepath.Join(platform.DataDir(), "backups", timestamp)`，其中 `platform.DataDir()` 平台相关（Windows exe 目录可写时为 exe 目录，不可写时为 `%LOCALAPPDATA%\Goink`；其他平台 `~/Goink/`；可被 `GOINK_DATA_DIR` 覆盖）
+- 备份根目录：`filepath.Join(platform.DataDir(), "backups", migration)`，其中 `migration` 是迁移组标识；`platform.DataDir()` 平台相关（Windows exe 目录可写时为 exe 目录，不可写时为 `%LOCALAPPDATA%\Goink`；其他平台 `~/Goink/`；可被 `GOINK_DATA_DIR` 覆盖）
 - 备份内容：
-  - `cp novel-agent.db → backups/{timestamp}/novel-agent.db`
-  - `cp -r novels/ → backups/{timestamp}/novels/`
-- 备份幂等：同名 timestamp 目录已存在则跳过（不重复备份）
-- 备份失败处理：日志告警但**不阻塞 migrate**（备份失败不卡住启动）；紧急恢复时用户手动从 `backups/` 恢复
-- 备份保留策略：保留最近 3 份，更老的自动清理（避免磁盘膨胀）
+  - 使用 SQLite Online Backup API 将已打开数据库写为 `backups/{migration}/novel-agent.db` 的一致性快照；WAL 中的已提交事务已包含在快照内，不单独复制 `-wal` / `-shm`
+  - `cp -r novels/ → backups/{migration}/novels/`
+- 备份幂等：同名 migration 目录已存在则跳过（不重复备份）
+- 备份失败处理：对破坏性迁移为**硬前置条件**；备份失败则停止启动期 migrate，不执行任何迁移 step。处理磁盘空间、目录权限或数据库占用后重启重试；紧急恢复时用户手动从 `backups/` 恢复
 
 ## 八、AI 暴露层（id 直寻，零转译）
 
@@ -481,7 +480,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 ### 13.2 回滚
 
 - 一次性破坏性变更，不支持自动回滚
-- 自动备份：migrate 前自动备份到 `platform.DataDir()/backups/{timestamp}/`（含 novel-agent.db + novels/ 全量拷贝，详见 7.6）
+- 自动备份：migrate 前自动备份到 `platform.DataDir()/backups/{migration}/`（含一致性 SQLite 快照 + novels/ 全量拷贝，详见 7.6）
 - 紧急回滚：手动从 `backups/` 恢复 DB 与 novels/，代码层靠 git revert
 
 ## 十四、不做的事
@@ -511,7 +510,7 @@ commit 路线（分层顺序、细粒度 commit 表格、删列与删字段约�
 1. **新建章节策略**（第十一节）：chapters/new.md 占位方案，rw_tools 删除 upsert 逻辑
 2. **AI 暴露层**（第八节）：AI 直接用 id（chapters/id_{id}.md），list_chapters 返回 id+chapter_number+volume_name+title，零转译
 3. **交叉引用迁移反查失败**（7.2 步骤2）：写 NULL + 日志，不阻塞迁移
-4. **自动备份**（7.6）：migrate 前自动备份到 `platform.DataDir()/backups/{timestamp}/`
+4. **自动备份**（7.6）：migrate 前自动备份到 `platform.DataDir()/backups/{migration}/`
 5. **delete_record 不扩展**（第九节）：AI 不能删章节，删章节仅前端
 6. **结构操作仅前端**：不新增 insert/move/delete chapter mcp_tool
 7. **实施顺序**：**自底向上分层平推**（L0 基建 → L2 chapter.Store → L3 rag+search → L4 其他内部包 → L5 mcp_tools → L6 app → L7 前端 → **L1b 删旧字段**），允许中途编译失败，中间层提交用 `--no-verify` 跳过 hook。删列（L1b）必须在最后：删列不可逆，任何一层没改完就删列，运行时会读到不存在的列。原「7 个细粒度 commit + PR1/PR2 拆分」方案已放弃，commit 路线统一见 [commit-roadmap.md](./commit-roadmap.md)

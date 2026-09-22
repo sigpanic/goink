@@ -56,7 +56,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 			continue
 		}
 		if err := backupBeforeMigrate(db, log, plan.Migration.Name); err != nil {
-			log.Warn("迁移前自动备份失败（继续迁移）", "migration", plan.Migration.Name, "description", plan.Migration.Description, "err", err)
+			return fmt.Errorf("migrate: 破坏性迁移前备份失败，迁移未执行 (%s): %w", plan.Migration.Name, err)
 		}
 	}
 	for _, plan := range plans {
