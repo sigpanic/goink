@@ -539,9 +539,13 @@ func runCmd(gitBin, dir string, args ...string) (stdout, stderr string, err erro
 	//   - core.hooksPath=.goink-no-hooks：用户全局 hooksPath 指向自定义 hook 目录时，
 	//     其中的 pre-commit 会拦截 Goink 的 commit；这里指向一个必然不存在的相对
 	//     目录，等价于禁用 hook。相对路径相对工作区根（cmd.Dir）解析，跨平台一致。
+	//   - core.quotepath=false：默认 true 会把 ls-tree / diff-tree 输出里的非 ASCII
+	//     路径转义成 "\346\210\221..." 形式，导致 commitFileChanges 返回的 Path 与
+	//     前端传入的 UTF-8 路径无法匹配，历史 diff 打不开。置 false 输出原始 UTF-8。
 	fullArgs := append([]string{
 		"-c", "commit.gpgsign=false",
 		"-c", "core.hooksPath=.goink-no-hooks",
+		"-c", "core.quotepath=false",
 	}, args...)
 
 	cmd := exec.Command(gitBin, fullArgs...)
