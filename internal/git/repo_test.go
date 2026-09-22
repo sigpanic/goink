@@ -65,6 +65,48 @@ func testRepo(t *testing.T, commits int) (*Repo, string, func()) {
 	return r, dir, func() { os.RemoveAll(dir) }
 }
 
+// TestRunCmd_IsolatesUserGitConfig 验证 runCmd 派生的 git 进程不继承用户全局 git
+// 配置：commit.gpgsign=true 会让无 tty 的 GUI 进程因无法 pinentry 而 commit 失败，
+// core.hooksPath 则会让用户的 pre-commit 拦截 Goink 的 commit。
+func TestRunCmd_IsolatesUserGitConfig(t *testing.T) {
+	home := t.TempDir()
+	hookDir := filepath.Join(home, "global-hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(home, "hook-ran")
+	hook := "#!/bin/sh\ntouch \"" + marker + "\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(hookDir, "pre-commit"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	gitconfig := "[user]\n\tname = Global\n\temail = global@test\n" +
+		"[commit]\n\tgpgsign = true\n" +
+		"[gpg]\n\tprogram = /nonexistent-goink-gpg\n" +
+		"[core]\n\thooksPath = " + hookDir + "\n"
+	if err := os.WriteFile(filepath.Join(home, ".gitconfig"), []byte(gitconfig), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("HOME", home)
+
+	dir := t.TempDir()
+	r := &Repo{dir: dir, gitBin: "git"}
+	if _, stderr, err := r.runInDir("init"); err != nil {
+		t.Fatalf("git init: %s: %v", stderr, err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, err := r.runInDir("add", "-A"); err != nil {
+		t.Fatalf("git add: %s: %v", stderr, err)
+	}
+	if _, stderr, err := r.runInDir("commit", "-m", "isolated"); err != nil {
+		t.Fatalf("commit 不应受用户全局 git 配置影响: %s: %v", stderr, err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("用户全局 core.hooksPath 下的 pre-commit 被执行了，runCmd 未隔离 hook")
+	}
+}
+
 func TestLogDetailed_Basic(t *testing.T) {
 	r, _, cleanup := testRepo(t, 3)
 	defer cleanup()

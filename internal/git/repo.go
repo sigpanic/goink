@@ -531,7 +531,20 @@ func (r *Repo) runInDir(args ...string) (stdout, stderr string, err error) {
 }
 
 func runCmd(gitBin, dir string, args ...string) (stdout, stderr string, err error) {
-	cmd := exec.Command(gitBin, args...)
+	// -c 是 git 的全局选项，必须置于子命令之前（git -c k=v commit 正确，
+	// git commit -c k=v 会被解析成「复用指定 commit 的消息」）。覆盖项用于切断
+	// 小说仓库对用户全局 git 配置的继承，生产与测试的全部 git 调用都经此处：
+	//   - commit.gpgsign=false：用户全局开启签名时，Goink 作为无 tty 的 GUI 进程
+	//     无法完成 pinentry，commit 会失败，表现为「保存章节失败」。
+	//   - core.hooksPath=.goink-no-hooks：用户全局 hooksPath 指向自定义 hook 目录时，
+	//     其中的 pre-commit 会拦截 Goink 的 commit；这里指向一个必然不存在的相对
+	//     目录，等价于禁用 hook。相对路径相对工作区根（cmd.Dir）解析，跨平台一致。
+	fullArgs := append([]string{
+		"-c", "commit.gpgsign=false",
+		"-c", "core.hooksPath=.goink-no-hooks",
+	}, args...)
+
+	cmd := exec.Command(gitBin, fullArgs...)
 	cmd.Dir = dir
 	cmd.Env = filteredGitEnv()
 	var outBuf, errBuf bytes.Buffer
