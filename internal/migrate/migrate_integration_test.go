@@ -32,7 +32,7 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 		want int64
 	}{
 		{"v1.2.0-chapter-number-column-names", 2},
-		{"v1.6.0-chapter-id-refactor", 4},
+		{"v1.6.0-chapter-id-refactor", 5},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -67,7 +67,7 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 		want int64
 	}{
 		{"v1.2.0-chapter-number-column-names", 2},
-		{"v1.6.0-chapter-id-refactor", 4},
+		{"v1.6.0-chapter-id-refactor", 5},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -200,8 +200,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 			t.Fatalf("迁移后表不存在: %s", table)
 		}
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND status = 'done'`); n != 4 {
-		t.Fatalf("v160 迁移步骤完成数 = %d, want 4", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND status = 'done'`); n != 5 {
+		t.Fatalf("v160 迁移步骤完成数 = %d, want 5", n)
 	}
 	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.2.0-chapter-number-column-names' AND status = 'done'`); n != 2 {
 		t.Fatalf("v120 迁移步骤完成数 = %d, want 2", n)
@@ -222,8 +222,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		db.Migrator().HasColumn("writing_log", "chapter_number") {
 		t.Fatal("状态丢失重跑不应回退最终的 id schema")
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 6 {
-		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 6", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 7 {
+		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 7", n)
 	}
 }
 

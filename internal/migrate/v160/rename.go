@@ -65,15 +65,27 @@ func migrateRenameFiles(db *gorm.DB, log *slog.Logger) error {
 func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 	dir := config.NovelDirPath(novelID)
 
-	// 2. volumes/ 目录 + .gitkeep（幂等：已存在跳过）
+	// 2. volumes/ 目录 + .gitkeep。目录或文件已经存在时均须确认类型和 .gitkeep，
+	// 避免进程在建目录与写文件之间中断后被错误地视为完成。
 	volumesDir := filepath.Join(dir, "volumes")
-	if _, err := os.Stat(volumesDir); err != nil {
+	if info, err := os.Stat(volumesDir); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("migrate v160: volumes 路径不是目录: %s", volumesDir)
+		}
+	} else if errors.Is(err, os.ErrNotExist) {
 		if err := os.MkdirAll(volumesDir, 0o755); err != nil {
 			return fmt.Errorf("migrate v160: 创建 volumes/ 目录: %w", err)
 		}
+	} else {
+		return fmt.Errorf("migrate v160: 检查 volumes/ 目录: %w", err)
+	}
+	gitkeep := filepath.Join(volumesDir, ".gitkeep")
+	if _, err := os.Stat(gitkeep); errors.Is(err, os.ErrNotExist) {
 		if err := os.WriteFile(filepath.Join(volumesDir, ".gitkeep"), nil, 0o644); err != nil {
 			return fmt.Errorf("migrate v160: 写入 volumes/.gitkeep: %w", err)
 		}
+	} else if err != nil {
+		return fmt.Errorf("migrate v160: 检查 volumes/.gitkeep: %w", err)
 	}
 
 	// 3. 章节/大纲文件 rename：{num:03d} → id_{id}（源按旧 num 命名，目标按新 id 命名）

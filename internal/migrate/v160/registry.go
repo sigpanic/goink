@@ -33,6 +33,12 @@ var registry = []engine.Step{
 	step{key: "4-drop-legacy", run: migrateDropLegacy},
 }
 
+// preSchemaRegistry 在任何当前 model AutoMigrate 前运行。checkpoint 必须独立于
+// 文件 rename：它成功后会有自己的 done 状态，rename 重试不会误提交迁移残留。
+var preSchemaRegistry = []engine.Step{
+	step{key: "0-checkpoint-novel-repositories", run: migrateCheckpointNovelRepositories},
+}
+
 // needsMigration 识别 v1.6.0 前的章节号 schema。chapter_number 是本次迁移的
 // 唯一历史输入列；最终 schema 已删除它，因此 migrate_state 丢失后不会重跑。
 func needsMigration(db *gorm.DB) (bool, error) {
@@ -47,6 +53,7 @@ func init() {
 		Description:     "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
 		Destructive:     true,
 		NeedsMigration:  needsMigration,
+		PreSchemaSteps:  preSchemaRegistry,
 		PostSchemaSteps: registry,
 	})
 }

@@ -172,17 +172,24 @@ migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具
 
 | 步骤 | 操作 | 幂等检查 |
 |---|---|---|
+| 0. 仓库 checkpoint | 将每个 novel 仓库中迁移开始前的未提交改动单独提交 | 工作区干净则跳过；checkpoint 有任一失败则停止迁移 |
 | 1. 加 chapter_id 列 | timeline/arc_node/reader/writing_log/character_relations 五张表加 `chapter_id int64` 列 | `HasColumn` 已存在则跳过 |
 | 2. 数据重写 | 按 `(novel_id, chapter_number)` 反查 `chapter.id`，写入新 `chapter_id` 列；**反查失败**（章节号无对应 chapter 记录，如数据损坏或用户手改过 DB）则 `chapter_id` 写 NULL 并记录告警日志，不阻塞迁移 | `WHERE chapter_id IS NULL` 仅重写未完成的行 |
 | 3. 建 volume 表 | AutoMigrate 新表 | GORM AutoMigrate 幂等 |
 | 4. 加 volume_id + sort_order 列 | chapter 表加 `volume_id *int64` + `sort_order int`；sort_order 初始化 = chapter_number（保留原顺序） | `HasColumn` 已存在则跳过；sort_order 为 NULL 时初始化 |
-| 5. 建 volumes/ 目录 | 每个 novel 仓库创建空 `volumes/` 目录 + `.gitkeep` | 目录存在则跳过 |
+| 5. 建 volumes/ 目录 | 每个 novel 仓库创建空 `volumes/` 目录 + `.gitkeep` | 已有目录时确认 `.gitkeep`；同名非目录则失败 |
 | 6. 文件逐个 mv（见 7.3） | 遍历所有 novel 仓库 rename 文件 `chapters/{num:03d}.md → chapters/id_{id}.md`、`outlines/{num:03d}.md → outlines/id_{id}.md` | 目标存在/源不存在则跳过 |
 | 7. 删旧字段 | 删 chapter_number 列及交叉引用表的旧 num 列 | `HasColumn` 不存在则跳过 |
 
 ### 7.3 文件系统迁移（每 novel 独立处理）
 
 跨 DB+FS 无法用单一事务保证，采用**逐个 mv + commit**实现幂等可重入：
+
+**阶段 0：迁移前 checkpoint**
+- 备份完成后、任何 schema 或文件改动前，逐个检查 novel 仓库工作区
+- 工作区不干净时先执行 `git add -A`，再单独提交 `checkpoint: save changes before chapter ID migration`
+- checkpoint 是独立 migration step；任一仓库失败即停止，重试时已完成的 checkpoint 不会再次执行，因此文件迁移的残留改动不会误归入 checkpoint
+- 仅 `chapters.chapter_number` 仍存在时执行；已完成 v1.6.0 但缺少该新增 step 状态的旧开发库只补状态，不提交当前用户改动
 
 **阶段 A：逐个 rename**（os.Rename，非 git mv）
 - 对每个 chapter 记录，按 id 逐个 rename：
@@ -214,6 +221,7 @@ migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具
   - git 干净 → 跳过 commit
 - 全部 step done → backup 组判断"全 done"→ 后续启动跳过备份
 - 单个 novel 的文件、目录或 Git 操作失败时，文件迁移仍会尝试其余 novel，但最后必须返回聚合错误；`2-rename-files` 保持 failed，禁止进入删旧字段步骤。重启后由结构性幂等检查跳过已完成文件、重试失败项。
+- 迁移前 checkpoint 已完成时会记录独立 done 状态；后续文件迁移重试不会把迁移自身造成的工作区改动当作迁移前用户改动再次提交。
 
 重启 `migrate.Run` 自动从未 done 的 step 继续，单步骤幂等保证不重复执行已完成的子操作。
 

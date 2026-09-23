@@ -153,6 +153,118 @@ func TestRenameFilesMigrationSkipsNewSchema(t *testing.T) {
 	}
 }
 
+func TestRenameFilesMigrationCheckpointsExistingWorktreeChanges(t *testing.T) {
+	dataDir := setupMigrateEnv(t)
+	db := openMigrateDB(t)
+	log := slog.Default()
+	for _, model := range []any{&novel.Novel{}, &chapter.Chapter{}} {
+		if err := db.AutoMigrate(model); err != nil {
+			t.Fatalf("AutoMigrate %T: %v", model, err)
+		}
+	}
+	if err := db.Exec(`ALTER TABLE chapters ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO novels (id, title) VALUES (1, 'n1')`,
+		`INSERT INTO chapters (id, novel_id, chapter_number, sort_order, title) VALUES (1, 1, 1, 0, 'c1')`,
+	} {
+		if err := db.Exec(query).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	repo, err := git.New(1, "", "", log)
+	if err != nil {
+		t.Fatal(err)
+	}
+	novelDir := filepath.Join(dataDir, "novels", "1")
+	for rel, content := range map[string]string{
+		"chapters/001.md": "chapter content",
+		"notes/draft.md":  "user draft",
+	} {
+		path := filepath.Join(novelDir, rel)
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := migrate.Run(db, log); err != nil {
+		t.Fatalf("migrate.Run: %v", err)
+	}
+	if dirty, err := repo.HasUncommitted(); err != nil || dirty {
+		t.Fatalf("迁移后 Git 工作区应干净: dirty=%v err=%v", dirty, err)
+	}
+
+	commits, err := repo.Log("", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var checkpointHash, migrationHash string
+	for _, commit := range commits {
+		switch commit.Message {
+		case "checkpoint: save changes before chapter ID migration":
+			checkpointHash = commit.Hash
+		case "migrate: rename chapter files to id-based names":
+			migrationHash = commit.Hash
+		}
+	}
+	if checkpointHash == "" || migrationHash == "" {
+		t.Fatalf("应分别产生 checkpoint 与迁移提交: checkpoint=%q migration=%q", checkpointHash, migrationHash)
+	}
+	_, checkpointFiles, err := repo.CommitFileList(checkpointHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, migrationFiles, err := repo.CommitFileList(migrationHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contains := func(files []git.FileEntry, path string) bool {
+		for _, file := range files {
+			if file.Path == path || file.OldPath == path {
+				return true
+			}
+		}
+		return false
+	}
+	if !contains(checkpointFiles, "notes/draft.md") {
+		t.Fatal("checkpoint 提交应包含迁移前用户改动")
+	}
+	if contains(migrationFiles, "notes/draft.md") {
+		t.Fatal("迁移提交不应包含迁移前用户改动")
+	}
+
+	var checkpointStatus string
+	if err := db.Table("migrate_state").Select("status").
+		Where("migration = ? AND step = ?", "v1.6.0-chapter-id-refactor", "0-checkpoint-novel-repositories").
+		Scan(&checkpointStatus).Error; err != nil {
+		t.Fatal(err)
+	}
+	if checkpointStatus != "done" {
+		t.Fatalf("checkpoint 状态 = %q, want done", checkpointStatus)
+	}
+
+	// 模拟曾在 checkpoint step 加入前完成 v1.6.0 的开发库。补写新 step 状态时，
+	// 最终 schema 不应触发 checkpoint 或提交之后产生的用户改动。
+	postMigrationDraft := filepath.Join(novelDir, "notes", "after-migration.md")
+	if err := os.WriteFile(postMigrationDraft, []byte("later draft"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Exec(`DELETE FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND step = '0-checkpoint-novel-repositories'`).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Run(db, log); err != nil {
+		t.Fatalf("最终 schema 补写 checkpoint 状态: %v", err)
+	}
+	if dirty, err := repo.HasUncommitted(); err != nil || !dirty {
+		t.Fatalf("最终 schema 补写状态不应提交新改动: dirty=%v err=%v", dirty, err)
+	}
+}
+
 func TestRenameFilesFailureStopsBeforeDroppingLegacyColumnsAndRetries(t *testing.T) {
 	dataDir := setupMigrateEnv(t)
 	db := openMigrateDB(t)
@@ -173,13 +285,14 @@ func TestRenameFilesFailureStopsBeforeDroppingLegacyColumnsAndRetries(t *testing
 		}
 	}
 
-	// novel 目录被普通文件占用时，创建 volumes/ 必定失败。迁移必须将该失败
-	// 回传给框架，而非将文件迁移标记 done 后继续删除 chapter_number。
+	// volumes 路径被普通文件占用时，文件迁移必须将该失败回传给框架，
+	// 而非将 step 标记 done 后继续删除 chapter_number。
 	novelDir := filepath.Join(dataDir, "novels", "1")
-	if err := os.MkdirAll(filepath.Dir(novelDir), 0o755); err != nil {
+	if _, err := git.New(1, "", "", slog.Default()); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(novelDir, []byte("not a directory"), 0o600); err != nil {
+	volumesPath := filepath.Join(novelDir, "volumes")
+	if err := os.WriteFile(volumesPath, []byte("not a directory"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	if err := migrate.Run(db, slog.Default()); err == nil {
@@ -198,7 +311,7 @@ func TestRenameFilesFailureStopsBeforeDroppingLegacyColumnsAndRetries(t *testing
 		t.Fatalf("文件迁移失败应记录 failed: got %q", status)
 	}
 
-	if err := os.Remove(novelDir); err != nil {
+	if err := os.Remove(volumesPath); err != nil {
 		t.Fatal(err)
 	}
 	chapterPath := filepath.Join(novelDir, "chapters", "001.md")
