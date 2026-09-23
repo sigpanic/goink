@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 )
 
@@ -44,9 +45,10 @@ func hashTestName(name string) int {
 	return h % 999
 }
 
-// novelDir returns the directory path for a given novel ID in the test data dir.
+// novelDir 返回小说目录，走与生产代码（git.New → config.NovelDirPath）完全相同的
+// 解析路径，保证 cleanup 删除的正是测试实际写入的目录。
 func novelDir(novelID int64) string {
-	return filepath.Join(os.Getenv("GOINK_DATA_DIR"), "novels", fmt.Sprintf("%d", novelID))
+	return config.NovelDirPath(novelID)
 }
 
 func TestGitNew_InitWithBundledGit(t *testing.T) {

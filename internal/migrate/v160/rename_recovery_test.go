@@ -5,7 +5,6 @@ package v160
 import (
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -16,20 +15,15 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/novel"
-	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/testsupport"
 )
 
 func TestMigrateRenameFilesCanRerunBeforeStateRecorded(t *testing.T) {
-	gitBin, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("系统无 git，跳过")
-	}
-	dataDir := t.TempDir()
+	gitBin := testsupport.RequireGit(t)
+	dataDir := testsupport.Isolate(t)
 	t.Setenv("GOINK_TESTING", "1")
-	t.Setenv("GOINK_DATA_DIR", dataDir)
 	t.Setenv("GOINK_GIT_BIN", gitBin)
 	t.Setenv("HOME", t.TempDir())
-	platform.ResetDataDirCache()
 	config.Set(&config.AppConfig{})
 
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "migrate.db")), &gorm.Config{})

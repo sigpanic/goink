@@ -18,7 +18,7 @@ import (
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/mcp_tools"
-	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/testsupport"
 	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
@@ -32,10 +32,8 @@ import (
 // git.ReadFile/WriteFile 是纯文件系统操作，无需 git 二进制。
 func setupRWEnv(t *testing.T) (*gorm.DB, mcp_tools.ToolContext, context.Context) {
 	t.Helper()
-	dataDir := t.TempDir()
+	testsupport.Isolate(t)
 	t.Setenv("GOINK_TESTING", "1")
-	t.Setenv("GOINK_DATA_DIR", dataDir)
-	platform.ResetDataDirCache()
 	config.Set(&config.AppConfig{})
 
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "rw.db")), &gorm.Config{})

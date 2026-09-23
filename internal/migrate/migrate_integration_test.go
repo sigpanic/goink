@@ -5,7 +5,6 @@ package migrate_test
 import (
 	"log/slog"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -15,7 +14,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/migrate"
-	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/testsupport"
 )
 
 func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
@@ -230,18 +229,13 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 
 func setupMigrationIntegrationEnv(t *testing.T) string {
 	t.Helper()
-	gitSrc, err := exec.LookPath("git")
-	if err != nil {
-		t.Skip("系统无 git，跳过")
-	}
-	dataDir := t.TempDir()
+	gitSrc := testsupport.RequireGit(t)
+	dataDir := testsupport.Isolate(t)
 	t.Setenv("GOINK_TESTING", "1")
-	t.Setenv("GOINK_DATA_DIR", dataDir)
 	// 迁移会 git commit 文件改名，必须有真实 git；测试模式默认只认 DataDir 下的
 	// bundled git，故显式注入系统 git，而非伪造一份 bundled 布局（Windows 上伪造不出来）。
 	t.Setenv("GOINK_GIT_BIN", gitSrc)
 	t.Setenv("HOME", t.TempDir())
-	platform.ResetDataDirCache()
 	config.Set(&config.AppConfig{})
 	return dataDir
 }

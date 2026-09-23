@@ -21,7 +21,6 @@ import (
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
-	"github.com/sigpanic/goink/internal/platform"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
@@ -31,6 +30,7 @@ import (
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
+	"github.com/sigpanic/goink/internal/testsupport"
 	"github.com/sigpanic/goink/internal/timeline"
 	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
@@ -41,10 +41,7 @@ import (
 func setupTestApp(t *testing.T) *App {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	t.Setenv("GOINK_DATA_DIR", tmpDir)
-	// Reset DataDir cache so platform.DataDir() picks up the new GOINK_DATA_DIR.
-	platform.ResetDataDirCache()
+	tmpDir := testsupport.Isolate(t)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 

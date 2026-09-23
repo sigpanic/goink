@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"testing"
 )
 
 // AppDir 返回当前可执行文件所在的目录。
@@ -155,7 +156,13 @@ var (
 // 环境变量 GOINK_DATA_DIR 可覆盖以上逻辑，用于集成测试。
 //
 // 结果用 sync.Once 缓存，避免每次调用都做可写性检测。
+// 测试二进制下不做缓存：测试用 t.Setenv 切换 GOINK_DATA_DIR，而 t.Setenv 只在测试
+// 结束时恢复环境变量、不会恢复这里的缓存，缓存会让后一个测试拿到前一个测试已删除
+// 的临时目录。
 func DataDir() string {
+	if testing.Testing() {
+		return resolveDataDir()
+	}
 	dataDirOnce.Do(func() {
 		dataDirCache = resolveDataDir()
 	})
@@ -171,10 +178,18 @@ func ResetDataDirCache() {
 	dataDirCache = ""
 }
 
-// resolveDataDir 实际计算 DataDir，仅由 DataDir 通过 sync.Once 调用一次。
+// resolveDataDir 实际计算 DataDir，由 DataDir 调用。
 func resolveDataDir() string {
 	if dir := os.Getenv("GOINK_DATA_DIR"); dir != "" {
 		return dir
+	}
+	// 兜底：测试二进制绝不能落到真实数据目录。未显式设置 GOINK_DATA_DIR 时回退到
+	// 进程独立的临时目录，保证测试不会写到真实数据（小说 git 仓库、SQLite 库）。
+	// 这里只保证"不落到真实目录"：该路径是可写的普通临时路径，调用方（如
+	// config.Load 里的 MkdirAll）会把它创建出来，遗留的临时目录交由系统清理。
+	// 按 PID 区分是因为 go test 会并行运行多个包的测试二进制。
+	if testing.Testing() {
+		return filepath.Join(os.TempDir(), fmt.Sprintf("goink-test-%d", os.Getpid()))
 	}
 	if runtime.GOOS == "windows" {
 		if dir, err := AppDir(); err == nil {

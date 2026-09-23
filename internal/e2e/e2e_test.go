@@ -18,21 +18,22 @@ import (
 	"github.com/sigpanic/goink/internal/platform"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/testsupport"
 )
 
 func TestMain(m *testing.M) {
-	// 1. GOINK_TESTING must be set (marks the test environment)
-	if os.Getenv("GOINK_TESTING") == "" {
-		fmt.Fprintln(os.Stderr, "FATAL: GOINK_TESTING env var not set; E2E tests require GOINK_TESTING=1")
-		os.Exit(1)
-	}
+	// 1. Test environment must be marked and isolated.
+	// GOINK_TESTING marks the run as a test; GOINK_DATA_DIR keeps it out of the real
+	// data directory — without it these tests would create novel git repos and the
+	// shared database under ~/Goink.
+	testsupport.RequireEnvOrExit("GOINK_TESTING", "E2E tests require GOINK_TESTING=1")
 	fmt.Println("OK: GOINK_TESTING is set")
 
+	testsupport.RequireEnvOrExit("GOINK_DATA_DIR", "E2E tests require an isolated data directory")
+	fmt.Println("OK: GOINK_DATA_DIR is set")
+
 	// 2. GOINK_E2E_STRICT must be set (makes ResolveGit/ResolveOnnxLib skip system fallback)
-	if os.Getenv("GOINK_E2E_STRICT") == "" {
-		fmt.Fprintln(os.Stderr, "FATAL: GOINK_E2E_STRICT env var not set; E2E tests require GOINK_E2E_STRICT=1")
-		os.Exit(1)
-	}
+	testsupport.RequireEnvOrExit("GOINK_E2E_STRICT", "E2E tests require GOINK_E2E_STRICT=1")
 	fmt.Println("OK: GOINK_E2E_STRICT is set")
 
 	// 3. ResolveGit() must find bundled git (not system git)

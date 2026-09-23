@@ -12,7 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/config"
-	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/testsupport"
 )
 
 func TestBackupSQLiteDatabaseIncludesCommittedWALData(t *testing.T) {
@@ -84,10 +84,7 @@ func TestBackupSQLiteDatabaseIncludesCommittedWALData(t *testing.T) {
 }
 
 func TestRunStopsDestructiveMigrationWhenBackupFails(t *testing.T) {
-	dataDir := t.TempDir()
-	t.Setenv("GOINK_DATA_DIR", dataDir)
-	platform.ResetDataDirCache()
-	t.Cleanup(platform.ResetDataDirCache)
+	dataDir := testsupport.Isolate(t)
 	config.Set(&config.AppConfig{})
 
 	dbPath := config.GlobalDBPath()
