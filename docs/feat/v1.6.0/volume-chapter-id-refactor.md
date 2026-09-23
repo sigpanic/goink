@@ -198,7 +198,7 @@ migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具
   - 否则 `os.Rename(chapters/{num:03d}.md, chapters/id_{id}.md)`
 - 大纲同理（`outlines/{num:03d}.md → outlines/id_{id}.md`）
 - id_ 前缀将 id 命名空间与旧 num 纯数字命名空间完全隔离：任何 num 值不可能撞名，目标存在即本文件已完成迁移，判断结构性可靠
-- 跨文件系统时（os.Rename 返回 EXDEV）退化成 cp+rm（同文件系统内通常一次 rename 完成）
+- 源和目标固定在同一 `chapters/` 或 `outlines/` 目录，直接使用原子 `os.Rename`；失败则中止迁移并在下次启动重试
 
 **为什么用普通 mv 不用 git mv**：
 - os.Rename 同文件系统内是原子 syscall，要么成功要么失败，无"一半"状态
@@ -525,7 +525,7 @@ commit 路线（分层顺序、细粒度 commit 表格、删列与删字段约�
 7. **实施顺序**：**自底向上分层平推**（L0 基建 → L2 chapter.Store → L3 rag+search → L4 其他内部包 → L5 mcp_tools → L6 app → L7 前端 → **L1b 删旧字段**），允许中途编译失败，中间层提交用 `--no-verify` 跳过 hook。删列（L1b）必须在最后：删列不可逆，任何一层没改完就删列，运行时会读到不存在的列。原「7 个细粒度 commit + PR1/PR2 拆分」方案已放弃，commit 路线统一见 [commit-roadmap.md](./commit-roadmap.md)
 8. **migrate 执行模式**：启动时同步等待（应用启动时跑 migrate，跑完进主界面；大数据量启动慢但简单）
 9. **migrate_state 表**（5.8）：自建迁移状态表（migration+step 两级），按步骤 running/done/failed 记录，不用 HasColumn 做 flag（避免中途中断误判）；不引入 golang-migrate（与 GORM AutoMigrate 冲突）
-10. **文件迁移**（7.3）：逐个 os.Rename + git commit 两阶段，不用 cp+rm 三阶段，不用 git mv（非原子）；EXDEV 时退化 cp+rm
+10. **文件迁移**（7.3）：逐个 os.Rename + git commit 两阶段，不用 cp+rm 三阶段，不用 git mv（非原子）；源、目标同目录，rename 原子完成
 11. **AI 不自动开卷**：AI 写到卷末时提示用户"建议开新卷"，由用户在前端创建卷；AI 不自主开卷（卷边界是用户掌控的大动作）
 12. **实时计算 num**：不 DB 维护 num 字段，list 时按 (volume_id, sort_order) 排序位次实时生成；DB 维护 num 等于回退 chapter_number 老方案，失去 id 方案价值
 13. **get 函数签名**：前端 get/delete 函数保持现状 (T, error)，不走 PageResult（章节列表一次拿全部，不需要分页），不走 errcode（错误类型单一，delete 引用冲突走 ToolResult.Data 结构化返回）

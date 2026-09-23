@@ -3,11 +3,9 @@ package v160
 import (
 	"errors"
 	"fmt"
-	"io"
 	"log/slog"
 	"os"
 	"path/filepath"
-	"syscall"
 
 	"gorm.io/gorm"
 
@@ -152,7 +150,8 @@ func outlineIDPath(id int64) string { return fmt.Sprintf("outlines/id_%d.md", id
 // renameChapterFile 将源相对路径 rename 到目标相对路径。
 //
 // 幂等：目标已存在 → 跳过（已迁移，中断恢复）；源不存在 → 跳过（该章节无此文件）。
-// 跨设备（EXDEV，如仓库在别的挂载点）退化：拷贝 + 删除源。
+// 源和目标均位于同一 chapters/ 或 outlines/ 目录，因此 os.Rename 是原子操作；
+// 任意失败由迁移框架记录并在下次启动时重试。
 func renameChapterFile(dir, srcRel, dstRel string) error {
 	src := filepath.Join(dir, srcRel)
 	dst := filepath.Join(dir, dstRel)
@@ -166,34 +165,7 @@ func renameChapterFile(dir, srcRel, dstRel string) error {
 		return fmt.Errorf("migrate v160: 创建目标目录: %w", err)
 	}
 	if err := os.Rename(src, dst); err != nil {
-		if errors.Is(err, syscall.EXDEV) {
-			if cerr := copyFileX(src, dst); cerr != nil {
-				return fmt.Errorf("migrate v160: 跨设备拷贝 %s: %w", srcRel, cerr)
-			}
-			if rerr := os.Remove(src); rerr != nil {
-				return fmt.Errorf("migrate v160: 跨设备删除源 %s: %w", srcRel, rerr)
-			}
-			return nil
-		}
 		return fmt.Errorf("migrate v160: rename %s → %s: %w", srcRel, dstRel, err)
 	}
 	return nil
-}
-
-// copyFileX 拷贝单文件（EXDEV 退化的 cp）。
-func copyFileX(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
 }
