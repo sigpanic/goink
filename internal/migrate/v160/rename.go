@@ -29,7 +29,8 @@ import (
 //   - rename：目标文件已存在 → 跳过（已迁移）；源文件不存在 → 跳过（该章节无正文/大纲）
 //   - git commit：工作区无变更（HasUncommitted）→ 跳过
 //
-// 单个 novel 失败只告警不阻塞（7.5），step 整体幂等，下次启动重跑剩余部分。
+// 单个 novel 失败不阻止尝试其他 novel，但所有错误会在最后汇总返回；框架据此将
+// step 保持为 failed，避免删旧列后失去重试文件迁移的输入。
 func migrateRenameFiles(db *gorm.DB, log *slog.Logger) error {
 	// 新装库已由当前 model 直接建成 id 化 schema，没有旧文件或 chapter_number 可迁移。
 	// 迁移状态丢失时也必须安全跳过，不能查询已经删除的旧列。
@@ -47,10 +48,15 @@ func migrateRenameFiles(db *gorm.DB, log *slog.Logger) error {
 	if err := db.Table("novels").Order("id").Pluck("id", &novelIDs).Error; err != nil {
 		return fmt.Errorf("migrate v160: 读取 novels: %w", err)
 	}
+	var errs []error
 	for _, novelID := range novelIDs {
 		if err := migrateNovelFiles(db, log, novelID); err != nil {
 			log.Warn("migrate v160: 该 novel 文件迁移失败（继续其他 novel）", "novel_id", novelID, "err", err)
+			errs = append(errs, fmt.Errorf("novel %d: %w", novelID, err))
 		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("migrate v160: 文件迁移未全部完成: %w", err)
 	}
 	return nil
 }
@@ -80,15 +86,21 @@ func migrateNovelFiles(db *gorm.DB, log *slog.Logger, novelID int64) error {
 		Where("novel_id = ?", novelID).Order("id").Scan(&rows).Error; err != nil {
 		return fmt.Errorf("migrate v160: 读取 chapters: %w", err)
 	}
+	var errs []error
 	for _, r := range rows {
 		// 正文：chapters/001.md → chapters/id_1.md
 		if err := renameChapterFile(dir, chapterNumPath(r.ChapterNumber), chapterIDPath(r.ID)); err != nil {
 			log.Warn("migrate v160: 章节文件 rename 失败", "novel_id", novelID, "id", r.ID, "err", err)
+			errs = append(errs, fmt.Errorf("章节 id=%d: %w", r.ID, err))
 		}
 		// 大纲：outlines/001.md → outlines/id_1.md
 		if err := renameChapterFile(dir, outlineNumPath(r.ChapterNumber), outlineIDPath(r.ID)); err != nil {
 			log.Warn("migrate v160: 大纲文件 rename 失败", "novel_id", novelID, "id", r.ID, "err", err)
+			errs = append(errs, fmt.Errorf("大纲 id=%d: %w", r.ID, err))
 		}
+	}
+	if err := errors.Join(errs...); err != nil {
+		return fmt.Errorf("migrate v160: 章节文件未全部完成: %w", err)
 	}
 
 	// 4. 按 novel git commit（工作区有变更才提交）

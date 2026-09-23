@@ -152,3 +152,69 @@ func TestRenameFilesMigrationSkipsNewSchema(t *testing.T) {
 		t.Fatalf("migrate.Run on new schema: %v", err)
 	}
 }
+
+func TestRenameFilesFailureStopsBeforeDroppingLegacyColumnsAndRetries(t *testing.T) {
+	dataDir := setupMigrateEnv(t)
+	db := openMigrateDB(t)
+	for _, model := range []any{&novel.Novel{}, &chapter.Chapter{}} {
+		if err := db.AutoMigrate(model); err != nil {
+			t.Fatalf("AutoMigrate %T: %v", model, err)
+		}
+	}
+	if err := db.Exec(`ALTER TABLE chapters ADD COLUMN chapter_number INTEGER NOT NULL DEFAULT 0`).Error; err != nil {
+		t.Fatal(err)
+	}
+	for _, query := range []string{
+		`INSERT INTO novels (id, title) VALUES (1, 'n1')`,
+		`INSERT INTO chapters (id, novel_id, chapter_number, sort_order, title) VALUES (1, 1, 1, 0, 'c1')`,
+	} {
+		if err := db.Exec(query).Error; err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	// novel 目录被普通文件占用时，创建 volumes/ 必定失败。迁移必须将该失败
+	// 回传给框架，而非将文件迁移标记 done 后继续删除 chapter_number。
+	novelDir := filepath.Join(dataDir, "novels", "1")
+	if err := os.MkdirAll(filepath.Dir(novelDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(novelDir, []byte("not a directory"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Run(db, slog.Default()); err == nil {
+		t.Fatal("文件迁移失败时 migrate.Run 不应成功")
+	}
+	if !db.Migrator().HasColumn("chapters", "chapter_number") {
+		t.Fatal("文件迁移失败后不应删除 chapter_number")
+	}
+	var status string
+	if err := db.Table("migrate_state").Select("status").
+		Where("migration = ? AND step = ?", "v1.6.0-chapter-id-refactor", "2-rename-files").
+		Scan(&status).Error; err != nil {
+		t.Fatal(err)
+	}
+	if status != "failed" {
+		t.Fatalf("文件迁移失败应记录 failed: got %q", status)
+	}
+
+	if err := os.Remove(novelDir); err != nil {
+		t.Fatal(err)
+	}
+	chapterPath := filepath.Join(novelDir, "chapters", "001.md")
+	if err := os.MkdirAll(filepath.Dir(chapterPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(chapterPath, []byte("chapter content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate.Run(db, slog.Default()); err != nil {
+		t.Fatalf("修复目录后重试 migrate.Run: %v", err)
+	}
+	if db.Migrator().HasColumn("chapters", "chapter_number") {
+		t.Fatal("文件迁移完成后应删除 chapter_number")
+	}
+	if _, err := os.Stat(filepath.Join(novelDir, "chapters", "id_1.md")); err != nil {
+		t.Fatalf("重试后章节文件未迁移: %v", err)
+	}
+}

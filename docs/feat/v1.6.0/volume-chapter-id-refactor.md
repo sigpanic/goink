@@ -213,13 +213,14 @@ migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具
   - 文件源 `chapters/{num:03d}.md` 不存在 → 跳过 rename
   - git 干净 → 跳过 commit
 - 全部 step done → backup 组判断"全 done"→ 后续启动跳过备份
+- 单个 novel 的文件、目录或 Git 操作失败时，文件迁移仍会尝试其余 novel，但最后必须返回聚合错误；`2-rename-files` 保持 failed，禁止进入删旧字段步骤。重启后由结构性幂等检查跳过已完成文件、重试失败项。
 
 重启 `migrate.Run` 自动从未 done 的 step 继续，单步骤幂等保证不重复执行已完成的子操作。
 
 ### 7.5 注意事项
 
 - migrate 期间应用启动会变慢（遍历所有 novel 仓库 os.Rename + git commit），日志输出进度
-- 单个 novel 仓库失败不影响其他 novel，错误记录后继续
+- 单个 novel 仓库失败不阻止尝试其他 novel，但会阻止本次迁移收尾和旧字段删除，修复后重启重试
 - DB 操作建议用 `db.Transaction()` 包，文件系统操作单独幂等处理
 
 ### 7.6 自动备份（migrate 前置）
