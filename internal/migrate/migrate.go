@@ -48,6 +48,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	if err != nil {
 		return fmt.Errorf("migrate: 生成迁移计划: %w", err)
 	}
+	// 对无需执行的迁移，计划一经原始 schema 判定便立即登记 done。后续的
+	// AutoMigrate 可能暂时制造新旧列共存；必须在此之前持久化判定结果，才能让
+	// 中断后的重启依赖 migrate_state 而非面对中间 schema 重新探测。
+	if err := markPlannedDone(db, log, plans); err != nil {
+		return err
+	}
 
 	// 备份和前置步骤均只能针对计划执行的迁移。由 plan 决定是否执行，避免
 	// 新库、最终 schema 或状态丢失的库误触历史 DDL。
@@ -98,17 +104,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		}
 	}
 
-	// 后置步骤依赖当前 model 已补齐的列；无需执行的 migration 则原子登记全部步骤，
-	// 使新库和丢失状态的最终 schema 都不会在后续启动误跑历史迁移。
+	// 后置步骤依赖当前 model 已补齐的列。无需执行的 migration 已在任何 schema
+	// 变化前登记完成，避免中断后把当前 migration 的中间 schema 误判为历史 schema。
 	for _, plan := range plans {
-		switch plan.Action {
-		case engine.PlanRun:
+		if plan.Action == engine.PlanRun {
 			log.Info("执行迁移", "migration", plan.Migration.Name, "description", plan.Migration.Description)
 			if err := engine.RunSteps(db, log, plan.Migration.Name, plan.Migration.PostSchemaSteps); err != nil {
-				return err
-			}
-		case engine.PlanMarkDone:
-			if err := engine.MarkStepsDone(db, log, plan.Migration.Name, plan.Migration.AllSteps()); err != nil {
 				return err
 			}
 		}
@@ -123,6 +124,20 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
+	return nil
+}
+
+// markPlannedDone 将原始 schema 判定为无需执行的迁移立即落盘。每个 migration
+// 由 MarkStepsDone 在单独事务中写入全部 step，避免留下半组状态。
+func markPlannedDone(db *gorm.DB, log *slog.Logger, plans []engine.Plan) error {
+	for _, plan := range plans {
+		if plan.Action != engine.PlanMarkDone {
+			continue
+		}
+		if err := engine.MarkStepsDone(db, log, plan.Migration.Name, plan.Migration.AllSteps()); err != nil {
+			return fmt.Errorf("migrate: 登记无需执行的迁移 %s: %w", plan.Migration.Name, err)
+		}
+	}
 	return nil
 }
 

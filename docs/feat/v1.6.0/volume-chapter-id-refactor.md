@@ -134,9 +134,9 @@
 
 migrate.Run 流程（注册表驱动，框架见 `internal/migrate/engine`，具体版本迁移见 `internal/migrate/v120` / `v160` 子包）：
 - 每个迁移声明 `NeedsMigration`、`PreSchemaSteps`、`PostSchemaSteps`。前置步骤在当前 model AutoMigrate 前运行（如历史字段 rename），后置步骤在其后运行（如数据重写、文件迁移、删旧列）
-- 先仅建 `migrate_state`，再在原始 schema 上为全部迁移生成计划：已有未完成状态则续跑；无状态的既有库由该迁移自己的 `NeedsMigration` 识别历史 schema；新库或已是最终 schema 的库仅登记 done
+- 先仅建 `migrate_state`，再在原始 schema 上为全部迁移生成计划：已有未完成状态则续跑；无状态的既有库由该迁移自己的 `NeedsMigration` 识别历史 schema；新库或已是最终 schema 的库计划为仅登记 done
+- 计划为仅登记 done 的迁移必须在任何备份、前置步骤或业务 model AutoMigrate 前，以单迁移事务一次性写入全部 done；这样后续 schema 加列期间即使中断，重启也不会再按原始 schema 探测该迁移
 - 只对计划执行且 `Destructive: true` 的迁移备份；随后按注册顺序运行所有前置步骤、AutoMigrate 当前 models、再运行所有后置步骤
-- 无需执行的迁移在一个数据库事务内一次性登记全部 done，避免进程中断留下半组状态
 
 **新用户与状态丢失**：新库不执行历史步骤；最终 schema 即使 `migrate_state` 丢失，也会由各迁移的 schema 检测判定为无需执行，只补回 done 状态。
 
