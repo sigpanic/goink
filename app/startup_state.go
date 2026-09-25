@@ -67,6 +67,14 @@ func (a *App) emitStartupState(ready bool, snapshot StartupState) {
 // beginInitialization 原子地校验来源状态并进入 initializing，防止多个前端调用
 // 在“检查状态”与“实际开始初始化”之间同时穿透。
 func (a *App) beginInitialization(from StartupPhase) error {
+	// ready 是终态，不允许从它再进入初始化。本函数只负责切换状态，真正执行初始化的是
+	// 调用方（Initialize / RetryStartup）——这里放行就等于让它们在一个已就绪的应用上
+	// 重跑一遍 initWithConfig（重开数据库、重跑迁移）。检查放在锁外：from 是调用方
+	// 传入的参数，不读共享状态，无需持锁。
+	if from == PhaseReady {
+		return errors.New("应用已就绪，无需再次初始化")
+	}
+
 	a.startupMu.Lock()
 	current := a.startupState.Phase
 	if current != from {

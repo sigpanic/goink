@@ -63,6 +63,17 @@ func TestStartupState_BeginInitializationIsAtomic(t *testing.T) {
 	}, a.GetStartupState())
 }
 
+func TestStartupState_BeginInitializationRejectsReadySource(t *testing.T) {
+	a := newStartupStateTestApp()
+	a.setStartupState(PhaseReady, "")
+	before := a.GetStartupState()
+
+	err := a.beginInitialization(PhaseReady)
+
+	require.EqualError(t, err, "应用已就绪，无需再次初始化")
+	assert.Equal(t, before, a.GetStartupState(), "拒绝时不应改变状态")
+}
+
 func TestStartupState_ConcurrentFrontendReadyAndTransitions(t *testing.T) {
 	a := newStartupStateTestApp()
 
