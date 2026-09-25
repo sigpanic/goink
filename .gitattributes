@@ -1,2 +1,5 @@
 # 旧版 Python 实现，排除在语言统计外
 python-master/** linguist-vendored
+
+# 第三方依赖（onnxruntime_go 上游源码及其补丁），排除在语言统计外
+third_party/** linguist-vendored
