@@ -58,7 +58,7 @@
     "retry": "Retry",
     "retrying": "Retrying...",
     "quitConfirmTitle": "Goink is preparing your data",
-    "quitConfirmMessage": "A database migration is running. Quitting now interrupts it; the next launch resumes automatically.",
+    "quitConfirmMessage": "Goink is starting up and preparing your data. Quitting now interrupts this launch; work already completed resumes on the next launch.",
     "quitConfirmWait": "Keep waiting",
     "quitConfirmLeave": "Quit"
   },

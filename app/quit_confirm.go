@@ -21,7 +21,7 @@ const (
 
 // decideClose 根据启动阶段与关窗标记决定如何处理本次关闭请求。
 //
-// 只有「迁移中 + 前端能弹窗 + 尚未确认过」才值得拦一次，其余一律放行：前端不可用
+// 只有「初始化中 + 前端能弹窗 + 尚未确认过」才值得拦一次，其余一律放行：前端不可用
 // 时根本弹不出确认，用户已在确认中时再拦一次等于把他关在窗口里——宁可放行，不可阻塞
 // 退出。做成纯函数是为了让这几条兜底规则可以直接表驱动测试，不必构造 App。
 func decideClose(phase StartupPhase, frontendReady, confirmPending, confirmed bool) quitDecision {

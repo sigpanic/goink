@@ -54,7 +54,7 @@
     "retry": "重试",
     "retrying": "正在重试...",
     "quitConfirmTitle": "Goink 正在准备数据",
-    "quitConfirmMessage": "数据库迁移进行中，现在退出会中断迁移（下次启动会自动继续）。",
+    "quitConfirmMessage": "应用正在准备数据。现在退出会中断本次启动；已完成的准备工作会在下次启动时继续。",
     "quitConfirmWait": "继续等待",
     "quitConfirmLeave": "退出"
   },

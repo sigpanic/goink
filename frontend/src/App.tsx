@@ -14,9 +14,12 @@ import { useQuitConfirm } from "@/components/startup/useQuitConfirm";
 
 export default function App() {
   const { t } = useTranslation();
+  // 顺序不能反：useQuitConfirm 必须先注册好 app:quit-confirm 监听，useStartupState 才会在
+  // effect 里调用 FrontendReady() 完成握手——后端一旦标记前端就绪，关窗请求就会被拦截并
+  // 发出该事件。hook 的 effect 按声明顺序执行，所以这两行谁在前是有意义的。
+  const quitConfirm = useQuitConfirm();
   const startup = useStartupState();
   const boot = useWorkspaceBoot(startup.phase, startup.version);
-  const quitConfirm = useQuitConfirm();
 
   function renderStartupContent() {
     switch (startup.phase) {

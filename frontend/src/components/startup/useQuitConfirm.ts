@@ -14,7 +14,7 @@ export interface QuitConfirmStatus {
 /**
  * 订阅后端的关窗确认请求，把"弹窗 + 回传用户选择"关在 hook 里。
  *
- * 确认由后端发起：OnBeforeClose 在迁移期间拦截关闭并发出 app:quit-confirm，
+ * 确认由后端发起：OnBeforeClose 在初始化期间拦截关闭并发出 app:quit-confirm，
  * 因为 Wails v2 的 MessageDialog 在 Windows/Linux 会忽略自定义按钮，
  * 无法表达"继续等待 / 退出"这组选项。
  *
