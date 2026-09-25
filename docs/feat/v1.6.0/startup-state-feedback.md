@@ -131,13 +131,21 @@ type StartupState struct {
 `failed → initializing` 重试转换。不能使用“终态不降级”规则，因为它会错误地
 忽略重试开始事件。
 
+`beginInitialization` 只接受 `unconfigured` / `failed` 两个来源状态，并显式拒绝
+`from == PhaseReady`。它的守卫条件是 `current == from`：若调用方误传 `PhaseReady`
+（此时 `current` 也是 ready）就会放行，让调用方在一个已就绪的应用上重跑一遍
+`initWithConfig`（重开数据库、重跑迁移）。该检查放在锁外——它校验的是调用方传来的
+参数，不读共享状态。
+
 ### 4.3 后端接口
 
 ```go
 // ── 内部状态（app 包私有）──
-startupMu     sync.Mutex
-startupState  StartupState
-frontendReady bool
+startupMu          sync.Mutex
+startupState       StartupState
+frontendReady      bool
+quitConfirmPending bool // 关窗确认已弹出，等待用户选择
+quitConfirmed      bool // 用户已确认退出，随后由 Quit 触发的 OnBeforeClose 直接放行
 
 // setStartupState 加锁写入状态；若前端已就绪则推送事件。
 func (a *App) setStartupState(phase StartupPhase, errMsg string)
@@ -151,6 +159,12 @@ func (a *App) GetStartupState() StartupState
 // FrontendReady 由前端在挂载完成、且已注册 startup:state 监听后调用。
 // 它标记前端就绪并返回锁内取得的当前快照，用于兜住前端就绪前的状态变化。
 func (a *App) FrontendReady() StartupState
+
+// ConfirmQuit / CancelQuit 由前端在关窗确认弹窗上回传用户选择。
+// ConfirmQuit 登记"已确认"后调用 runtime.Quit；CancelQuit 清除待确认标记，
+// 使下一次关窗重新弹确认而不是被当成"确认期间再次关闭"直接放行。
+func (a *App) ConfirmQuit()
+func (a *App) CancelQuit()
 ```
 
 **为什么需要 `FrontendReady` 返回快照**：`setStartupState` 在 `frontendReady == false`
@@ -185,6 +199,10 @@ mount
 
 遮罩**立即消失**、不延迟——延迟只用于"显示"，否则快启动会出现"闪一下就没"。
 
+关窗确认弹窗不按 `phase` 渲染，而是由 `app:quit-confirm` 事件驱动、挂在 App 根部：
+它要盖在"迁移中"的遮罩之上，且不能随启动界面切换被卸载。同一时刻它只对应一次
+待确认的关闭请求，用户的选择经 `ConfirmQuit` / `CancelQuit` 回传后端。
+
 ### 4.5 竞态处理
 
 **(a) `FrontendReady` 与 `setStartupState` 并发**
@@ -211,8 +229,8 @@ FrontendReady (dispatcher goroutine):
 **(c) `Initialize` 互斥**
 
 `beginInitialization` 在同一个临界区内检查来源状态并写入 `initializing`：`Initialize`
-只能从 `unconfigured` 开始，`RetryStartup` 只能从 `failed` 开始。不能先调用
-`isInitializing()` 再切状态，否则两个调用仍可能同时穿过检查。
+只能从 `unconfigured` 开始，`RetryStartup` 只能从 `failed` 开始。不能先读一次状态
+再切状态，否则两个调用仍可能同时穿过检查。
 
 **(d) `OnShutdown` 与初始化 goroutine**
 
@@ -226,17 +244,28 @@ FrontendReady (dispatcher goroutine):
 
 **(e) 迁移期间劝阻关窗**
 
-`main.go` 增加 `OnBeforeClose`（当前未使用）：
+`OnBeforeClose`（`main.go` 注册）在迁移期间拦截一次关闭，并请前端弹出确认：
 
 ```
-PhaseInitializing → 弹对话框："正在准备数据（迁移中）。
-                              现在退出会中断迁移，下次启动将自动继续。确定退出吗？"
-                   默认按钮为"继续等待"，允许用户坚持退出。
-其他状态          → 直接允许关闭
+任意状态 ──► decideClose(phase, frontendReady, pending, confirmed)
+                ├─ 非 initializing              → 放行
+                ├─ 前端未就绪                    → 放行
+                ├─ 已确认（Quit 触发的二次调用）   → 放行
+                ├─ 已弹过确认（用户又点了一次关闭） → 放行（视为放弃等待）
+                └─ 其余                          → 拦截 + EventsEmit("app:quit-confirm")
 ```
 
-Wails 的 `OnBeforeClose` 返回值是 `prevent`，而不是 `allow`：非初始化状态返回
-`false`；初始化中只有用户选择“继续等待”时返回 `true`。
+Wails 的 `OnBeforeClose` 返回值是 `prevent`（true = 阻止关闭），与上面的"放行"相反。
+
+**为什么不用 Wails 的 `MessageDialog`**：v2 在 Windows/Linux 会忽略 `Buttons`
+自定义标签（Windows 只给 `MB_OK`、Linux 只给 `GTK_BUTTONS_OK`），返回值恒为
+`Ok` / `OK`，无法表达"继续等待 / 退出"；macOS 支持自定义标签，但三平台返回值不统一。
+因此改由前端渲染弹窗：后端只做判定与标记，`ConfirmQuit` 登记已确认后 `runtime.Quit`，
+`CancelQuit` 清除待确认标记。
+
+**兜底方向统一为"宁可放行，不可阻塞退出"**：前端未就绪（弹不出弹窗）、用户在确认中
+再次关窗、选择未能回传，全部放行。否则确认链路一旦失效，用户就被关在窗口里。
+`decideClose` 做成纯函数正是为了让这几条兜底规则可以直接表驱动测试。
 
 选择"劝阻 + 允许"而不是"硬阻止"，因为：中断是安全的（见 (d)），
 且强杀进程无法拦截，硬阻止只会把用户逼向更粗暴的退出方式。
@@ -245,24 +274,39 @@ Wails 的 `OnBeforeClose` 返回值是 `prevent`，而不是 `allow`：非初始
 
 | 文件 | 改动 |
 |---|---|
-| `app/startup_state.go`（新增） | 状态定义、`setStartupState`、`GetStartupState`、`FrontendReady` |
-| `app/handler.go` | `OnStartup` 各分支设置对应状态；`initWithConfig` 成功/失败时设置终态；`Initialize` 加互斥 |
+| `app/startup_state.go`（新增） | 阶段与快照定义、`setStartupState`、`GetStartupState`、`FrontendReady`、`beginInitialization`（含 ready 来源守卫） |
+| `app/quit_confirm.go`（新增） | `decideClose` 判定、关窗确认事件名、`ConfirmQuit` / `CancelQuit` |
+| `app/handler.go` | `OnStartup` 各分支设置对应状态；`Initialize` / `RetryStartup` 经 `beginInitialization` 进入并透传前置失败原因；`initWithConfig` 成功/失败时设置终态；`OnBeforeClose` 改为发事件拦截；`OnShutdown` 释放资源 |
+| `app/startup_state_test.go`、`app/quit_confirm_test.go`（新增） | 状态机与关窗判定的单元测试 |
 | `main.go` | 注册 `OnBeforeClose` |
-| `frontend/src/App.tsx` | 四态状态机、事件订阅、遮罩与错误页分流 |
-| `frontend/src/components/StartupOverlay.tsx`（新增） | 遮罩与错误页组件 |
+| `frontend/src/App.tsx` | 按 `phase` 渲染四种界面；挂载关窗确认弹窗 |
+| `frontend/src/components/startup/useStartupState.ts`（新增） | 事件订阅 + 按 `Version` 取舍 + 遮罩防抖 + 重试 |
+| `frontend/src/components/startup/useWorkspaceBoot.ts`（新增） | 等 `ready` 后再取作品列表，避免初始化期打 DB |
+| `frontend/src/components/startup/useQuitConfirm.ts`（新增） | 订阅 `app:quit-confirm` 并回传用户选择 |
+| `frontend/src/components/startup/StartupOverlay.tsx`、`LoadingScreen.tsx`（新增） | 遮罩 / 错误页与加载态 |
+| `frontend/src/views/InitView.tsx` | 接收 `startup.error`，展示"前置步骤失败后回到设置页"的原因 |
+| `frontend/src/components/ui/ConfirmDialog.tsx` | 复用为关窗确认弹窗（未改动组件本身） |
+| `frontend/src/i18n/locales/zh-CN.json`、`en.json` | 新增 `startup.*` 文案（含关窗确认四项） |
 | `frontend/src/lib/wailsjs/` | 由 `wails generate module` 重新生成（不手工编辑） |
 
 ## 6. 验证方案
 
-**单元测试**（`app/startup_state_test.go`）：
+**单元测试**（`app/startup_state_test.go`、`app/quit_confirm_test.go`）：
 
-1. 状态单向性：`initializing → ready` 后不接受回退（由前端规则保证，测试后端只验证状态写入）。
-2. `FrontendReady` 幂等：重复调用不 panic、不重复推送。
-3. `FrontendReady` 补发：`frontendReady == false` 时 `setStartupState` 不推送；
-   调用 `FrontendReady` 后能拿到当前状态。
-4. `Initialize` 互斥：`PhaseInitializing` 时返回错误。
-5. 并发：`FrontendReady` 与 `setStartupState` 并发调用，最终状态一致且至少推送一次
+1. 初始快照：`New()` 后为 `initializing` 且 `Version == 1`。
+2. `FrontendReady` 幂等：重复调用不 panic、不改变状态与版本。
+3. `beginInitialization` 互斥：16 个 goroutine 同时进入，只有 1 个成功，终态为
+   `initializing`。
+4. `beginInitialization` 拒绝 `PhaseReady` 来源，且不改变状态。
+5. 并发：`FrontendReady` 与 `setStartupState` 并发调用后版本号符合预期
    （`-race` 下运行）。
+6. `decideClose` 表驱动：非初始化阶段 / 前端未就绪 / 已确认 → 放行；首次请求 →
+   弹确认；确认期间再次关闭 → 强制退出。
+7. `ConfirmQuit` / `CancelQuit` 的标记语义：取消后下次关窗仍弹确认，确认后直接放行。
+
+尚未覆盖：`frontendReady == false` 时 `setStartupState` 不推送事件（只在 2、5 里被
+间接覆盖）；`useStartupState` / `useWorkspaceBoot` / `useQuitConfirm` 三个前端 hook
+没有单测。
 
 **手工验证**：
 
@@ -273,4 +317,5 @@ Wails 的 `OnBeforeClose` 返回值是 `prevent`，而不是 `allow`：非初始
 | 首次启动 | 显示 `InitView`，点"开始使用"后进入初始化流程 |
 | 迁移失败（人为制造，如占用 `volumes/` 路径） | 显示错误页 + 重试按钮，**不显示 InitView** |
 | 初始化中重复点"开始使用" | 第二次调用被拒绝，不产生并发初始化 |
-| 初始化中关闭窗口 | 弹出劝阻对话框；确认退出后进程干净退出，重启后迁移从断点续跑 |
+| 初始化中关闭窗口 | 弹出前端确认弹窗；选「继续等待」后仍停在遮罩、再关一次仍会弹；选「退出」后进程干净退出，重启后迁移从断点续跑 |
+| 初始化中连点两次关闭 | 第二次直接退出，不再弹确认（"确认期间再次关闭视为放弃等待"） |

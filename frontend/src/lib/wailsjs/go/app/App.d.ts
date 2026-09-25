@@ -32,6 +32,8 @@ export function CancelExtract(arg1:string):Promise<void>;
 
 export function CancelExtractPattern(arg1:number):Promise<void>;
 
+export function CancelQuit():Promise<void>;
+
 export function Chat(arg1:app.ChatInput):Promise<app.ChatResult>;
 
 export function CheckUpdate(arg1:boolean):Promise<update.CheckResult>;
@@ -39,6 +41,8 @@ export function CheckUpdate(arg1:boolean):Promise<update.CheckResult>;
 export function CompressContext(arg1:app.CompressInput):Promise<app.CompressResult>;
 
 export function ComputeStyleStats(arg1:app.ComputeStyleStatsInput):Promise<style.Stats>;
+
+export function ConfirmQuit():Promise<void>;
 
 export function CreateArcNode(arg1:number,arg2:app.CreateArcNodeInput):Promise<storyarc.ArcNode>;
 

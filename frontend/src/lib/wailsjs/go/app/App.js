@@ -18,6 +18,10 @@ export function CancelExtractPattern(arg1) {
   return window['go']['app']['App']['CancelExtractPattern'](arg1);
 }
 
+export function CancelQuit() {
+  return window['go']['app']['App']['CancelQuit']();
+}
+
 export function Chat(arg1) {
   return window['go']['app']['App']['Chat'](arg1);
 }
@@ -32,6 +36,10 @@ export function CompressContext(arg1) {
 
 export function ComputeStyleStats(arg1) {
   return window['go']['app']['App']['ComputeStyleStats'](arg1);
+}
+
+export function ConfirmQuit() {
+  return window['go']['app']['App']['ConfirmQuit']();
 }
 
 export function CreateArcNode(arg1, arg2) {

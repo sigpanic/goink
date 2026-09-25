@@ -56,7 +56,11 @@
     "failedTitle": "Startup failed",
     "failedMessage": "The app could not finish initialization. Review the error and try again.",
     "retry": "Retry",
-    "retrying": "Retrying..."
+    "retrying": "Retrying...",
+    "quitConfirmTitle": "Goink is preparing your data",
+    "quitConfirmMessage": "A database migration is running. Quitting now interrupts it; the next launch resumes automatically.",
+    "quitConfirmWait": "Keep waiting",
+    "quitConfirmLeave": "Quit"
   },
   "init": {
     "lightMode": "Light Mode",

@@ -103,11 +103,6 @@ func (a *App) GetStartupState() StartupState {
 	return a.startupState
 }
 
-// isInitializing 报告是否正处于初始化中，用于迁移期间的关窗确认。
-func (a *App) isInitializing() bool {
-	return a.GetStartupState().Phase == PhaseInitializing
-}
-
 // FrontendReady 由前端在挂载完成、且已注册 startup:state 监听之后调用。
 //
 // 它在同一临界区内标记前端就绪并返回当前快照：此前状态由返回值补齐，此后

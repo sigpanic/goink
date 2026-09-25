@@ -54,6 +54,11 @@ type App struct {
 	startupState  StartupState
 	frontendReady bool
 
+	// 关窗确认：初始化期间拦截一次关闭，等前端弹窗回传用户选择，见 quit_confirm.go。
+	// 与启动状态共用 startupMu：OnBeforeClose 需要在同一临界区里同时读到阶段与标记。
+	quitConfirmPending bool
+	quitConfirmed      bool
+
 	cfg      *config.AppConfig
 	settings *config.AppSettings
 	db       *gorm.DB
@@ -139,24 +144,29 @@ func (a *App) runInit(cfg *config.AppConfig) error {
 // 初始化进行中（含数据库迁移）时劝阻退出：迁移本身可断点续跑，但用户往往
 // 不知道自己在等什么，中途退出会白白浪费一次启动。这里选择"劝阻 + 允许"而非
 // 硬阻止——强杀进程无法拦截，硬阻止只会把用户逼向更粗暴的退出方式。
+//
+// Wails v2 的 MessageDialog 在 Windows/Linux 会忽略自定义按钮（只给系统按钮，
+// 返回值恒为 "Ok"/"OK"），无法表达"继续等待 / 退出"这组选项，因此改由前端渲染
+// 弹窗：本函数只做判定与登记，用户的最终选择经 ConfirmQuit / CancelQuit 回来。
 func (a *App) OnBeforeClose(ctx context.Context) bool {
-	if !a.isInitializing() {
+	a.startupMu.Lock()
+	decision := decideClose(a.startupState.Phase, a.frontendReady, a.quitConfirmPending, a.quitConfirmed)
+	if decision == quitConfirm {
+		a.quitConfirmPending = true
+	}
+	a.startupMu.Unlock()
+
+	switch decision {
+	case quitConfirm:
+		a.logger.Info("初始化进行中，请求前端确认是否退出")
+		runtime.EventsEmit(ctx, quitConfirmEventName)
+		return true
+	case quitForce:
+		a.logger.Info("确认期间再次请求关闭窗口，直接退出")
+		return false
+	default:
 		return false
 	}
-	choice, err := runtime.MessageDialog(ctx, runtime.MessageDialogOptions{
-		Type:          runtime.WarningDialog,
-		Title:         "Goink 正在准备数据",
-		Message:       "数据库迁移进行中，现在退出会中断迁移（下次启动会自动继续）。确定要退出吗？",
-		Buttons:       []string{"继续等待", "退出"},
-		DefaultButton: "继续等待",
-		CancelButton:  "继续等待",
-	})
-	if err != nil {
-		// 对话框不可用时不应反过来阻塞用户退出
-		a.logger.Warn("关闭确认对话框失败", "err", err)
-		return false
-	}
-	return choice != "退出"
 }
 
 // OnShutdown 在 Wails 窗口关闭前调用，释放资源。

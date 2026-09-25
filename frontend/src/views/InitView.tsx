@@ -239,7 +239,7 @@ export default function InitView({ error: startupError }: Props) {
         </p>
 
         {/* 本地 error 是本次点击的直接结果（如 beginInitialization 被拒），比快照里的旧
-            失败文本更新鲜，故优先；快照那路负责跨"组件被卸载重挂"保留上次失败原因。 */}
+            失败文本更新鲜，故优先；快照那路负责跨「组件被卸载重挂」保留上次失败原因。 */}
         {(error || startupError) && (
           <p className="text-sm text-destructive mb-6">
             {error || startupError}

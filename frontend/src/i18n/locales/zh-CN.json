@@ -52,7 +52,11 @@
     "failedTitle": "启动失败",
     "failedMessage": "应用暂时无法完成初始化。请检查错误信息后重试。",
     "retry": "重试",
-    "retrying": "正在重试..."
+    "retrying": "正在重试...",
+    "quitConfirmTitle": "Goink 正在准备数据",
+    "quitConfirmMessage": "数据库迁移进行中，现在退出会中断迁移（下次启动会自动继续）。",
+    "quitConfirmWait": "继续等待",
+    "quitConfirmLeave": "退出"
   },
   "init": {
     "lightMode": "浅色模式",
