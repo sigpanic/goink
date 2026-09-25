@@ -150,6 +150,10 @@ export function ExtractStyle(arg1) {
   return window['go']['app']['App']['ExtractStyle'](arg1);
 }
 
+export function FrontendReady() {
+  return window['go']['app']['App']['FrontendReady']();
+}
+
 export function GetAppConfig() {
   return window['go']['app']['App']['GetAppConfig']();
 }
@@ -250,6 +254,10 @@ export function GetSettings() {
   return window['go']['app']['App']['GetSettings']();
 }
 
+export function GetStartupState() {
+  return window['go']['app']['App']['GetStartupState']();
+}
+
 export function GetStoryArcs(arg1) {
   return window['go']['app']['App']['GetStoryArcs'](arg1);
 }
@@ -316,6 +324,10 @@ export function PickAndImportNovel() {
 
 export function RebuildNovelIndex(arg1) {
   return window['go']['app']['App']['RebuildNovelIndex'](arg1);
+}
+
+export function RetryStartup() {
+  return window['go']['app']['App']['RetryStartup']();
 }
 
 export function SaveAvatar(arg1) {

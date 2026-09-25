@@ -50,6 +50,14 @@
   "app": {
     "loading": "Loading..."
   },
+  "startup": {
+    "preparingTitle": "Preparing your data",
+    "preparingMessage": "The database and runtime are being initialized. Please keep the app open.",
+    "failedTitle": "Startup failed",
+    "failedMessage": "The app could not finish initialization. Review the error and try again.",
+    "retry": "Retry",
+    "retrying": "Retrying..."
+  },
   "init": {
     "lightMode": "Light Mode",
     "darkMode": "Dark Mode",

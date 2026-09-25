@@ -98,6 +98,8 @@ export function ExtractPattern(arg1:pattern.ExtractPatternInput):Promise<pattern
 
 export function ExtractStyle(arg1:app.ExtractStyleInput):Promise<style.ExtractResult>;
 
+export function FrontendReady():Promise<app.StartupState>;
+
 export function GetAppConfig():Promise<Record<string, any>>;
 
 export function GetArcNodes(arg1:number):Promise<Array<storyarc.ArcNode>>;
@@ -148,6 +150,8 @@ export function GetSessions(arg1:app.GetSessionsInput):Promise<storage.PageResul
 
 export function GetSettings():Promise<config.AppSettings>;
 
+export function GetStartupState():Promise<app.StartupState>;
+
 export function GetStoryArcs(arg1:number):Promise<Array<storyarc.StoryArc>>;
 
 export function GetStyleSample(arg1:number):Promise<style.Sample>;
@@ -181,6 +185,8 @@ export function ListStyleSamples(arg1:app.ListStyleSamplesInput):Promise<storage
 export function PickAndImportNovel():Promise<imp.ImportResult>;
 
 export function RebuildNovelIndex(arg1:number):Promise<void>;
+
+export function RetryStartup():Promise<void>;
 
 export function SaveAvatar(arg1:Array<number>):Promise<void>;
 

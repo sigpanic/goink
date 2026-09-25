@@ -46,6 +46,14 @@
   "app": {
     "loading": "加载中..."
   },
+  "startup": {
+    "preparingTitle": "正在准备数据",
+    "preparingMessage": "正在初始化数据库和运行环境，请不要关闭应用。",
+    "failedTitle": "启动失败",
+    "failedMessage": "应用暂时无法完成初始化。请检查错误信息后重试。",
+    "retry": "重试",
+    "retrying": "正在重试..."
+  },
   "init": {
     "lightMode": "浅色模式",
     "darkMode": "深色模式",

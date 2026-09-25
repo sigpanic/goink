@@ -652,6 +652,22 @@ export namespace app {
 	        this.type = source["type"];
 	    }
 	}
+	export class StartupState {
+	    phase: string;
+	    error?: string;
+	    version: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartupState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.phase = source["phase"];
+	        this.error = source["error"];
+	        this.version = source["version"];
+	    }
+	}
 	export class TestConnectionInput {
 	    provider_name: string;
 	    chat_url: string;

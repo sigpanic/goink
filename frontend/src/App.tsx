@@ -1,45 +1,49 @@
-import { useState, useEffect } from "react";
-import { useTranslation } from "react-i18next";
-import { IsInitialized, GetSettings } from "@/lib/wailsjs/go/app/App";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { queryClient } from "@/lib/queryClient";
 import InitView from "@/views/InitView";
 import WorkspaceView from "@/views/WorkspaceView";
-
-type View = "loading" | "init" | "workspace";
+import StartupOverlay from "@/components/startup/StartupOverlay";
+import LoadingScreen from "@/components/startup/LoadingScreen";
+import { useStartupState } from "@/components/startup/useStartupState";
+import { useWorkspaceBoot } from "@/components/startup/useWorkspaceBoot";
 
 export default function App() {
-  const { t } = useTranslation();
-  const [view, setView] = useState<View>("loading");
-  const [initialNovelId, setInitialNovelId] = useState(0);
-  const [fromInit, setFromInit] = useState(false);
-  useEffect(() => {
-    IsInitialized()
-      .then(async (ok) => {
-        if (ok) {
-          const settings = await GetSettings();
-          setInitialNovelId(settings?.last_novel_id ?? 0);
-          setView("workspace");
-        } else {
-          setView("init");
-        }
-      })
-      .catch((err) => {
-        console.error("App initialization failed", err);
-        setView("init");
-      });
-  }, []);
+  const startup = useStartupState();
+  const boot = useWorkspaceBoot(startup.phase, startup.version);
 
-  if (view === "loading") {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-background">
-        <p className="text-muted-foreground">{t("app.loading")}</p>
-      </div>
-    );
+  function renderStartupContent() {
+    switch (startup.phase) {
+      case "unconfigured":
+        return <InitView error={startup.error} />;
+      case "failed":
+        return (
+          <StartupOverlay
+            phase="failed"
+            error={startup.error}
+            onRetry={startup.retry}
+            retrying={startup.retrying}
+          />
+        );
+      case "ready":
+        return boot.ready ? (
+          <WorkspaceView
+            initialNovelId={boot.novelId}
+            initialShowHelp={startup.cameFromInit}
+          />
+        ) : (
+          <LoadingScreen />
+        );
+      case "initializing":
+        return startup.showPreparing ? (
+          <StartupOverlay phase="initializing" />
+        ) : (
+          <LoadingScreen />
+        );
+      default:
+        return <LoadingScreen />;
+    }
   }
 
   return (
@@ -60,26 +64,7 @@ export default function App() {
               },
             }}
           />
-          {view === "init" && (
-            <InitView
-              onInitialized={async () => {
-                try {
-                  const settings = await GetSettings();
-                  setInitialNovelId(settings?.last_novel_id ?? 0);
-                } catch (err) {
-                  toastError(toErrorMessage(err, t("chat.settingsLoadFailed")));
-                }
-                setFromInit(true);
-                setView("workspace");
-              }}
-            />
-          )}
-          {view === "workspace" && (
-            <WorkspaceView
-              initialNovelId={initialNovelId}
-              initialShowHelp={fromInit}
-            />
-          )}
+          {renderStartupContent()}
         </div>
       </TooltipProvider>
     </QueryClientProvider>
