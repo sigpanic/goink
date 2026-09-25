@@ -21,7 +21,6 @@ import (
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
-	"github.com/sigpanic/goink/internal/platform"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/rollback"
@@ -31,7 +30,9 @@ import (
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/style"
+	"github.com/sigpanic/goink/internal/testsupport"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -40,10 +41,7 @@ import (
 func setupTestApp(t *testing.T) *App {
 	t.Helper()
 
-	tmpDir := t.TempDir()
-	t.Setenv("GOINK_DATA_DIR", tmpDir)
-	// Reset DataDir cache so platform.DataDir() picks up the new GOINK_DATA_DIR.
-	platform.ResetDataDirCache()
+	tmpDir := testsupport.Isolate(t)
 
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug}))
 
@@ -90,6 +88,7 @@ func setupTestApp(t *testing.T) *App {
 	turnCommitStore := rollback.NewStore(db, logger)
 	writingStore := writing.NewStore(db, logger)
 	styleStore := style.NewStore(db, logger)
+	volumeStore := volume.NewStore(db, logger)
 
 	skillStore, err := skill.NewStore(logger, filepath.Join(tmpDir, "skills"))
 	require.NoError(t, err, "init skill store")
@@ -109,7 +108,7 @@ func setupTestApp(t *testing.T) *App {
 	cancelMgr := agent.NewCancelManager()
 
 	// Agent.
-	ag := agent.New(llmClient, registry, sessionStore, db, approvals, logger, skillStore, cancelMgr)
+	ag := agent.New(llmClient, registry, sessionStore, chapterStore, db, approvals, logger, skillStore, cancelMgr)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	t.Cleanup(cancel)
@@ -141,6 +140,7 @@ func setupTestApp(t *testing.T) *App {
 		reader:     readerStore,
 		turnCommit: turnCommitStore,
 		writing:    writingStore,
+		volume:     volumeStore,
 	}
 
 	return app
@@ -163,4 +163,15 @@ func createTestNovel(t *testing.T, app *App) *novel.Novel {
 	require.NoError(t, os.MkdirAll(novelDir, 0o755), "create novel dir")
 
 	return n
+}
+
+func int64Ptr(v int64) *int64 {
+	return &v
+}
+
+func createTestChapter(t *testing.T, app *App, novelID int64) *chapter.Chapter {
+	t.Helper()
+	ch, err := app.CreateChapter(CreateChapterInput{NovelID: novelID, Title: "Test Chapter"})
+	require.NoError(t, err, "create test chapter")
+	return ch
 }

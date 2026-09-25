@@ -279,7 +279,7 @@ type UpdateCharacterRelationshipArgs struct {
 	TargetCharacterID int64  `json:"target_character_id" jsonschema:"description=建立新关系时的接收方角色ID。旧关系自动变为历史"`
 	RelationDescribe  string `json:"relation_describe"   jsonschema:"description=自由文本描述关系，如'师徒、暗中较量'。详细描述而非简单分类词。编辑已有关系时可不传"`
 	Description       string `json:"description"         jsonschema:"description=当前关系阶段的详细描述"`
-	ChapterNumber     int    `json:"chapter_number"      jsonschema:"description=此关系确立/变化的章节号"`
+	ChapterID         *int64 `json:"chapter_id"          jsonschema:"description=此关系确立/变化的稳定章节 ID" validate:"omitempty,min=1"`
 }
 
 // UpdateCharacterRelationshipTool 创建或更新角色关系。
@@ -312,6 +312,13 @@ func (t *UpdateCharacterRelationshipTool) Execute(ctx context.Context, args any,
 	_, hasRelationID := m["relation_id"]
 	_, hasSource := m["source_character_id"]
 	_, hasTarget := m["target_character_id"]
+	chapterIDs := make([]int64, 0, 1)
+	if a.ChapterID != nil {
+		chapterIDs = append(chapterIDs, *a.ChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	switch {
 	case hasRelationID && !hasSource && !hasTarget:
@@ -399,7 +406,7 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 			TargetCharacterID: a.TargetCharacterID,
 			RelationDescribe:  a.RelationDescribe,
 			Description:       a.Description,
-			ChapterNumber:     a.ChapterNumber,
+			ChapterID:         a.ChapterID,
 			IsCurrent:         true,
 		}
 		if err := tx.Create(&newRel).Error; err != nil {

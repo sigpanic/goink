@@ -149,7 +149,7 @@ function ApprovalBody({
           {t("chat.confirmDeleteReaderEntry", {
             id: s(d.id),
             entryType: s(d.entry_type),
-            plantedChapter: s(d.planted_chapter),
+            plantedChapter: s(d.planted_chapter_id),
           })}
         </span>
       );
@@ -239,7 +239,7 @@ function DeletedEntityBody({ deleted }: { deleted: Record<string, unknown> }) {
         {t("chat.deletedEntityReaderEntry", {
           id: s(deleted.id),
           entryType: s(deleted.entry_type),
-          plantedChapter: s(deleted.planted_chapter),
+          plantedChapter: s(deleted.planted_chapter_id),
         })}
       </span>
     );

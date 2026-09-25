@@ -1,8 +1,8 @@
 package pattern
 
 import (
-	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -11,12 +11,12 @@ func boundaryMessages(chapters []ChapterSource) []map[string]any {
 	for _, ch := range chapters {
 		title := strings.TrimSpace(ch.Title)
 		if title == "" {
-			title = fmt.Sprintf("第%d章（无标题）", ch.ChapterNumber)
+			title = fmt.Sprintf("第%d章（无标题）", ch.ReadingNumber)
 		}
-		fmt.Fprintf(&b, "第%d章：%s\n", ch.ChapterNumber, title)
+		fmt.Fprintf(&b, "第%d章（chapter_id: %d）：%s\n", ch.ReadingNumber, ch.ID, title)
 	}
 	return []map[string]any{
-		{"role": "system", "content": "你是一个长篇小说结构分析师。根据章节标题推断可能的叙事阶段边界。只能通过调用 output_boundary_hints 返回结果。"},
+		{"role": "system", "content": "你是一个长篇小说结构分析师。根据章节标题推断可能的叙事阶段边界。章节号只用于理解阅读顺序；返回边界端点时必须使用对应的 chapter_id。只能通过调用 output_boundary_hints 返回结果。"},
 		{"role": "user", "content": "请找出可能的叙事阶段边界。边界是参考线索，不是最终定论。每条提示保持简短。\n\n" + b.String()},
 	}
 }
@@ -26,7 +26,7 @@ func summaryMessages(chapters []ChapterSource, boundaries []BoundaryHint) []map[
 	if len(boundaries) > 0 {
 		b.WriteString("疑似阶段边界参考：\n")
 		for _, h := range boundaries {
-			fmt.Fprintf(&b, "- 第%d-%d章：%s\n", h.StartChapter, h.EndChapter, h.Hint)
+			fmt.Fprintf(&b, "- 第%d-%d章（chapter_id: %d-%d）：%s\n", h.StartReadingNumber, h.EndReadingNumber, h.StartChapterID, h.EndChapterID, h.Hint)
 		}
 		b.WriteString("\n")
 	}
@@ -34,9 +34,9 @@ func summaryMessages(chapters []ChapterSource, boundaries []BoundaryHint) []map[
 	for _, ch := range chapters {
 		title := strings.TrimSpace(ch.Title)
 		if title == "" {
-			title = fmt.Sprintf("第%d章（无标题）", ch.ChapterNumber)
+			title = fmt.Sprintf("第%d章（无标题）", ch.ReadingNumber)
 		}
-		fmt.Fprintf(&b, "\n## 第%d章：%s\n", ch.ChapterNumber, title)
+		fmt.Fprintf(&b, "\n## 第%d章（chapter_id: %d）：%s\n", ch.ReadingNumber, ch.ID, title)
 		if strings.TrimSpace(ch.Summary) != "" {
 			fmt.Fprintf(&b, "[上下文参考，无需重新生成]\n%s\n", strings.TrimSpace(ch.Summary))
 			continue
@@ -48,38 +48,63 @@ func summaryMessages(chapters []ChapterSource, boundaries []BoundaryHint) []map[
 		fmt.Fprintf(&b, "[需提取]\n%s\n", ch.Content)
 	}
 	return []map[string]any{
-		{"role": "system", "content": "你为叙事模式提取生成章节摘要。标记为[需提取]的章节需要各生成一条 80-150 字的叙事摘要，覆盖核心事件、关键人物行为与决策、情感或关系转折。保留足够信息量以供后续判断叙事阶段边界。标记为[上下文参考]的章节仅作叙事背景参考，除非同时标记了[需提取]，否则不要包含在输出中。只能通过调用 output_chapter_summaries 返回结果。"},
+		{"role": "system", "content": "你为叙事模式提取生成章节摘要。标记为[需提取]的章节需要各生成一条 80-150 字的叙事摘要，覆盖核心事件、关键人物行为与决策、情感或关系转折。保留足够信息量以供后续判断叙事阶段边界。标记为[上下文参考]的章节仅作叙事背景参考，除非同时标记了[需提取]，否则不要包含在输出中。章节号只用于理解阅读顺序；返回摘要时必须使用对应的 chapter_id。只能通过调用 output_chapter_summaries 返回结果。"},
 		{"role": "user", "content": b.String()},
 	}
 }
 
 func initialChunkMessages(summaries []ChapterSummaryItem) []map[string]any {
+	var b strings.Builder
+	for _, summary := range summaries {
+		fmt.Fprintf(&b, "第%d章（chapter_id: %d）：%s\n", summary.ReadingNumber, summary.ChapterID, summary.Summary)
+	}
 	return []map[string]any{
-		{"role": "system", "content": "你将章节级摘要压缩为叙事阶段块（chunk）。以叙事阶段转折为分界标准：当摘要显示叙事方向、情感基调或核心冲突发生明显变化时，应在该处划分边界。相邻且属于同一叙事阶段的章节应合并为一个块。每个块的 content 应概括该阶段的核心事件、关键人物行动与转折，约 100-200 字。只能通过调用 output_chunks 返回结果。"},
-		{"role": "user", "content": "根据以下章节摘要生成第一轮叙事阶段块：\n\n" + marshalPretty(summaries)},
+		{"role": "system", "content": "你将章节级摘要压缩为叙事阶段块（chunk）。以叙事阶段转折为分界标准：当摘要显示叙事方向、情感基调或核心冲突发生明显变化时，应在该处划分边界。相邻且属于同一叙事阶段的章节应合并为一个块。每个块的 content 应概括该阶段的核心事件、关键人物行动与转折，约 100-200 字。章节号只用于理解阅读顺序；返回块端点时必须使用对应的 start_chapter_id 和 end_chapter_id。只能通过调用 output_chunks 返回结果。"},
+		{"role": "user", "content": "根据以下章节摘要生成第一轮叙事阶段块：\n\n" + b.String()},
 	}
 }
 
-func compressChunkMessages(chunks []Chunk, round int) []map[string]any {
-	return []map[string]any{
-		{"role": "system", "content": "你将多个叙事阶段块合并为更少、更大的阶段块。规则如下：\n1. 优先合并相邻且属于同一叙事阶段的块（叙事方向一致、情感基调相同）。\n2. 若一个块的内部包含两个明显不同的叙事子阶段（如铺垫→爆发），则可以拆分，但应尽量减少拆分。\n3. 每个输出块的 content 应重新概括该合并后阶段的核心事件与转折，约 100-200 字。\n4. 必须保留准确的 start_chapter 和 end_chapter。只能通过调用 output_chunks 返回结果。"},
-		{"role": "user", "content": fmt.Sprintf("第 %d 轮压缩。将以下阶段块合并为更少的叙事阶段块：\n\n%s", round, marshalPretty(chunks))},
+func compressChunkMessages(chunks []Chunk, readingNumbers map[int64]int, round int) []map[string]any {
+	var b strings.Builder
+	for _, chunk := range chunks {
+		fmt.Fprintf(&b, "第%d-%d章（chapter_id: %d-%d） %s：%s\n", chunk.StartReadingNumber, chunk.EndReadingNumber, chunk.StartChapterID, chunk.EndChapterID, chunk.Name, chunk.Content)
 	}
+	references := chapterReferences(chunks, readingNumbers)
+	return []map[string]any{
+		{"role": "system", "content": "你将多个叙事阶段块合并为更少、更大的阶段块。规则如下：\n1. 优先合并相邻且属于同一叙事阶段的块（叙事方向一致、情感基调相同）。\n2. 若一个块的内部包含两个明显不同的叙事子阶段（如铺垫→爆发），则可以拆分，但应尽量减少拆分。\n3. 每个输出块的 content 应重新概括该合并后阶段的核心事件与转折，约 100-200 字。\n4. 必须保留准确的 start_chapter_id 和 end_chapter_id；章节号只用于理解阅读顺序。可用章节定位表列出了可作为端点的全部 ID。只能通过调用 output_chunks 返回结果。"},
+		{"role": "user", "content": fmt.Sprintf("第 %d 轮压缩。将以下阶段块合并为更少的叙事阶段块：\n\n%s\n可用章节定位表：\n%s", round, b.String(), references)},
+	}
+}
+
+func chapterReferences(chunks []Chunk, readingNumbers map[int64]int) string {
+	if len(chunks) == 0 || len(readingNumbers) == 0 {
+		return ""
+	}
+	type chapterReference struct {
+		id     int64
+		number int
+	}
+	refs := make([]chapterReference, 0, len(readingNumbers))
+	for id, number := range readingNumbers {
+		refs = append(refs, chapterReference{id: id, number: number})
+	}
+	slices.SortFunc(refs, func(a, b chapterReference) int { return a.number - b.number })
+	var b strings.Builder
+	for _, ref := range refs {
+		fmt.Fprintf(&b, "第%d章=%d\n", ref.number, ref.id)
+	}
+	return b.String()
 }
 
 func finalSkillMessages(chunks []Chunk) []map[string]any {
+	var b strings.Builder
+	for _, chunk := range chunks {
+		fmt.Fprintf(&b, "第%d-%d章（chapter_id: %d-%d） %s：%s\n", chunk.StartReadingNumber, chunk.EndReadingNumber, chunk.StartChapterID, chunk.EndChapterID, chunk.Name, chunk.Content)
+	}
 	return []map[string]any{
 		{"role": "system", "content": finalSkillSystemPrompt},
-		{"role": "user", "content": "根据以下叙事阶段块生成最终的可复用叙事模式技能：\n\n" + marshalPretty(chunks)},
+		{"role": "user", "content": "根据以下叙事阶段块生成最终的可复用叙事模式技能：\n\n" + b.String()},
 	}
-}
-
-func marshalPretty(v any) string {
-	raw, err := json.MarshalIndent(v, "", "  ")
-	if err != nil {
-		return fmt.Sprintf("%v", v)
-	}
-	return string(raw)
 }
 
 const finalSkillSystemPrompt = `你是一个专业的小说结构分析师。

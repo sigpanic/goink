@@ -58,7 +58,7 @@ type ListByNovelOptions struct {
 	Search     string // 空字符串=不过滤，按 title LIKE OR content LIKE 模糊匹配
 	Category   string // 空字符串=不过滤，"foreshadowing"/"user_directive"
 	Status     string // 空字符串=不过滤，"pending"/"resolved"/"abandoned"
-	Order      string // 空字符串=默认 target_chapter ASC, importance DESC
+	Order      string // 空字符串=默认 target_reading_number ASC, importance DESC
 }
 
 // ListByNovel 分页列出某小说的伏笔/用户指令，支持搜索、分类和状态过滤。
@@ -87,7 +87,7 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 
 	order := opts.Order
 	if order == "" {
-		order = "target_chapter ASC, importance DESC"
+		order = "target_reading_number ASC, importance DESC"
 	}
 	var entries []TimelineEntry
 	if err := q.Order(order).Offset(pp.Offset()).Limit(pp.Size).Find(&entries).Error; err != nil {
@@ -102,8 +102,8 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 func (s *Store) ListBefore(ctx context.Context, novelID int64, chapterNum int, limit int) ([]TimelineEntry, error) {
 	var entries []TimelineEntry
 	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND target_chapter < ?", novelID, chapterNum).
-		Order("target_chapter DESC").
+		Where("novel_id = ? AND target_reading_number < ?", novelID, chapterNum).
+		Order("target_reading_number DESC").
 		Limit(limit).
 		Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("timeline store: list before: %w", err)
@@ -116,8 +116,8 @@ func (s *Store) ListBefore(ctx context.Context, novelID int64, chapterNum int, l
 func (s *Store) ListPendingBefore(ctx context.Context, novelID int64, chapterNum int) ([]TimelineEntry, error) {
 	var entries []TimelineEntry
 	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND target_chapter < ? AND status = ?", novelID, chapterNum, "pending").
-		Order("target_chapter DESC").
+		Where("novel_id = ? AND target_reading_number < ? AND status = ?", novelID, chapterNum, "pending").
+		Order("target_reading_number DESC").
 		Limit(100).
 		Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("timeline store: list pending before: %w", err)
@@ -129,8 +129,8 @@ func (s *Store) ListPendingBefore(ctx context.Context, novelID int64, chapterNum
 func (s *Store) ListAfter(ctx context.Context, novelID int64, chapterNum int) ([]TimelineEntry, error) {
 	var entries []TimelineEntry
 	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND target_chapter >= ?", novelID, chapterNum).
-		Order("target_chapter ASC").
+		Where("novel_id = ? AND target_reading_number >= ?", novelID, chapterNum).
+		Order("target_reading_number ASC").
 		Limit(100).
 		Find(&entries).Error; err != nil {
 		return nil, fmt.Errorf("timeline store: list after: %w", err)

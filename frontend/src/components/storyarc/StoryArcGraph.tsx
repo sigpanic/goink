@@ -18,6 +18,8 @@ import type { storyarc } from "@/lib/wailsjs/go/models";
 import { useStoryArcs } from "./useStoryArcs";
 import { useArcNodes } from "./useArcNodes";
 import { useMaxChapterNumber } from "./useMaxChapterNumber";
+import { useChapters } from "@/components/chapter/useChapters";
+import { buildChapterReferenceMap } from "@/components/chapter/chapterReferenceMap";
 
 interface Props {
   novelId: number;
@@ -70,6 +72,11 @@ export default function StoryArcGraph({ novelId }: Props) {
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
   const arcsQuery = useStoryArcs(novelId);
   const nodesQuery = useArcNodes(novelId);
+  const { data: chapters = [] } = useChapters(novelId);
+  const chapterReferences = useMemo(
+    () => buildChapterReferenceMap(chapters),
+    [chapters],
+  );
   const maxChQuery = useMaxChapterNumber(novelId);
   const arcs = arcsQuery.data ?? [];
   const allNodes = nodesQuery.data ?? [];
@@ -110,7 +117,7 @@ export default function StoryArcGraph({ novelId }: Props) {
 
   const totalChapters =
     allNodes.length > 0
-      ? Math.max(...allNodes.map((n) => n.target_chapter))
+      ? Math.max(...allNodes.map((n) => n.target_reading_number))
       : 1;
   const totalChaptersRef = useRef(totalChapters);
   const allNodesRef = useRef(allNodes);
@@ -126,7 +133,10 @@ export default function StoryArcGraph({ novelId }: Props) {
       map.get(n.story_arc_id)!.push(n);
     }
     for (const [, ns] of map) {
-      ns.sort((a, b) => a.target_chapter - b.target_chapter || a.id - b.id);
+      ns.sort(
+        (a, b) =>
+          a.target_reading_number - b.target_reading_number || a.id - b.id,
+      );
     }
     return map;
   }, [allNodes]);
@@ -135,7 +145,9 @@ export default function StoryArcGraph({ novelId }: Props) {
     if (arcs.length === 0) return { nodes: [], edges: [] };
 
     const visibleNodes = allNodes.filter(
-      (n) => n.target_chapter >= windowFrom && n.target_chapter <= windowTo,
+      (n) =>
+        n.target_reading_number >= windowFrom &&
+        n.target_reading_number <= windowTo,
     );
 
     const gNodes: any[] = [];
@@ -209,7 +221,8 @@ export default function StoryArcGraph({ novelId }: Props) {
       const arcIdx = arcs.findIndex((a) => a.id === n.story_arc_id);
       if (arcIdx < 0) continue;
       const color = PALETTE[arcIdx % PALETTE.length];
-      const x = LEFT_MARGIN + (n.target_chapter - windowFrom + 0.5) * CH_W;
+      const x =
+        LEFT_MARGIN + (n.target_reading_number - windowFrom + 0.5) * CH_W;
       const y = arcIdx * LANE_H + LANE_H / 2;
 
       let fill = color.fill;
@@ -306,8 +319,8 @@ export default function StoryArcGraph({ novelId }: Props) {
       for (let i = 0; i < ns.length - 1; i++) {
         const src = ns[i];
         const tgt = ns[i + 1];
-        const srcCh = src.target_chapter;
-        const tgtCh = tgt.target_chapter;
+        const srcCh = src.target_reading_number;
+        const tgtCh = tgt.target_reading_number;
 
         // Both outside window on same side — skip
         if (srcCh > windowTo && tgtCh > windowTo) continue;
@@ -457,8 +470,8 @@ export default function StoryArcGraph({ novelId }: Props) {
       const visTo = Math.ceil((right - LEFT_MARGIN) / CH_W) + wf;
       const nodes = allNodesRef.current;
       setEdgeCounts({
-        left: nodes.filter((n) => n.target_chapter < visFrom).length,
-        right: nodes.filter((n) => n.target_chapter > visTo).length,
+        left: nodes.filter((n) => n.target_reading_number < visFrom).length,
+        right: nodes.filter((n) => n.target_reading_number > visTo).length,
       });
     };
     graph.on("canvas:zoom", updateEdgeCounts);
@@ -630,10 +643,15 @@ export default function StoryArcGraph({ novelId }: Props) {
           const desc = selectedNode.description?.trim() || "";
           const longDesc = desc.length > 100;
           const ch =
-            selectedNode.actual_chapter > 0
-              ? t("storyarc.actualChapter", { n: selectedNode.actual_chapter })
+            selectedNode.actual_chapter_id != null
+              ? t("storyarc.actualChapter", {
+                  n:
+                    chapterReferences.readingNumberByChapterID.get(
+                      selectedNode.actual_chapter_id,
+                    ) ?? "?",
+                })
               : t("storyarc.targetChapter2", {
-                  n: selectedNode.target_chapter,
+                  n: selectedNode.target_reading_number,
                 });
           const arc = arcs.find((a) => a.id === selectedNode.story_arc_id);
           return (

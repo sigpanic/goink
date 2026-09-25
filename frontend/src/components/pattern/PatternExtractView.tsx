@@ -330,7 +330,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm text-foreground truncate">
-                        {t("extract.chapterN", { n: ch.chapter_number })}{" "}
+                        {t("extract.chapterN", { n: ch.reading_number })}{" "}
                         {ch.title}
                       </span>
                       <span className="block text-xs text-muted-foreground mt-1">

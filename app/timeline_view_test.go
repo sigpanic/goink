@@ -67,14 +67,16 @@ func TestCreateTimelineEntry(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	sourceChapter := createTestChapter(t, app, novelID)
 
 	entry, err := app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "foreshadowing",
-		Title:         "神秘剑谱",
-		Content:       "主角捡到一本神秘剑谱",
-		TargetChapter: 5,
-		Importance:    4,
-		Source:        "user",
+		Category:            "foreshadowing",
+		Title:               "神秘剑谱",
+		Content:             "主角捡到一本神秘剑谱",
+		TargetReadingNumber: 5,
+		Importance:          4,
+		SourceChapterID:     int64Ptr(sourceChapter.ID),
+		Source:              "user",
 	})
 	require.NoError(t, err)
 	assert.NotZero(t, entry.ID)
@@ -82,10 +84,12 @@ func TestCreateTimelineEntry(t *testing.T) {
 	assert.Equal(t, "foreshadowing", entry.Category)
 	assert.Equal(t, "神秘剑谱", entry.Title)
 	assert.Equal(t, "主角捡到一本神秘剑谱", entry.Content)
-	assert.Equal(t, 5, entry.TargetChapter)
+	assert.Equal(t, 5, entry.TargetReadingNumber)
 	assert.Equal(t, 4, entry.Importance)
 	assert.Equal(t, "pending", entry.Status)
 	assert.Equal(t, "user", entry.Source)
+	require.NotNil(t, entry.SourceChapterID)
+	assert.Equal(t, sourceChapter.ID, *entry.SourceChapterID)
 }
 
 func TestCreateTimelineEntry_MissingFields(t *testing.T) {
@@ -108,23 +112,23 @@ func TestGetTimelineEntries_All(t *testing.T) {
 	novelID := novel.ID
 
 	_, err := app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "foreshadowing",
-		Title:         "伏笔A",
-		TargetChapter: 3,
+		Category:            "foreshadowing",
+		Title:               "伏笔A",
+		TargetReadingNumber: 3,
 	})
 	require.NoError(t, err)
 
 	_, err = app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "foreshadowing",
-		Title:         "伏笔B",
-		TargetChapter: 7,
+		Category:            "foreshadowing",
+		Title:               "伏笔B",
+		TargetReadingNumber: 7,
 	})
 	require.NoError(t, err)
 
 	_, err = app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "user_directive",
-		Title:         "指令C",
-		TargetChapter: 10,
+		Category:            "user_directive",
+		Title:               "指令C",
+		TargetReadingNumber: 10,
 	})
 	require.NoError(t, err)
 
@@ -138,20 +142,22 @@ func TestUpdateTimelineEntry(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
 	novelID := novel.ID
+	resolvedChapter := createTestChapter(t, app, novelID)
 
 	entry, err := app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "foreshadowing",
-		Title:         "伏笔A",
-		Content:       "旧内容",
-		TargetChapter: 5,
+		Category:            "foreshadowing",
+		Title:               "伏笔A",
+		Content:             "旧内容",
+		TargetReadingNumber: 5,
 	})
 	require.NoError(t, err)
 
 	err = app.UpdateTimelineEntry(novelID, entry.ID, UpdateTimelineEntryInput{
-		Title:      "伏笔A-更新",
-		Content:    "新内容",
-		Status:     "resolved",
-		Importance: 5,
+		Title:             "伏笔A-更新",
+		Content:           "新内容",
+		Status:            "resolved",
+		Importance:        5,
+		ResolvedChapterID: int64Ptr(resolvedChapter.ID),
 	})
 	require.NoError(t, err)
 
@@ -162,6 +168,8 @@ func TestUpdateTimelineEntry(t *testing.T) {
 	assert.Equal(t, "新内容", entries[0].Content)
 	assert.Equal(t, "resolved", entries[0].Status)
 	assert.Equal(t, 5, entries[0].Importance)
+	require.NotNil(t, entries[0].ResolvedChapterID)
+	assert.Equal(t, resolvedChapter.ID, *entries[0].ResolvedChapterID)
 }
 
 func TestDeleteTimelineEntry(t *testing.T) {
@@ -170,9 +178,9 @@ func TestDeleteTimelineEntry(t *testing.T) {
 	novelID := novel.ID
 
 	entry, err := app.CreateTimelineEntry(novelID, CreateTimelineEntryInput{
-		Category:      "foreshadowing",
-		Title:         "伏笔A",
-		TargetChapter: 5,
+		Category:            "foreshadowing",
+		Title:               "伏笔A",
+		TargetReadingNumber: 5,
 	})
 	require.NoError(t, err)
 

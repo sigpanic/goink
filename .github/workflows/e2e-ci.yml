@@ -15,10 +15,11 @@ jobs:
     env:
       CGO_ENABLED: 1
       GOINK_TESTING: 1
+      GOINK_E2E_STRICT: 1
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: "1.25"
 
@@ -33,7 +34,7 @@ jobs:
 
       - name: Cache runtime deps
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/runtime
           key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}

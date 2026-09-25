@@ -236,7 +236,7 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 		return nil // 用户取消
 	}
 
-	chapters, err := a.chapter.ListAllByNovel(a.ctx, novelID)
+	chapters, err := a.chapter.ListAllByNovel(a.ctx, nil, novelID)
 	if err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}
@@ -246,9 +246,9 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 
 	var cc []export.ChapterWithContent
 	for _, ch := range chapters {
-		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ChapterNumber))
+		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ID))
 		if err != nil {
-			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ChapterNumber, err)
+			return fmt.Errorf("export novel: 读取第%d章失败: %w", ch.ReadingNumber, err)
 		}
 		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
 	}

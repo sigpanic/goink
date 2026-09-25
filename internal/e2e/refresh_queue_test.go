@@ -63,25 +63,26 @@ func setupRefreshQueueTest(t *testing.T) (*rag.RefreshQueue, int64, func()) {
 }
 
 // createChapterInDB creates a chapter record in the database and writes content to disk.
-func createChapterInDB(t *testing.T, novelID int64, chapterNumber int, title, summary, content string) {
+func createChapterInDB(t *testing.T, novelID int64, sortOrder int, title, summary, content string) int64 {
 	t.Helper()
 
 	sharedDB := getSharedDB(t)
 
 	ch := &chapter.Chapter{
-		NovelID:       novelID,
-		ChapterNumber: chapterNumber,
-		Title:         title,
-		Summary:       summary,
+		NovelID:   novelID,
+		SortOrder: sortOrder,
+		Title:     title,
+		Summary:   summary,
 	}
 	if err := sharedDB.Create(ch).Error; err != nil {
-		t.Fatalf("create chapter %d failed: %v", chapterNumber, err)
+		t.Fatalf("create chapter at sort order %d failed: %v", sortOrder, err)
 	}
 
 	// Write chapter content to disk
-	if err := git.WriteFile(novelID, git.ChapterPath(chapterNumber), content); err != nil {
-		t.Fatalf("write chapter %d file failed: %v", chapterNumber, err)
+	if err := git.WriteFile(novelID, git.ChapterPath(ch.ID), content); err != nil {
+		t.Fatalf("write chapter %d file failed: %v", ch.ID, err)
 	}
+	return ch.ID
 }
 
 func TestRefreshQueue_SubmitAndSearch(t *testing.T) {
@@ -92,10 +93,10 @@ func TestRefreshQueue_SubmitAndSearch(t *testing.T) {
 
 	// Create a chapter
 	chapterContent := "林风盘坐在冰冷的石台上，感受着体内灵力的涌动。经过三年的苦修，他终于触摸到了金丹期的门槛。一道金光从他体内迸发而出，照亮了整个山洞。山洞外，一只白色的灵狐静静地等待着。它感受到了主人的气息变化，尾巴轻轻摇动。"
-	createChapterInDB(t, novelID, 1, "第一章 修行之路", "林风在山洞中修炼突破金丹期", chapterContent)
+	chapterID := createChapterInDB(t, novelID, 1, "第一章 修行之路", "林风在山洞中修炼突破金丹期", chapterContent)
 
 	// Submit a refresh task
-	rag.SubmitRefresh(novelID, 1, chapterContent)
+	rag.SubmitRefresh(novelID, chapterID, chapterContent)
 
 	// Wait for async processing (500ms dedup window + processing time)
 	time.Sleep(3 * time.Second)
@@ -113,7 +114,7 @@ func TestRefreshQueue_SubmitAndSearch(t *testing.T) {
 
 	t.Logf("Search returned %d results after SubmitRefresh", len(results))
 	for i, r := range results {
-		t.Logf("  [%d] chunk=%s type=%s ch=%d relevance=%.4f", i, r.ChunkID, r.SourceType, r.ChapterNumber, r.Relevance)
+		t.Logf("  [%d] chunk=%s type=%s chapter_id=%d relevance=%.4f", i, r.ChunkID, r.SourceType, r.ChapterID, r.Relevance)
 	}
 }
 
@@ -125,11 +126,11 @@ func TestRefreshQueue_Dedup(t *testing.T) {
 
 	// Create a chapter
 	chapterContent := "赵云单骑救主，在长坂坡杀了个七进七出。曹操在山上观战，见赵云勇猛无比，下令不许放冷箭。"
-	createChapterInDB(t, novelID, 1, "第一章 长坂坡", "赵云单骑救主", chapterContent)
+	chapterID := createChapterInDB(t, novelID, 1, "第一章 长坂坡", "赵云单骑救主", chapterContent)
 
 	// Submit the same chapter refresh multiple times rapidly
 	for i := 0; i < 10; i++ {
-		rag.SubmitRefresh(novelID, 1, chapterContent)
+		rag.SubmitRefresh(novelID, chapterID, chapterContent)
 	}
 
 	// Wait for dedup window + processing
@@ -170,12 +171,12 @@ func TestRefreshQueue_RebuildNovel(t *testing.T) {
 	// Create two chapters
 	ch1Content := "孙悟空从石头中蹦出，天地震动。他在花果山上称王，过着无忧无虑的生活。一日他看到猴子老死，决定出海寻仙访道。"
 	ch2Content := "孙悟空拜入菩提祖师门下，学得七十二变和筋斗云。祖师赐他法名悟空，他从此踏上修行之路。"
-	createChapterInDB(t, novelID, 1, "第一章 石猴出世", "孙悟空从石头中诞生", ch1Content)
-	createChapterInDB(t, novelID, 2, "第二章 拜师学艺", "孙悟空拜师菩提祖师", ch2Content)
+	chapter1ID := createChapterInDB(t, novelID, 1, "第一章 石猴出世", "孙悟空从石头中诞生", ch1Content)
+	chapter2ID := createChapterInDB(t, novelID, 2, "第二章 拜师学艺", "孙悟空拜师菩提祖师", ch2Content)
 
 	// First, index some chunks via direct SubmitRefresh
-	rag.SubmitRefresh(novelID, 1, ch1Content)
-	rag.SubmitRefresh(novelID, 2, ch2Content)
+	rag.SubmitRefresh(novelID, chapter1ID, ch1Content)
+	rag.SubmitRefresh(novelID, chapter2ID, ch2Content)
 	time.Sleep(3 * time.Second)
 
 	// Verify initial indexing
@@ -283,10 +284,10 @@ func TestRefreshQueue_StopDrainsPending(t *testing.T) {
 
 	// Create a chapter
 	chapterContent := "关羽温酒斩华雄，威震诸侯。张飞在旁高声喝彩，声如巨雷。刘备暗自欣喜，兄弟三人初露锋芒。"
-	createChapterInDB(t, novelID, 1, "第一章 温酒斩华雄", "关羽斩华雄立威", chapterContent)
+	chapterID := createChapterInDB(t, novelID, 1, "第一章 温酒斩华雄", "关羽斩华雄立威", chapterContent)
 
 	// Submit a refresh task
-	rag.SubmitRefresh(novelID, 1, chapterContent)
+	rag.SubmitRefresh(novelID, chapterID, chapterContent)
 
 	// Stop immediately — should drain pending tasks before exiting
 	queue.Stop()

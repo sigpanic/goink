@@ -107,9 +107,9 @@ func New(novelDir, gitBin string) (*Repo, error)
 
 // ── 文件读写 ──
 
-func (r *Repo) ChapterPath(num int) string                 // "chapters/001.md"
-func (r *Repo) ReadChapter(num int) (string, error)        // 读全文
-func (r *Repo) WriteChapter(num int, content string) error // 全量覆写，章节内容天然小（几千字），无需增量写入
+func ChapterPath(id int64) string                           // "chapters/id_1.md"
+func ReadFile(novelID int64, path string) (string, error)   // 读全文
+func WriteFile(novelID int64, path, content string) error   // 全量覆写，章节内容天然小（几千字），无需增量写入
 
 func (r *Repo) GoinkPath() string
 func (r *Repo) ReadGoink() (string, error)

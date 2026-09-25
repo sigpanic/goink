@@ -16,11 +16,11 @@ import (
 
 // SearchStoryMemoryArgs 是 search_story_memory 的参数。
 type SearchStoryMemoryArgs struct {
-	Query          string   `json:"query" jsonschema:"required,description=语义搜索查询。用自然语言描述你想找的内容" validate:"required"`
-	TopK           int      `json:"top_k" jsonschema:"description=返回结果数量,default=5,minimum=1,maximum=20" validate:"omitempty,min=1,max=20"`
-	MinRelevance   float64  `json:"min_relevance" jsonschema:"description=相关度阈值 0-1,default=0.5" validate:"omitempty,min=0,max=1"`
-	ChapterNumbers []int    `json:"chapter_numbers" jsonschema:"description=限定章节号范围，空表示不限制"`
-	ChunkTypes     []string `json:"chunk_types" jsonschema:"description=限定块类型：summary(章节摘要) / chapter_brief(章节概要) / content(正文内容)，空表示全部"`
+	Query        string   `json:"query" jsonschema:"required,description=语义搜索查询。用自然语言描述你想找的内容" validate:"required"`
+	TopK         int      `json:"top_k" jsonschema:"description=返回结果数量,default=5,minimum=1,maximum=20" validate:"omitempty,min=1,max=20"`
+	MinRelevance float64  `json:"min_relevance" jsonschema:"description=相关度阈值 0-1,default=0.5" validate:"omitempty,min=0,max=1"`
+	ChapterIDs   []int64  `json:"chapter_ids" jsonschema:"description=限定章节 ID，空表示不限制" validate:"omitempty,dive,min=1"`
+	ChunkTypes   []string `json:"chunk_types" jsonschema:"description=限定块类型：summary(章节摘要) / chapter_brief(章节概要) / content(正文内容)，空表示全部"`
 }
 
 // SearchStoryMemoryTool 语义检索小说记忆。
@@ -55,10 +55,10 @@ func (t *SearchStoryMemoryTool) Execute(ctx context.Context, args any, tc ToolCo
 	fetchK := min(a.TopK*2, 40)
 
 	var filter *rag.SearchFilter
-	if len(a.ChapterNumbers) > 0 || len(a.ChunkTypes) > 0 {
+	if len(a.ChapterIDs) > 0 || len(a.ChunkTypes) > 0 {
 		filter = &rag.SearchFilter{
-			ChapterNumbers: a.ChapterNumbers,
-			ChunkTypes:     a.ChunkTypes,
+			ChapterIDs: a.ChapterIDs,
+			ChunkTypes: a.ChunkTypes,
 		}
 	}
 
@@ -90,53 +90,16 @@ func (t *SearchStoryMemoryTool) Execute(ctx context.Context, args any, tc ToolCo
 	reranked := rag.MMRRerank(a.Query, filtered, a.TopK, 0.7)
 
 	// 4. 查询章节元数据
-	chapterNums := make([]int, 0, len(reranked))
-	seen := make(map[int]bool, len(reranked))
-	for _, r := range reranked {
-		if r.ChapterNumber > 0 && !seen[r.ChapterNumber] {
-			chapterNums = append(chapterNums, r.ChapterNumber)
-			seen[r.ChapterNumber] = true
-		}
+	chapters, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).ListAllByNovel(ctx, nil, tc.NovelID)
+	if err != nil {
+		return nil, fmt.Errorf("查询章节元数据失败: %w", err)
 	}
-
-	var chapters []chapter.Chapter
-	if len(chapterNums) > 0 {
-		if err := tc.DB.WithContext(ctx).
-			Where("novel_id = ? AND chapter_number IN ?", tc.NovelID, chapterNums).
-			Find(&chapters).Error; err != nil {
-			return nil, fmt.Errorf("查询章节元数据失败: %w", err)
-		}
-	}
-	chapMap := make(map[int]chapter.Chapter, len(chapters))
+	chapMap := make(map[int64]chapter.Chapter, len(chapters))
 	for _, ch := range chapters {
-		chapMap[ch.ChapterNumber] = ch
+		chapMap[ch.ID] = ch
 	}
 
-	// 5. 格式化 Markdown 输出
-	var sb strings.Builder
-	sb.WriteString("## 语义搜索结果\n\n")
-	fmt.Fprintf(&sb, "**查询：** %s  \n", a.Query)
-	fmt.Fprintf(&sb, "**结果数：** %d", len(reranked))
-
-	maxRelevance := 0.0
-	for i, r := range reranked {
-		if r.Relevance > maxRelevance {
-			maxRelevance = r.Relevance
-		}
-
-		ch, ok := chapMap[r.ChapterNumber]
-		sourceLabel := chunkTypeLabel(r.SourceType)
-		fmt.Fprintf(&sb, "\n\n### %d. ", i+1)
-		if ok && ch.ChapterNumber > 0 {
-			fmt.Fprintf(&sb, "第%d章 %s", ch.ChapterNumber, ch.Title)
-		} else {
-			sb.WriteString("未知章节")
-		}
-		fmt.Fprintf(&sb, " — %s（相关度：%.2f）\n\n", sourceLabel, r.Relevance)
-		sb.WriteString(r.Content)
-	}
-
-	fmt.Fprintf(&sb, "\n\n> 最高相关度：%.2f | 查询：%s", maxRelevance, a.Query)
+	content, maxRelevance := formatSearchStoryMemoryResults(a.Query, reranked, chapMap)
 
 	return &ToolResult{
 		Success: true,
@@ -144,9 +107,38 @@ func (t *SearchStoryMemoryTool) Execute(ctx context.Context, args any, tc ToolCo
 			"query":         a.Query,
 			"total":         len(reranked),
 			"max_relevance": fmt.Sprintf("%.2f", maxRelevance),
-			"content":       sb.String(),
+			"content":       content,
 		},
 	}, nil
+}
+
+// formatSearchStoryMemoryResults 格式化搜索结果；chapterID 用于关联章节，ReadingNumber 仅供展示。
+func formatSearchStoryMemoryResults(query string, results []rag.SearchResult, chapters map[int64]chapter.Chapter) (string, float64) {
+	var sb strings.Builder
+	sb.WriteString("## 语义搜索结果\n\n")
+	fmt.Fprintf(&sb, "**查询：** %s  \n", query)
+	fmt.Fprintf(&sb, "**结果数：** %d", len(results))
+
+	maxRelevance := 0.0
+	for i, r := range results {
+		if r.Relevance > maxRelevance {
+			maxRelevance = r.Relevance
+		}
+
+		ch, ok := chapters[r.ChapterID]
+		sourceLabel := chunkTypeLabel(r.SourceType)
+		fmt.Fprintf(&sb, "\n\n### %d. ", i+1)
+		if ok && ch.ReadingNumber > 0 {
+			fmt.Fprintf(&sb, "第%d章 %s [chapter_id:%d]", ch.ReadingNumber, ch.Title, ch.ID)
+		} else {
+			sb.WriteString("未知章节")
+		}
+		fmt.Fprintf(&sb, " — %s（相关度：%.2f）\n\n", sourceLabel, r.Relevance)
+		sb.WriteString(r.Content)
+	}
+
+	fmt.Fprintf(&sb, "\n\n> 最高相关度：%.2f | 查询：%s", maxRelevance, query)
+	return sb.String(), maxRelevance
 }
 
 // chunkTypeLabel 将块类型转为中文标签。

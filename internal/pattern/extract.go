@@ -64,6 +64,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 	if len(chapters) < 5 {
 		return nil, fmt.Errorf("章节数量不足，模式提取至少需要 5 个有内容的章节")
 	}
+	readingNumbers := readingNumbersFromChapters(chapters)
 
 	contextWindow := e.modelContextWindow(input.ProviderName, input.ModelID)
 	budget := batchBudget(contextWindow)
@@ -149,7 +150,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 			Tokens:  tokensOfChunks(chunks),
 		})
 		prevTokens := tokensOfChunks(chunks)
-		next, roundTrace, err := e.compressChunks(ctx, input, chunks, budget, round)
+		next, roundTrace, err := e.compressChunks(ctx, input, chunks, readingNumbers, budget, round)
 		if err != nil {
 			return nil, err
 		}
@@ -161,7 +162,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
-			next, roundTrace, err = e.compressChunks(ctx, input, chunks, budget, round)
+			next, roundTrace, err = e.compressChunks(ctx, input, chunks, readingNumbers, budget, round)
 			if err != nil {
 				return nil, fmt.Errorf("第%d轮压缩未返回任何叙事阶段块，重试也失败: %w", round, err)
 			}
@@ -244,7 +245,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 
 // loadChapters 加载指定 Novel 的章节，支持按 ID 过滤
 func (e *Extractor) loadChapters(ctx context.Context, novelID int64, ids []int64) ([]ChapterSource, error) {
-	dbChapters, err := e.Chapters.ListAllByNovel(ctx, novelID)
+	dbChapters, err := e.Chapters.ListAllByNovel(ctx, nil, novelID)
 	if err != nil {
 		return nil, err
 	}
@@ -259,19 +260,19 @@ func (e *Extractor) loadChapters(ctx context.Context, novelID int64, ids []int64
 		if len(idSet) > 0 && !idSet[ch.ID] {
 			continue
 		}
-		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ChapterNumber))
+		content, err := git.ReadFile(novelID, git.ChapterPath(ch.ID))
 		if err != nil && !errors.Is(err, os.ErrNotExist) {
-			return nil, fmt.Errorf("读取第%d章失败: %w", ch.ChapterNumber, err)
+			return nil, fmt.Errorf("读取第%d章失败: %w", ch.ReadingNumber, err)
 		}
 		out = append(out, ChapterSource{
 			ID:            ch.ID,
-			ChapterNumber: ch.ChapterNumber,
+			ReadingNumber: ch.ReadingNumber,
 			Title:         ch.Title,
 			Summary:       strings.TrimSpace(ch.Summary),
 			Content:       strings.TrimSpace(content),
 		})
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].ChapterNumber < out[j].ChapterNumber })
+	sort.Slice(out, func(i, j int) bool { return out[i].ReadingNumber < out[j].ReadingNumber })
 	return out, nil
 }
 
@@ -288,16 +289,17 @@ func (e *Extractor) preAnalyzeBoundaries(ctx context.Context, input ExtractPatte
 	if err := json.Unmarshal(raw, &out); err != nil {
 		return nil, fmt.Errorf("解析边界提示失败: %w", err)
 	}
-	return normalizeBoundaries(out.Boundaries), nil
+	return normalizeBoundaries(out.Boundaries, readingNumbersFromChapters(chapters)), nil
 }
 
 // ensureSummaries Step 1：增量生成章节摘要，已有摘要的章节作为上下文参考跳过
 func (e *Extractor) ensureSummaries(ctx context.Context, input ExtractPatternInput, chapters []ChapterSource, boundaries []BoundaryHint, budget int) ([]ChapterSummaryItem, error) {
 	batches := buildChapterBatches(chapters, boundaries, budget)
-	summaryByNumber := map[int]string{}
+	readingNumbers := readingNumbersFromChapters(chapters)
+	summaryByID := map[int64]string{}
 	for _, ch := range chapters {
 		if strings.TrimSpace(ch.Summary) != "" {
-			summaryByNumber[ch.ChapterNumber] = strings.TrimSpace(ch.Summary)
+			summaryByID[ch.ID] = strings.TrimSpace(ch.Summary)
 		}
 	}
 
@@ -307,7 +309,7 @@ func (e *Extractor) ensureSummaries(ctx context.Context, input ExtractPatternInp
 		}
 		var missing []ChapterSource
 		for _, ch := range batch {
-			if _, ok := summaryByNumber[ch.ChapterNumber]; !ok {
+			if _, ok := summaryByID[ch.ID]; !ok {
 				missing = append(missing, ch)
 			}
 		}
@@ -335,20 +337,22 @@ func (e *Extractor) ensureSummaries(ctx context.Context, input ExtractPatternInp
 		if err := json.Unmarshal(raw, &out); err != nil {
 			return nil, fmt.Errorf("解析章节摘要失败: %w", err)
 		}
-		for _, item := range out.Summaries {
+		for i := range out.Summaries {
+			item := &out.Summaries[i]
 			item.Summary = strings.TrimSpace(item.Summary)
-			if item.ChapterNumber == 0 || item.Summary == "" {
+			item.ReadingNumber = readingNumbers[item.ChapterID]
+			if item.ChapterID == 0 || item.Summary == "" {
 				continue
 			}
-			if !chapterInList(item.ChapterNumber, missing) {
+			if !chapterInList(item.ChapterID, missing) {
 				continue
 			}
-			summaryByNumber[item.ChapterNumber] = item.Summary
+			summaryByID[item.ChapterID] = item.Summary
 			if err := e.Chapters.DB.WithContext(ctx).
 				Model(&chapter.Chapter{}).
-				Where("novel_id = ? AND chapter_number = ?", input.NovelID, item.ChapterNumber).
+				Where("novel_id = ? AND id = ?", input.NovelID, item.ChapterID).
 				Update("summary", item.Summary).Error; err != nil {
-				return nil, fmt.Errorf("保存第%d章摘要失败: %w", item.ChapterNumber, err)
+				return nil, fmt.Errorf("保存第%d章摘要失败: %w", readingNumbers[item.ChapterID], err)
 			}
 		}
 		e.emit(input, Progress{
@@ -362,14 +366,14 @@ func (e *Extractor) ensureSummaries(ctx context.Context, input ExtractPatternInp
 
 	result := make([]ChapterSummaryItem, 0, len(chapters))
 	for _, ch := range chapters {
-		summary := summaryByNumber[ch.ChapterNumber]
+		summary := summaryByID[ch.ID]
 		if summary == "" && ch.Content == "" {
 			summary = "无内容。"
 		}
 		if summary == "" {
 			continue
 		}
-		result = append(result, ChapterSummaryItem{ChapterNumber: ch.ChapterNumber, Summary: summary})
+		result = append(result, ChapterSummaryItem{ChapterID: ch.ID, ReadingNumber: ch.ReadingNumber, Summary: summary})
 	}
 	return result, nil
 }
@@ -398,7 +402,7 @@ func (e *Extractor) initialChunks(ctx context.Context, input ExtractPatternInput
 		if err := json.Unmarshal(raw, &out); err != nil {
 			return nil, trace, fmt.Errorf("解析初始阶段块失败: %w", err)
 		}
-		normalized := normalizeChunks(out.Chunks)
+		normalized := normalizeChunks(out.Chunks, readingNumbersFromSummaries(batch))
 		all = append(all, normalized...)
 		trace.Batches = append(trace.Batches, BatchTrace{
 			Index:        i + 1,
@@ -422,7 +426,7 @@ func (e *Extractor) initialChunks(ctx context.Context, input ExtractPatternInput
 }
 
 // compressChunks Step 2 后续轮：递归合并叙事阶段块
-func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInput, chunks []Chunk, budget int, round int) ([]Chunk, ChunkRoundTrace, error) {
+func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInput, chunks []Chunk, readingNumbers map[int64]int, budget int, round int) ([]Chunk, ChunkRoundTrace, error) {
 	var all []Chunk
 	batches := buildChunkBatches(chunks, budget)
 	trace := ChunkRoundTrace{Round: round, InputCount: len(chunks)}
@@ -437,7 +441,8 @@ func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInpu
 			BatchIndex: i + 1,
 			BatchTotal: len(batches),
 		})
-		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, compressChunkMessages(batch, round), 2, 0, nil)
+		batchReadingNumbers := readingNumbersForChunks(batch, readingNumbers)
+		raw, err := e.callTool(ctx, input, outputChunksTool, ChunksOutput{}, compressChunkMessages(batch, batchReadingNumbers, round), 2, 0, nil)
 		if err != nil {
 			return nil, trace, fmt.Errorf("第%d轮压缩失败: %w", round, err)
 		}
@@ -445,7 +450,7 @@ func (e *Extractor) compressChunks(ctx context.Context, input ExtractPatternInpu
 		if err := json.Unmarshal(raw, &out); err != nil {
 			return nil, trace, fmt.Errorf("解析第%d轮压缩结果失败: %w", round, err)
 		}
-		normalized := normalizeChunks(out.Chunks)
+		normalized := normalizeChunks(out.Chunks, batchReadingNumbers)
 		all = append(all, normalized...)
 		trace.Batches = append(trace.Batches, BatchTrace{
 			Index:        i + 1,
@@ -589,7 +594,7 @@ func maybeExtendToBoundary(chapters []ChapterSource, start int, boundaries []Bou
 			return start
 		}
 		for _, b := range boundaries {
-			if b.EndChapter == chapters[i].ChapterNumber {
+			if b.EndChapterID == chapters[i].ID {
 				return i + 1
 			}
 		}
@@ -675,49 +680,93 @@ func approxTokens(text string) int {
 	return runes / 2
 }
 
-// normalizeBoundaries 清洗并排序边界提示：交换逆序区间、过滤无效条目、按起始章排序
-func normalizeBoundaries(items []BoundaryHint) []BoundaryHint {
+func readingNumbersFromChapters(chapters []ChapterSource) map[int64]int {
+	numbers := make(map[int64]int, len(chapters))
+	for _, ch := range chapters {
+		numbers[ch.ID] = ch.ReadingNumber
+	}
+	return numbers
+}
+
+func readingNumbersFromSummaries(summaries []ChapterSummaryItem) map[int64]int {
+	numbers := make(map[int64]int, len(summaries))
+	for _, summary := range summaries {
+		numbers[summary.ChapterID] = summary.ReadingNumber
+	}
+	return numbers
+}
+
+func readingNumbersForChunks(chunks []Chunk, all map[int64]int) map[int64]int {
+	if len(chunks) == 0 {
+		return nil
+	}
+	start, end := chunks[0].StartReadingNumber, chunks[0].EndReadingNumber
+	for _, chunk := range chunks[1:] {
+		start = min(start, chunk.StartReadingNumber)
+		end = max(end, chunk.EndReadingNumber)
+	}
+	numbers := make(map[int64]int)
+	for id, number := range all {
+		if number >= start && number <= end {
+			numbers[id] = number
+		}
+	}
+	return numbers
+}
+
+// normalizeBoundaries 清洗并排序边界提示：按阅读顺序纠正端点、过滤无效条目。
+func normalizeBoundaries(items []BoundaryHint, readingNumbers map[int64]int) []BoundaryHint {
 	out := make([]BoundaryHint, 0, len(items))
 	for _, it := range items {
-		if it.StartChapter <= 0 || it.EndChapter <= 0 {
+		start, startOK := readingNumbers[it.StartChapterID]
+		end, endOK := readingNumbers[it.EndChapterID]
+		if !startOK || !endOK {
 			continue
 		}
-		if it.StartChapter > it.EndChapter {
-			it.StartChapter, it.EndChapter = it.EndChapter, it.StartChapter
+		if start > end {
+			it.StartChapterID, it.EndChapterID = it.EndChapterID, it.StartChapterID
+			start, end = end, start
 		}
+		it.StartReadingNumber = start
+		it.EndReadingNumber = end
 		it.Hint = strings.TrimSpace(it.Hint)
 		out = append(out, it)
 	}
-	sort.Slice(out, func(i, j int) bool { return out[i].StartChapter < out[j].StartChapter })
+	sort.Slice(out, func(i, j int) bool { return out[i].StartReadingNumber < out[j].StartReadingNumber })
 	return out
 }
 
-// normalizeChunks 清洗并排序叙事阶段块：过滤空字段、交换逆序区间、按起止章排序
-func normalizeChunks(items []Chunk) []Chunk {
+// normalizeChunks 清洗并排序叙事阶段块：按阅读顺序纠正端点、过滤无效条目。
+func normalizeChunks(items []Chunk, readingNumbers map[int64]int) []Chunk {
 	out := make([]Chunk, 0, len(items))
 	for _, it := range items {
 		it.Name = strings.TrimSpace(it.Name)
 		it.Content = strings.TrimSpace(it.Content)
-		if it.Name == "" || it.Content == "" || it.StartChapter <= 0 || it.EndChapter <= 0 {
+		start, startOK := readingNumbers[it.StartChapterID]
+		end, endOK := readingNumbers[it.EndChapterID]
+		if it.Name == "" || it.Content == "" || !startOK || !endOK {
 			continue
 		}
-		if it.StartChapter > it.EndChapter {
-			it.StartChapter, it.EndChapter = it.EndChapter, it.StartChapter
+		if start > end {
+			it.StartChapterID, it.EndChapterID = it.EndChapterID, it.StartChapterID
+			start, end = end, start
 		}
+		it.StartReadingNumber = start
+		it.EndReadingNumber = end
 		out = append(out, it)
 	}
 	sort.Slice(out, func(i, j int) bool {
-		if out[i].StartChapter == out[j].StartChapter {
-			return out[i].EndChapter < out[j].EndChapter
+		if out[i].StartReadingNumber == out[j].StartReadingNumber {
+			return out[i].EndReadingNumber < out[j].EndReadingNumber
 		}
-		return out[i].StartChapter < out[j].StartChapter
+		return out[i].StartReadingNumber < out[j].StartReadingNumber
 	})
 	return out
 }
 
-func chapterInList(num int, chapters []ChapterSource) bool {
+func chapterInList(chapterID int64, chapters []ChapterSource) bool {
 	for _, ch := range chapters {
-		if ch.ChapterNumber == num {
+		if ch.ID == chapterID {
 			return true
 		}
 	}

@@ -3,7 +3,7 @@ package search
 import (
 	"context"
 	"log/slog"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 	"unicode/utf8"
@@ -36,7 +36,7 @@ type Service struct {
 	vectorStore  *rag.VectorStore
 
 	mu    sync.RWMutex
-	cache map[int64]map[int]string // novelID → chapterNum → content
+	cache map[int64]map[int64]string // novelID → chapterID → content
 }
 
 // NewService 创建搜索服务。
@@ -55,7 +55,7 @@ func NewService(logger *slog.Logger, charStore *character.Store, locStore *locat
 		prefStore:    prefStore,
 		settingStore: settingStore,
 		vectorStore:  vecStore,
-		cache:        make(map[int64]map[int]string),
+		cache:        make(map[int64]map[int64]string),
 	}
 }
 
@@ -90,6 +90,11 @@ func (s *Service) SearchAll(ctx context.Context, novelID int64, query string) ([
 // searchEntities 在各实体 store 上执行 LIKE 搜索。
 func (s *Service) searchEntities(ctx context.Context, novelID int64, query string) []Result {
 	var results []Result
+	readingNumbers, err := s.chapStore.GetReadingNumbersByNovel(ctx, nil, novelID)
+	if err != nil {
+		s.logger.Warn("chapter list for entity search failed", "err", err)
+		readingNumbers = nil
+	}
 
 	// 人物
 	chars, err := s.charStore.ListByNovel(ctx, novelID, character.ListByNovelOptions{
@@ -141,12 +146,12 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	} else if tlResult != nil {
 		for _, e := range tlResult.Items {
 			results = append(results, Result{
-				Type:       "timeline",
-				ID:         e.ID,
-				Title:      e.Title,
-				Subtitle:   e.Category, // 英文原值，前端 t("timeline."+subtitle) 翻译
-				ChapterNum: e.TargetChapter,
-				PanelID:    "timeline",
+				Type:          "timeline",
+				ID:            e.ID,
+				Title:         e.Title,
+				Subtitle:      e.Category, // 英文原值，前端 t("timeline."+subtitle) 翻译
+				ReadingNumber: e.TargetReadingNumber,
+				PanelID:       "timeline",
 			})
 		}
 	}
@@ -175,7 +180,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	nodesResult, err := s.arcStore.ListNodesByNovel(ctx, novelID, storyarc.ListNodesOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
-		Order:      "story_arc_id, target_chapter ASC, id ASC", // 显式锚定 + 补 story_arc_id 前缀，避免同弧线节点被打散
+		Order:      "story_arc_id, target_reading_number ASC, id ASC", // 显式锚定 + 补 story_arc_id 前缀，避免同弧线节点被打散
 	})
 	if err != nil {
 		s.logger.Warn("arc node search failed", "err", err)
@@ -191,12 +196,12 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 		for _, node := range nodesResult.Items {
 			subtitle := arcNameMap[node.StoryArcID]
 			results = append(results, Result{
-				Type:       "arc_node",
-				ID:         node.ID,
-				Title:      node.Title,
-				Subtitle:   subtitle,
-				ChapterNum: node.TargetChapter,
-				PanelID:    "storyarcs",
+				Type:          "arc_node",
+				ID:            node.ID,
+				Title:         node.Title,
+				Subtitle:      subtitle,
+				ReadingNumber: node.TargetReadingNumber,
+				PanelID:       "storyarcs",
 			})
 		}
 	}
@@ -205,7 +210,7 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	readersResult, err := s.readerStore.ListByNovel(ctx, novelID, reader.ListByNovelOptions{
 		Search:     query,
 		PageParams: storage.PageParams{Page: 1, Size: EntityLimit},
-		Order:      "type, planted_chapter ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
+		Order:      "type, planted_chapter_id ASC", // 显式锚定默认排序，避免依赖 store 隐式默认
 	})
 	if err != nil {
 		s.logger.Warn("reader search failed", "err", err)
@@ -215,13 +220,19 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 			if runes := []rune(title); len(runes) > 40 {
 				title = string(runes[:40]) + "…"
 			}
+			var chapterID int64
+			if r.PlantedChapterID != nil {
+				chapterID = *r.PlantedChapterID
+			}
+			readingNumber := readingNumbers[chapterID]
 			results = append(results, Result{
-				Type:       "reader",
-				ID:         r.ID,
-				Title:      title,
-				Subtitle:   r.Type, // 英文原值，前端 t("reader."+subtitle) 翻译
-				ChapterNum: r.PlantedChapter,
-				PanelID:    "reader",
+				Type:          "reader",
+				ID:            r.ID,
+				Title:         title,
+				Subtitle:      r.Type, // 英文原值，前端 t("reader."+subtitle) 翻译
+				ChapterID:     chapterID,
+				ReadingNumber: readingNumber,
+				PanelID:       "reader",
 			})
 		}
 	}
@@ -290,19 +301,20 @@ func (s *Service) searchEntities(ctx context.Context, novelID int64, query strin
 	}
 
 	// 章节
-	chapters, err := s.chapStore.SearchByNovel(ctx, novelID, query, EntityLimit)
+	chapters, err := s.chapStore.SearchByNovel(ctx, nil, novelID, query, EntityLimit)
 	if err != nil {
 		s.logger.Warn("chapter title search failed", "err", err)
 	} else {
 		for _, ch := range chapters {
 			results = append(results, Result{
-				Type:       "chapter",
-				ID:         ch.ID,
-				Title:      ch.Title,
-				Subtitle:   "titleMatch", // 4b: i18n key 后缀，前端 t("chapter."+subtitle) 翻译
-				ChapterNum: ch.ChapterNumber,
-				FilePath:   ch.FilePath,
-				PanelID:    "chapters",
+				Type:          "chapter",
+				ID:            ch.ID,
+				Title:         ch.Title,
+				Subtitle:      "titleMatch", // 4b: i18n key 后缀，前端 t("chapter."+subtitle) 翻译
+				ChapterID:     ch.ID,
+				ReadingNumber: ch.ReadingNumber,
+				FilePath:      ch.FilePath,
+				PanelID:       "chapters",
 			})
 		}
 	}
@@ -317,7 +329,7 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 	s.mu.RLock()
 	srcMap := s.cache[novelID]
 	// 拷贝一份防止 UpdateCachedChapter 并发写入
-	chapMap := make(map[int]string, len(srcMap))
+	chapMap := make(map[int64]string, len(srcMap))
 	for k, v := range srcMap {
 		chapMap[k] = v
 	}
@@ -328,20 +340,29 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 	}
 
 	type match struct {
-		chapNum  int
-		position int // 命中字符偏移（按 rune 计）
+		chapterID int64
+		position  int // 命中字符偏移（按 rune 计）
 	}
 	var matches []match
 
-	// 按章节号有序遍历
-	chapNums := make([]int, 0, len(chapMap))
-	for n := range chapMap {
-		chapNums = append(chapNums, n)
+	allChapters, err := s.chapStore.ListAllByNovel(ctx, nil, novelID)
+	chapterIDs := make([]int64, 0, len(chapMap))
+	if err != nil {
+		s.logger.Warn("chapter list for search content failed; searching cached content without metadata", "err", err)
+		for chapterID := range chapMap {
+			chapterIDs = append(chapterIDs, chapterID)
+		}
+		slices.Sort(chapterIDs)
+	} else {
+		for _, ch := range allChapters {
+			if _, ok := chapMap[ch.ID]; ok {
+				chapterIDs = append(chapterIDs, ch.ID)
+			}
+		}
 	}
-	sort.Ints(chapNums)
 
-	for _, chapNum := range chapNums {
-		content := chapMap[chapNum]
+	for _, chapterID := range chapterIDs {
+		content := chapMap[chapterID]
 		pos := 0
 		for {
 			idx := strings.Index(content[pos:], query)
@@ -349,7 +370,7 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 				break
 			}
 			absPos := utf8.RuneCountInString(content[:pos+idx])
-			matches = append(matches, match{chapNum: chapNum, position: absPos})
+			matches = append(matches, match{chapterID: chapterID, position: absPos})
 			pos = pos + idx + len(query)
 		}
 		if len(matches) >= ContentLimit {
@@ -361,28 +382,23 @@ func (s *Service) searchContent(ctx context.Context, novelID int64, query string
 		matches = matches[:ContentLimit]
 	}
 
-	// 获取章节元数据（标题）
-	allChapters, err := s.chapStore.ListAllByNovel(ctx, novelID)
-	chapMeta := make(map[int]chapter.Chapter)
-	if err != nil {
-		s.logger.Warn("chapter list for search content failed", "err", err)
-	} else {
-		for _, ch := range allChapters {
-			chapMeta[ch.ChapterNumber] = ch
-		}
+	chapMeta := make(map[int64]chapter.Chapter, len(allChapters))
+	for _, ch := range allChapters {
+		chapMeta[ch.ID] = ch
 	}
 
 	var results []Result
 	for _, m := range matches {
-		content := chapMap[m.chapNum]
+		content := chapMap[m.chapterID]
 		prefix, hit, suffix := buildContext(content, m.position, query)
-		meta := chapMeta[m.chapNum]
+		meta := chapMeta[m.chapterID]
 		results = append(results, Result{
 			Type:          "content",
 			ID:            0,
 			Title:         meta.Title,
-			ChapterNum:    m.chapNum,
-			FilePath:      git.ChapterPath(m.chapNum),
+			ChapterID:     m.chapterID,
+			ReadingNumber: meta.ReadingNumber,
+			FilePath:      git.ChapterPath(m.chapterID),
 			MatchPrefix:   prefix,
 			MatchHit:      hit,
 			MatchSuffix:   suffix,
@@ -441,19 +457,19 @@ func (s *Service) ensureContentCache(novelID int64) {
 		return
 	}
 
-	chapters, err := s.chapStore.ListAllByNovel(context.Background(), novelID)
+	chapters, err := s.chapStore.ListAllByNovel(context.Background(), nil, novelID)
 	if err != nil {
 		s.logger.Warn("搜索缓存: 获取章节列表失败", "novel_id", novelID, "err", err)
 		return
 	}
 
-	chapMap := make(map[int]string, len(chapters))
+	chapMap := make(map[int64]string, len(chapters))
 	for _, ch := range chapters {
 		content, err := git.ReadFile(novelID, ch.FilePath)
 		if err != nil {
 			continue
 		}
-		chapMap[ch.ChapterNumber] = content
+		chapMap[ch.ID] = content
 	}
 
 	s.cache[novelID] = chapMap
@@ -461,11 +477,11 @@ func (s *Service) ensureContentCache(novelID int64) {
 }
 
 // UpdateCachedChapter 在章节保存后更新缓存中的对应章节内容。
-func (s *Service) UpdateCachedChapter(novelID int64, chapterNum int, newContent string) {
+func (s *Service) UpdateCachedChapter(novelID, chapterID int64, newContent string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if chapMap, ok := s.cache[novelID]; ok {
-		chapMap[chapterNum] = newContent
+		chapMap[chapterID] = newContent
 	}
 }
 
@@ -498,19 +514,20 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 
 	reranked := rag.MMRRerank(query, filtered, RagTopK, 0.7)
 
-	allChapters, err := s.chapStore.ListAllByNovel(ctx, novelID)
-	chapMeta := make(map[int]chapter.Chapter)
+	allChapters, err := s.chapStore.ListAllByNovel(ctx, nil, novelID)
+	chapMeta := make(map[int64]chapter.Chapter)
 	if err != nil {
 		s.logger.Warn("chapter list for RAG search failed", "err", err)
 	} else {
 		for _, ch := range allChapters {
-			chapMeta[ch.ChapterNumber] = ch
+			chapMeta[ch.ID] = ch
 		}
 	}
 
 	var results []Result
 	for _, r := range reranked {
-		meta := chapMeta[r.ChapterNumber]
+		// vec 表只存 chapter_id，按 id 反查当前标题和展示编号。
+		meta := chapMeta[r.ChapterID]
 		contentPreview := r.Content
 		runes := []rune(contentPreview)
 		if len(runes) > 200 {
@@ -521,8 +538,9 @@ func (s *Service) searchRAG(ctx context.Context, novelID int64, query string) []
 			Type:          "rag",
 			ID:            0,
 			Title:         meta.Title,
-			ChapterNum:    r.ChapterNumber,
-			FilePath:      git.ChapterPath(r.ChapterNumber),
+			ChapterID:     r.ChapterID,
+			ReadingNumber: meta.ReadingNumber,
+			FilePath:      git.ChapterPath(meta.ID),
 			MatchPrefix:   contentPreview,
 			MatchLen:      utf8.RuneCountInString(r.Content),
 			MatchPosition: r.StartRunePos,

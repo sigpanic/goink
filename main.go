@@ -73,8 +73,9 @@ func main() {
 				})
 			},
 		},
-		OnStartup:  wapp.OnStartup,
-		OnShutdown: wapp.OnShutdown,
+		OnStartup:     wapp.OnStartup,
+		OnBeforeClose: wapp.OnBeforeClose,
+		OnShutdown:    wapp.OnShutdown,
 		Bind: []any{
 			wapp,
 		},

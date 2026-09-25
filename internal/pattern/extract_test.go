@@ -49,39 +49,55 @@ func TestBatchBudget_ZeroWindow(t *testing.T) {
 
 func TestNormalizeBoundaries_Normal(t *testing.T) {
 	input := []BoundaryHint{
-		{StartChapter: 5, EndChapter: 10, Hint: "第一幕结束"},
-		{StartChapter: 1, EndChapter: 4, Hint: "开篇"},
+		{StartChapterID: 5, EndChapterID: 10, Hint: "第一幕结束"},
+		{StartChapterID: 1, EndChapterID: 4, Hint: "开篇"},
 	}
-	got := normalizeBoundaries(input)
+	got := normalizeBoundaries(input, map[int64]int{1: 1, 4: 4, 5: 5, 10: 10})
 	if len(got) != 2 {
 		t.Fatalf("len = %d, want 2", len(got))
 	}
-	if got[0].StartChapter != 1 {
-		t.Errorf("first item StartChapter = %d, want 1", got[0].StartChapter)
+	if got[0].StartChapterID != 1 {
+		t.Errorf("first item StartChapterID = %d, want 1", got[0].StartChapterID)
 	}
-	if got[1].StartChapter != 5 {
-		t.Errorf("second item StartChapter = %d, want 5", got[1].StartChapter)
+	if got[1].StartChapterID != 5 {
+		t.Errorf("second item StartChapterID = %d, want 5", got[1].StartChapterID)
 	}
 }
 
 func TestNormalizeBoundaries_SwapRange(t *testing.T) {
 	input := []BoundaryHint{
-		{StartChapter: 10, EndChapter: 5, Hint: "逆序"},
+		{StartChapterID: 10, EndChapterID: 5, Hint: "逆序"},
 	}
-	got := normalizeBoundaries(input)
-	if got[0].StartChapter != 5 || got[0].EndChapter != 10 {
-		t.Errorf("swapped = %+v, want Start=5 End=10", got[0])
+	got := normalizeBoundaries(input, map[int64]int{5: 1, 10: 2})
+	if got[0].StartChapterID != 5 || got[0].EndChapterID != 10 {
+		t.Errorf("swapped = %+v, want StartID=5 EndID=10", got[0])
+	}
+}
+
+func TestNormalizeBoundaries_UsesReadingOrderNotID(t *testing.T) {
+	input := []BoundaryHint{
+		{StartChapterID: 84, EndChapterID: 42, Hint: "稳定ID与阅读顺序相反"},
+	}
+	got := normalizeBoundaries(input, map[int64]int{84: 1, 42: 2})
+	if len(got) != 1 {
+		t.Fatalf("len = %d, want 1", len(got))
+	}
+	if got[0].StartChapterID != 84 || got[0].EndChapterID != 42 {
+		t.Errorf("range was reordered by ID: %+v", got[0])
+	}
+	if got[0].StartReadingNumber != 1 || got[0].EndReadingNumber != 2 {
+		t.Errorf("reading range = %d-%d, want 1-2", got[0].StartReadingNumber, got[0].EndReadingNumber)
 	}
 }
 
 func TestNormalizeBoundaries_FilterInvalid(t *testing.T) {
 	input := []BoundaryHint{
-		{StartChapter: 1, EndChapter: 5, Hint: "valid"},
-		{StartChapter: 0, EndChapter: 3, Hint: "zero start"},
-		{StartChapter: -1, EndChapter: 5, Hint: "negative"},
-		{StartChapter: 2, EndChapter: 0, Hint: "zero end"},
+		{StartChapterID: 1, EndChapterID: 5, Hint: "valid"},
+		{StartChapterID: 0, EndChapterID: 3, Hint: "zero start"},
+		{StartChapterID: -1, EndChapterID: 5, Hint: "negative"},
+		{StartChapterID: 2, EndChapterID: 0, Hint: "zero end"},
 	}
-	got := normalizeBoundaries(input)
+	got := normalizeBoundaries(input, map[int64]int{1: 1, 5: 2})
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1 (only valid)", len(got))
 	}
@@ -91,7 +107,7 @@ func TestNormalizeBoundaries_FilterInvalid(t *testing.T) {
 }
 
 func TestNormalizeBoundaries_Empty(t *testing.T) {
-	got := normalizeBoundaries(nil)
+	got := normalizeBoundaries(nil, nil)
 	if len(got) != 0 {
 		t.Errorf("len = %d, want 0", len(got))
 	}
@@ -103,36 +119,36 @@ func TestNormalizeBoundaries_Empty(t *testing.T) {
 
 func TestNormalizeChunks_Normal(t *testing.T) {
 	input := []Chunk{
-		{Name: "转折", StartChapter: 10, EndChapter: 15, Content: "主人公觉醒"},
-		{Name: "开篇", StartChapter: 1, EndChapter: 9, Content: "平凡日常"},
+		{Name: "转折", StartChapterID: 10, EndChapterID: 15, Content: "主人公觉醒"},
+		{Name: "开篇", StartChapterID: 1, EndChapterID: 9, Content: "平凡日常"},
 	}
-	got := normalizeChunks(input)
+	got := normalizeChunks(input, map[int64]int{1: 1, 9: 9, 10: 10, 15: 15})
 	if len(got) != 2 {
 		t.Fatalf("len = %d, want 2", len(got))
 	}
-	if got[0].StartChapter != 1 {
-		t.Errorf("first StartChapter = %d, want 1", got[0].StartChapter)
+	if got[0].StartChapterID != 1 {
+		t.Errorf("first StartChapterID = %d, want 1", got[0].StartChapterID)
 	}
 }
 
 func TestNormalizeChunks_SwapRange(t *testing.T) {
 	input := []Chunk{
-		{Name: "test", StartChapter: 20, EndChapter: 10, Content: "逆序范围"},
+		{Name: "test", StartChapterID: 20, EndChapterID: 10, Content: "逆序范围"},
 	}
-	got := normalizeChunks(input)
-	if got[0].StartChapter != 10 || got[0].EndChapter != 20 {
-		t.Errorf("swapped = %+v, want Start=10 End=20", got[0])
+	got := normalizeChunks(input, map[int64]int{10: 1, 20: 2})
+	if got[0].StartChapterID != 10 || got[0].EndChapterID != 20 {
+		t.Errorf("swapped = %+v, want StartID=10 EndID=20", got[0])
 	}
 }
 
 func TestNormalizeChunks_FilterEmpty(t *testing.T) {
 	input := []Chunk{
-		{Name: "valid", StartChapter: 1, EndChapter: 5, Content: "内容"},
-		{Name: "", StartChapter: 1, EndChapter: 5, Content: "无名称"},
-		{Name: "无内容", StartChapter: 1, EndChapter: 5, Content: ""},
-		{Name: "全是空格", StartChapter: 1, EndChapter: 5, Content: "   "},
+		{Name: "valid", StartChapterID: 1, EndChapterID: 5, Content: "内容"},
+		{Name: "", StartChapterID: 1, EndChapterID: 5, Content: "无名称"},
+		{Name: "无内容", StartChapterID: 1, EndChapterID: 5, Content: ""},
+		{Name: "全是空格", StartChapterID: 1, EndChapterID: 5, Content: "   "},
 	}
-	got := normalizeChunks(input)
+	got := normalizeChunks(input, map[int64]int{1: 1, 5: 5})
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -143,11 +159,11 @@ func TestNormalizeChunks_FilterEmpty(t *testing.T) {
 
 func TestNormalizeChunks_FilterInvalid(t *testing.T) {
 	input := []Chunk{
-		{Name: "ok", StartChapter: 1, EndChapter: 5, Content: "ok"},
-		{Name: "bad", StartChapter: 0, EndChapter: 5, Content: "zero start"},
-		{Name: "bad2", StartChapter: 1, EndChapter: -1, Content: "neg end"},
+		{Name: "ok", StartChapterID: 1, EndChapterID: 5, Content: "ok"},
+		{Name: "bad", StartChapterID: 0, EndChapterID: 5, Content: "zero start"},
+		{Name: "bad2", StartChapterID: 1, EndChapterID: -1, Content: "neg end"},
 	}
-	got := normalizeChunks(input)
+	got := normalizeChunks(input, map[int64]int{1: 1, 5: 5})
 	if len(got) != 1 {
 		t.Fatalf("len = %d, want 1", len(got))
 	}
@@ -162,7 +178,7 @@ func makeChapters(count, contentLen int) []ChapterSource {
 	for i := range count {
 		out[i] = ChapterSource{
 			ID:            int64(i + 1),
-			ChapterNumber: i + 1,
+			ReadingNumber: i + 1,
 			Title:         "章节标题",
 			Content:       strings.Repeat("a", contentLen),
 		}
@@ -203,9 +219,9 @@ func TestBuildChapterBatches_MultiBatch(t *testing.T) {
 func TestBuildChapterBatches_BoundaryAlignment(t *testing.T) {
 	chapters := makeChapters(10, 100) // 每章约 50 tokens
 	boundaries := []BoundaryHint{
-		{StartChapter: 1, EndChapter: 4, Hint: "第一阶段"},
-		{StartChapter: 5, EndChapter: 7, Hint: "第二阶段"},
-		{StartChapter: 8, EndChapter: 10, Hint: "第三阶段"},
+		{StartChapterID: 1, EndChapterID: 4, Hint: "第一阶段"},
+		{StartChapterID: 5, EndChapterID: 7, Hint: "第二阶段"},
+		{StartChapterID: 8, EndChapterID: 10, Hint: "第三阶段"},
 	}
 	// 小预算，强制分批，但边界对齐可能让切分点落在边界上
 	budget := 300
@@ -227,7 +243,8 @@ func TestBuildSummaryBatches(t *testing.T) {
 	items := make([]ChapterSummaryItem, 20)
 	for i := range items {
 		items[i] = ChapterSummaryItem{
-			ChapterNumber: i + 1,
+			ChapterID:     int64(i + 1),
+			ReadingNumber: i + 1,
 			Summary:       strings.Repeat("摘要内容", 10), // ~40 chars
 		}
 	}
@@ -253,10 +270,10 @@ func TestBuildChunkBatches(t *testing.T) {
 	chunks := make([]Chunk, 10)
 	for i := range chunks {
 		chunks[i] = Chunk{
-			Name:         "阶段",
-			StartChapter: i*10 + 1,
-			EndChapter:   (i + 1) * 10,
-			Content:      strings.Repeat("内容概括", 20), // ~80 chars
+			Name:           "阶段",
+			StartChapterID: int64(i*10 + 1),
+			EndChapterID:   int64((i + 1) * 10),
+			Content:        strings.Repeat("内容概括", 20), // ~80 chars
 		}
 	}
 	// 每条约 40+32=72 tokens, 预算 200 -> 2-3 条/批
@@ -279,8 +296,8 @@ func TestBuildChunkBatches(t *testing.T) {
 
 func TestTokensOfChunks(t *testing.T) {
 	chunks := []Chunk{
-		{Name: "开篇", StartChapter: 1, EndChapter: 5, Content: "平凡日常的开始"},
-		{Name: "转折", StartChapter: 6, EndChapter: 10, Content: "命运的改变"},
+		{Name: "开篇", StartChapterID: 1, EndChapterID: 5, StartReadingNumber: 1, EndReadingNumber: 5, Content: "平凡日常的开始"},
+		{Name: "转折", StartChapterID: 6, EndChapterID: 10, StartReadingNumber: 6, EndReadingNumber: 10, Content: "命运的改变"},
 	}
 	got := tokensOfChunks(chunks)
 	// 手动算一次确保一致
@@ -295,8 +312,8 @@ func TestTokensOfChunks(t *testing.T) {
 
 func TestTokensOfSummaries(t *testing.T) {
 	items := []ChapterSummaryItem{
-		{ChapterNumber: 1, Summary: "开篇叙事"},
-		{ChapterNumber: 2, Summary: "冲突升级"},
+		{ChapterID: 1, ReadingNumber: 1, Summary: "开篇叙事"},
+		{ChapterID: 2, ReadingNumber: 2, Summary: "冲突升级"},
 	}
 	got := tokensOfSummaries(items)
 	manual := 0
@@ -366,7 +383,7 @@ func TestApproxTokens_Empty(t *testing.T) {
 func TestMaybeExtendToBoundary_Found(t *testing.T) {
 	chapters := makeChapters(15, 50)
 	boundaries := []BoundaryHint{
-		{StartChapter: 1, EndChapter: 7, Hint: "第一阶段结束"},
+		{StartChapterID: 1, EndChapterID: 7, Hint: "第一阶段结束"},
 	}
 	// start=5, remaining 足够容纳到第7章
 	got := maybeExtendToBoundary(chapters, 5, boundaries, 500)
@@ -387,7 +404,7 @@ func TestMaybeExtendToBoundary_NotFound(t *testing.T) {
 func TestMaybeExtendToBoundary_ExceedsRemaining(t *testing.T) {
 	chapters := makeChapters(15, 5000) // 每章 ~2500 tokens
 	boundaries := []BoundaryHint{
-		{StartChapter: 1, EndChapter: 10, Hint: "远"},
+		{StartChapterID: 1, EndChapterID: 10, Hint: "远"},
 	}
 	// remaining=100 不够容纳第5章 (5000 chars -> ~2500 tokens)
 	got := maybeExtendToBoundary(chapters, 5, boundaries, 100)
@@ -401,14 +418,14 @@ func TestMaybeExtendToBoundary_ExceedsRemaining(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestChapterInList_Found(t *testing.T) {
-	list := []ChapterSource{{ChapterNumber: 3}, {ChapterNumber: 7}}
+	list := []ChapterSource{{ID: 3, ReadingNumber: 1}, {ID: 7, ReadingNumber: 2}}
 	if !chapterInList(3, list) {
 		t.Error("chapter 3 should be in list")
 	}
 }
 
 func TestChapterInList_NotFound(t *testing.T) {
-	list := []ChapterSource{{ChapterNumber: 3}, {ChapterNumber: 7}}
+	list := []ChapterSource{{ID: 3, ReadingNumber: 1}, {ID: 7, ReadingNumber: 2}}
 	if chapterInList(5, list) {
 		t.Error("chapter 5 should not be in list")
 	}
@@ -420,8 +437,8 @@ func TestChapterInList_NotFound(t *testing.T) {
 
 func TestBoundaryMessages_Format(t *testing.T) {
 	chapters := []ChapterSource{
-		{ChapterNumber: 1, Title: "初遇"},
-		{ChapterNumber: 2, Title: ""},
+		{ID: 42, ReadingNumber: 1, Title: "初遇"},
+		{ID: 84, ReadingNumber: 2, Title: ""},
 	}
 	msgs := boundaryMessages(chapters)
 	if len(msgs) != 2 {
@@ -431,8 +448,11 @@ func TestBoundaryMessages_Format(t *testing.T) {
 	if !ok {
 		t.Fatal("user message content is not string")
 	}
-	if !strings.Contains(userContent, "第1章：初遇") {
+	if !strings.Contains(userContent, "第1章（chapter_id: 42）：初遇") {
 		t.Error("should contain chapter 1 title")
+	}
+	if !strings.Contains(userContent, "chapter_id: 42") {
+		t.Error("should expose stable chapter ID alongside reading number")
 	}
 	if !strings.Contains(userContent, "第2章（无标题）") {
 		t.Error("should contain fallback for empty title")
@@ -441,11 +461,11 @@ func TestBoundaryMessages_Format(t *testing.T) {
 
 func TestSummaryMessages_WithBoundaries(t *testing.T) {
 	chapters := []ChapterSource{
-		{ChapterNumber: 1, Title: "开始", Summary: "已有摘要", Content: "正文"},
-		{ChapterNumber: 2, Title: "发展", Summary: "", Content: "新正文"},
+		{ID: 42, ReadingNumber: 1, Title: "开始", Summary: "已有摘要", Content: "正文"},
+		{ID: 84, ReadingNumber: 2, Title: "发展", Summary: "", Content: "新正文"},
 	}
 	boundaries := []BoundaryHint{
-		{StartChapter: 1, EndChapter: 5, Hint: "第一阶段"},
+		{StartChapterID: 42, EndChapterID: 84, StartReadingNumber: 1, EndReadingNumber: 2, Hint: "第一阶段"},
 	}
 	msgs := summaryMessages(chapters, boundaries)
 	userContent, ok := msgs[1]["content"].(string)
@@ -465,7 +485,7 @@ func TestSummaryMessages_WithBoundaries(t *testing.T) {
 
 func TestSummaryMessages_NoBoundaries(t *testing.T) {
 	chapters := []ChapterSource{
-		{ChapterNumber: 1, Title: "开始", Content: "正文"},
+		{ID: 42, ReadingNumber: 1, Title: "开始", Content: "正文"},
 	}
 	msgs := summaryMessages(chapters, nil)
 	userContent, ok := msgs[1]["content"].(string)
@@ -479,7 +499,7 @@ func TestSummaryMessages_NoBoundaries(t *testing.T) {
 
 func TestInitialChunkMessages_Format(t *testing.T) {
 	summaries := []ChapterSummaryItem{
-		{ChapterNumber: 1, Summary: "开篇叙事"},
+		{ChapterID: 42, ReadingNumber: 1, Summary: "开篇叙事"},
 	}
 	msgs := initialChunkMessages(summaries)
 	if len(msgs) != 2 {
@@ -492,13 +512,16 @@ func TestInitialChunkMessages_Format(t *testing.T) {
 	if !strings.Contains(userContent, "开篇叙事") {
 		t.Error("should contain summary text")
 	}
+	if !strings.Contains(userContent, "chapter_id: 42") {
+		t.Error("should expose stable chapter ID alongside reading number")
+	}
 }
 
 func TestCompressChunkMessages_ContainsRound(t *testing.T) {
 	chunks := []Chunk{
-		{Name: "崛起", StartChapter: 1, EndChapter: 10, Content: "主角崛起"},
+		{Name: "崛起", StartChapterID: 1, EndChapterID: 10, StartReadingNumber: 1, EndReadingNumber: 10, Content: "主角崛起"},
 	}
-	msgs := compressChunkMessages(chunks, 3)
+	msgs := compressChunkMessages(chunks, map[int64]int{1: 1, 10: 10}, 3)
 	userContent, ok := msgs[1]["content"].(string)
 	if !ok {
 		t.Fatal("user message content is not string")
@@ -506,11 +529,14 @@ func TestCompressChunkMessages_ContainsRound(t *testing.T) {
 	if !strings.Contains(userContent, "第 3 轮压缩") {
 		t.Error("should contain round number")
 	}
+	if !strings.Contains(userContent, "第1章=1") {
+		t.Error("should include chapter ID reference table for range endpoints")
+	}
 }
 
 func TestFinalSkillMessages_Format(t *testing.T) {
 	chunks := []Chunk{
-		{Name: "终局", StartChapter: 50, EndChapter: 60, Content: "大结局"},
+		{Name: "终局", StartChapterID: 50, EndChapterID: 60, StartReadingNumber: 50, EndReadingNumber: 60, Content: "大结局"},
 	}
 	msgs := finalSkillMessages(chunks)
 	if len(msgs) != 2 {
@@ -723,8 +749,8 @@ func defaultInput() ExtractPatternInput {
 func TestPreAnalyzeBoundaries_MockLLM(t *testing.T) {
 	boundaries := BoundaryHintsOutput{
 		Boundaries: []BoundaryHint{
-			{StartChapter: 1, EndChapter: 5, Hint: "开篇阶段"},
-			{StartChapter: 6, EndChapter: 10, Hint: "转折阶段"},
+			{StartChapterID: 1, EndChapterID: 5, Hint: "开篇阶段"},
+			{StartChapterID: 6, EndChapterID: 10, Hint: "转折阶段"},
 		},
 	}
 	argsJSON, _ := json.Marshal(boundaries)
@@ -742,8 +768,8 @@ func TestPreAnalyzeBoundaries_MockLLM(t *testing.T) {
 	if got[0].Hint != "开篇阶段" {
 		t.Errorf("first boundary hint = %q, want 开篇阶段", got[0].Hint)
 	}
-	if got[1].StartChapter != 6 {
-		t.Errorf("second boundary start = %d, want 6", got[1].StartChapter)
+	if got[1].StartChapterID != 6 {
+		t.Errorf("second boundary start = %d, want 6", got[1].StartChapterID)
 	}
 }
 
@@ -754,15 +780,15 @@ func TestPreAnalyzeBoundaries_MockLLM(t *testing.T) {
 func TestInitialChunks_MockLLM(t *testing.T) {
 	output := ChunksOutput{
 		Chunks: []Chunk{
-			{Name: "崛起", StartChapter: 1, EndChapter: 5, Content: "主角从平凡到觉醒"},
-			{Name: "转折", StartChapter: 6, EndChapter: 10, Content: "遭遇重大变故"},
+			{Name: "崛起", StartChapterID: 1, EndChapterID: 1, Content: "主角从平凡到觉醒"},
+			{Name: "转折", StartChapterID: 2, EndChapterID: 2, Content: "遭遇重大变故"},
 		},
 	}
 	argsJSON, _ := json.Marshal(output)
 
 	summaries := []ChapterSummaryItem{
-		{ChapterNumber: 1, Summary: "第一章摘要"},
-		{ChapterNumber: 2, Summary: "第二章摘要"},
+		{ChapterID: 1, ReadingNumber: 1, Summary: "第一章摘要"},
+		{ChapterID: 2, ReadingNumber: 2, Summary: "第二章摘要"},
 	}
 
 	e := testExtractor(mockToolHandler(outputChunksTool, string(argsJSON), ""))
@@ -791,18 +817,18 @@ func TestInitialChunks_MockLLM(t *testing.T) {
 func TestCompressChunks_MockLLM(t *testing.T) {
 	output := ChunksOutput{
 		Chunks: []Chunk{
-			{Name: "全篇", StartChapter: 1, EndChapter: 10, Content: "完整叙事概括"},
+			{Name: "全篇", StartChapterID: 1, EndChapterID: 10, Content: "完整叙事概括"},
 		},
 	}
 	argsJSON, _ := json.Marshal(output)
 
 	inputChunks := []Chunk{
-		{Name: "崛起", StartChapter: 1, EndChapter: 5, Content: "主角从平凡到觉醒"},
-		{Name: "转折", StartChapter: 6, EndChapter: 10, Content: "遭遇重大变故"},
+		{Name: "崛起", StartChapterID: 1, EndChapterID: 5, StartReadingNumber: 1, EndReadingNumber: 5, Content: "主角从平凡到觉醒"},
+		{Name: "转折", StartChapterID: 6, EndChapterID: 10, StartReadingNumber: 6, EndReadingNumber: 10, Content: "遭遇重大变故"},
 	}
 
 	e := testExtractor(mockToolHandler(outputChunksTool, string(argsJSON), ""))
-	compressed, trace, err := e.compressChunks(context.Background(), defaultInput(), inputChunks, 100_000, 2)
+	compressed, trace, err := e.compressChunks(context.Background(), defaultInput(), inputChunks, map[int64]int{1: 1, 5: 5, 6: 6, 10: 10}, 100_000, 2)
 	if err != nil {
 		t.Fatalf("compressChunks: %v", err)
 	}
@@ -836,7 +862,7 @@ func TestFinalSkill_MockLLM(t *testing.T) {
 
 	e := testExtractor(mockToolHandler("output_skill", string(argsJSON), ""))
 	chunks := []Chunk{
-		{Name: "崛起", StartChapter: 1, EndChapter: 5, Content: "主角觉醒"},
+		{Name: "崛起", StartChapterID: 1, EndChapterID: 5, StartReadingNumber: 1, EndReadingNumber: 5, Content: "主角觉醒"},
 	}
 
 	raw, err := e.finalSkill(context.Background(), defaultInput(), chunks)
@@ -928,7 +954,7 @@ func TestPreAnalyzeBoundaries_Cancelled(t *testing.T) {
 func TestPreAnalyzeBoundaries_ProgressCallback(t *testing.T) {
 	boundaries := BoundaryHintsOutput{
 		Boundaries: []BoundaryHint{
-			{StartChapter: 1, EndChapter: 5, Hint: "阶段一"},
+			{StartChapterID: 1, EndChapterID: 5, Hint: "阶段一"},
 		},
 	}
 	argsJSON, _ := json.Marshal(boundaries)

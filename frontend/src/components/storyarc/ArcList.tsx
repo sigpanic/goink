@@ -132,7 +132,9 @@ export default function SidebarArcList({ novelId }: Props) {
                     </span>
                     <span className="text-[10px] text-muted-foreground truncate block">
                       {arcNameMap.get(n.story_arc_id) || ""} ·{" "}
-                      {t("sidebar.chapterN", { n: n.target_chapter })}
+                      {t("sidebar.chapterN", {
+                        n: n.target_reading_number,
+                      })}
                     </span>
                   </div>
                 </div>

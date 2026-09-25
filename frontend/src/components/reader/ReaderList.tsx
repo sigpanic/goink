@@ -3,6 +3,8 @@ import { Eye } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useFocusStore } from "@/stores/useFocusStore";
 import SearchInput from "@/components/shared/SearchInput";
+import { buildChapterReferenceMap } from "@/components/chapter/chapterReferenceMap";
+import { useChapters } from "@/components/chapter/useChapters";
 import { useReaderPerspectives } from "./useReaderPerspectives";
 
 interface Props {
@@ -14,6 +16,11 @@ export default function SidebarReaderList({ novelId }: Props) {
   // 4.5.1: entries 走 query（与 ReaderView 共享缓存）。
   // 4a: query 错误 toast 由全局中间件接管，组件加 isError 内连显示（对齐 TimelineList）。
   const { data: items = [], isError } = useReaderPerspectives(novelId);
+  const { data: chapters = [] } = useChapters(novelId);
+  const chapterReferences = useMemo(
+    () => buildChapterReferenceMap(chapters),
+    [chapters],
+  );
   // 4b: 点击条目触发 focusEntity，ReaderView useEffect 定位+展开+高亮。
   const focusEntity = useFocusStore((s) => s.focusEntity);
   const [search, setSearch] = useState("");
@@ -84,7 +91,13 @@ export default function SidebarReaderList({ novelId }: Props) {
                     : e.content}
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  {e.type} · {t("reader.chapterN", { n: e.planted_chapter })}
+                  {e.type} ·{" "}
+                  {t("reader.chapterN", {
+                    n:
+                      chapterReferences.readingNumberByChapterID.get(
+                        e.planted_chapter_id ?? 0,
+                      ) ?? "?",
+                  })}
                 </span>
               </div>
               <span

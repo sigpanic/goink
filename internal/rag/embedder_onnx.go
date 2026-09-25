@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"math"
 	"path/filepath"
+	"runtime"
 	"sync"
 
 	ort "github.com/yalue/onnxruntime_go"
@@ -15,11 +16,20 @@ import (
 
 const (
 	bertMaxLen   = 512 // BERT 模型最大输入 token 数（含特殊 token）
-	maxBatchSize = 64  // 单次 ONNX Run 最大样本数，防 OOM
+	maxBatchSize = 8   // 单次 ONNX Run 最大样本数：批越大，注意力张量的峰值内存越高
+
+	minEmbedThreads = 2 // 推理线程数下限：核少的机器也要能用
+	maxEmbedThreads = 4 // 推理线程数上限：核多的机器不占满 CPU
 )
 
 // BGE 模型查询时需要加指令前缀，文档不加。
 const queryInstruction = "为这个句子生成表示以用于检索相关文章："
+
+const (
+	memoryArenaShrinkKey   = "memory.enable_memory_arena_shrinkage"
+	memoryArenaShrinkValue = "cpu:0"
+	compactProbeText       = "内存整理"
+)
 
 var (
 	instance  *OnnxEmbedder
@@ -96,6 +106,19 @@ func GetTokenizer() *Tokenizer {
 
 func (e *OnnxEmbedder) Dim() int { return 512 }
 
+// embedThreads 返回批量推理使用的 ONNX 线程数：按 CPU 核数动态收缩，
+// 避免核多的机器被推理占满，也避免核少的机器线程数过低而不可用。
+func embedThreads() int {
+	threads := runtime.NumCPU() / 4
+	if threads < minEmbedThreads {
+		threads = minEmbedThreads
+	}
+	if threads > maxEmbedThreads {
+		threads = maxEmbedThreads
+	}
+	return threads
+}
+
 // newOnnxEmbedder 同步初始化 ONNX Runtime 并加载模型。仅由 InitEmbedder 调用。
 func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmbedder, error) {
 	modelPath := filepath.Join(modelsDir, "model.onnx")
@@ -110,9 +133,32 @@ func newOnnxEmbedder(modelsDir string, t *Tokenizer, log *slog.Logger) (*OnnxEmb
 		return nil, fmt.Errorf("rag: init onnx environment: %w", err)
 	}
 
+	options, err := ort.NewSessionOptions()
+	if err != nil {
+		return nil, fmt.Errorf("rag: create session options: %w", err)
+	}
+	defer options.Destroy()
+
+	// 保持 CPU arena 开启，使连续推理复用稳定的高水位内存；全量重建结束后由
+	// Compact 显式 shrink。关闭 arena 会把释放行为交给 native allocator，Linux
+	// 多线程推理下反而可能持续抬高 RSS。
+	if err := options.SetCpuMemArena(true); err != nil {
+		return nil, fmt.Errorf("rag: enable cpu mem arena: %w", err)
+	}
+	if err := options.SetMemPattern(false); err != nil {
+		return nil, fmt.Errorf("rag: disable mem pattern: %w", err)
+	}
+	// 线程数按机器规模动态收缩；Run 已由 e.mu 串行化，inter-op 并行无意义。
+	if err := options.SetIntraOpNumThreads(embedThreads()); err != nil {
+		return nil, fmt.Errorf("rag: set intra op threads: %w", err)
+	}
+	if err := options.SetInterOpNumThreads(1); err != nil {
+		return nil, fmt.Errorf("rag: set inter op threads: %w", err)
+	}
+
 	session, err := ort.NewDynamicAdvancedSession(modelPath,
 		[]string{"input_ids", "attention_mask", "token_type_ids"},
-		[]string{"last_hidden_state"}, nil)
+		[]string{"last_hidden_state"}, options)
 	if err != nil {
 		return nil, fmt.Errorf("rag: load model: %w", err)
 	}
@@ -209,7 +255,7 @@ func (e *OnnxEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 		return nil, nil
 	}
 	if len(texts) <= maxBatchSize {
-		return e.embedBatch(ctx, texts)
+		return e.embedBatch(ctx, texts, nil)
 	}
 
 	results := make([][]float32, 0, len(texts))
@@ -218,7 +264,7 @@ func (e *OnnxEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 		if end > len(texts) {
 			end = len(texts)
 		}
-		batch, err := e.embedBatch(ctx, texts[i:end])
+		batch, err := e.embedBatch(ctx, texts[i:end], nil)
 		if err != nil {
 			return nil, fmt.Errorf("rag: batch [%d:%d]: %w", i, end, err)
 		}
@@ -228,7 +274,7 @@ func (e *OnnxEmbedder) EmbedBatch(ctx context.Context, texts []string) ([][]floa
 }
 
 // embedBatch 执行单次 batch ONNX 推理，调用方保证 len(texts) ≤ maxBatchSize。
-func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]float32, error) {
+func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string, runOptions *ort.RunOptions) ([][]float32, error) {
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -296,9 +342,10 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 	// 3. Single ONNX Run.
 	e.mu.Lock()
 	defer e.mu.Unlock()
-	err = e.session.Run(
+	err = e.session.RunWithOptions(
 		[]ort.Value{inputTensor, maskTensor, typeIDsTensor},
 		[]ort.Value{outputTensor},
+		runOptions,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("rag: batch onnx run: %w", err)
@@ -314,6 +361,24 @@ func (e *OnnxEmbedder) embedBatch(ctx context.Context, texts []string) ([][]floa
 	}
 
 	return results, nil
+}
+
+// Compact 在一次极小推理结束时触发 ONNX Runtime CPU arena shrink。
+// 用于完整索引重建后的任务级收尾；普通查询和增量刷新不应逐次调用。
+func (e *OnnxEmbedder) Compact(ctx context.Context) error {
+	options, err := ort.NewRunOptions()
+	if err != nil {
+		return fmt.Errorf("rag: create compact run options: %w", err)
+	}
+	defer options.Destroy()
+	if err := options.AddRunConfigEntry(memoryArenaShrinkKey, memoryArenaShrinkValue); err != nil {
+		return fmt.Errorf("rag: configure memory arena shrink: %w", err)
+	}
+	if _, err := e.embedBatch(ctx, []string{compactProbeText}, options); err != nil {
+		return fmt.Errorf("rag: compact memory arena: %w", err)
+	}
+	e.log.Info("ONNX CPU 内存池已整理")
+	return nil
 }
 
 func (e *OnnxEmbedder) Close() error {

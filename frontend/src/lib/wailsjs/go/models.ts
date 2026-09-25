@@ -114,7 +114,7 @@ export namespace app {
 	    story_arc_id: number;
 	    title: string;
 	    description?: string;
-	    target_chapter: number;
+	    target_reading_number: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateArcNodeInput(source);
@@ -125,7 +125,7 @@ export namespace app {
 	        this.story_arc_id = source["story_arc_id"];
 	        this.title = source["title"];
 	        this.description = source["description"];
-	        this.target_chapter = source["target_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
 	    }
 	}
 	export class CreateChapterInput {
@@ -231,9 +231,9 @@ export namespace app {
 	export class CreateReaderPerspectiveInput {
 	    type: string;
 	    content: string;
-	    planted_chapter: number;
+	    planted_chapter_id: number;
 	    related_truth?: string;
-	    revealed_chapter?: number;
+	    revealed_chapter_id?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new CreateReaderPerspectiveInput(source);
@@ -243,9 +243,9 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
 	        this.content = source["content"];
-	        this.planted_chapter = source["planted_chapter"];
+	        this.planted_chapter_id = source["planted_chapter_id"];
 	        this.related_truth = source["related_truth"];
-	        this.revealed_chapter = source["revealed_chapter"];
+	        this.revealed_chapter_id = source["revealed_chapter_id"];
 	    }
 	}
 	export class CreateStoryArcInput {
@@ -291,9 +291,9 @@ export namespace app {
 	    title: string;
 	    content?: string;
 	    detail_json?: string;
-	    target_chapter: number;
+	    target_reading_number: number;
 	    importance?: number;
-	    source_chapter?: number;
+	    source_chapter_id?: number;
 	    source?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -306,9 +306,9 @@ export namespace app {
 	        this.title = source["title"];
 	        this.content = source["content"];
 	        this.detail_json = source["detail_json"];
-	        this.target_chapter = source["target_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
 	        this.importance = source["importance"];
-	        this.source_chapter = source["source_chapter"];
+	        this.source_chapter_id = source["source_chapter_id"];
 	        this.source = source["source"];
 	    }
 	}
@@ -652,6 +652,22 @@ export namespace app {
 	        this.type = source["type"];
 	    }
 	}
+	export class StartupState {
+	    phase: string;
+	    error?: string;
+	    version: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartupState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.phase = source["phase"];
+	        this.error = source["error"];
+	        this.version = source["version"];
+	    }
+	}
 	export class TestConnectionInput {
 	    provider_name: string;
 	    chat_url: string;
@@ -673,8 +689,8 @@ export namespace app {
 	export class UpdateArcNodeInput {
 	    title: string;
 	    description: string;
-	    target_chapter: number;
-	    actual_chapter: number;
+	    target_reading_number: number;
+	    actual_chapter_id?: number;
 	    status: string;
 	
 	    static createFrom(source: any = {}) {
@@ -685,8 +701,8 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
 	        this.description = source["description"];
-	        this.target_chapter = source["target_chapter"];
-	        this.actual_chapter = source["actual_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
+	        this.actual_chapter_id = source["actual_chapter_id"];
 	        this.status = source["status"];
 	    }
 	}
@@ -789,9 +805,9 @@ export namespace app {
 	export class UpdateReaderPerspectiveInput {
 	    type: string;
 	    content: string;
-	    planted_chapter: number;
+	    planted_chapter_id?: number;
 	    related_truth: string;
-	    revealed_chapter: number;
+	    revealed_chapter_id?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateReaderPerspectiveInput(source);
@@ -801,9 +817,9 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.type = source["type"];
 	        this.content = source["content"];
-	        this.planted_chapter = source["planted_chapter"];
+	        this.planted_chapter_id = source["planted_chapter_id"];
 	        this.related_truth = source["related_truth"];
-	        this.revealed_chapter = source["revealed_chapter"];
+	        this.revealed_chapter_id = source["revealed_chapter_id"];
 	    }
 	}
 	export class UpdateStoryArcInput {
@@ -851,10 +867,10 @@ export namespace app {
 	export class UpdateTimelineEntryInput {
 	    title: string;
 	    content: string;
-	    target_chapter: number;
+	    target_reading_number: number;
 	    importance: number;
 	    status: string;
-	    resolved_chapter: number;
+	    resolved_chapter_id?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateTimelineEntryInput(source);
@@ -864,10 +880,10 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.title = source["title"];
 	        this.content = source["content"];
-	        this.target_chapter = source["target_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
 	        this.importance = source["importance"];
 	        this.status = source["status"];
-	        this.resolved_chapter = source["resolved_chapter"];
+	        this.resolved_chapter_id = source["resolved_chapter_id"];
 	    }
 	}
 
@@ -968,7 +984,8 @@ export namespace chapter {
 	export class Chapter {
 	    id: number;
 	    novel_id: number;
-	    chapter_number: number;
+	    volume_id?: number;
+	    sort_order: number;
 	    title: string;
 	    summary: string;
 	    word_count: number;
@@ -977,6 +994,7 @@ export namespace chapter {
 	    // Go type: time
 	    updated_at: any;
 	    file_path: string;
+	    reading_number: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Chapter(source);
@@ -986,13 +1004,15 @@ export namespace chapter {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.novel_id = source["novel_id"];
-	        this.chapter_number = source["chapter_number"];
+	        this.volume_id = source["volume_id"];
+	        this.sort_order = source["sort_order"];
 	        this.title = source["title"];
 	        this.summary = source["summary"];
 	        this.word_count = source["word_count"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.file_path = source["file_path"];
+	        this.reading_number = source["reading_number"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1071,7 +1091,7 @@ export namespace character {
 	    target_character_id: number;
 	    relation_describe: string;
 	    description: string;
-	    chapter_number: number;
+	    chapter_id?: number;
 	    is_current: boolean;
 	    // Go type: time
 	    created_at: any;
@@ -1088,7 +1108,7 @@ export namespace character {
 	        this.target_character_id = source["target_character_id"];
 	        this.relation_describe = source["relation_describe"];
 	        this.description = source["description"];
-	        this.chapter_number = source["chapter_number"];
+	        this.chapter_id = source["chapter_id"];
 	        this.is_current = source["is_current"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
@@ -1639,8 +1659,8 @@ export namespace pattern {
 	    }
 	}
 	export class BoundaryHint {
-	    start_chapter: number;
-	    end_chapter: number;
+	    start_chapter_id: number;
+	    end_chapter_id: number;
 	    hint: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1649,13 +1669,13 @@ export namespace pattern {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.start_chapter = source["start_chapter"];
-	        this.end_chapter = source["end_chapter"];
+	        this.start_chapter_id = source["start_chapter_id"];
+	        this.end_chapter_id = source["end_chapter_id"];
 	        this.hint = source["hint"];
 	    }
 	}
 	export class ChapterSummaryItem {
-	    chapter_number: number;
+	    chapter_id: number;
 	    summary: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1664,14 +1684,14 @@ export namespace pattern {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.chapter_number = source["chapter_number"];
+	        this.chapter_id = source["chapter_id"];
 	        this.summary = source["summary"];
 	    }
 	}
 	export class Chunk {
 	    name: string;
-	    start_chapter: number;
-	    end_chapter: number;
+	    start_chapter_id: number;
+	    end_chapter_id: number;
 	    content: string;
 	
 	    static createFrom(source: any = {}) {
@@ -1681,8 +1701,8 @@ export namespace pattern {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
-	        this.start_chapter = source["start_chapter"];
-	        this.end_chapter = source["end_chapter"];
+	        this.start_chapter_id = source["start_chapter_id"];
+	        this.end_chapter_id = source["end_chapter_id"];
 	        this.content = source["content"];
 	    }
 	}
@@ -1894,8 +1914,8 @@ export namespace reader {
 	    type: string;
 	    content: string;
 	    related_truth: string;
-	    planted_chapter: number;
-	    revealed_chapter: number;
+	    planted_chapter_id?: number;
+	    revealed_chapter_id?: number;
 	    // Go type: time
 	    created_at: any;
 	
@@ -1910,8 +1930,8 @@ export namespace reader {
 	        this.type = source["type"];
 	        this.content = source["content"];
 	        this.related_truth = source["related_truth"];
-	        this.planted_chapter = source["planted_chapter"];
-	        this.revealed_chapter = source["revealed_chapter"];
+	        this.planted_chapter_id = source["planted_chapter_id"];
+	        this.revealed_chapter_id = source["revealed_chapter_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	    }
 	
@@ -1972,7 +1992,8 @@ export namespace search {
 	    id: number;
 	    title: string;
 	    subtitle: string;
-	    chapter_num: number;
+	    chapter_id: number;
+	    reading_number: number;
 	    file_path: string;
 	    match_prefix: string;
 	    match_hit: string;
@@ -1992,7 +2013,8 @@ export namespace search {
 	        this.id = source["id"];
 	        this.title = source["title"];
 	        this.subtitle = source["subtitle"];
-	        this.chapter_num = source["chapter_num"];
+	        this.chapter_id = source["chapter_id"];
+	        this.reading_number = source["reading_number"];
 	        this.file_path = source["file_path"];
 	        this.match_prefix = source["match_prefix"];
 	        this.match_hit = source["match_hit"];
@@ -2273,8 +2295,8 @@ export namespace storyarc {
 	    story_arc_id: number;
 	    title: string;
 	    description: string;
-	    target_chapter: number;
-	    actual_chapter: number;
+	    target_reading_number: number;
+	    actual_chapter_id?: number;
 	    status: string;
 	    // Go type: time
 	    created_at: any;
@@ -2292,8 +2314,8 @@ export namespace storyarc {
 	        this.story_arc_id = source["story_arc_id"];
 	        this.title = source["title"];
 	        this.description = source["description"];
-	        this.target_chapter = source["target_chapter"];
-	        this.actual_chapter = source["actual_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
+	        this.actual_chapter_id = source["actual_chapter_id"];
 	        this.status = source["status"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
@@ -2509,11 +2531,11 @@ export namespace timeline {
 	    title: string;
 	    content: string;
 	    detail_json: string;
-	    target_chapter: number;
+	    target_reading_number: number;
 	    importance: number;
-	    source_chapter: number;
+	    source_chapter_id?: number;
 	    source: string;
-	    resolved_chapter: number;
+	    resolved_chapter_id?: number;
 	    // Go type: time
 	    created_at: any;
 	    // Go type: time
@@ -2532,11 +2554,11 @@ export namespace timeline {
 	        this.title = source["title"];
 	        this.content = source["content"];
 	        this.detail_json = source["detail_json"];
-	        this.target_chapter = source["target_chapter"];
+	        this.target_reading_number = source["target_reading_number"];
 	        this.importance = source["importance"];
-	        this.source_chapter = source["source_chapter"];
+	        this.source_chapter_id = source["source_chapter_id"];
 	        this.source = source["source"];
-	        this.resolved_chapter = source["resolved_chapter"];
+	        this.resolved_chapter_id = source["resolved_chapter_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	    }

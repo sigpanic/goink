@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { GitBranch, Pencil, Plus, Trash2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -21,6 +21,8 @@ import { useCreateStoryArc } from "./useCreateStoryArc";
 import { useUpdateStoryArc } from "./useUpdateStoryArc";
 import { useCreateArcNode } from "./useCreateArcNode";
 import { useUpdateArcNode } from "./useUpdateArcNode";
+import { useChapters } from "@/components/chapter/useChapters";
+import { buildChapterReferenceMap } from "@/components/chapter/chapterReferenceMap";
 
 interface Props {
   novelId: number;
@@ -77,8 +79,8 @@ type NodeForm = {
   story_arc_id: number;
   title: string;
   description: string;
-  target_chapter: number;
-  actual_chapter: number;
+  target_reading_number: number;
+  actual_chapter_id?: number;
   status: string;
 };
 
@@ -93,8 +95,7 @@ const EMPTY_NODE: NodeForm = {
   story_arc_id: 0,
   title: "",
   description: "",
-  target_chapter: 1,
-  actual_chapter: 0,
+  target_reading_number: 1,
   status: "pending",
 };
 
@@ -113,6 +114,11 @@ export default function ArcListView({ novelId }: Props) {
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
   const arcsQuery = useStoryArcs(novelId);
   const nodesQuery = useArcNodes(novelId);
+  const { data: chapters = [] } = useChapters(novelId);
+  const chapterReferences = useMemo(
+    () => buildChapterReferenceMap(chapters),
+    [chapters],
+  );
   const maxChQuery = useMaxChapterNumber(novelId);
   const arcs = arcsQuery.data ?? [];
   const allNodes = nodesQuery.data ?? [];
@@ -153,6 +159,12 @@ export default function ArcListView({ novelId }: Props) {
     null,
   );
 
+  const readingNumberForChapterID = useCallback(
+    (chapterID: number | undefined) =>
+      chapterReferences.readingNumberByChapterID.get(chapterID ?? 0) ?? 0,
+    [chapterReferences],
+  );
+
   // 4.3.1: maxChapter 就绪后初始化 windowCenter（替代原 load() 里的 setWindowCenter）。
   useEffect(() => {
     const max = maxChQuery.data ?? 0;
@@ -179,7 +191,7 @@ export default function ArcListView({ novelId }: Props) {
       const arcNodes = allNodes.filter((n) => n.story_arc_id === focusId);
       if (arcNodes.length > 0) {
         const maxChapterOfArc = arcNodes.reduce(
-          (m, n) => Math.max(m, n.target_chapter || 0),
+          (m, n) => Math.max(m, n.target_reading_number || 0),
           0,
         );
         setWindowCenter(Math.max(1, maxChapterOfArc - WINDOW));
@@ -196,7 +208,11 @@ export default function ArcListView({ novelId }: Props) {
       const node = allNodes.find((n) => n.id === focusId);
       if (!node) return;
       soloArc(node.story_arc_id);
-      setWindowCenter(node.target_chapter || node.actual_chapter || 1);
+      setWindowCenter(
+        node.target_reading_number ||
+          readingNumberForChapterID(node.actual_chapter_id) ||
+          1,
+      );
       setExpandedId(node.id);
       setHighlightedNodeId(node.id);
       // 滚动到 node 卡片（DOM API 留 useEffect）
@@ -214,12 +230,22 @@ export default function ArcListView({ novelId }: Props) {
       if (arcNodes.length > 0) {
         const firstNode = arcNodes[0];
         setWindowCenter(
-          firstNode.target_chapter || firstNode.actual_chapter || 1,
+          firstNode.target_reading_number ||
+            readingNumberForChapterID(firstNode.actual_chapter_id) ||
+            1,
         );
         setExpandedId(firstNode.id);
       }
     }
-  }, [focusId, focusType, focus?.nonce, allNodes, arcs, maxChQuery.data]);
+  }, [
+    focusId,
+    focusType,
+    focus?.nonce,
+    allNodes,
+    arcs,
+    maxChQuery.data,
+    readingNumberForChapterID,
+  ]);
 
   const windowFrom = Math.max(1, windowCenter - WINDOW);
   const windowTo = windowCenter + WINDOW;
@@ -238,7 +264,7 @@ export default function ArcListView({ novelId }: Props) {
   const grouped = useMemo(() => {
     const map = new Map<number, storyarc.ArcNode[]>();
     for (const n of filteredNodes) {
-      const ch = n.target_chapter;
+      const ch = n.target_reading_number;
       if (!map.has(ch)) map.set(ch, []);
       map.get(ch)!.push(n);
     }
@@ -356,7 +382,7 @@ export default function ArcListView({ novelId }: Props) {
     setNodeForm({
       ...EMPTY_NODE,
       story_arc_id: arcId ?? arcs[0]?.id ?? 0,
-      target_chapter: Math.max(1, windowCenter),
+      target_reading_number: Math.max(1, windowCenter),
     });
     setEditMode({ type: "create_node" });
   }
@@ -368,8 +394,8 @@ export default function ArcListView({ novelId }: Props) {
       story_arc_id: node.story_arc_id,
       title: node.title,
       description: node.description || "",
-      target_chapter: node.target_chapter,
-      actual_chapter: node.actual_chapter,
+      target_reading_number: node.target_reading_number,
+      actual_chapter_id: node.actual_chapter_id,
       status: node.status,
     });
     setEditMode({ type: "edit_node", node });
@@ -384,7 +410,7 @@ export default function ArcListView({ novelId }: Props) {
       toastError(t("storyarc.pleaseSelectParentArc"));
       return;
     }
-    if (!nodeForm.target_chapter) {
+    if (!nodeForm.target_reading_number) {
       toastError(t("storyarc.pleaseEnterTargetChapter"));
       return;
     }
@@ -395,7 +421,7 @@ export default function ArcListView({ novelId }: Props) {
         story_arc_id: nodeForm.story_arc_id,
         title: nodeForm.title,
         description: nodeForm.description,
-        target_chapter: nodeForm.target_chapter,
+        target_reading_number: nodeForm.target_reading_number,
       });
       setEditMode(null);
       setExpandedId(created.id);
@@ -420,8 +446,8 @@ export default function ArcListView({ novelId }: Props) {
         input: {
           title: nodeForm.title,
           description: nodeForm.description,
-          target_chapter: nodeForm.target_chapter,
-          actual_chapter: nodeForm.actual_chapter,
+          target_reading_number: nodeForm.target_reading_number,
+          actual_chapter_id: nodeForm.actual_chapter_id,
           status: nodeForm.status,
         },
       });
@@ -470,8 +496,8 @@ export default function ArcListView({ novelId }: Props) {
         input: {
           title: node.title,
           description: node.description,
-          target_chapter: node.target_chapter,
-          actual_chapter: node.actual_chapter,
+          target_reading_number: node.target_reading_number,
+          actual_chapter_id: node.actual_chapter_id,
           status: newStatus,
         },
       });
@@ -678,11 +704,11 @@ export default function ArcListView({ novelId }: Props) {
             </label>
             <input
               type="number"
-              value={nodeForm.target_chapter}
+              value={nodeForm.target_reading_number}
               onChange={(e) =>
                 setNodeForm((f) => ({
                   ...f,
-                  target_chapter: parseInt(e.target.value) || 1,
+                  target_reading_number: parseInt(e.target.value) || 1,
                 }))
               }
               min={1}
@@ -1119,14 +1145,16 @@ export default function ArcListView({ novelId }: Props) {
                                 <div className="flex items-center gap-2 mt-0.5 text-[11px] text-muted-foreground">
                                   <span>
                                     {t("storyarc.targetChapterN", {
-                                      n: node.target_chapter,
+                                      n: node.target_reading_number,
                                     })}
                                   </span>
-                                  {node.actual_chapter > 0 && (
+                                  {node.actual_chapter_id != null && (
                                     <span className="text-tag-green-foreground">
                                       ·{" "}
                                       {t("storyarc.actualChapterN", {
-                                        n: node.actual_chapter,
+                                        n: readingNumberForChapterID(
+                                          node.actual_chapter_id,
+                                        ),
                                       })}
                                     </span>
                                   )}

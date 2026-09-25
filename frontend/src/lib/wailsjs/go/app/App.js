@@ -18,6 +18,10 @@ export function CancelExtractPattern(arg1) {
   return window['go']['app']['App']['CancelExtractPattern'](arg1);
 }
 
+export function CancelQuit() {
+  return window['go']['app']['App']['CancelQuit']();
+}
+
 export function Chat(arg1) {
   return window['go']['app']['App']['Chat'](arg1);
 }
@@ -32,6 +36,10 @@ export function CompressContext(arg1) {
 
 export function ComputeStyleStats(arg1) {
   return window['go']['app']['App']['ComputeStyleStats'](arg1);
+}
+
+export function ConfirmQuit() {
+  return window['go']['app']['App']['ConfirmQuit']();
 }
 
 export function CreateArcNode(arg1, arg2) {
@@ -150,6 +158,10 @@ export function ExtractStyle(arg1) {
   return window['go']['app']['App']['ExtractStyle'](arg1);
 }
 
+export function FrontendReady() {
+  return window['go']['app']['App']['FrontendReady']();
+}
+
 export function GetAppConfig() {
   return window['go']['app']['App']['GetAppConfig']();
 }
@@ -250,6 +262,10 @@ export function GetSettings() {
   return window['go']['app']['App']['GetSettings']();
 }
 
+export function GetStartupState() {
+  return window['go']['app']['App']['GetStartupState']();
+}
+
 export function GetStoryArcs(arg1) {
   return window['go']['app']['App']['GetStoryArcs'](arg1);
 }
@@ -316,6 +332,10 @@ export function PickAndImportNovel() {
 
 export function RebuildNovelIndex(arg1) {
   return window['go']['app']['App']['RebuildNovelIndex'](arg1);
+}
+
+export function RetryStartup() {
+  return window['go']['app']['App']['RetryStartup']();
 }
 
 export function SaveAvatar(arg1) {

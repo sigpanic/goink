@@ -28,9 +28,9 @@ func exportMarkdown(n *novel.Novel, chapters []ChapterWithContent) ([]byte, stri
 		ch := cc.Chapter
 		title := ch.Title
 		if title == "" {
-			title = fmt.Sprintf("第%d章", ch.ChapterNumber)
+			title = fmt.Sprintf("第%d章", ch.ReadingNumber)
 		}
-		fmt.Fprintf(&b, "- [第%d章 %s](#第%d章)\n\n", ch.ChapterNumber, title, ch.ChapterNumber)
+		fmt.Fprintf(&b, "- [第%d章 %s](#第%d章)\n\n", ch.ReadingNumber, title, ch.ReadingNumber)
 	}
 	b.WriteString("\n---\n\n")
 
@@ -39,9 +39,9 @@ func exportMarkdown(n *novel.Novel, chapters []ChapterWithContent) ([]byte, stri
 		ch := cc.Chapter
 		title := ch.Title
 		if title == "" {
-			title = fmt.Sprintf("第%d章", ch.ChapterNumber)
+			title = fmt.Sprintf("第%d章", ch.ReadingNumber)
 		}
-		fmt.Fprintf(&b, "## 第%d章 %s\n\n", ch.ChapterNumber, title)
+		fmt.Fprintf(&b, "## 第%d章 %s\n\n", ch.ReadingNumber, title)
 		b.WriteString(cc.Content)
 		b.WriteString("\n\n")
 	}

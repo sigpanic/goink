@@ -12,17 +12,17 @@ jobs:
   build-windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: '24', cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
 
       - name: Cache runtime deps
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/runtime
           key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}
@@ -109,7 +109,7 @@ jobs:
 
           echo "All Windows smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: build/dist/*
@@ -117,17 +117,17 @@ jobs:
   build-linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: '24', cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
 
       - name: Cache runtime deps
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/runtime
           key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}
@@ -180,7 +180,7 @@ jobs:
 
           echo "All Linux smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           path: build/dist/*
@@ -188,17 +188,17 @@ jobs:
   build-macos:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: '24', cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
 
       - name: Cache runtime deps
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/runtime
           key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}
@@ -272,7 +272,7 @@ jobs:
 
           echo "All macOS smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: build/dist/*
@@ -284,7 +284,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
 
       - name: Collect artifacts
         run: |

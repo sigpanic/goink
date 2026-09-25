@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/reader"
 )
 
@@ -38,12 +40,10 @@ func (t *GetReaderPerspectiveTool) NewArgs() any      { return &GetReaderPerspec
 func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	rs := reader.NewStore(tc.DB, tc.LoggerOrDefault())
 
-	// known：取最近 60 条，直接查 DB 保证 DESC 顺序
+	// known：读取后按当前阅读顺序取最近 60 条。
 	var knownItems []reader.ReaderPerspective
 	if err := tc.DB.WithContext(ctx).
 		Where("novel_id = ? AND type = ?", tc.NovelID, reader.TypeKnown).
-		Order("planted_chapter DESC").
-		Limit(60).
 		Find(&knownItems).Error; err != nil {
 		return nil, fmt.Errorf("query known perspectives: %w", err)
 	}
@@ -65,7 +65,27 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 		}
 	}
 
-	formatted := formatReaderPerspective(knownItems, suspenses, misconceptions)
+	readingNumbers, err := chapter.NewStore(tc.DB, tc.LoggerOrDefault()).GetReadingNumbersByNovel(ctx, nil, tc.NovelID)
+	if err != nil {
+		return nil, err
+	}
+	readingNumberFor := func(chapterID *int64) int {
+		if chapterID == nil {
+			return 0
+		}
+		return readingNumbers[*chapterID]
+	}
+	byLatestPlanting := func(a, b reader.ReaderPerspective) int {
+		return readingNumberFor(b.PlantedChapterID) - readingNumberFor(a.PlantedChapterID)
+	}
+	slices.SortFunc(knownItems, byLatestPlanting)
+	if len(knownItems) > 60 {
+		knownItems = knownItems[:60]
+	}
+	slices.SortFunc(suspenses, byLatestPlanting)
+	slices.SortFunc(misconceptions, byLatestPlanting)
+
+	formatted := formatReaderPerspective(knownItems, suspenses, misconceptions, readingNumbers)
 
 	return &ToolResult{
 		Success: true,
@@ -82,18 +102,27 @@ func (t *GetReaderPerspectiveTool) Execute(ctx context.Context, args any, tc Too
 
 // ── 格式化 ──────────────────────────────────────────────
 
-func formatReaderPerspective(known, suspenses, misconceptions []reader.ReaderPerspective) string {
+func formatReaderPerspective(known, suspenses, misconceptions []reader.ReaderPerspective, readingNumbers map[int64]int) string {
 	var sections []string
 
 	ref := func(e reader.ReaderPerspective) string {
 		return fmt.Sprintf(" `[entry_id:%d]`", e.ID)
+	}
+	chapterLabel := func(chapterID *int64) string {
+		if chapterID == nil {
+			return "章节信息缺失"
+		}
+		if readingNumber, ok := readingNumbers[*chapterID]; ok {
+			return fmt.Sprintf("第%d章 [chapter_id:%d]", readingNumber, *chapterID)
+		}
+		return fmt.Sprintf("章节 [chapter_id:%d]", *chapterID)
 	}
 
 	// 已知信息
 	if len(known) > 0 {
 		lines := []string{"### 已知信息"}
 		for _, e := range known {
-			lines = append(lines, fmt.Sprintf("- %s [第%d章起]%s", e.Content, e.PlantedChapter, ref(e)))
+			lines = append(lines, fmt.Sprintf("- %s [%s起]%s", e.Content, chapterLabel(e.PlantedChapterID), ref(e)))
 		}
 		sections = append(sections, strings.Join(lines, "\n"))
 	}
@@ -102,7 +131,7 @@ func formatReaderPerspective(known, suspenses, misconceptions []reader.ReaderPer
 	if len(suspenses) > 0 {
 		lines := []string{"### 活跃悬念"}
 		for _, e := range suspenses {
-			lines = append(lines, fmt.Sprintf("- %s（第%d章种下）%s", e.Content, e.PlantedChapter, ref(e)))
+			lines = append(lines, fmt.Sprintf("- %s（%s种下）%s", e.Content, chapterLabel(e.PlantedChapterID), ref(e)))
 		}
 		sections = append(sections, strings.Join(lines, "\n"))
 	}
@@ -130,10 +159,10 @@ func formatReaderPerspective(known, suspenses, misconceptions []reader.ReaderPer
 
 // CreateReaderPerspectiveEntryItem 是 create_reader_perspective_entry 的单条参数。
 type CreateReaderPerspectiveEntryItem struct {
-	Type           string `json:"type" jsonschema:"required,description=条目类型,enum=known,enum=suspense,enum=misconception" validate:"required,oneof=known suspense misconception"`
-	Content        string `json:"content" jsonschema:"required,description=内容描述"          validate:"required"`
-	PlantedChapter int    `json:"planted_chapter" jsonschema:"required,description=种下的章节号"    validate:"required,min=1"`
-	RelatedTruth   string `json:"related_truth" jsonschema:"description=仅 misconception：真实情况是什么"`
+	Type             string `json:"type" jsonschema:"required,description=条目类型,enum=known,enum=suspense,enum=misconception" validate:"required,oneof=known suspense misconception"`
+	Content          string `json:"content" jsonschema:"required,description=内容描述"          validate:"required"`
+	PlantedChapterID int64  `json:"planted_chapter_id" jsonschema:"required,description=种下该信息的稳定章节 ID" validate:"required,min=1"`
+	RelatedTruth     string `json:"related_truth" jsonschema:"description=仅 misconception：真实情况是什么"`
 }
 
 // CreateReaderPerspectiveEntryArgs 是 create_reader_perspective_entry 的参数。
@@ -170,18 +199,26 @@ func (t *CreateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 			return &ToolResult{Success: false, Error: "misconception 类型必须提供 related_truth（实际真相）"}, nil
 		}
 	}
+	chapterIDs := make([]int64, 0, len(a.Entries))
+	for _, item := range a.Entries {
+		chapterIDs = append(chapterIDs, item.PlantedChapterID)
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	var ids []int64
 	var failedName string
 	var failedErr error
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for _, item := range a.Entries {
+			chapterID := item.PlantedChapterID
 			rp := reader.ReaderPerspective{
-				NovelID:        tc.NovelID,
-				Type:           item.Type,
-				Content:        item.Content,
-				PlantedChapter: item.PlantedChapter,
-				RelatedTruth:   item.RelatedTruth,
+				NovelID:          tc.NovelID,
+				Type:             item.Type,
+				Content:          item.Content,
+				PlantedChapterID: &chapterID,
+				RelatedTruth:     item.RelatedTruth,
 			}
 			if err := tx.Create(&rp).Error; err != nil {
 				failedName = item.Content
@@ -212,12 +249,12 @@ func (t *CreateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 
 // UpdateReaderPerspectiveEntryArgs 是 update_reader_perspective_entry 的参数。
 type UpdateReaderPerspectiveEntryArgs struct {
-	EntryID         int    `json:"entry_id" jsonschema:"required,description=要更新的条目 ID" validate:"required,min=1"`
-	Content         string `json:"content" jsonschema:"description=更新后的完整内容描述"`
-	RevealedChapter int    `json:"revealed_chapter" jsonschema:"description=实际揭露或回收的章节号（设置后该条目不再出现在活跃列表中）" validate:"omitempty,min=0"`
-	PlantedChapter  int    `json:"planted_chapter" jsonschema:"description=在哪章种下的章节号" validate:"omitempty,min=1"`
-	RelatedTruth    string `json:"related_truth" jsonschema:"description=作者视角的真实情况（支持所有类型）"`
-	Type            string `json:"type" jsonschema:"description=条目类型,enum=known,enum=suspense,enum=misconception" validate:"omitempty,oneof=known suspense misconception"`
+	EntryID           int    `json:"entry_id" jsonschema:"required,description=要更新的条目 ID" validate:"required,min=1"`
+	Content           string `json:"content" jsonschema:"description=更新后的完整内容描述"`
+	RevealedChapterID *int64 `json:"revealed_chapter_id" jsonschema:"description=实际揭露或回收的稳定章节 ID（设置后该条目不再出现在活跃列表中）" validate:"omitempty,min=1"`
+	PlantedChapterID  *int64 `json:"planted_chapter_id" jsonschema:"description=在哪章种下的稳定章节 ID" validate:"omitempty,min=1"`
+	RelatedTruth      string `json:"related_truth" jsonschema:"description=作者视角的真实情况（支持所有类型）"`
+	Type              string `json:"type" jsonschema:"description=条目类型,enum=known,enum=suspense,enum=misconception" validate:"omitempty,oneof=known suspense misconception"`
 }
 
 // UpdateReaderPerspectiveEntryTool 更新读者认知条目。
@@ -226,8 +263,8 @@ type UpdateReaderPerspectiveEntryTool struct{}
 func (t *UpdateReaderPerspectiveEntryTool) Name() string { return "update_reader_perspective_entry" }
 func (t *UpdateReaderPerspectiveEntryTool) Description() string {
 	return "更新一条读者认知条目。常见用途：\n" +
-		"- 回收悬念：设置 revealed_chapter\n" +
-		"- 揭露误知：设置 revealed_chapter"
+		"- 回收悬念：设置 revealed_chapter_id\n" +
+		"- 揭露误知：设置 revealed_chapter_id"
 }
 func (t *UpdateReaderPerspectiveEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
 
@@ -241,7 +278,7 @@ func (t *UpdateReaderPerspectiveEntryTool) NewArgs() any      { return &UpdateRe
 func (t *UpdateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*UpdateReaderPerspectiveEntryArgs)
 
-	if a.RevealedChapter == 0 && a.PlantedChapter == 0 && a.Content == "" && a.Type == "" && a.RelatedTruth == "" {
+	if a.RevealedChapterID == nil && a.PlantedChapterID == nil && a.Content == "" && a.Type == "" && a.RelatedTruth == "" {
 		return &ToolResult{Success: false, Error: "至少需要提供一个要修改的字段"}, nil
 	}
 
@@ -258,6 +295,15 @@ func (t *UpdateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 	if err := json.Unmarshal(tc.RawArgs, &entry); err != nil {
 		return &ToolResult{Success: false, Error: "参数格式不正确: " + err.Error()}, nil
 	}
+	chapterIDs := make([]int64, 0, 2)
+	for _, chapterID := range []*int64{a.PlantedChapterID, a.RevealedChapterID} {
+		if chapterID != nil {
+			chapterIDs = append(chapterIDs, *chapterID)
+		}
+	}
+	if result, err := ensureChapterIDsInNovel(ctx, tc, chapterIDs); err != nil || result != nil {
+		return result, err
+	}
 
 	if err := tc.DB.WithContext(ctx).Save(&entry).Error; err != nil {
 		return nil, fmt.Errorf("save perspective entry: %w", err)
@@ -265,7 +311,7 @@ func (t *UpdateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 
 	return &ToolResult{
 		Success: true,
-		Data:    map[string]any{"id": entry.ID, "revealed_chapter": entry.RevealedChapter},
+		Data:    map[string]any{"id": entry.ID, "revealed_chapter_id": entry.RevealedChapterID},
 	}, nil
 }
 

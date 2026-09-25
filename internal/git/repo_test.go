@@ -65,6 +65,110 @@ func testRepo(t *testing.T, commits int) (*Repo, string, func()) {
 	return r, dir, func() { os.RemoveAll(dir) }
 }
 
+// TestRunCmd_IsolatesGitConfig 验证 runCmd 派生的 git 进程不受 commit.gpgsign
+// 与 core.hooksPath 影响：前者会让无 tty 的 GUI 进程因无法 pinentry 而 commit
+// 失败，后者会让 pre-commit 拦截 commit。
+//
+// 干扰项通过 git config 命令写入仓库级 config，而不是手写全局 config 文件：
+// 手写会把 Windows 绝对路径直接塞进文件，而反斜杠是 gitconfig 的转义字符，
+// 会让 git 报 "bad config line" 并导致所有 git 命令失败（Windows CI 实测）。
+// 选仓库级是因为 git 的优先级是 -c > worktree > local > global > system，
+// 能覆盖 local 即可覆盖 global。
+func TestRunCmd_IsolatesGitConfig(t *testing.T) {
+	dir := t.TempDir()
+	r := &Repo{dir: dir, gitBin: "git"}
+	if _, stderr, err := r.runInDir("init"); err != nil {
+		t.Fatalf("git init: %s: %v", stderr, err)
+	}
+	if _, stderr, err := r.runInDir("config", "user.name", "Test"); err != nil {
+		t.Fatalf("git config user.name: %s: %v", stderr, err)
+	}
+	if _, stderr, err := r.runInDir("config", "user.email", "test@local"); err != nil {
+		t.Fatalf("git config user.email: %s: %v", stderr, err)
+	}
+
+	hookDir := filepath.Join(dir, "failing-hooks")
+	if err := os.MkdirAll(hookDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	marker := filepath.Join(dir, "hook-ran")
+	// hook 只用重定向，不依赖外部命令；路径转成正斜杠，Windows 上的 sh 才能解析。
+	hook := "#!/bin/sh\necho ran > \"" + filepath.ToSlash(marker) + "\"\nexit 1\n"
+	if err := os.WriteFile(filepath.Join(hookDir, "pre-commit"), []byte(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// 写入本该生效的干扰配置；若 runCmd 的 -c 覆盖失效，下面的 commit 必然失败。
+	for k, v := range map[string]string{
+		"commit.gpgsign": "true",
+		"gpg.program":    "nonexistent-goink-gpg",
+		"core.hooksPath": hookDir,
+	} {
+		if _, stderr, err := r.runInDir("config", k, v); err != nil {
+			t.Fatalf("git config %s: %s: %v", k, stderr, err)
+		}
+	}
+
+	if err := os.WriteFile(filepath.Join(dir, "a.txt"), []byte("a\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, stderr, err := r.runInDir("add", "-A"); err != nil {
+		t.Fatalf("git add: %s: %v", stderr, err)
+	}
+	if _, stderr, err := r.runInDir("commit", "-m", "isolated"); err != nil {
+		t.Fatalf("commit 不应受 commit.gpgsign / core.hooksPath 影响: %s: %v", stderr, err)
+	}
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("core.hooksPath 指向的 pre-commit 被执行了，runCmd 未隔离 hook")
+	}
+}
+
+// TestCommitFileChanges_NonASCIIPath 验证 core.quotepath=false 生效：默认
+// quotepath=true 会把非 ASCII 路径转义成 "\346\210\221..." 并加上引号，导致
+// CommitFileList 返回的 Path 无法匹配前端传入的 UTF-8 路径，历史 diff 打不开。
+func TestCommitFileChanges_NonASCIIPath(t *testing.T) {
+	r, dir, cleanup := testRepo(t, 1)
+	defer cleanup()
+
+	const rel = "notes/我的笔记.md"
+	full := filepath.Join(dir, filepath.FromSlash(rel))
+	if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(full, []byte("正文\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := r.StageAll(); err != nil {
+		t.Fatalf("StageAll: %v", err)
+	}
+	hash, err := r.Commit("add non-ascii file")
+	if err != nil {
+		t.Fatalf("Commit: %v", err)
+	}
+
+	_, entries, err := r.CommitFileList(hash)
+	if err != nil {
+		t.Fatalf("CommitFileList: %v", err)
+	}
+	var found bool
+	for _, e := range entries {
+		if e.Path == rel {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("未找到路径 %q，实际条目: %+v", rel, entries)
+	}
+
+	f, err := r.ShowFile(hash, rel)
+	if err != nil {
+		t.Fatalf("ShowFile(%q): %v", rel, err)
+	}
+	if f.ModifiedContent != "正文\n" {
+		t.Fatalf("ShowFile 内容错误: %q", f.ModifiedContent)
+	}
+}
+
 func TestLogDetailed_Basic(t *testing.T) {
 	r, _, cleanup := testRepo(t, 3)
 	defer cleanup()
@@ -258,6 +362,7 @@ func TestCommitFileList_ShowFile(t *testing.T) {
 	}
 	if commit == nil {
 		t.Fatal("expected non-nil commit")
+		return
 	}
 	if len(entries) == 0 {
 		t.Fatal("expected at least 1 file entry")
@@ -390,6 +495,7 @@ func TestCommitFileList_CommitInfo(t *testing.T) {
 	}
 	if commit == nil {
 		t.Fatal("expected non-nil commit")
+		return
 	}
 	if commit.Hash != hash {
 		t.Errorf("hash mismatch: expected %q, got %q", hash, commit.Hash)

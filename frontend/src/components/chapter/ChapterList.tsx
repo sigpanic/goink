@@ -72,7 +72,7 @@ export default function ChapterList({
 
   const chapterBlocks = useMemo(() => {
     const sorted = [...chapters].sort(
-      (a, b) => b.chapter_number - a.chapter_number,
+      (a, b) => b.reading_number - a.reading_number,
     );
     const blocks: {
       key: number;
@@ -82,11 +82,11 @@ export default function ChapterList({
     }[] = [];
     for (let i = 0; i < sorted.length; i += BLOCK_SIZE) {
       const slice = sorted.slice(i, Math.min(i + BLOCK_SIZE, sorted.length));
-      slice.sort((a, b) => a.chapter_number - b.chapter_number);
+      slice.sort((a, b) => a.reading_number - b.reading_number);
       blocks.push({
         key: i / BLOCK_SIZE,
-        start: slice[0].chapter_number,
-        end: slice[slice.length - 1].chapter_number,
+        start: slice[0].reading_number,
+        end: slice[slice.length - 1].reading_number,
         chs: slice,
       });
     }
@@ -131,7 +131,7 @@ export default function ChapterList({
     if (newTitle && newTitle !== ch.title) {
       try {
         await updateChapterTitleMutation.mutateAsync({
-          chapterNumber: ch.chapter_number,
+          chapterID: ch.id,
           title: newTitle,
         });
         // 5.2 commit 2: onSuccess invalidate chapterKeys.list，不需要 refetch
@@ -290,7 +290,7 @@ export default function ChapterList({
                             <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
                           )}
                           <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
-                            {t("sidebar.chapterN", { n: ch.chapter_number })}
+                            {t("sidebar.chapterN", { n: ch.reading_number })}
                           </span>
                           {editingId === ch.id ? (
                             <input

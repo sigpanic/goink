@@ -67,10 +67,11 @@ function ThemePreview({ theme }: { theme: Theme }) {
 }
 
 interface Props {
-  onInitialized: () => void;
+  /** 后端上一次初始化失败的文本（来自 startup:state 快照）；无错时为空串。 */
+  error?: string;
 }
 
-export default function InitView({ onInitialized }: Props) {
+export default function InitView({ error: startupError }: Props) {
   const { t, i18n } = useTranslation();
   const { theme, setTheme } = useThemeStore();
 
@@ -109,7 +110,6 @@ export default function InitView({ onInitialized }: Props) {
     setInitializing(true);
     try {
       await Initialize(dataDir);
-      onInitialized();
     } catch (e) {
       setError(String(e));
       setInitializing(false);
@@ -238,7 +238,13 @@ export default function InitView({ onInitialized }: Props) {
           {t("init.backupNote")}
         </p>
 
-        {error && <p className="text-sm text-destructive mb-6">{error}</p>}
+        {/* 本地 error 是本次点击的直接结果（如 beginInitialization 被拒），比快照里的旧
+            失败文本更新鲜，故优先；快照那路负责跨「组件被卸载重挂」保留上次失败原因。 */}
+        {(error || startupError) && (
+          <p className="text-sm text-destructive mb-6">
+            {error || startupError}
+          </p>
+        )}
 
         <Button
           size="lg"

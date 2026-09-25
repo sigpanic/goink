@@ -10,9 +10,13 @@ import (
 
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
-// Store 管理 Chapter 持久化。DB 导出供调用方做简单 CRUD。
+// Store 管理 Chapter 持久化。
+//
+// 事务约定：每个方法都接受可选 tx；事务外传 nil，事务内必须传入 tx，
+// 避免在 SetMaxOpenConns(1) 时从 Store 自身连接重新取连接而死锁。
 type Store struct {
 	DB     *gorm.DB
 	logger *slog.Logger
@@ -23,23 +27,47 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 	return &Store{DB: db, logger: logger}
 }
 
+// pick 返回本次操作使用的连接：tx 非 nil 时优先使用 tx，否则使用 Store 自身的 DB。
+func (s *Store) pick(tx *gorm.DB) *gorm.DB {
+	if tx != nil {
+		return tx
+	}
+	return s.DB
+}
+
 // ListByNovelOptions 是 ListByNovel 的可选参数。零值即可直接使用（默认升序）。
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
-	Order      string // "asc"(默认) 或 "desc"，按 chapter_number 排序
+	Order      string // "asc"(默认) 或 "desc"，按阅读顺序排序
+}
+
+const (
+	// chapterOrderAsc 按卷的可重排顺序和卷内顺序排序，未分卷章节置后。
+	chapterOrderAsc = "chapters.volume_id IS NULL ASC, volumes.sort_order ASC, chapters.sort_order ASC, chapters.id ASC"
+	// chapterOrderDesc 是阅读顺序的倒序，用于 "desc" 与 GetRecent。
+	chapterOrderDesc = "chapters.volume_id IS NULL DESC, volumes.sort_order DESC, chapters.sort_order DESC, chapters.id DESC"
+)
+
+// orderedByNovel 返回带卷排序信息的章节查询。必须按 volumes.sort_order 排序，
+// 不能只按 chapters.volume_id，否则 ReorderVolumes 不会改变章节的阅读顺序。
+func (s *Store) orderedByNovel(ctx context.Context, tx *gorm.DB, novelID int64) *gorm.DB {
+	return s.pick(tx).WithContext(ctx).
+		Model(&Chapter{}).
+		Joins("LEFT JOIN volumes ON volumes.id = chapters.volume_id").
+		Where("chapters.novel_id = ?", novelID)
 }
 
 // ListByNovel 分页列出某小说的章节。
-func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovelOptions) (*storage.PageResult[Chapter], error) {
+func (s *Store) ListByNovel(ctx context.Context, tx *gorm.DB, novelID int64, opts ListByNovelOptions) (*storage.PageResult[Chapter], error) {
 	pp := opts.PageParams
 	pp.Normalize()
 
-	order := "chapter_number ASC"
+	order := chapterOrderAsc
 	if strings.ToLower(opts.Order) == "desc" {
-		order = "chapter_number DESC"
+		order = chapterOrderDesc
 	}
 
-	q := s.DB.WithContext(ctx).Model(&Chapter{}).Where("novel_id = ?", novelID)
+	q := s.orderedByNovel(ctx, tx, novelID)
 
 	var total int64
 	if err := q.Count(&total).Error; err != nil {
@@ -52,92 +80,219 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	}
 
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		if order == chapterOrderAsc {
+			chapters[i].ReadingNumber = pp.Offset() + i + 1
+		} else {
+			chapters[i].ReadingNumber = int(total) - pp.Offset() - i
+		}
 	}
 
 	s.logger.Debug("chapter store: listed", "novel_id", novelID, "total", total, "page", pp.Page)
 	return storage.NewPageResult(chapters, total, pp.Page, pp.Size), nil
 }
 
-// ListAllByNovel 返回某小说的全部章节（不分页），按 chapter_number 升序。
-func (s *Store) ListAllByNovel(ctx context.Context, novelID int64) ([]Chapter, error) {
+// ListAllByNovel 返回某小说的全部章节（不分页），按阅读顺序升序。
+func (s *Store) ListAllByNovel(ctx context.Context, tx *gorm.DB, novelID int64) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ?", novelID).
-		Order("chapter_number ASC").
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Order(chapterOrderAsc).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: list all: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].ReadingNumber = i + 1
 	}
 	return chapters, nil
 }
 
-// GetByNovelAndNumber 按 novel_id + chapter_number 取单章。
-func (s *Store) GetByNovelAndNumber(ctx context.Context, novelID int64, chapterNumber int) (*Chapter, error) {
-	var ch Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
-		First(&ch).Error; err != nil {
-		if err == gorm.ErrRecordNotFound {
-			return nil, fmt.Errorf("chapter store: get by novel+number: %w", err)
-		}
-		return nil, fmt.Errorf("chapter store: get by novel+number: %w", err)
+// CountByNovel 返回小说当前的章节总数。
+// 阅读顺序中的章节号从 1 连续编号，因此该值也等于当前最大的展示章节号。
+func (s *Store) CountByNovel(ctx context.Context, tx *gorm.DB, novelID int64) (int, error) {
+	var count int64
+	if err := s.pick(tx).WithContext(ctx).
+		Model(&Chapter{}).
+		Where("novel_id = ?", novelID).
+		Count(&count).Error; err != nil {
+		return 0, fmt.Errorf("chapter store: count by novel: %w", err)
 	}
-	ch.FilePath = git.ChapterPath(ch.ChapterNumber)
+	return int(count), nil
+}
+
+// MissingIDsByNovel 返回不存在或不属于指定小说的章节 ID。
+// 返回值按输入中的首次出现顺序排列，重复 ID 只返回一次。
+func (s *Store) MissingIDsByNovel(ctx context.Context, tx *gorm.DB, novelID int64, ids []int64) ([]int64, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	unique := make([]int64, 0, len(ids))
+	seen := make(map[int64]struct{}, len(ids))
+	for _, id := range ids {
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		unique = append(unique, id)
+	}
+
+	var found []int64
+	if err := s.pick(tx).WithContext(ctx).
+		Model(&Chapter{}).
+		Where("novel_id = ? AND id IN ?", novelID, unique).
+		Pluck("id", &found).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: find IDs by novel: %w", err)
+	}
+	foundSet := make(map[int64]struct{}, len(found))
+	for _, id := range found {
+		foundSet[id] = struct{}{}
+	}
+
+	missing := make([]int64, 0, len(unique))
+	for _, id := range unique {
+		if _, ok := foundSet[id]; !ok {
+			missing = append(missing, id)
+		}
+	}
+	return missing, nil
+}
+
+// GetReadingNumberByID 返回章节在当前阅读顺序中的 1-based 位次。
+// 章节号由卷顺序、卷内 sort_order 和未分卷末尾规则实时计算，不依赖 chapter_number 列。
+func (s *Store) GetReadingNumberByID(ctx context.Context, tx *gorm.DB, novelID, chapterID int64) (int, error) {
+	var ids []int64
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Order(chapterOrderAsc).
+		Pluck("chapters.id", &ids).Error; err != nil {
+		return 0, fmt.Errorf("chapter store: list reading order: %w", err)
+	}
+	for i, id := range ids {
+		if id == chapterID {
+			return i + 1, nil
+		}
+	}
+	return 0, fmt.Errorf("chapter store: get reading number: %w", gorm.ErrRecordNotFound)
+}
+
+// GetReadingNumbersByNovel 返回小说中每个章节在当前阅读顺序中的 1-based 位次。
+func (s *Store) GetReadingNumbersByNovel(ctx context.Context, tx *gorm.DB, novelID int64) (map[int64]int, error) {
+	var ids []int64
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Order(chapterOrderAsc).
+		Pluck("chapters.id", &ids).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: list reading order: %w", err)
+	}
+	numbers := make(map[int64]int, len(ids))
+	for i, id := range ids {
+		numbers[id] = i + 1
+	}
+	return numbers, nil
+}
+
+// GetByID 按 novel_id + id 取单章。
+func (s *Store) GetByID(ctx context.Context, tx *gorm.DB, novelID, chapterID int64) (*Chapter, error) {
+	var ch Chapter
+	if err := s.pick(tx).WithContext(ctx).
+		Where("novel_id = ? AND id = ?", novelID, chapterID).
+		First(&ch).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: get by id: %w", err)
+	}
+	ch.FilePath = git.ChapterPath(ch.ID)
+	readingNumber, err := s.GetReadingNumberByID(ctx, tx, novelID, chapterID)
+	if err != nil {
+		return nil, err
+	}
+	ch.ReadingNumber = readingNumber
 	return &ch, nil
 }
 
-// GetLatestNumber 返回该小说当前最大的章节编号，无章节时返回 0。
-func (s *Store) GetLatestNumber(ctx context.Context, novelID int64) (int, error) {
-	var maxNum int
-	if err := s.DB.WithContext(ctx).
-		Model(&Chapter{}).
-		Where("novel_id = ?", novelID).
-		Select("COALESCE(MAX(chapter_number), 0)").
-		Scan(&maxNum).Error; err != nil {
-		return 0, fmt.Errorf("chapter store: latest number: %w", err)
+// Create 新建章节记录，并追加到指定卷或未分卷组的末尾。
+// volumeID 为 nil 时创建未分卷章节；非 nil 时必须属于该小说。
+// tx 可为 nil；传入时创建与 sort_order 分配使用同一事务。
+func (s *Store) Create(ctx context.Context, tx *gorm.DB, novelID int64, volumeID *int64, title string) (*Chapter, error) {
+	db := s.pick(tx)
+
+	var created *Chapter
+	err := db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		pos, err := volume.NewStore(s.DB, s.logger).AllocateChapterSortOrder(ctx, tx, novelID, volumeID)
+		if err != nil {
+			return err
+		}
+
+		created = &Chapter{
+			NovelID:   novelID,
+			VolumeID:  volumeID,
+			SortOrder: pos,
+			Title:     title,
+		}
+		if err := tx.WithContext(ctx).Create(created).Error; err != nil {
+			return fmt.Errorf("insert chapter: %w", err)
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("chapter store: create: %w", err)
 	}
-	return maxNum, nil
+	return created, nil
 }
 
 // SearchByNovel 按关键词搜索某小说的章节，匹配标题和摘要。
-func (s *Store) SearchByNovel(ctx context.Context, novelID int64, query string, limit int) ([]Chapter, error) {
+func (s *Store) SearchByNovel(ctx context.Context, tx *gorm.DB, novelID int64, query string, limit int) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ? AND (title LIKE ? OR summary LIKE ?)", novelID, "%"+query+"%", "%"+query+"%").
-		Order("chapter_number ASC").
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Where("chapters.title LIKE ? OR chapters.summary LIKE ?", "%"+query+"%", "%"+query+"%").
+		Order(chapterOrderAsc).
 		Limit(limit).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: search: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+	}
+	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, tx, novelID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range chapters {
+		chapters[i].ReadingNumber = readingNumbers[chapters[i].ID]
 	}
 	return chapters, nil
 }
 
-// GetRecent 取最近 N 章，按 chapter_number 降序。
-func (s *Store) GetRecent(ctx context.Context, novelID int64, limit int) ([]Chapter, error) {
+// GetRecent 取阅读顺序最后 N 章，按阅读顺序倒序返回。
+func (s *Store) GetRecent(ctx context.Context, tx *gorm.DB, novelID int64, limit int) ([]Chapter, error) {
 	var chapters []Chapter
-	if err := s.DB.WithContext(ctx).
-		Where("novel_id = ?", novelID).
-		Order("chapter_number DESC").
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Order(chapterOrderDesc).
 		Limit(limit).
 		Find(&chapters).Error; err != nil {
 		return nil, fmt.Errorf("chapter store: recent: %w", err)
 	}
 	for i := range chapters {
-		chapters[i].FilePath = git.ChapterPath(chapters[i].ChapterNumber)
+		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+	}
+	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, tx, novelID)
+	if err != nil {
+		return nil, err
+	}
+	for i := range chapters {
+		chapters[i].ReadingNumber = readingNumbers[chapters[i].ID]
 	}
 	return chapters, nil
 }
 
-// UpdateTitle 更新章节标题。
-func (s *Store) UpdateTitle(ctx context.Context, novelID int64, chapterNumber int, title string) error {
-	return s.DB.WithContext(ctx).
+// UpdateTitle 按 novel_id + id 更新章节标题。
+func (s *Store) UpdateTitle(ctx context.Context, tx *gorm.DB, novelID, chapterID int64, title string) error {
+	result := s.pick(tx).WithContext(ctx).
 		Model(&Chapter{}).
-		Where("novel_id = ? AND chapter_number = ?", novelID, chapterNumber).
-		Update("title", title).Error
+		Where("novel_id = ? AND id = ?", novelID, chapterID).
+		Update("title", title)
+	if result.Error != nil {
+		return fmt.Errorf("chapter store: update title: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("chapter store: update title: %w", gorm.ErrRecordNotFound)
+	}
+	return nil
 }

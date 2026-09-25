@@ -44,7 +44,7 @@ export default function ChapterRangeInput({
     }
     return new Set(
       chapters
-        .filter((ch) => allNums.has(ch.chapter_number))
+        .filter((ch) => allNums.has(ch.reading_number))
         .map((ch) => ch.id),
     );
   }, [ranges, chapters, parsePair]);

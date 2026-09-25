@@ -55,10 +55,10 @@ func TestIsStuckLoop_OnlyReadsOldTurn(t *testing.T) {
 
 func TestToolPattern_Single(t *testing.T) {
 	outputs := []toolOutput{
-		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/001.md"}`)},
+		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/id_1.md"}`)},
 	}
 	result := toolPattern(outputs)
-	expected := "read:{\"path\":\"chapters/001.md\"}"
+	expected := "read:{\"path\":\"chapters/id_1.md\"}"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}
@@ -67,11 +67,11 @@ func TestToolPattern_Single(t *testing.T) {
 func TestToolPattern_Sorted(t *testing.T) {
 	outputs := []toolOutput{
 		{name: "get_characters", id: "2", rawArgs: []byte(`{}`)},
-		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/003.md"}`)},
+		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/id_3.md"}`)},
 	}
 	result := toolPattern(outputs)
 	// 排序后 get_characters 在前
-	expected := "get_characters:{}|read:{\"path\":\"chapters/003.md\"}"
+	expected := "get_characters:{}|read:{\"path\":\"chapters/id_3.md\"}"
 	if result != expected {
 		t.Errorf("expected %q, got %q", expected, result)
 	}

@@ -9,28 +9,28 @@ import (
 
 // CreateReaderPerspectiveInput 是创建读者认知条目的入参。
 type CreateReaderPerspectiveInput struct {
-	Type            string `json:"type"`                       // 必填："known" | "suspense" | "misconception"
-	Content         string `json:"content"`                    // 必填
-	PlantedChapter  int    `json:"planted_chapter"`            // 必填
-	RelatedTruth    string `json:"related_truth,omitempty"`    // 可选
-	RevealedChapter int    `json:"revealed_chapter,omitempty"` // 可选，默认 0
+	Type              string `json:"type"`                          // 必填："known" | "suspense" | "misconception"
+	Content           string `json:"content"`                       // 必填
+	PlantedChapterID  int64  `json:"planted_chapter_id"`            // 必填
+	RelatedTruth      string `json:"related_truth,omitempty"`       // 可选
+	RevealedChapterID *int64 `json:"revealed_chapter_id,omitempty"` // 可选，nil=未回收
 }
 
 // UpdateReaderPerspectiveInput 采用 PUT 语义：前端全量传，后端全量覆盖。
 type UpdateReaderPerspectiveInput struct {
-	Type            string `json:"type"`
-	Content         string `json:"content"`
-	PlantedChapter  int    `json:"planted_chapter"`
-	RelatedTruth    string `json:"related_truth"`
-	RevealedChapter int    `json:"revealed_chapter"`
+	Type              string `json:"type"`
+	Content           string `json:"content"`
+	PlantedChapterID  *int64 `json:"planted_chapter_id"`
+	RelatedTruth      string `json:"related_truth"`
+	RevealedChapterID *int64 `json:"revealed_chapter_id"`
 }
 
-// GetReaderPerspectives 返回指定小说的全部读者认知条目，按 type, planted_chapter ASC 排列。
+// GetReaderPerspectives 返回指定小说的全部读者认知条目，按 type, planted_chapter_id ASC 排列。
 // 4b: 改调 ListByNovel(Size=-1) 一次拉全（废弃循环翻页拉全）。显式传 Order 保持原排序。
 func (a *App) GetReaderPerspectives(novelID int64) ([]reader.ReaderPerspective, error) {
 	result, err := a.reader.ListByNovel(a.ctx, novelID, reader.ListByNovelOptions{
 		PageParams: storage.PageParams{Size: -1},
-		Order:      "type, planted_chapter ASC",
+		Order:      "type, planted_chapter_id ASC",
 	})
 	if err != nil {
 		return nil, err
@@ -43,16 +43,24 @@ func (a *App) GetReaderPerspectives(novelID int64) ([]reader.ReaderPerspective, 
 
 // CreateReaderPerspective 创建一条读者认知条目。
 func (a *App) CreateReaderPerspective(novelID int64, input CreateReaderPerspectiveInput) (*reader.ReaderPerspective, error) {
-	if input.Type == "" || input.Content == "" {
-		return nil, fmt.Errorf("类型和内容不能为空")
+	if input.Type == "" || input.Content == "" || input.PlantedChapterID == 0 {
+		return nil, fmt.Errorf("类型、内容和种下章节不能为空")
 	}
+	chapterIDs := []int64{input.PlantedChapterID}
+	if input.RevealedChapterID != nil {
+		chapterIDs = append(chapterIDs, *input.RevealedChapterID)
+	}
+	if err := a.ensureChapterIDsInNovel(novelID, chapterIDs); err != nil {
+		return nil, err
+	}
+	plantedChapterID := input.PlantedChapterID
 	item := reader.ReaderPerspective{
-		NovelID:         novelID,
-		Type:            input.Type,
-		Content:         input.Content,
-		PlantedChapter:  input.PlantedChapter,
-		RelatedTruth:    input.RelatedTruth,
-		RevealedChapter: input.RevealedChapter,
+		NovelID:           novelID,
+		Type:              input.Type,
+		Content:           input.Content,
+		PlantedChapterID:  &plantedChapterID,
+		RelatedTruth:      input.RelatedTruth,
+		RevealedChapterID: input.RevealedChapterID,
 	}
 	if err := a.reader.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create reader perspective: %w", err)
@@ -68,11 +76,20 @@ func (a *App) UpdateReaderPerspective(id int64, novelID int64, input UpdateReade
 		First(&item).Error; err != nil {
 		return fmt.Errorf("update reader perspective: %w", err)
 	}
+	var chapterIDs []int64
+	for _, chapterID := range []*int64{input.PlantedChapterID, input.RevealedChapterID} {
+		if chapterID != nil {
+			chapterIDs = append(chapterIDs, *chapterID)
+		}
+	}
+	if err := a.ensureChapterIDsInNovel(novelID, chapterIDs); err != nil {
+		return err
+	}
 	item.Type = input.Type
 	item.Content = input.Content
-	item.PlantedChapter = input.PlantedChapter
+	item.PlantedChapterID = input.PlantedChapterID
 	item.RelatedTruth = input.RelatedTruth
-	item.RevealedChapter = input.RevealedChapter
+	item.RevealedChapterID = input.RevealedChapterID
 	if err := a.reader.DB.WithContext(a.ctx).Save(&item).Error; err != nil {
 		return fmt.Errorf("update reader perspective: %w", err)
 	}

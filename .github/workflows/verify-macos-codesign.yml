@@ -20,17 +20,17 @@ jobs:
   verify-codesign:
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with: { node-version: '24', cache: 'npm', cache-dependency-path: 'frontend/package-lock.json' }
 
       - name: Cache runtime deps
         id: cache-runtime
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: build/runtime
           key: runtime-${{ runner.os }}-${{ hashFiles('scripts/download-git.sh', 'scripts/download-onnx.sh') }}
@@ -194,7 +194,7 @@ jobs:
 
           hdiutil detach "$MOUNT_POINT" 2>/dev/null || true
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos-codesign-diagnose
           path: |

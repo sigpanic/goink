@@ -13,7 +13,7 @@ import (
 )
 
 func TestResolveGit_NoSystemFallback(t *testing.T) {
-	// In GOINK_TESTING mode, ResolveGit must NOT use system PATH fallback
+	// In GOINK_E2E_STRICT mode, ResolveGit must NOT use system PATH fallback
 	// Even if system git is available, it must return the bundled path
 	gitBin, err := platform.ResolveGit()
 	if err != nil {

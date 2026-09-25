@@ -22,6 +22,7 @@ import (
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
 var dbSeq atomic.Int64
@@ -44,6 +45,7 @@ func openSearchDB(t *testing.T) *gorm.DB {
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},
+		&volume.Volume{},
 		&chapter.Chapter{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
@@ -164,7 +166,7 @@ func TestSearchEntities_Timeline(t *testing.T) {
 	svc := newTestService(db)
 	ctx := context.Background()
 
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三复仇", Content: "复仇之路", TargetChapter: 20, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三复仇", Content: "复仇之路", TargetReadingNumber: 20, Status: "pending"})
 
 	results := svc.searchEntities(ctx, 1, "复仇")
 	if len(results) != 1 {
@@ -200,8 +202,8 @@ func TestSearchEntities_Chapter(t *testing.T) {
 	svc := newTestService(db)
 	ctx := context.Background()
 
-	db.Create(&chapter.Chapter{NovelID: 1, ChapterNumber: 1, Title: "初入江湖"})
-	db.Create(&chapter.Chapter{NovelID: 1, ChapterNumber: 2, Title: "华山论剑"})
+	db.Create(&chapter.Chapter{NovelID: 1, SortOrder: 1, Title: "初入江湖"})
+	db.Create(&chapter.Chapter{NovelID: 1, SortOrder: 2, Title: "华山论剑"})
 
 	results := svc.searchEntities(ctx, 1, "江湖")
 	if len(results) != 1 {
@@ -289,7 +291,7 @@ func TestSearchAll_EntitiesOnly(t *testing.T) {
 	ctx := context.Background()
 
 	db.Create(&character.Character{NovelID: 1, Name: "张三"})
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三出场", Content: "", TargetChapter: 5, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "foreshadowing", Title: "张三出场", Content: "", TargetReadingNumber: 5, Status: "pending"})
 
 	results, err := svc.SearchAll(ctx, 1, "张三")
 	if err != nil {
@@ -357,6 +359,66 @@ func TestUpdateCachedChapter_NoCache(t *testing.T) {
 	svc.UpdateCachedChapter(1, 5, "新内容")
 }
 
+func TestUpdateCachedChapter_UsesChapterID(t *testing.T) {
+	db := openSearchDB(t)
+	svc := newTestService(db)
+	ctx := context.Background()
+
+	// ID 和阅读编号刻意不同：该章是阅读顺序第 1 章，但数据库 ID 为 42。
+	ch := chapter.Chapter{ID: 42, NovelID: 1, SortOrder: 1}
+	if err := db.Create(&ch).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	svc.mu.Lock()
+	svc.cache[1] = map[int64]string{
+		42: "旧正文",
+		1:  "不应被当作该章缓存的内容",
+	}
+	svc.mu.Unlock()
+
+	svc.UpdateCachedChapter(1, 42, "更新后的正文包含唯一关键词")
+
+	results := svc.searchContent(ctx, 1, "唯一关键词")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].ChapterID != 42 {
+		t.Errorf("ChapterID = %d, want 42", results[0].ChapterID)
+	}
+	if results[0].ReadingNumber != 1 {
+		t.Errorf("ReadingNumber = %d, want 1", results[0].ReadingNumber)
+	}
+}
+
+func TestSearchContent_UsesCacheWhenChapterMetadataUnavailable(t *testing.T) {
+	db := openSearchDB(t)
+	svc := newTestService(db)
+
+	svc.mu.Lock()
+	svc.cache[1] = map[int64]string{42: "缓存正文包含唯一关键词"}
+	svc.mu.Unlock()
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := sqlDB.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	results := svc.searchContent(context.Background(), 1, "唯一关键词")
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result from cache fallback, got %d", len(results))
+	}
+	if results[0].ChapterID != 42 {
+		t.Errorf("ChapterID = %d, want 42", results[0].ChapterID)
+	}
+	if results[0].ReadingNumber != 0 {
+		t.Errorf("ReadingNumber = %d, want 0 without metadata", results[0].ReadingNumber)
+	}
+}
+
 func TestSearchAll_NoResults(t *testing.T) {
 	db := openSearchDB(t)
 	svc := newTestService(db)
@@ -382,7 +444,7 @@ func TestSearchAll_ResultOrder(t *testing.T) {
 
 	// 创建多类型数据，验证实体结果在 RAG 之前
 	db.Create(&character.Character{NovelID: 1, Name: "测试角色"})
-	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "user_directive", Title: "测试指令", Content: "", TargetChapter: 3, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: 1, Category: "user_directive", Title: "测试指令", Content: "", TargetReadingNumber: 3, Status: "pending"})
 
 	results, err := svc.SearchAll(ctx, 1, "测试")
 	if err != nil {
@@ -425,10 +487,13 @@ func TestSearchContent_MatchPosition(t *testing.T) {
 	query := "李四"
 	// 查询在 rune 偏移 16 处（"看到"后面）
 	queryRunePos := utf8.RuneCountInString(content[:strings.Index(content, query)])
+	if err := db.Create(&chapter.Chapter{NovelID: 1, SortOrder: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	// 直接注入缓存
 	svc.mu.Lock()
-	svc.cache[1] = map[int]string{1: content}
+	svc.cache[1] = map[int64]string{1: content}
 	svc.mu.Unlock()
 
 	results := svc.searchContent(ctx, 1, query)
@@ -454,9 +519,12 @@ func TestSearchContent_MultipleMatches(t *testing.T) {
 
 	content := "张三走来。\n张三离开。"
 	query := "张三"
+	if err := db.Create(&chapter.Chapter{NovelID: 2, SortOrder: 1}).Error; err != nil {
+		t.Fatal(err)
+	}
 
 	svc.mu.Lock()
-	svc.cache[2] = map[int]string{1: content}
+	svc.cache[2] = map[int64]string{1: content}
 	svc.mu.Unlock()
 
 	results := svc.searchContent(ctx, 2, query)
@@ -547,20 +615,20 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 	db.Create(&location.Location{NovelID: novelID, Name: "京城", LocationType: "城市", Description: "天子脚下"})
 
 	// ── 章节 ────────────────────────────────────────────
-	db.Create(&chapter.Chapter{NovelID: novelID, ChapterNumber: 1, Title: "初入江湖", Summary: "张三离开华山，踏上复仇之路"})
-	db.Create(&chapter.Chapter{NovelID: novelID, ChapterNumber: 2, Title: "黑木崖之战", Summary: "张三潜入魔教总坛，遭遇李四"})
-	db.Create(&chapter.Chapter{NovelID: novelID, ChapterNumber: 3, Title: "京城风云", Summary: "张三来到京城，发现更大的阴谋"})
+	db.Create(&chapter.Chapter{NovelID: novelID, SortOrder: 1, Title: "初入江湖", Summary: "张三离开华山，踏上复仇之路"})
+	db.Create(&chapter.Chapter{NovelID: novelID, SortOrder: 2, Title: "黑木崖之战", Summary: "张三潜入魔教总坛，遭遇李四"})
+	db.Create(&chapter.Chapter{NovelID: novelID, SortOrder: 3, Title: "京城风云", Summary: "张三来到京城，发现更大的阴谋"})
 
 	// ── 时间线 ───────────────────────────────────────────
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "foreshadowing", Status: "pending",
 		Title: "青龙刀的传说", Content: "王五提起传说中的青龙刀，暗示其与张三的身世有关",
-		TargetChapter: 5, SourceChapter: 1, Importance: 5, Source: "ai",
+		TargetReadingNumber: 5, Importance: 5, Source: "ai",
 	})
 	db.Create(&timeline.TimelineEntry{
 		NovelID: novelID, Category: "user_directive", Status: "pending",
 		Title: "决战黑木崖", Content: "张三需要在黑木崖与李四展开最终决战",
-		TargetChapter: 10, Importance: 4, Source: "user",
+		TargetReadingNumber: 10, Importance: 4, Source: "user",
 	})
 
 	// ── 故事弧 ──────────────────────────────────────────
@@ -571,7 +639,7 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 
 	// ── 章节正文缓存（模拟 git 文件） ────────────────────
 	svc.mu.Lock()
-	svc.cache[novelID] = map[int]string{
+	svc.cache[novelID] = map[int64]string{
 		1: `华山之巅，云雾缭绕。
 王五站在崖边，负手而立，望着远处的群山出神。
 "师父。"张三走到他身后，轻声唤道。
@@ -769,7 +837,7 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 			t.Fatalf("SearchAll: %v", err)
 		}
 		for _, r := range results {
-			if r.ChapterNum == 1 && r.Type == "content" {
+			if r.ChapterID == 1 && r.Type == "content" {
 				t.Errorf("chapter 1 content was replaced, should not find old text, got: %s", r.MatchHit)
 			}
 		}
@@ -791,7 +859,7 @@ func TestSearchAll_RealisticNovel(t *testing.T) {
 
 	// ── 测试 10：正文匹配的上下文居中 ─────────────────────
 	t.Run("content context centered", func(t *testing.T) {
-		svc.UpdateCachedChapter(novelID, 5, "那年冬天，北风呼啸，张三独自一人走在荒凉的官道上。腰间配着父亲遗留的龙泉剑，剑鞘上斑驳的纹路诉说着岁月的沧桑。他抬头望着远方的天际线，眼神中既有迷茫也有坚定。他知道，这一去黑木崖，生死未卜。")
+		svc.UpdateCachedChapter(novelID, 1, "那年冬天，北风呼啸，张三独自一人走在荒凉的官道上。腰间配着父亲遗留的龙泉剑，剑鞘上斑驳的纹路诉说着岁月的沧桑。他抬头望着远方的天际线，眼神中既有迷茫也有坚定。他知道，这一去黑木崖，生死未卜。")
 		results, err := svc.SearchAll(ctx, novelID, "龙泉剑")
 		if err != nil {
 			t.Fatalf("SearchAll: %v", err)

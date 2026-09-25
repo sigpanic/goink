@@ -56,7 +56,7 @@ func batchBudget(contextWindow int) int {
   - ...
 ```
 
-产物是一组 `(start_chapter, end_chapter, hint)` 三元组，作为 Step 1 的参照。Step 1 的 LLM 优先参考这些边界，但不强制——实际边界仍由内容决定。
+产物是一组 `(start_chapter_id, end_chapter_id, hint)` 三元组，作为 Step 1 的参照。提示词同时展示阅读章节号与稳定 ID：章节号供 LLM 理解顺序，ID 供其返回可持久引用的端点。Step 1 的 LLM 优先参考这些边界，但不强制——实际边界仍由内容决定。
 
 ### Step 1（固定）：章节摘要生成
 
@@ -86,7 +86,7 @@ func batchBudget(contextWindow int) int {
   - 通过调用工具 `output_chapter_summaries` 输出结果
 ```
 
-后端构造 batch 时已知道缺失章节号，收到 JSON 后校验是否全部覆盖。已有摘要不动，缺失的入库。比「全批重出」省输入 token（已摘要的只占 ~500 token 而非 ~5K 正文），比「跳单章」保上下文完整性。
+后端构造 batch 时已知道缺失章节 ID，收到 JSON 后校验是否全部覆盖。已有摘要不动，缺失的入库。章节号仅在 prompt 中辅助 LLM 理解阅读顺序；摘要回传和入库均按稳定 ID 定位。比「全批重出」省输入 token（已摘要的只占 ~500 token 而非 ~5K 正文），比「跳单章」保上下文完整性。
 
 **Prompt 要点**：
 - 提取本章的关键事件（1-2句话）
@@ -120,14 +120,14 @@ for each chapter:
 ```json
 {
   "name": "末世前物资囤积",
-  "start_chapter": 1,
-  "end_chapter": 47,
+  "start_chapter_id": 42,
+  "end_chapter_id": 84,
   "content": "主角发现末世即将来临，开始大量囤积物资。从最初的单人采购逐步发展为组织化运作，期间遭遇数次小规模冲突和资源争夺..."
 }
 ```
 
 - `name`：阶段名称，用于最终 Skill 的结构展示和人类阅读
-- `start_chapter` / `end_chapter`：后端注入的章节定位，确定性字段，追溯链不可丢失
+- `start_chapter_id` / `end_chapter_id`：稳定章节定位，确定性字段，追溯链不可丢失；后端用本次加载的阅读顺序映射判断范围先后和排序
 - `content`：该阶段的实质性摘要，递归轮 LLM 依此判断合并与否；最终轮依此生成套路模板
 
 每轮流程：
@@ -253,8 +253,8 @@ type ChapterSummaries struct {
     Summaries []ChapterSummaryItem `json:"summaries"`
 }
 type ChapterSummaryItem struct {
-    ChapterNumber int    `json:"chapter_number" jsonschema:"required"`
-    Summary       string `json:"summary" jsonschema:"required"`
+    ChapterID int64  `json:"chapter_id" jsonschema:"required"`
+    Summary   string `json:"summary" jsonschema:"required"`
 }
 // tools = []map[string]any{{"type": "function", "function": {..., "parameters": SchemaOf(ChapterSummaries{})}}}
 ```

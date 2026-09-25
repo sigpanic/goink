@@ -28,13 +28,15 @@ func testRdLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
+func readerChapterID(id int64) *int64 { return &id }
+
 func TestRdListByNovel_FilterType(t *testing.T) {
 	db := openRdDB(t)
 	s := NewStore(db, testRdLogger())
 	ctx := context.Background()
 
-	db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapter: 1})
-	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", PlantedChapter: 2})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapterID: readerChapterID(1)})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", PlantedChapterID: readerChapterID(2)})
 
 	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{Type: "suspense"})
 	if result.Total != 1 {
@@ -47,9 +49,10 @@ func TestRdListActive(t *testing.T) {
 	s := NewStore(db, testRdLogger())
 	ctx := context.Background()
 
-	db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapter: 1, RevealedChapter: 0})
-	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", PlantedChapter: 2, RevealedChapter: 5}) // 已揭示
-	db.Create(&ReaderPerspective{NovelID: 1, Type: "misconception", PlantedChapter: 3, RevealedChapter: 0})
+	revealedID := int64(5)
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapterID: readerChapterID(1)})
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "suspense", PlantedChapterID: readerChapterID(2), RevealedChapterID: &revealedID}) // 已揭示
+	db.Create(&ReaderPerspective{NovelID: 1, Type: "misconception", PlantedChapterID: readerChapterID(3)})
 
 	active, _ := s.ListActive(ctx, 1)
 	if len(active) != 2 {
@@ -63,7 +66,7 @@ func TestRdListByNovel_Pagination(t *testing.T) {
 	ctx := context.Background()
 
 	for i := 1; i <= 4; i++ {
-		db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapter: i})
+		db.Create(&ReaderPerspective{NovelID: 1, Type: "known", PlantedChapterID: readerChapterID(int64(i))})
 	}
 
 	result, _ := s.ListByNovel(ctx, 1, ListByNovelOptions{
@@ -85,7 +88,7 @@ func TestRdCreate(t *testing.T) {
 
 	item := ReaderPerspective{
 		NovelID: 1, Type: "known", Content: "主角身世未知",
-		PlantedChapter: 1, RelatedTruth: "主角是皇帝私生子",
+		PlantedChapterID: readerChapterID(1), RelatedTruth: "主角是皇帝私生子",
 	}
 	if err := db.WithContext(ctx).Create(&item).Error; err != nil {
 		t.Fatalf("create: %v", err)
@@ -104,27 +107,40 @@ func TestRdCreate(t *testing.T) {
 	}
 }
 
+func TestRdCreate_AllowsMissingHistoricalPlantedChapter(t *testing.T) {
+	db := openRdDB(t)
+
+	item := ReaderPerspective{NovelID: 1, Type: "known", Content: "历史条目"}
+	if err := db.Create(&item).Error; err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	if item.PlantedChapterID != nil {
+		t.Errorf("planted chapter ID = %v, want nil", item.PlantedChapterID)
+	}
+}
+
 func TestRdUpdate(t *testing.T) {
 	db := openRdDB(t)
 	ctx := context.Background()
 
-	item := ReaderPerspective{NovelID: 1, Type: "suspense", Content: "旧悬念", PlantedChapter: 2}
+	item := ReaderPerspective{NovelID: 1, Type: "suspense", Content: "旧悬念", PlantedChapterID: readerChapterID(2)}
 	db.WithContext(ctx).Create(&item)
 
 	type UpdateInput struct {
-		Content         string `json:"content,omitempty"`
-		Type            string `json:"type,omitempty"`
-		RevealedChapter int    `json:"revealed_chapter,omitempty"`
+		Content           string `json:"content,omitempty"`
+		Type              string `json:"type,omitempty"`
+		RevealedChapterID *int64 `json:"revealed_chapter_id,omitempty"`
 	}
-	input := UpdateInput{RevealedChapter: 5, Type: ""}
+	revealedID := int64(5)
+	input := UpdateInput{RevealedChapterID: &revealedID, Type: ""}
 	if err := db.WithContext(ctx).Model(&ReaderPerspective{}).Where("id = ?", item.ID).Updates(&input).Error; err != nil {
 		t.Fatalf("update: %v", err)
 	}
 
 	var updated ReaderPerspective
 	db.WithContext(ctx).First(&updated, item.ID)
-	if updated.RevealedChapter != 5 {
-		t.Errorf("revealed_chapter: expected 5, got %d", updated.RevealedChapter)
+	if updated.RevealedChapterID == nil || *updated.RevealedChapterID != 5 {
+		t.Errorf("revealed_chapter_id: expected 5, got %v", updated.RevealedChapterID)
 	}
 	if updated.Type != "suspense" {
 		t.Errorf("type should be unchanged (empty string skipped), got %s", updated.Type)
@@ -135,7 +151,7 @@ func TestRdDelete(t *testing.T) {
 	db := openRdDB(t)
 	ctx := context.Background()
 
-	item := ReaderPerspective{NovelID: 1, Type: "known", Content: "待删", PlantedChapter: 1}
+	item := ReaderPerspective{NovelID: 1, Type: "known", Content: "待删", PlantedChapterID: readerChapterID(1)}
 	db.WithContext(ctx).Create(&item)
 
 	if err := db.WithContext(ctx).Where("id = ?", item.ID).Delete(&ReaderPerspective{}).Error; err != nil {

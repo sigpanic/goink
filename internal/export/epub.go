@@ -40,10 +40,10 @@ func exportEpub(n *novel.Novel, chapters []ChapterWithContent, author string) ([
 		ch := cc.Chapter
 		var buf bytes.Buffer
 		if err := md.Convert([]byte(cc.Content), &buf); err != nil {
-			return nil, "", fmt.Errorf("epub: 第%d章 markdown 转换失败: %w", ch.ChapterNumber, err)
+			return nil, "", fmt.Errorf("epub: 第%d章 markdown 转换失败: %w", ch.ReadingNumber, err)
 		}
 
-		title := fmt.Sprintf("第%d章 %s", ch.ChapterNumber, ch.Title)
+		title := fmt.Sprintf("第%d章 %s", ch.ReadingNumber, ch.Title)
 		sectionBody := fmt.Sprintf(`<html>
 <head><style>%s</style></head>
 <body><h1>%s</h1>

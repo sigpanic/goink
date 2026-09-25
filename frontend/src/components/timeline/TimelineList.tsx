@@ -95,7 +95,9 @@ export default function SidebarTimelineList({ novelId }: Props) {
                   {e.title}
                 </span>
                 <span className="text-[10px] text-muted-foreground">
-                  {t("timeline.targetChapterN2", { n: e.target_chapter })}
+                  {t("timeline.targetChapterN2", {
+                    n: e.target_reading_number,
+                  })}
                 </span>
               </div>
               <span

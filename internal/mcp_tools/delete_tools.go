@@ -403,10 +403,10 @@ func (t *DeleteRecordTool) deleteReaderPerspectiveEntry(ctx context.Context, a *
 	}
 
 	meta := map[string]any{
-		"id":              rec.ID,
-		"entry_type":      rec.Type,
-		"planted_chapter": rec.PlantedChapter,
-		"type":            "reader_perspective_entry",
+		"id":                 rec.ID,
+		"entry_type":         rec.Type,
+		"planted_chapter_id": rec.PlantedChapterID,
+		"type":               "reader_perspective_entry",
 	}
 	injects, result, err := requestDeleteApproval(ctx, tc, map[string]any{
 		"table": a.Table, "id": a.ID, "deleted": meta,

@@ -22,6 +22,7 @@ import (
 	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storyarc"
 	"github.com/sigpanic/goink/internal/timeline"
+	"github.com/sigpanic/goink/internal/volume"
 )
 
 var benchDBNum atomic.Int64
@@ -40,6 +41,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		&setting.SettingItem{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
+		&volume.Volume{},
 		&chapter.Chapter{},
 	)
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
@@ -59,7 +61,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 
 	// 插入章节元数据
 	for i := 1; i <= chapters; i++ {
-		db.Create(&chapter.Chapter{NovelID: novelID, ChapterNumber: i, Title: "第" + strconv.Itoa(i) + "章"})
+		db.Create(&chapter.Chapter{NovelID: novelID, SortOrder: i, Title: "第" + strconv.Itoa(i) + "章"})
 	}
 
 	// 插入实体数据
@@ -68,7 +70,7 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 		db.Create(&character.Character{NovelID: novelID, Name: name})
 		db.Create(&location.Location{NovelID: novelID, Name: name})
 	}
-	db.Create(&timeline.TimelineEntry{NovelID: novelID, Category: "foreshadowing", Title: "伏笔", Content: "线索", TargetChapter: 100, Status: "pending"})
+	db.Create(&timeline.TimelineEntry{NovelID: novelID, Category: "foreshadowing", Title: "伏笔", Content: "线索", TargetReadingNumber: 100, Status: "pending"})
 	db.Create(&storyarc.StoryArc{NovelID: novelID, Name: "主线", ArcType: "main", Status: "active"})
 
 	// 构造每章 3000 字的重复模板正文
@@ -80,12 +82,12 @@ func setupBenchService(tb testing.TB, chapters int, wordsPerChapter int) (*Servi
 
 	// 懒加载方式直接注入缓存，跳过文件 IO
 	svc.mu.Lock()
-	chapMap := make(map[int]string, chapters)
+	chapMap := make(map[int64]string, chapters)
 	for i := 1; i <= chapters; i++ {
 		if i == targetChapter {
-			chapMap[i] = targetContent
+			chapMap[int64(i)] = targetContent
 		} else {
-			chapMap[i] = contentPerChapter
+			chapMap[int64(i)] = contentPerChapter
 		}
 	}
 	svc.cache[novelID] = chapMap

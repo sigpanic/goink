@@ -17,6 +17,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/agentcfg"
 	"github.com/sigpanic/goink/internal/approval"
+	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/search"
@@ -34,6 +35,7 @@ type Agent struct {
 	approver      approval.Approver
 	logger        *slog.Logger
 	skillStore    *skill.Store
+	chapterStore  *chapter.Store
 	searchService atomic.Pointer[search.Service]
 	cancelMgr     *CancelManager
 }
@@ -57,16 +59,17 @@ type RunOptions struct {
 }
 
 // New 创建 Agent 实例。
-func New(llmClient *llm.Client, registry *mcp_tools.Registry, session *session.Store, db *gorm.DB, approver approval.Approver, logger *slog.Logger, skillStore *skill.Store, cancelMgr *CancelManager) *Agent {
+func New(llmClient *llm.Client, registry *mcp_tools.Registry, session *session.Store, chapterStore *chapter.Store, db *gorm.DB, approver approval.Approver, logger *slog.Logger, skillStore *skill.Store, cancelMgr *CancelManager) *Agent {
 	return &Agent{
-		llm:        llmClient,
-		registry:   registry,
-		session:    session,
-		db:         db,
-		approver:   approver,
-		logger:     logger,
-		skillStore: skillStore,
-		cancelMgr:  cancelMgr,
+		llm:          llmClient,
+		registry:     registry,
+		session:      session,
+		chapterStore: chapterStore,
+		db:           db,
+		approver:     approver,
+		logger:       logger,
+		skillStore:   skillStore,
+		cancelMgr:    cancelMgr,
 	}
 }
 
@@ -233,7 +236,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			select {
 			case <-ctx.Done():
 				canceled = true
-				a.flushInterruptedTools(stream, &opts, &toolOutputs)
+				a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 				break streamLoop
 
 			case event, ok := <-stream:
@@ -272,7 +275,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 					name := event.Delta.ToolName
 					id := event.Delta.ToolID
-					display := a.buildDisplay(name, nil, mcp_tools.PhaseSelected, opts.NovelID)
+					display := a.buildDisplay(ctx, name, nil, mcp_tools.PhaseSelected, opts.NovelID)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventToolCall,
 						ToolName: name, ToolID: id, Phase: "selected",
@@ -286,7 +289,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					rawArgs := event.Delta.ArgumentsJSON
 
 					args := parseArgs(rawArgs)
-					display := a.buildDisplay(name, args, mcp_tools.PhaseExecuting, opts.NovelID)
+					display := a.buildDisplay(ctx, name, args, mcp_tools.PhaseExecuting, opts.NovelID)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventToolCall,
 						ToolName: name, ToolID: id, Phase: "executing",
@@ -325,7 +328,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					if !result.Success {
 						phase = "failed"
 					}
-					display = a.buildDisplay(name, args, displayPhase(phase), opts.NovelID)
+					display = a.buildDisplay(ctx, name, args, displayPhase(phase), opts.NovelID)
 					metadata := display.Metadata
 					if resultDataMergeTools[name] && result.Success && result.Data != nil {
 						if metadata == nil {
@@ -350,7 +353,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if interrupt, reason := tracker.recordFailure(name, result.ErrKind); interrupt {
 							interrupted = true
 							interruptErr = reason
-							a.flushInterruptedTools(stream, &opts, &toolOutputs)
+							a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 							break streamLoop
 						}
 					}

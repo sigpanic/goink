@@ -189,7 +189,7 @@ export default function WorkspaceView({
   // ── SidePanel → ContentPanel 桥接 ─────────────────────────
 
   function handleSelectChapter(ch: chapter.Chapter) {
-    const chTitle = `${t("sidebar.chapterN", { n: ch.chapter_number })} ${ch.title}`;
+    const chTitle = `${t("sidebar.chapterN", { n: ch.reading_number })} ${ch.title}`;
     // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
     useEditorStore
       .getState()

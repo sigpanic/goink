@@ -83,9 +83,11 @@ type BatchTrace struct {
 }
 
 type BoundaryHint struct {
-	StartChapter int    `json:"start_chapter" jsonschema:"required,description=起始章节号"`
-	EndChapter   int    `json:"end_chapter" jsonschema:"required,description=结束章节号"`
-	Hint         string `json:"hint" jsonschema:"required,description=为什么这里可能是叙事阶段边界"`
+	StartChapterID     int64  `json:"start_chapter_id" jsonschema:"required,description=起始章节的稳定ID"`
+	EndChapterID       int64  `json:"end_chapter_id" jsonschema:"required,description=结束章节的稳定ID"`
+	StartReadingNumber int    `json:"-"`
+	EndReadingNumber   int    `json:"-"`
+	Hint               string `json:"hint" jsonschema:"required,description=为什么这里可能是叙事阶段边界"`
 }
 
 type BoundaryHintsOutput struct {
@@ -93,7 +95,8 @@ type BoundaryHintsOutput struct {
 }
 
 type ChapterSummaryItem struct {
-	ChapterNumber int    `json:"chapter_number" jsonschema:"required,description=章节号"`
+	ChapterID     int64  `json:"chapter_id" jsonschema:"required,description=章节的稳定ID"`
+	ReadingNumber int    `json:"-"`
 	Summary       string `json:"summary" jsonschema:"required,description=80-150字的章节叙事摘要，覆盖核心事件、人物行为与转折"`
 }
 
@@ -102,10 +105,12 @@ type ChapterSummariesOutput struct {
 }
 
 type Chunk struct {
-	Name         string `json:"name" jsonschema:"required,description=叙事阶段名称（如：崛起、转折）"`
-	StartChapter int    `json:"start_chapter" jsonschema:"required,description=起始章节号"`
-	EndChapter   int    `json:"end_chapter" jsonschema:"required,description=结束章节号"`
-	Content      string `json:"content" jsonschema:"required,description=100-200字的阶段叙事概括，覆盖核心事件与转折"`
+	Name               string `json:"name" jsonschema:"required,description=叙事阶段名称（如：崛起、转折）"`
+	StartChapterID     int64  `json:"start_chapter_id" jsonschema:"required,description=起始章节的稳定ID"`
+	EndChapterID       int64  `json:"end_chapter_id" jsonschema:"required,description=结束章节的稳定ID"`
+	StartReadingNumber int    `json:"-"`
+	EndReadingNumber   int    `json:"-"`
+	Content            string `json:"content" jsonschema:"required,description=100-200字的阶段叙事概括，覆盖核心事件与转折"`
 }
 
 type ChunksOutput struct {
@@ -121,7 +126,7 @@ type SkillOutput struct {
 // ChapterSource 是从 DB 元数据和 git 正文拼出的章节数据传递对象
 type ChapterSource struct {
 	ID            int64
-	ChapterNumber int
+	ReadingNumber int
 	Title         string
 	Summary       string
 	Content       string

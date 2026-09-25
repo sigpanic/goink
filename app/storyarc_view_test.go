@@ -92,9 +92,9 @@ func TestDeleteStoryArc(t *testing.T) {
 
 	// Create an associated node
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Node to cascade delete",
-		TargetChapter: 5,
+		StoryArcID:          arc.ID,
+		Title:               "Node to cascade delete",
+		TargetReadingNumber: 5,
 	})
 	require.NoError(t, err)
 
@@ -124,15 +124,15 @@ func TestCreateArcNode(t *testing.T) {
 	require.NoError(t, err)
 
 	node, err := app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Discover enemy identity",
-		Description:   "The protagonist learns who the real enemy is",
-		TargetChapter: 10,
+		StoryArcID:          arc.ID,
+		Title:               "Discover enemy identity",
+		Description:         "The protagonist learns who the real enemy is",
+		TargetReadingNumber: 10,
 	})
 	require.NoError(t, err)
 	assert.Equal(t, arc.ID, node.StoryArcID)
 	assert.Equal(t, "Discover enemy identity", node.Title)
-	assert.Equal(t, 10, node.TargetChapter)
+	assert.Equal(t, 10, node.TargetReadingNumber)
 	assert.Equal(t, "pending", node.Status)
 	assert.Equal(t, novelID, node.NovelID)
 }
@@ -150,15 +150,15 @@ func TestCreateArcNode_MissingFields(t *testing.T) {
 
 	// Missing title
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		TargetChapter: 5,
+		StoryArcID:          arc.ID,
+		TargetReadingNumber: 5,
 	})
 	assert.Error(t, err)
 
 	// Missing story_arc_id
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		Title:         "Node",
-		TargetChapter: 5,
+		Title:               "Node",
+		TargetReadingNumber: 5,
 	})
 	assert.Error(t, err)
 
@@ -180,18 +180,19 @@ func TestUpdateArcNode(t *testing.T) {
 		ArcType: "main",
 	})
 	require.NoError(t, err)
+	actualChapter := createTestChapter(t, app, novelID)
 
 	node, err := app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Original node",
-		TargetChapter: 3,
+		StoryArcID:          arc.ID,
+		Title:               "Original node",
+		TargetReadingNumber: 3,
 	})
 	require.NoError(t, err)
 
 	err = app.UpdateArcNode(novelID, node.ID, UpdateArcNodeInput{
-		Title:         "Updated node",
-		ActualChapter: 4,
-		Status:        "completed",
+		Title:           "Updated node",
+		ActualChapterID: int64Ptr(actualChapter.ID),
+		Status:          "completed",
 	})
 	require.NoError(t, err)
 
@@ -199,7 +200,8 @@ func TestUpdateArcNode(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, nodes, 1)
 	assert.Equal(t, "Updated node", nodes[0].Title)
-	assert.Equal(t, 4, nodes[0].ActualChapter)
+	require.NotNil(t, nodes[0].ActualChapterID)
+	assert.Equal(t, actualChapter.ID, *nodes[0].ActualChapterID)
 	assert.Equal(t, "completed", nodes[0].Status)
 }
 
@@ -215,9 +217,9 @@ func TestDeleteArcNode(t *testing.T) {
 	require.NoError(t, err)
 
 	node, err := app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Delete me",
-		TargetChapter: 7,
+		StoryArcID:          arc.ID,
+		Title:               "Delete me",
+		TargetReadingNumber: 7,
 	})
 	require.NoError(t, err)
 
@@ -246,23 +248,23 @@ func TestGetArcNodes_All(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Early node",
-		TargetChapter: 2,
+		StoryArcID:          arc.ID,
+		Title:               "Early node",
+		TargetReadingNumber: 2,
 	})
 	require.NoError(t, err)
 
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Mid node",
-		TargetChapter: 5,
+		StoryArcID:          arc.ID,
+		Title:               "Mid node",
+		TargetReadingNumber: 5,
 	})
 	require.NoError(t, err)
 
 	_, err = app.CreateArcNode(novelID, CreateArcNodeInput{
-		StoryArcID:    arc.ID,
-		Title:         "Late node",
-		TargetChapter: 10,
+		StoryArcID:          arc.ID,
+		Title:               "Late node",
+		TargetReadingNumber: 10,
 	})
 	require.NoError(t, err)
 
