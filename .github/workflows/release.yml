@@ -109,7 +109,7 @@ jobs:
 
           echo "All Windows smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows
           path: build/dist/*
@@ -180,7 +180,7 @@ jobs:
 
           echo "All Linux smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: linux
           path: build/dist/*
@@ -272,7 +272,7 @@ jobs:
 
           echo "All macOS smoke tests passed"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macos
           path: build/dist/*
@@ -284,7 +284,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
 
       - name: Collect artifacts
         run: |
