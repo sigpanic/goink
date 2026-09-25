@@ -99,10 +99,11 @@ export function useStartupState(): StartupStatus {
   }, []);
 
   // 握手失败（拿不到任何快照）也归一到 failed，让调用方只需看 phase 一个字段。
-  const phase = bootstrapError ? "failed" : state?.phase ?? null;
+  const phase = bootstrapError ? "failed" : (state?.phase ?? null);
   const error = bootstrapError || retryError || state?.error || "";
   const showPreparing =
-    state?.phase === "initializing" && preparingVisibleVersion === state.version;
+    state?.phase === "initializing" &&
+    preparingVisibleVersion === state.version;
 
   return {
     phase,
