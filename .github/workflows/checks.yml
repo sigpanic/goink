@@ -15,6 +15,9 @@ jobs:
           fetch-depth: 0
 
       - uses: gitleaks/gitleaks-action@v2
+        # v2 起 PR 事件下 GITHUB_TOKEN 为必填（用于回写 PR 评论），扫描本身不依赖它
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           config-path: .gitleaks.toml
 
