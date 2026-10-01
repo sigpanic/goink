@@ -5,6 +5,7 @@
 export type PanelId =
   | "novels"
   | "chapters"
+  | "chapter-management"
   | "characters"
   | "locations"
   | "storyarcs"

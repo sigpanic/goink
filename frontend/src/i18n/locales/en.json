@@ -92,6 +92,7 @@
     "search": "Search",
     "bookshelf": "Bookshelf",
     "chapters": "Chapters",
+    "chapterManagement": "Chapter Management",
     "preference": "Preferences",
     "novelSetting": "Novel Settings",
     "characters": "Characters",
@@ -772,6 +773,18 @@
   },
   "chapter": {
     "titleMatch": "Title Match"
+  },
+  "chapterManagement": {
+    "title": "Chapter Management",
+    "volumes": "Volume order",
+    "unassigned": "Unassigned",
+    "noVolumes": "No volumes yet; chapters appear under Unassigned",
+    "noChapters": "No chapters yet",
+    "emptyGroup": "No chapters in this group",
+    "selectNovel": "Select a novel first",
+    "loading": "Loading chapter structure...",
+    "loadFailed": "Failed to load chapter structure",
+    "retry": "Retry"
   },
   "novelSetting": {
     "title": "Novel Settings",

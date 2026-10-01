@@ -12,6 +12,10 @@ export const chapterKeys = {
   detail: (filePath: string) => ["chapter", filePath] as const,
 };
 
+export const volumeKeys = {
+  list: (novelId: number) => ["volumes", novelId] as const,
+};
+
 // content: GetContent(novelId, filePath) 读文件内容（章节正文/大纲/goink.md/skill）。
 // 与 chapterKeys 区分：chapterKeys 是章节元数据列表（GetChapters），contentKeys 是文件内容缓存。
 // 5.2 commit 1：useFileContent 基于 queryClient.fetchQuery 走此 key，多 tab 共享缓存。

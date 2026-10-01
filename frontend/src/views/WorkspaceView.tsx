@@ -22,6 +22,7 @@ import TimelineView from "@/components/timeline/TimelineView";
 import ReaderView from "@/components/reader/ReaderView";
 import PreferenceView from "@/components/preference/PreferenceView";
 import NovelSettingView from "@/components/novel-setting/NovelSettingView";
+import ChapterManagementView from "@/components/chapter-management/ChapterManagementView";
 import BookshelfView from "@/components/novel/BookshelfView";
 import NovelDialogs from "@/components/novel/NovelDialogs";
 import ImportProgressDialog from "@/components/novel/ImportProgressDialog";
@@ -413,7 +414,7 @@ export default function WorkspaceView({
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <ActivityBar onSelect={handleActivitySelect} />
 
-          {!sidebarClosed && (
+          {!sidebarClosed && activePanel !== "chapter-management" && (
             <SidePanel
               novels={novels}
               novelId={activeNovelId}
@@ -454,7 +455,11 @@ export default function WorkspaceView({
             />
           )}
 
-          {activePanel === "novels" ? (
+          {activePanel === "chapter-management" ? (
+            <ErrorBoundary>
+              <ChapterManagementView novelId={activeNovelId} />
+            </ErrorBoundary>
+          ) : activePanel === "novels" ? (
             <BookshelfView
               onSelectNovel={handleSelectNovel}
               onSaveCover={handleSaveCover}
@@ -520,7 +525,15 @@ export default function WorkspaceView({
             </ErrorBoundary>
           ) : null}
 
-          {activePanel !== "profile" && (
+          <div
+            style={{
+              display:
+                activePanel === "chapter-management" ||
+                activePanel === "profile"
+                  ? "none"
+                  : "contents",
+            }}
+          >
             <ChatPanel
               novelId={activeNovelId}
               onApprove={handleApprove}
@@ -529,7 +542,7 @@ export default function WorkspaceView({
               chatPanelWidth={chatPanelWidth}
               onChatPanelResize={setChatPanelWidth}
             />
-          )}
+          </div>
         </div>
 
         <StatusBar />

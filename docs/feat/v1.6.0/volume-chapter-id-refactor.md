@@ -402,7 +402,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 
 ### 11.5 前端新建章节（独立通道）
 
-前端章节管理 tab 的"新建章节"按钮走 app.CreateChapter（不走 rw_tools），直接建记录拿 id 写空文件，用户填标题/选卷。与 AI 走 chapters/new.md 是两条独立通道，互不影响。
+前端章节管理 tab 的“新建章节”按钮走 app.PlaceChapter（不走 rw_tools），直接建记录拿 id 写空文件，用户填标题/选卷。与 AI 走 chapters/new.md 是两条独立通道，互不影响。
 
 ## 十二、前端 UI 改造点（独立 tab 章节管理）
 
@@ -416,7 +416,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 | [frontend/src/components/shell/ActivityBar.tsx](../../../frontend/src/components/shell/ActivityBar.tsx) | activities[] 加一项（图标 + labelKey） |
 | [frontend/src/views/WorkspaceView.tsx](../../../frontend/src/views/WorkspaceView.tsx) | 主区域加分支 `activePanel === "chapter-management" ? <ChapterManagementView novelId={...} /> : ...` |
 | 新建 `frontend/src/components/chapter-management/` | ChapterManagementView 主组件 + 卷管理面板 + 拖拽逻辑 |
-| 后端 [app/chapter.go](../../../app/chapter.go) + [chapter/store.go](../../../internal/chapter/store.go) | 加 DeleteChapter/InsertChapter/MoveChapterToVolume + volume CRUD（供前端调用） |
+| 后端 [app/chapter.go](../../../app/chapter.go) + [chapter/store.go](../../../internal/chapter/store.go) | 提供 DeleteChapter/PlaceChapter + volume CRUD（供前端调用） |
 | i18n locales（`frontend/src/i18n/locales/`） | 加 `shell.chapterManagement` 等 key |
 
 ### 12.2 章节管理 tab 布局
@@ -447,15 +447,14 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 ### 12.4 章节删除入口
 
 - 章节行 [⋮] 菜单 → "删除"
-- 弹窗确认 + 显示交叉引用清单（timeline/arc_node/reader/character_relations 的引用）
-- 有引用则禁用删除按钮并提示"请先清理以下引用：..."
-- 确认删除后调 app.DeleteChapter(chapterID)，后端检测引用 + 删文件 + 删记录 + RAG 清理
+- 弹窗确认后调 app.DeleteChapter(novelID, chapterID)，由后端检测引用 + 删文件 + 删记录 + RAG 清理
+- 若返回引用阻塞清单（timeline/arc_node/reader/character_relations），展示“请先清理以下引用：...”；此时章节未删除
 
 ### 12.5 章节插入入口
 
 - 章节行 [⋮] 菜单 → "在此章前插入" / "在此章后插入"
 - 弹窗填标题 + 选卷
-- 调 app.InsertChapter(afterChapterID, volumeID, title)
+- 调 app.PlaceChapter，传目标卷和目标组内的锚点章节 ID；末尾插入时锚点为空
 
 ### 12.6 卷管理面板
 
@@ -466,7 +465,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 
 ### 12.7 跨卷移动
 
-- 拖拽章节行到目标卷标签 → 调 app.MoveChapterToVolume(chapterID, volumeID)
+- 拖拽章节行到目标卷标签 → 调 app.PlaceChapter，目标卷为该卷、锚点为空
 - 移动后章节号实时重排（实时计算）
 
 ### 12.8 现有 ChapterList（SidePanel 内）保留

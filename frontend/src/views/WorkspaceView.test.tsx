@@ -132,6 +132,9 @@ vi.mock("@/components/shell/ActivityBar", () => ({
     <div data-testid="activity-bar">
       <button onClick={() => onSelect("novels")}>btn-novels</button>
       <button onClick={() => onSelect("chapters")}>btn-chapters</button>
+      <button onClick={() => onSelect("chapter-management")}>
+        btn-chapter-management
+      </button>
       <button onClick={() => onSelect("characters")}>btn-characters</button>
       <button onClick={() => onSelect("locations")}>btn-locations</button>
       <button onClick={() => onSelect("profile")}>btn-profile</button>
@@ -257,6 +260,9 @@ vi.mock("@/components/preference/PreferenceView", () => ({
 vi.mock("@/components/novel-setting/NovelSettingView", () => ({
   default: () => <div data-testid="novel-setting">novel-setting</div>,
 }));
+vi.mock("@/components/chapter-management/ChapterManagementView", () => ({
+  default: () => <div data-testid="chapter-management">chapter-management</div>,
+}));
 vi.mock("@/components/novel/BookshelfView", () => ({
   // 3.2: BookshelfView 内部订阅 useNovelStore.setShowCreateDialog（不再通过 prop 接收 onCreateNovel）。
   // mock 也要订阅，模拟"点新建按钮 → 打开 dialog"行为。
@@ -379,13 +385,34 @@ describe("WorkspaceView panel switching", () => {
     expect(await screen.findByTestId("location-list")).toBeInTheDocument();
   });
 
-  it("点 profile 面板渲染个人资料且不渲染 ChatPanel", async () => {
+  it("章节管理使用宽屏主区域，离开时恢复侧栏与聊天显示", async () => {
     mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
+
+    fireEvent.click(screen.getByText("btn-chapter-management"));
+    expect(await screen.findByTestId("chapter-management")).toBeVisible();
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
+    expect(screen.getByTestId("chat-panel")).not.toBeVisible();
+
+    fireEvent.click(screen.getByText("btn-chapters"));
+    expect(screen.getByTestId("content-panel")).toBeVisible();
+    expect(screen.getByTestId("side-panel")).toBeVisible();
+    expect(screen.getByTestId("chat-panel")).toBeVisible();
+  });
+
+  it("点 profile 面板隐藏 ChatPanel，返回后保留同一实例", async () => {
+    mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    const chatPanel = screen.getByTestId("chat-panel");
     fireEvent.click(screen.getByText("btn-profile"));
     expect(await screen.findByTestId("profile")).toBeInTheDocument();
-    expect(screen.queryByTestId("chat-panel")).not.toBeInTheDocument();
+    expect(chatPanel).not.toBeVisible();
+    expect(screen.getByTestId("chat-panel")).toBe(chatPanel);
+    fireEvent.click(screen.getByText("btn-chapters"));
+    expect(chatPanel).toBeVisible();
+    expect(screen.getByTestId("chat-panel")).toBe(chatPanel);
   });
 });
 

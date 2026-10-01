@@ -88,6 +88,7 @@
     "search": "搜索",
     "bookshelf": "书架",
     "chapters": "章节",
+    "chapterManagement": "章节管理",
     "preference": "偏好",
     "novelSetting": "小说设定",
     "characters": "角色",
@@ -749,6 +750,18 @@
   },
   "chapter": {
     "titleMatch": "标题匹配"
+  },
+  "chapterManagement": {
+    "title": "章节管理",
+    "volumes": "卷顺序",
+    "unassigned": "未分卷",
+    "noVolumes": "暂无卷，章节列在未分卷中",
+    "noChapters": "暂无章节",
+    "emptyGroup": "这一组暂无章节",
+    "selectNovel": "请先选择一部小说",
+    "loading": "正在加载章节结构...",
+    "loadFailed": "章节结构加载失败",
+    "retry": "重试"
   },
   "novelSetting": {
     "title": "小说设定",
