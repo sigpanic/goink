@@ -5,7 +5,12 @@ import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
 import type { chapter } from "@/lib/wailsjs/go/models";
-import { chapterKeys, modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
+import {
+  chapterKeys,
+  modelKeys,
+  sessionKeys,
+  slashCommandKeys,
+} from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSessions } from "./useSessions";
@@ -888,7 +893,8 @@ export default function ChatPanel({
                   .getQueryData<chapter.Chapter[]>(chapterKeys.list(novelId))
                   ?.find(
                     (entry) =>
-                      entry.file_path === path || entry.outline_file_path === path,
+                      entry.file_path === path ||
+                      entry.outline_file_path === path,
                   );
                 if (item?.file_path === path) {
                   title = `diff: ${t("chat.diffChapter", { n: item.reading_number })}`;

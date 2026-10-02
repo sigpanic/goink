@@ -149,7 +149,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     const resolveChapter = useCallback(
       async (path: string): Promise<chapter.Chapter | undefined> => {
-        if (!path.startsWith("chapters/") && !isOutlinePath(path)) return undefined;
+        if (!path.startsWith("chapters/") && !isOutlinePath(path))
+          return undefined;
         const chapters = await qc.fetchQuery({
           queryKey: chapterKeys.list(novelId),
           queryFn: () => GetChapters(novelId),
@@ -184,13 +185,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const outline = tab.outlinePath
           ? Promise.resolve(tab.outlinePath)
           : resolveChapter(tab.path).then((item) => {
-              if (item) updateTab(tab.id, { outlinePath: item.outline_file_path });
+              if (item)
+                updateTab(tab.id, { outlinePath: item.outline_file_path });
               return item?.outline_file_path;
             });
         outline
           .then((path) => (path ? fetchContent(novelId, path) : undefined))
           .then((oc) => {
-            if (oc !== undefined) updateTab(tab.id, { outlineContent: oc || "" });
+            if (oc !== undefined)
+              updateTab(tab.id, { outlineContent: oc || "" });
           })
           .catch(() => {
             if (tab.outlinePath) updateTab(tab.id, { outlineContent: "" });
@@ -269,7 +272,10 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           void resolveChapter(tab.path)
             .then((item) => {
               if (!item) return;
-              const resolvedTab = { ...tab, outlinePath: item.outline_file_path };
+              const resolvedTab = {
+                ...tab,
+                outlinePath: item.outline_file_path,
+              };
               updateTab(tabId, {
                 outlinePath: item.outline_file_path,
                 viewMode: mode,
@@ -558,7 +564,10 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           if (!existing.outlinePath && path.startsWith("chapters/")) {
             void resolveChapter(path)
               .then((item) => {
-                if (item) updateTab(existing.id, { outlinePath: item.outline_file_path });
+                if (item)
+                  updateTab(existing.id, {
+                    outlinePath: item.outline_file_path,
+                  });
               })
               .catch(() => undefined);
           }
@@ -683,7 +692,9 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     }, [activeTab?.id, activeTab?.content, doHighlight]);
 
     const filePathFromDiff = useCallback(
-      async (diffPath: string): Promise<{
+      async (
+        diffPath: string,
+      ): Promise<{
         filePath: string;
         viewMode: "content" | "outline";
       }> => {
@@ -726,7 +737,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         closeTab(dt.id);
         doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [novelId, tabs, fetchContent, updateTab, closeTab, doOpenFile, filePathFromDiff],
+      [
+        novelId,
+        tabs,
+        fetchContent,
+        updateTab,
+        closeTab,
+        doOpenFile,
+        filePathFromDiff,
+      ],
     );
 
     const handleDiffReject = useCallback(

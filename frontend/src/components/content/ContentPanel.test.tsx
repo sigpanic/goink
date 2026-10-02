@@ -289,7 +289,9 @@ describe("ContentPanel", () => {
 
     view.rerender(<ContentPanel ref={ref} />);
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "content.outlineEdit" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.outlineEdit" }),
+      );
     });
     expect(mockFetchContent).toHaveBeenCalledWith(1, "outlines/id_42.md");
 
@@ -320,7 +322,9 @@ describe("ContentPanel", () => {
     render(<ContentPanel />);
 
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "content.outlineEdit" }));
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.outlineEdit" }),
+      );
     });
     expect(mockUpdateTab).not.toHaveBeenCalledWith(
       "f42",

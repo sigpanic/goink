@@ -1,8 +1,5 @@
 import { create } from "zustand";
-import {
-  isContentPath,
-  type EditorTab,
-} from "@/components/content/types";
+import { isContentPath, type EditorTab } from "@/components/content/types";
 
 // useEditorTabsStore: 编辑器 tab 集的全局内存单例 + 持久化。
 //
