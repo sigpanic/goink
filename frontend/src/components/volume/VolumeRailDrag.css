@@ -1,0 +1,83 @@
+.volume-chip {
+  position: relative;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.volume-chip-dragging {
+  opacity: 0.45;
+}
+
+.volume-chip-drop-before,
+.volume-chip-drop-after {
+  border-color: var(--primary);
+  background-color: color-mix(in oklab, var(--primary) 7%, var(--card));
+}
+
+.volume-chip-drop-before::before,
+.volume-chip-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  top: 0.3rem;
+  bottom: 0.3rem;
+  width: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 15%, transparent);
+  pointer-events: none;
+  animation: volume-drop-line-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.volume-chip-drop-before::before {
+  left: -3px;
+}
+
+.volume-chip-drop-after::after {
+  right: -3px;
+}
+
+.volume-chip-moved {
+  animation: volume-chip-moved 1800ms ease-out both;
+}
+
+@keyframes volume-drop-line-in {
+  from {
+    opacity: 0;
+    transform: scaleY(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scaleY(1);
+  }
+}
+
+@keyframes volume-chip-moved {
+  0% {
+    border-color: var(--primary);
+    background-color: color-mix(in oklab, var(--primary) 24%, var(--card));
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--primary) 20%, transparent);
+  }
+  100% {
+    border-color: var(--border);
+    background-color: var(--card);
+    box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .volume-chip,
+  .volume-chip-drop-before::before,
+  .volume-chip-drop-after::after,
+  .volume-chip-moved {
+    animation: none;
+    transition: none;
+  }
+
+  .volume-chip-moved {
+    border-color: var(--primary);
+    background-color: color-mix(in oklab, var(--primary) 14%, var(--card));
+  }
+}

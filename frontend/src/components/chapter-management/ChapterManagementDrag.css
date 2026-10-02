@@ -1,0 +1,109 @@
+.chapter-row {
+  position: relative;
+  transition:
+    background-color 160ms ease,
+    opacity 160ms ease;
+}
+
+.chapter-row-dragging {
+  opacity: 0.42;
+}
+
+.chapter-row-drop-before,
+.chapter-row-drop-after {
+  background-color: color-mix(in oklab, var(--primary) 7%, transparent);
+}
+
+.chapter-row-drop-before::before,
+.chapter-row-drop-after::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 0.75rem;
+  right: 0.75rem;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--primary);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--primary) 15%, transparent);
+  pointer-events: none;
+  animation: chapter-drop-line-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.chapter-row-drop-before::before {
+  top: -2px;
+}
+
+.chapter-row-drop-after::after {
+  bottom: -2px;
+}
+
+.chapter-row-moved {
+  z-index: 1;
+  animation: chapter-moved-glow 1800ms ease-out both;
+}
+
+.chapter-row-moved-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 999px;
+  padding: 0.2rem 0.5rem;
+  color: var(--primary-foreground);
+  background: var(--primary);
+  animation: chapter-moved-badge-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes chapter-drop-line-in {
+  from {
+    opacity: 0;
+    transform: scaleX(0.75);
+  }
+  to {
+    opacity: 1;
+    transform: scaleX(1);
+  }
+}
+
+@keyframes chapter-moved-glow {
+  0% {
+    background-color: color-mix(in oklab, var(--primary) 24%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklab, var(--primary) 70%, transparent);
+  }
+  45% {
+    background-color: color-mix(in oklab, var(--primary) 13%, transparent);
+    box-shadow: inset 0 0 0 1px
+      color-mix(in oklab, var(--primary) 40%, transparent);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: none;
+  }
+}
+
+@keyframes chapter-moved-badge-in {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chapter-row,
+  .chapter-row-drop-before::before,
+  .chapter-row-drop-after::after,
+  .chapter-row-moved,
+  .chapter-row-moved-badge {
+    animation: none;
+    transition: none;
+  }
+
+  .chapter-row-moved {
+    background-color: color-mix(in oklab, var(--primary) 14%, transparent);
+    box-shadow: inset 0 0 0 1px var(--primary);
+  }
+}

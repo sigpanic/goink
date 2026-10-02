@@ -457,7 +457,10 @@ export default function WorkspaceView({
 
           {activePanel === "chapter-management" ? (
             <ErrorBoundary>
-              <ChapterManagementView novelId={activeNovelId} />
+              <ChapterManagementView
+                key={activeNovelId}
+                novelId={activeNovelId}
+              />
             </ErrorBoundary>
           ) : activePanel === "novels" ? (
             <BookshelfView

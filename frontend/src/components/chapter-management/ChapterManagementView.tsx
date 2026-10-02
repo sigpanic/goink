@@ -1,13 +1,23 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import type { chapter } from "@/lib/wailsjs/go/models";
-import { chapterKeys } from "@/lib/queryKeys";
+import { chapterKeys, contentKeys } from "@/lib/queryKeys";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useVolumes } from "@/components/volume/useVolumes";
 import VolumeRail from "@/components/volume/VolumeRail";
+import { chapterPath, outlinePath } from "@/components/content/types";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
+import { toErrorMessage } from "@/utils/error";
+import { toastError } from "@/utils/toast";
+import ChapterGroup from "./ChapterGroup";
+import ChapterEditorForm, { type ChapterEditor } from "./ChapterEditorForm";
+import ChapterDeletionFeedback, {
+  type BlockedChapterDeletion,
+} from "./ChapterDeletionFeedback";
+import { useChapterStructureMutations } from "./useChapterStructureMutations";
+import { useChapterMoveFeedback } from "./useChapterMoveFeedback";
 
 interface Props {
   novelId: number;
@@ -15,18 +25,33 @@ interface Props {
 
 const EMPTY_CHAPTERS: chapter.Chapter[] = [];
 const AUTO_EXPAND_LIMIT = 30;
-const BLOCK_SIZE = 100;
 
 export default function ChapterManagementView({ novelId }: Props) {
   const { t } = useTranslation();
   const qc = useQueryClient();
   const chapterQuery = useChapters(novelId);
   const volumeQuery = useVolumes(novelId);
+  const { place, remove } = useChapterStructureMutations(novelId);
   const chapters = chapterQuery.data ?? EMPTY_CHAPTERS;
+  const {
+    containerRef,
+    highlightedId,
+    revealedId,
+    capturePositions,
+    cancelMove,
+    showMovedChapter,
+    dismissReveal,
+  } = useChapterMoveFeedback(chapters);
+  const [editor, setEditor] = useState<ChapterEditor | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<chapter.Chapter | null>(
+    null,
+  );
+  const [blocked, setBlocked] = useState<BlockedChapterDeletion | null>(null);
+  const [dragChapterId, setDragChapterId] = useState<number | null>(null);
+  const [menuId, setMenuId] = useState<number | null>(null);
   const [groupExpanded, setGroupExpanded] = useState<Record<string, boolean>>(
     {},
   );
-  const [openRanges, setOpenRanges] = useState<Set<string>>(new Set());
   const sectionRefs = useRef(new Map<string, HTMLElement>());
   const volumes = useMemo(
     () =>
@@ -70,12 +95,16 @@ export default function ChapterManagementView({ novelId }: Props) {
     return { byVolume, unassigned };
   }, [chapters, volumes]);
 
+  const busy = place.isPending || remove.isPending;
+
   function groupKey(volumeId: number | null) {
     return `${novelId}:${volumeId ?? "unassigned"}`;
   }
 
-  function isGroupExpanded(key: string, count: number) {
-    return groupExpanded[key] ?? count <= AUTO_EXPAND_LIMIT;
+  function groupItems(volumeId: number | null) {
+    return volumeId === null
+      ? groups.unassigned
+      : (groups.byVolume.get(volumeId) ?? EMPTY_CHAPTERS);
   }
 
   function jumpToGroup(key: string) {
@@ -86,118 +115,171 @@ export default function ChapterManagementView({ novelId }: Props) {
     });
   }
 
-  function toggleGroup(key: string, count: number) {
-    setGroupExpanded((previous) => ({
-      ...previous,
-      [key]: !(previous[key] ?? count <= AUTO_EXPAND_LIMIT),
-    }));
+  function openCreate(volumeId: number | null, beforeId: number | null = null) {
+    setEditor({ kind: "create", volumeId, beforeId, title: "" });
   }
 
-  function toggleRange(key: string) {
-    setOpenRanges((previous) => {
-      const next = new Set(previous);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
+  function openMove(item: chapter.Chapter) {
+    setEditor({
+      kind: "move",
+      sourceId: item.id,
+      volumeId: item.volume_id ?? null,
+      beforeId: null,
+      title: "",
     });
   }
 
-  function renderChapters(items: chapter.Chapter[]) {
-    if (items.length === 0) {
-      return (
-        <p className="px-4 py-5 text-sm text-muted-foreground">
-          {t("chapterManagement.emptyGroup")}
-        </p>
-      );
+  async function placeChapter(
+    sourceId: number,
+    volumeId: number | null,
+    beforeId: number | null,
+  ): Promise<boolean> {
+    setDragChapterId(null);
+    if (busy || sourceId === beforeId) return false;
+    const source = chapters.find((item) => item.id === sourceId);
+    const targetItems = groupItems(volumeId);
+    if (!source) return false;
+    if (source.volume_id === volumeId) {
+      const sourceIndex = targetItems.findIndex((item) => item.id === sourceId);
+      const beforeIndex = targetItems.findIndex((item) => item.id === beforeId);
+      if (
+        beforeId === null
+          ? sourceIndex === targetItems.length - 1
+          : sourceIndex + 1 === beforeIndex
+      )
+        return true;
     }
-    return (
-      <ol className="divide-y divide-border">
-        {items.map((item) => (
-          <li key={item.id} className="flex items-center gap-4 px-4 py-3">
-            <span className="w-16 shrink-0 text-sm tabular-nums text-muted-foreground">
-              {t("sidebar.chapterN", { n: item.reading_number })}
-            </span>
-            <span
-              className="min-w-0 flex-1 truncate text-sm"
-              title={item.title}
-            >
-              {item.title}
-            </span>
-            <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
-              {t("sidebar.wordCount", { count: item.word_count })}
-            </span>
-          </li>
-        ))}
-      </ol>
-    );
+    try {
+      capturePositions();
+      await place.mutateAsync({
+        novel_id: novelId,
+        source_chapter_id: sourceId,
+        ...(volumeId !== null ? { target_volume_id: volumeId } : {}),
+        ...(beforeId !== null ? { before_chapter_id: beforeId } : {}),
+      });
+      setGroupExpanded((previous) => ({
+        ...previous,
+        [groupKey(volumeId)]: true,
+      }));
+      showMovedChapter(sourceId);
+      return true;
+    } catch (error) {
+      cancelMove();
+      toastError(toErrorMessage(error));
+      return false;
+    }
   }
 
-  function renderGroup(key: string, name: string, items: chapter.Chapter[]) {
-    const expanded = isGroupExpanded(key, items.length);
-    const blocks: chapter.Chapter[][] = [];
-    if (expanded && items.length > BLOCK_SIZE) {
-      for (let start = 0; start < items.length; start += BLOCK_SIZE) {
-        blocks.push(items.slice(start, start + BLOCK_SIZE));
+  async function submitEditor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor || busy) return;
+    if (editor.kind === "move") {
+      if (editor.sourceId !== undefined) {
+        if (
+          await placeChapter(editor.sourceId, editor.volumeId, editor.beforeId)
+        ) {
+          setEditor(null);
+        }
       }
+      return;
     }
+    const title = editor.title.trim();
+    if (!title) return;
+    try {
+      await place.mutateAsync({
+        novel_id: novelId,
+        title,
+        ...(editor.volumeId !== null
+          ? { target_volume_id: editor.volumeId }
+          : {}),
+        ...(editor.beforeId !== null
+          ? { before_chapter_id: editor.beforeId }
+          : {}),
+      });
+      setGroupExpanded((previous) => ({
+        ...previous,
+        [groupKey(editor.volumeId)]: true,
+      }));
+      setEditor(null);
+    } catch (error) {
+      toastError(toErrorMessage(error));
+    }
+  }
+
+  async function confirmDelete() {
+    const item = deleteTarget;
+    if (!item) return;
+    try {
+      const result = await remove.mutateAsync(item.id);
+      setDeleteTarget(null);
+      if (!result.deleted) {
+        setBlocked({ item, references: result.references ?? [] });
+        return;
+      }
+      const bodyPath = item.file_path || chapterPath(item.id);
+      const draftPath = outlinePath(item.id);
+      const tabStore = useEditorTabsStore.getState();
+      for (const tab of tabStore.byNovel[String(novelId)]?.tabs ?? []) {
+        if (tab.path === bodyPath || tab.path === draftPath) {
+          tabStore.closeTab(novelId, tab.id);
+        }
+      }
+      qc.removeQueries({
+        queryKey: contentKeys.detail(novelId, bodyPath),
+        exact: true,
+      });
+      qc.removeQueries({
+        queryKey: contentKeys.detail(novelId, draftPath),
+        exact: true,
+      });
+    } catch (error) {
+      toastError(toErrorMessage(error));
+    }
+  }
+
+  function renderGroup(
+    volumeId: number | null,
+    name: string,
+    items: chapter.Chapter[],
+  ) {
+    const key = groupKey(volumeId);
     return (
-      <section
+      <ChapterGroup
         key={key}
-        ref={(element) => {
+        groupKey={key}
+        name={name}
+        items={items}
+        expanded={groupExpanded[key] ?? items.length <= AUTO_EXPAND_LIMIT}
+        busy={busy}
+        menuId={menuId}
+        dragChapterId={dragChapterId}
+        highlightedChapterId={highlightedId}
+        revealedChapterId={revealedId}
+        onDismissReveal={dismissReveal}
+        sectionRef={(element) => {
           if (element) sectionRefs.current.set(key, element);
           else sectionRefs.current.delete(key);
         }}
-        className="scroll-mt-28 overflow-hidden rounded-xl border"
-      >
-        <h2>
-          <button
-            type="button"
-            aria-expanded={expanded}
-            onClick={() => toggleGroup(key, items.length)}
-            className="flex w-full items-center gap-2 border-b bg-muted/30 px-4 py-3 text-left text-sm font-medium hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-          >
-            <ChevronRight
-              aria-hidden="true"
-              className={`h-4 w-4 shrink-0 transition-transform ${expanded ? "rotate-90" : ""}`}
-            />
-            <span className="min-w-0 flex-1 truncate">{name}</span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {t("sidebar.chapterCountShort", { count: items.length })}
-            </span>
-          </button>
-        </h2>
-        {expanded &&
-          (blocks.length === 0 ? (
-            renderChapters(items)
-          ) : (
-            <div className="divide-y divide-border">
-              {blocks.map((block) => {
-                const rangeKey = `${key}:${block[0].id}`;
-                const rangeOpen = openRanges.has(rangeKey);
-                return (
-                  <div key={rangeKey}>
-                    <button
-                      type="button"
-                      aria-expanded={rangeOpen}
-                      onClick={() => toggleRange(rangeKey)}
-                      className="flex w-full items-center gap-2 px-5 py-3 text-left text-sm hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                    >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={`h-4 w-4 shrink-0 transition-transform ${rangeOpen ? "rotate-90" : ""}`}
-                      />
-                      {t("sidebar.chapterRange", {
-                        start: block[0].reading_number,
-                        end: block[block.length - 1].reading_number,
-                      })}
-                    </button>
-                    {rangeOpen && renderChapters(block)}
-                  </div>
-                );
-              })}
-            </div>
-          ))}
-      </section>
+        onToggle={() =>
+          setGroupExpanded((previous) => ({
+            ...previous,
+            [key]: !(previous[key] ?? items.length <= AUTO_EXPAND_LIMIT),
+          }))
+        }
+        onCreate={(beforeId) => openCreate(volumeId, beforeId)}
+        onMove={openMove}
+        onMenuChange={setMenuId}
+        onDelete={(item) => {
+          setBlocked(null);
+          setDeleteTarget(item);
+        }}
+        onDragStart={setDragChapterId}
+        onDragEnd={() => setDragChapterId(null)}
+        onDrop={(beforeId) => {
+          if (dragChapterId !== null)
+            void placeChapter(dragChapterId, volumeId, beforeId);
+        }}
+      />
     );
   }
 
@@ -205,7 +287,10 @@ export default function ChapterManagementView({ novelId }: Props) {
   const isError = chapterQuery.isError || volumeQuery.isError;
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col bg-background">
+    <main
+      ref={containerRef}
+      className="flex min-h-0 min-w-0 flex-1 flex-col bg-background"
+    >
       <header className="shrink-0 border-b px-6 py-4">
         <h1 className="text-xl font-semibold">
           {t("chapterManagement.title")}
@@ -248,29 +333,52 @@ export default function ChapterManagementView({ novelId }: Props) {
                   new Map(
                     volumes.map((volume) => [
                       volume.id,
-                      groups.byVolume.get(volume.id)?.length ?? 0,
+                      groupItems(volume.id).length,
                     ]),
                   )
                 }
                 onNavigate={(volumeId) => jumpToGroup(groupKey(volumeId))}
+                dragChapterId={dragChapterId}
+                onChapterDrop={(volumeId) => {
+                  if (dragChapterId !== null)
+                    void placeChapter(dragChapterId, volumeId, null);
+                }}
               />
-
+              {editor && (
+                <ChapterEditorForm
+                  editor={editor}
+                  volumes={volumes}
+                  targetItems={groupItems(editor.volumeId)}
+                  busy={busy}
+                  onChange={setEditor}
+                  onSubmit={(event) => {
+                    void submitEditor(event);
+                  }}
+                  onClose={() => setEditor(null)}
+                />
+              )}
+              <ChapterDeletionFeedback
+                novelId={novelId}
+                deleteTarget={deleteTarget}
+                blocked={blocked}
+                loading={remove.isPending}
+                onConfirm={confirmDelete}
+                onClose={() => {
+                  if (!remove.isPending) setDeleteTarget(null);
+                }}
+                onDismissBlocked={() => setBlocked(null)}
+              />
               {chapters.length === 0 && (
                 <p className="text-sm text-muted-foreground">
                   {t("chapterManagement.noChapters")}
                 </p>
               )}
-
               <div className="flex flex-col gap-5">
                 {volumes.map((volume) =>
-                  renderGroup(
-                    groupKey(volume.id),
-                    volume.name,
-                    groups.byVolume.get(volume.id) ?? EMPTY_CHAPTERS,
-                  ),
+                  renderGroup(volume.id, volume.name, groupItems(volume.id)),
                 )}
                 {renderGroup(
-                  groupKey(null),
+                  null,
                   t("chapterManagement.unassigned"),
                   groups.unassigned,
                 )}

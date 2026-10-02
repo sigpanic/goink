@@ -1,35 +1,55 @@
 import { useState, type DragEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
+import { Check, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { volume } from "@/lib/wailsjs/go/models";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PopSelect from "@/components/shared/PopSelect";
 import { toErrorMessage } from "@/utils/error";
 import { toastError } from "@/utils/toast";
 import { useVolumeMutations } from "./useVolumeMutations";
+import { useVolumeMoveFeedback } from "./useVolumeMoveFeedback";
+import "./VolumeRailDrag.css";
 
 interface Props {
   novelId: number;
   volumes: volume.Volume[];
   chapterCounts: Map<number, number>;
   onNavigate: (volumeId: number | null) => void;
+  dragChapterId?: number | null;
+  onChapterDrop?: (volumeId: number | null) => void;
 }
 
 type Editor =
   { kind: "create"; beforeId: number | null } | { kind: "rename"; id: number };
+type DropEdge = "before" | "after";
 
 export default function VolumeRail({
   novelId,
   volumes,
   chapterCounts,
   onNavigate,
+  dragChapterId = null,
+  onChapterDrop,
 }: Props) {
   const { t } = useTranslation();
   const { place, rename, remove } = useVolumeMutations(novelId);
+  const {
+    railRef,
+    highlightedId,
+    capturePositions,
+    cancelMove,
+    showMovedVolume,
+  } = useVolumeMoveFeedback(volumes);
   const [editor, setEditor] = useState<Editor | null>(null);
   const [name, setName] = useState("");
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [dragId, setDragId] = useState<number | null>(null);
-  const [dropId, setDropId] = useState<number | "end" | null>(null);
+  const [dropTarget, setDropTarget] = useState<
+    { id: number; edge: DropEdge } | "end" | null
+  >(null);
+  const [chapterDropId, setChapterDropId] = useState<
+    number | "unassigned" | null
+  >(null);
   const busy = place.isPending || rename.isPending || remove.isPending;
   const deleteVolume = volumes.find((item) => item.id === deleteId);
 
@@ -75,37 +95,132 @@ export default function VolumeRail({
     setDragId(id);
   }
 
-  function allowDrop(event: DragEvent<HTMLElement>, target: number | "end") {
-    if (dragId === null || dragId === target || busy) return;
-    event.preventDefault();
-    event.dataTransfer.dropEffect = "move";
-    setDropId(target);
+  function dropEdgeFor(event: DragEvent<HTMLElement>): DropEdge {
+    const rect = event.currentTarget.getBoundingClientRect();
+    if (rect.width <= 0) return "before";
+    return event.clientX < rect.left + rect.width / 2 ? "before" : "after";
   }
 
-  async function move(event: DragEvent<HTMLElement>, target: number | "end") {
+  function anchorFor(target: number | "end", edge: DropEdge): number | null {
+    if (target === "end") return null;
+    if (edge === "before") return target;
+    const targetIndex = volumes.findIndex((item) => item.id === target);
+    return volumes[targetIndex + 1]?.id ?? null;
+  }
+
+  function gapDropTarget(
+    clientX: number,
+  ): { id: number; edge: DropEdge } | "end" {
+    for (const chip of railRef.current?.querySelectorAll<HTMLElement>(
+      "[data-volume-id]",
+    ) ?? []) {
+      const rect = chip.getBoundingClientRect();
+      if (clientX < rect.left + rect.width / 2) {
+        return { id: Number(chip.dataset.volumeId), edge: "before" };
+      }
+    }
+    return "end";
+  }
+
+  function dragStillInside(event: DragEvent<HTMLElement>) {
+    if (
+      event.relatedTarget instanceof Node &&
+      event.currentTarget.contains(event.relatedTarget)
+    )
+      return true;
+    const rect = event.currentTarget.getBoundingClientRect();
+    return (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      event.clientX >= rect.left &&
+      event.clientX <= rect.right &&
+      event.clientY >= rect.top &&
+      event.clientY <= rect.bottom
+    );
+  }
+
+  function allowDrop(event: DragEvent<HTMLElement>, target: number | "end") {
+    if (dragChapterId !== null && target !== "end") {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      setChapterDropId(target);
+      return;
+    }
+    if (dragId === null || busy) return;
     event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    if (target === "end") setDropTarget("end");
+    else {
+      const edge = dropEdgeFor(event);
+      setDropTarget((previous) =>
+        previous !== null &&
+        previous !== "end" &&
+        previous.id === target &&
+        previous.edge === edge
+          ? previous
+          : { id: target, edge },
+      );
+    }
+  }
+
+  async function moveVolume(beforeId: number | null) {
     const source = dragId;
     setDragId(null);
-    setDropId(null);
-    if (source === null || source === target || busy) return;
+    setDropTarget(null);
+    if (source === null || busy) return;
     const sourceIndex = volumes.findIndex((item) => item.id === source);
-    const targetIndex = volumes.findIndex((item) => item.id === target);
-    if (sourceIndex < 0 || (target !== "end" && targetIndex < 0)) return;
     if (
-      target === "end"
+      sourceIndex < 0 ||
+      (beforeId !== null && !volumes.some((item) => item.id === beforeId))
+    )
+      return;
+    const beforeIndex = volumes.findIndex((item) => item.id === beforeId);
+    if (
+      beforeId === null
         ? sourceIndex === volumes.length - 1
-        : sourceIndex + 1 === targetIndex
+        : beforeId === source || sourceIndex + 1 === beforeIndex
     )
       return;
     try {
+      capturePositions();
       await place.mutateAsync({
         novel_id: novelId,
         source_volume_id: source,
-        ...(target !== "end" ? { before_volume_id: target } : {}),
+        ...(beforeId !== null ? { before_volume_id: beforeId } : {}),
       });
+      showMovedVolume(source);
     } catch (error) {
+      cancelMove();
       toastError(toErrorMessage(error));
     }
+  }
+
+  function move(event: DragEvent<HTMLElement>, target: number | "end") {
+    event.preventDefault();
+    if (dragChapterId !== null && target !== "end") {
+      setChapterDropId(null);
+      onChapterDrop?.(target);
+      return;
+    }
+    const beforeId = anchorFor(
+      target,
+      target === "end" ? "after" : dropEdgeFor(event),
+    );
+    void moveVolume(beforeId);
+  }
+
+  function dragOverRailGap(event: DragEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || dragId === null || busy) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    setDropTarget(gapDropTarget(event.clientX));
+  }
+
+  function dropOnRailGap(event: DragEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget || dragId === null) return;
+    event.preventDefault();
+    const target = gapDropTarget(event.clientX);
+    void moveVolume(target === "end" ? null : target.id);
   }
 
   function askDelete(id: number) {
@@ -150,14 +265,24 @@ export default function VolumeRail({
           {t("chapterManagement.noVolumes")}
         </p>
       )}
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div
+        ref={railRef}
+        onDragOver={dragOverRailGap}
+        onDrop={dropOnRailGap}
+        className="flex gap-3 overflow-x-auto px-1 py-2"
+      >
         {volumes.map((item) => (
           <div
             key={item.id}
+            data-volume-id={item.id}
             onDragOver={(event) => allowDrop(event, item.id)}
-            onDrop={(event) => void move(event, item.id)}
-            onDragLeave={() => setDropId(null)}
-            className={`flex shrink-0 items-center rounded-lg border bg-card ${dropId === item.id ? "border-primary ring-2 ring-primary/40" : ""}`}
+            onDrop={(event) => move(event, item.id)}
+            onDragLeave={(event) => {
+              if (dragStillInside(event)) return;
+              setDropTarget(null);
+              setChapterDropId(null);
+            }}
+            className={`volume-chip flex shrink-0 items-center rounded-lg border bg-card ${dragId === item.id ? "volume-chip-dragging" : ""} ${dropTarget !== null && dropTarget !== "end" && dropTarget.id === item.id ? `volume-chip-drop-${dropTarget.edge}` : ""} ${chapterDropId === item.id ? "border-primary ring-2 ring-primary/40" : ""} ${highlightedId === item.id ? "volume-chip-moved" : ""}`}
           >
             <button
               type="button"
@@ -165,7 +290,7 @@ export default function VolumeRail({
               onDragStart={(event) => startDrag(event, item.id)}
               onDragEnd={() => {
                 setDragId(null);
-                setDropId(null);
+                setDropTarget(null);
               }}
               aria-label={t("chapterManagement.dragVolume", {
                 name: item.name,
@@ -173,8 +298,17 @@ export default function VolumeRail({
               title={t("chapterManagement.dragVolume", { name: item.name })}
               className="cursor-grab p-2 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <GripVertical aria-hidden="true" className="h-4 w-4" />
+              {highlightedId === item.id ? (
+                <Check aria-hidden="true" className="h-4 w-4 text-primary" />
+              ) : (
+                <GripVertical aria-hidden="true" className="h-4 w-4" />
+              )}
             </button>
+            {highlightedId === item.id && (
+              <span role="status" className="sr-only">
+                {t("chapterManagement.volumeMoveSuccess", { name: item.name })}
+              </span>
+            )}
             <button
               type="button"
               onClick={() => onNavigate(item.id)}
@@ -210,9 +344,9 @@ export default function VolumeRail({
         {volumes.length > 0 && (
           <div
             onDragOver={(event) => allowDrop(event, "end")}
-            onDrop={(event) => void move(event, "end")}
-            onDragLeave={() => setDropId(null)}
-            className={`shrink-0 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground ${dropId === "end" ? "border-primary bg-primary/10" : ""}`}
+            onDrop={(event) => move(event, "end")}
+            onDragLeave={() => setDropTarget(null)}
+            className={`min-w-28 shrink-0 rounded-lg border border-dashed px-3 py-2 text-center text-sm text-muted-foreground ${dropTarget === "end" ? "border-primary bg-primary/10 ring-2 ring-primary/30" : ""}`}
           >
             {t("chapterManagement.moveToEnd")}
           </div>
@@ -220,7 +354,20 @@ export default function VolumeRail({
         <button
           type="button"
           onClick={() => onNavigate(null)}
-          className="shrink-0 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          onDragOver={(event) => {
+            if (dragChapterId === null) return;
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "move";
+            setChapterDropId("unassigned");
+          }}
+          onDrop={(event) => {
+            if (dragChapterId === null) return;
+            event.preventDefault();
+            setChapterDropId(null);
+            onChapterDrop?.(null);
+          }}
+          onDragLeave={() => setChapterDropId(null)}
+          className={`shrink-0 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${chapterDropId === "unassigned" ? "border-primary bg-primary/10" : ""}`}
         >
           {t("chapterManagement.unassigned")}
         </button>
@@ -243,30 +390,33 @@ export default function VolumeRail({
             className="min-w-40 flex-1 rounded-md border bg-background px-2 py-1.5 text-sm"
           />
           {editor.kind === "create" && (
-            <label className="flex items-center gap-2 text-sm">
-              {t("chapterManagement.insertBefore")}
-              <select
-                value={editor.beforeId ?? "end"}
-                onChange={(event) =>
+            <div className="flex min-w-48 flex-1 items-center gap-2 text-sm">
+              <span>{t("chapterManagement.volumePosition")}</span>
+              <PopSelect
+                ariaLabel={t("chapterManagement.volumePosition")}
+                size="form"
+                dropUp={false}
+                className="min-w-40 flex-1"
+                minWidth="0"
+                value={String(editor.beforeId ?? "end")}
+                options={[
+                  { value: "end", label: t("chapterManagement.atVolumeEnd") },
+                  ...volumes.map((item) => ({
+                    value: String(item.id),
+                    label: t("chapterManagement.beforeVolume", {
+                      name: item.name,
+                    }),
+                  })),
+                ]}
+                onChange={(value) =>
                   setEditor({
                     kind: "create",
-                    beforeId:
-                      event.target.value === "end"
-                        ? null
-                        : Number(event.target.value),
+                    beforeId: value === "end" ? null : Number(value),
                   })
                 }
                 disabled={busy}
-                className="rounded-md border bg-background px-2 py-1.5"
-              >
-                <option value="end">{t("chapterManagement.atEnd")}</option>
-                {volumes.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+              />
+            </div>
           )}
           <button
             type="submit"

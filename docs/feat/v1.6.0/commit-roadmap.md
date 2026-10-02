@@ -109,8 +109,8 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 |---|---|---|---|
 | 7.0 | `refactor(frontend): consume stable chapter references` | 先迁移既有 UI，不新增章节管理能力：章节列表/Pattern 用 `reading_number` 展示、`chapter_id` 写入；Reader、Timeline、Story arc 的已发生章节引用改 `*_chapter_id`，未来位置改 `target_reading_number`；搜索和聊天展示同步字段。按界面领域分多次提交，完成后恢复前端构建。 | 🟡 进行中 |
 | 7.1 | `feat(frontend): add chapter management workspace` | 新增独立 tab“章节管理”：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 只读分组展示；现有 ChapterList 保留；i18n key | ✅ 已提交 |
-| 7.2 | `feat(frontend): manage volumes in chapter workspace` | 在卷轨道创建、重命名、删除空卷，并按锚点拖拽排序；按卷分组渲染 | ✅ 实现完成，待 review |
-| 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ❌ |
+| 7.2 | `feat(frontend): manage volumes in chapter workspace` | 在卷轨道创建、重命名、删除空卷，并按锚点拖拽排序；按卷分组渲染 | ✅ 已提交 |
+| 7.3 | `feat(frontend): manage chapter structure` | 章节操作菜单：前后插入、移动、删除；组末创建；拖拽卷内或跨卷移动 | ✅ 实现完成，待 review |
 
 ### L1b 收尾 — 删旧字段
 

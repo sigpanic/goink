@@ -22,6 +22,9 @@ interface Props {
   placeholder?: string;
   footerAction?: FooterAction;
   dropUp?: boolean; // true=向上弹出(默认), false=向下弹出
+  disabled?: boolean;
+  ariaLabel?: string;
+  size?: "compact" | "form";
 }
 
 export default function PopSelect({
@@ -34,12 +37,17 @@ export default function PopSelect({
   placeholder,
   footerAction,
   dropUp = true,
+  disabled = false,
+  ariaLabel,
+  size = "compact",
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const handleToggle = () => {
+    if (disabled) return;
     if (!open && onOpen) onOpen();
     setOpen(!open);
   };
@@ -61,11 +69,27 @@ export default function PopSelect({
   const selected = options.find((o) => o.value === value);
 
   return (
-    <div ref={containerRef} className={`relative ${className}`}>
+    <div
+      ref={containerRef}
+      className={`relative ${className}`}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          event.preventDefault();
+          setOpen(false);
+          triggerRef.current?.focus();
+        }
+      }}
+    >
       <button
+        ref={triggerRef}
+        type="button"
         onClick={handleToggle}
         style={{ minWidth }}
-        className="h-[30px] rounded-lg border bg-background px-2.5 text-xs text-muted-foreground flex items-center justify-between gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        disabled={disabled}
+        aria-label={ariaLabel}
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        className={`flex items-center justify-between gap-2 border bg-background text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 ${size === "form" ? "h-9 w-full rounded-md px-3 text-sm text-foreground" : "h-[30px] rounded-lg px-2.5 text-xs text-muted-foreground"}`}
       >
         <span className="truncate">
           {selected?.label || placeholder || t("chat.noModelAvailable")}
@@ -77,16 +101,21 @@ export default function PopSelect({
 
       {open && (
         <div
-          className={`absolute left-0 w-full max-h-[200px] overflow-y-auto rounded-lg border bg-background shadow-lg z-50 ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
+          role="listbox"
+          aria-label={ariaLabel}
+          className={`absolute left-0 z-50 max-h-64 w-full overflow-y-auto rounded-lg border bg-background shadow-lg ${dropUp ? "bottom-full mb-1" : "top-full mt-1"}`}
         >
           {options.map((opt) => (
             <button
               key={opt.value}
+              type="button"
+              role="option"
+              aria-selected={opt.value === value}
               onClick={() => {
                 onChange(opt.value);
                 setOpen(false);
               }}
-              className={`w-full text-left px-2.5 py-1.5 text-xs hover:bg-muted transition-colors ${
+              className={`w-full px-2.5 text-left hover:bg-muted transition-colors ${size === "form" ? "py-2 text-sm" : "py-1.5 text-xs"} ${
                 opt.value === value
                   ? "bg-primary/10 text-primary font-medium"
                   : "text-muted-foreground"
@@ -99,6 +128,7 @@ export default function PopSelect({
             <>
               <div className="border-t my-0.5" />
               <button
+                type="button"
                 onClick={() => {
                   footerAction.onClick();
                   setOpen(false);
