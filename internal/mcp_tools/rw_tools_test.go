@@ -485,7 +485,7 @@ func TestReadNewMD_Rejected(t *testing.T) {
 func TestVolumeOutlineReadWrite(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	volumeID := seedVolume(t, db, tc.NovelID, "第一卷", 1)
-	path := fmt.Sprintf("volumes/%d.md", volumeID)
+	path := fmt.Sprintf("volumes/id_%d.md", volumeID)
 
 	created := execEdit(t, ctx, tc, editArgs(path, "full_replace", "# 入城卷\n- 目标：进京"))
 	if !created.Success {
@@ -515,12 +515,30 @@ func TestVolumeOutlineReadWrite(t *testing.T) {
 
 func TestVolumeOutlineRejectsUnknownVolume(t *testing.T) {
 	_, tc, ctx := setupRWEnv(t)
-	res := execEdit(t, ctx, tc, editArgs("volumes/99.md", "full_replace", "# 孤儿卷纲"))
+	res := execEdit(t, ctx, tc, editArgs("volumes/id_99.md", "full_replace", "# 孤儿卷纲"))
 	if res.Success {
 		t.Fatal("expected unknown volume to be rejected")
 	}
 	if !contains(res.Error, "卷不存在") {
 		t.Errorf("error = %s, want missing volume error", res.Error)
+	}
+}
+
+func TestVolumeOutlineRejectsLegacyPath(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	volumeID := seedVolume(t, db, tc.NovelID, "第一卷", 1)
+	legacyPath := fmt.Sprintf("volumes/%d.md", volumeID)
+
+	for _, res := range []*mcp_tools.ToolResult{
+		execEdit(t, ctx, tc, editArgs(legacyPath, "full_replace", "# 旧路径")),
+		execRead(t, ctx, tc, legacyPath),
+	} {
+		if res.Success || !contains(res.Error, "无效文件路径") {
+			t.Errorf("legacy path result = %+v, want invalid path", res)
+		}
+	}
+	if _, err := os.Stat(novelFile(t, tc.NovelID, legacyPath)); !os.IsNotExist(err) {
+		t.Errorf("legacy path should not create a file: %v", err)
 	}
 }
 

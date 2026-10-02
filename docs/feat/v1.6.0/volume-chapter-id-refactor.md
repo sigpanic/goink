@@ -61,7 +61,7 @@
 | 删除流程 | 仅前端入口；删文件 + 删 DB 记录 + 检测 timeline/arc_node/reader 引用（有则拒绝）；`delete_record` mcp_tool 不扩展支持 chapter 表 |
 | 跨卷移动 | 更新 chapter.volume_id，并将 sort_order 追加到目标分组末尾 |
 | 分卷 | volume 表：`id/novel_id/name/sort_order/created_at/updated_at` |
-| AI 卷感知 | list_chapters 返回 `id + volume_name + 实时章节号 + 标题`；AI 新建章节时传 volume_name（rw_tools 经 chapters/new.md 反查 volume_id），可读写卷纲（volumes/{id}.md） |
+| AI 卷感知 | list_chapters 返回 `id + volume_name + 实时章节号 + 标题`；AI 新建章节时传 volume_name（rw_tools 经 chapters/new.md 反查 volume_id），可读写卷纲（volumes/id_{id}.md） |
 
 ## 五、DB Schema 变更
 
@@ -83,7 +83,7 @@
 
 约束：`(novel_id, sort_order)` 唯一索引，`(novel_id, name)` 唯一索引
 
-卷纲存文件系统（不入库）：`volumes/{volume_id}.md`，类似现有 `chapters/id_{id}.md`、`outlines/id_{id}.md`、`goink.md` 的文件模型。卷纲内容：创作主题、目标章节范围、节奏、关键角色/伏笔等。AI 可通过 rw_tools 读写卷纲（路径正则扩展支持 `volumes/{正整数}.md`）；读写前必须校验该卷存在且属于当前小说，避免创建孤儿卷纲文件。
+卷纲存文件系统（不入库）：`volumes/id_{volume_id}.md`，类似现有 `chapters/id_{id}.md`、`outlines/id_{id}.md`、`goink.md` 的文件模型。卷纲内容：创作主题、目标章节范围、节奏、关键角色/伏笔等。AI 可通过 rw_tools 读写卷纲（路径只接受 `volumes/id_{正整数}.md`）；读写前必须校验该卷存在且属于当前小说，避免创建孤儿卷纲文件。此命名在首次发布前统一，不迁移旧格式卷纲文件。
 
 ### 5.3 time_entries 表（GORM 表名，结构体 TimelineEntry）
 
@@ -345,7 +345,7 @@ app 层：
 AI 通道（经 rw_tools，非 mcp_tool）：
 - AI 新建章节走 `chapters/new.md` 占位（见第十一节），可传 `volume_name` 让 rw_tools 反查 `volume_id`
 - AI 不感知卷 CRUD（不提供 create/update/delete volume 工具，结构操作仅前端）
-- AI 可通过 rw_tools 读写卷纲文件 `volumes/{id}.md`
+- AI 可通过 rw_tools 读写卷纲文件 `volumes/id_{id}.md`
 
 ### 10.3 章节排序
 

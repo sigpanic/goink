@@ -12,7 +12,7 @@ func TestValidPath(t *testing.T) {
 		"chapters/3/new.md",
 		"outlines/id_1.md",
 		"outlines/3/new.md",
-		"volumes/3.md",
+		"volumes/id_3.md",
 		"goink.md",
 		"skills/my-skill.md",
 		"~/.goink/skills/my-skill.md",
@@ -29,9 +29,10 @@ func TestValidPath(t *testing.T) {
 		"chapters/new",        // 缺扩展名
 		"chapters/id_1.md/",   // 尾部斜杠
 		"plans/weekly.md",     // 不支持的目录
-		"volumes/0.md",        // 卷 ID 必须为正整数
-		"volumes/01.md",       // 卷 ID 必须用规范整数表示
-		"volumes/1.txt",       // 扩展名错误
+		"volumes/3.md",        // 旧的无 id_ 前缀路径不再接受
+		"volumes/id_0.md",     // 卷 ID 必须为正整数
+		"volumes/id_01.md",    // 卷 ID 必须用规范整数表示
+		"volumes/id_1.txt",    // 扩展名错误
 		"skills/",             // 缺文件名
 		"skills/a/b.md",       // 多级技能名
 		"/etc/passwd",         // 绝对路径（builtin 前缀之外）

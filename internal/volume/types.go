@@ -3,7 +3,7 @@ package volume
 import "time"
 
 // Volume 是小说分卷的元数据。
-// 卷纲正文以文件形式存储在 Git 仓库 volumes/{id}.md，DB 仅保存索引。
+// 卷纲正文以文件形式存储在 Git 仓库 volumes/id_{id}.md，DB 仅保存索引。
 //
 // 设计原则：
 //   - sort_order 是内部排序键，仅用于 ORDER BY，对用户/AI 不可见

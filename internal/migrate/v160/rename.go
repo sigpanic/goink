@@ -15,7 +15,7 @@ import (
 
 // migrateRenameFiles（commit 1.6）：
 //  1. chapter.sort_order 初始化 = chapter_number（保留原顺序）
-//  2. 每个 novel 仓库建 volumes/ 目录 + .gitkeep（卷纲 volumes/{id}.md 落位）
+//  2. 每个 novel 仓库建 volumes/ 目录 + .gitkeep（卷纲 volumes/id_{id}.md 落位）
 //  3. 章节文件 rename：chapters/{num:03d}.md → chapters/id_{id}.md、outlines/{num:03d}.md → outlines/id_{id}.md
 //  4. 按 novel 各自 git commit
 //
