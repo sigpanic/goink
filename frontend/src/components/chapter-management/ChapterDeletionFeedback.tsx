@@ -1,7 +1,6 @@
 import { useTranslation } from "react-i18next";
 import type { chapter, deletion } from "@/lib/wailsjs/go/models";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
-import { chapterPath, outlinePath } from "@/components/content/types";
 import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 
 export type BlockedChapterDeletion = {
@@ -33,9 +32,8 @@ export default function ChapterDeletionFeedback({
     deleteTarget !== null &&
     (useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs ?? []).some(
       (tab) =>
-        (tab.path ===
-          (deleteTarget.file_path || chapterPath(deleteTarget.id)) ||
-          tab.path === outlinePath(deleteTarget.id)) &&
+        (tab.path === deleteTarget.file_path ||
+          tab.path === deleteTarget.outline_file_path) &&
         (tab.isDirty || tab.outlineIsDirty),
     );
 

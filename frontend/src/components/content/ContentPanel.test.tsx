@@ -10,6 +10,13 @@ import type { ReactElement } from "react";
 import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";
 import { toastError } from "@/utils/toast";
 
+const { mockGetChapters } = vi.hoisted(() => ({
+  mockGetChapters: vi.fn(),
+}));
+vi.mock("@/lib/wailsjs/go/app/App", () => ({
+  GetChapters: mockGetChapters,
+}));
+
 // 5.2 commit 1: useFileContent 引入 useQueryClient，render 需包 QueryClientProvider。
 // 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
 function render(ui: ReactElement) {
@@ -42,7 +49,12 @@ vi.mock("./TabBar", () => ({
 }));
 
 vi.mock("./ContentEditor", () => ({
-  default: ({ value }: any) => <div data-testid="content-editor">{value}</div>,
+  default: ({ value, onChange }: any) => (
+    <div data-testid="content-editor">
+      {value}
+      <button onClick={() => onChange?.("edited outline")}>edit content</button>
+    </div>
+  ),
 }));
 
 vi.mock("./OutlineViewer", () => ({
@@ -156,6 +168,7 @@ describe("ContentPanel", () => {
     // 5.2 commit 1: GetContent 走 useFileContent.fetchContent（query 缓存通道）
     mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
+    mockGetChapters.mockResolvedValue([]);
   });
 
   it("renders empty state when no tabs", () => {
@@ -167,7 +180,7 @@ describe("ContentPanel", () => {
 
   it("renders tab select hint when tabs exist but no active tab", () => {
     mockTabsState = [
-      { id: "f1", type: "file", path: "chapters/001.md", title: "Ch1" },
+      { id: "f1", type: "file", path: "chapters/id_1.md", title: "Ch1" },
     ];
     mockActiveTabIdState = null;
     render(<ContentPanel />);
@@ -215,10 +228,10 @@ describe("ContentPanel", () => {
     render(<ContentPanel ref={ref} />);
 
     await act(async () => {
-      ref.current?.openFile("chapters/001.md", "Chapter 1");
+      ref.current?.openFile("chapters/id_1.md", "Chapter 1");
     });
 
-    expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/001.md");
+    expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
   });
 
   it("opens file with empty content on GetContent failure", async () => {
@@ -233,12 +246,126 @@ describe("ContentPanel", () => {
     render(<ContentPanel ref={ref} />);
 
     await act(async () => {
-      ref.current?.openFile("chapters/001.md", "Chapter 1");
+      ref.current?.openFile("chapters/id_1.md", "Chapter 1");
     });
 
     // Should still open the tab with empty content
     expect(mockOpenTab).toHaveBeenCalledWith(
-      expect.objectContaining({ content: "", path: "chapters/001.md" }),
+      expect.objectContaining({ content: "", path: "chapters/id_1.md" }),
+    );
+  });
+
+  it("uses the backend outline path when loading and saving an ID-based chapter", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 42,
+        reading_number: 7,
+        title: "重逢",
+        file_path: "chapters/id_42.md",
+        outline_file_path: "outlines/id_42.md",
+      },
+    ]);
+    mockOpenTab.mockImplementation((tab: any) => {
+      mockTabsState = [{ ...tab, id: "f42" }];
+      mockActiveTabIdState = "f42";
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: any) => {
+      mockTabsState = mockTabsState.map((tab) =>
+        tab.id === id ? { ...tab, ...patch } : tab,
+      );
+    });
+
+    const ref = { current: null as ContentPanelHandle | null };
+    const view = render(<ContentPanel ref={ref} />);
+    await act(async () => {
+      ref.current?.openFile("chapters/id_42.md", "第七章 重逢");
+    });
+    expect(mockOpenTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "chapters/id_42.md",
+        outlinePath: "outlines/id_42.md",
+      }),
+    );
+
+    view.rerender(<ContentPanel ref={ref} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "content.outlineEdit" }));
+    });
+    expect(mockFetchContent).toHaveBeenCalledWith(1, "outlines/id_42.md");
+
+    view.rerender(<ContentPanel ref={ref} />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+    expect(mockSaveContent).toHaveBeenCalledWith({
+      novel_id: 1,
+      path: "outlines/id_42.md",
+      content: "edited outline",
+    });
+  });
+
+  it("does not guess an outline path when chapter metadata is unavailable", async () => {
+    mockTabsState = [
+      {
+        id: "f42",
+        type: "file",
+        path: "chapters/id_42.md",
+        title: "重逢",
+        content: "正文",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "f42";
+    render(<ContentPanel />);
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "content.outlineEdit" }));
+    });
+    expect(mockUpdateTab).not.toHaveBeenCalledWith(
+      "f42",
+      expect.objectContaining({ viewMode: "outline-edit" }),
+    );
+    expect(mockFetchContent).not.toHaveBeenCalledWith(
+      1,
+      expect.stringContaining("outlines/"),
+    );
+  });
+
+  it("returns an outline diff to its chapter using backend paths", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 42,
+        reading_number: 7,
+        title: "重逢",
+        file_path: "chapters/id_42.md",
+        outline_file_path: "outlines/id_42.md",
+      },
+    ]);
+    mockTabsState = [
+      {
+        id: "d42",
+        type: "diff",
+        path: "outlines/id_42.md",
+        toolId: "tool-42",
+        title: "大纲修改",
+      },
+    ];
+    mockActiveTabIdState = "d42";
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => {
+      await ref.current?.handleDiffReject("tool-42");
+    });
+    await vi.waitFor(() =>
+      expect(mockOpenTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "chapters/id_42.md",
+          outlinePath: "outlines/id_42.md",
+          viewMode: "outline",
+        }),
+      ),
     );
   });
 
@@ -247,7 +374,7 @@ describe("ContentPanel", () => {
       {
         id: "f1",
         type: "file",
-        path: "chapters/001.md",
+        path: "chapters/id_1.md",
         title: "Ch1",
         content: "hello world",
         viewMode: "content",
@@ -282,7 +409,7 @@ describe("ContentPanel", () => {
       {
         id: "d1",
         type: "diff",
-        path: "chapters/001.md",
+        path: "chapters/id_1.md",
         title: "Diff",
         original: "old content",
         modified: "new content",

@@ -225,7 +225,7 @@ export default function WorkspaceView({
       toastError(toErrorMessage(err, t("approval.rejectFailed")));
       return;
     }
-    contentRef.current?.handleDiffReject(toolId);
+    await contentRef.current?.handleDiffReject(toolId);
   }
 
   function handleApprovalFileEdit(data: {

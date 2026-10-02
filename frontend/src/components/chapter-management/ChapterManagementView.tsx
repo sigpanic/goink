@@ -7,7 +7,6 @@ import { chapterKeys, contentKeys } from "@/lib/queryKeys";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useVolumes } from "@/components/volume/useVolumes";
 import VolumeRail from "@/components/volume/VolumeRail";
-import { chapterPath, outlinePath } from "@/components/content/types";
 import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 import { toErrorMessage } from "@/utils/error";
 import { toastError } from "@/utils/toast";
@@ -216,8 +215,8 @@ export default function ChapterManagementView({ novelId }: Props) {
         setBlocked({ item, references: result.references ?? [] });
         return;
       }
-      const bodyPath = item.file_path || chapterPath(item.id);
-      const draftPath = outlinePath(item.id);
+      const bodyPath = item.file_path;
+      const draftPath = item.outline_file_path;
       const tabStore = useEditorTabsStore.getState();
       for (const tab of tabStore.byNovel[String(novelId)]?.tabs ?? []) {
         if (tab.path === bodyPath || tab.path === draftPath) {

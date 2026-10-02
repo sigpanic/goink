@@ -17,7 +17,9 @@ import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
-import { contentKeys } from "@/lib/queryKeys";
+import { chapterKeys, contentKeys } from "@/lib/queryKeys";
+import { GetChapters } from "@/lib/wailsjs/go/app/App";
+import type { chapter } from "@/lib/wailsjs/go/models";
 import TabBar from "./TabBar";
 import ContentEditor from "./ContentEditor";
 import OutlineViewer from "./OutlineViewer";
@@ -27,7 +29,6 @@ import { useSaveContent } from "./useSaveContent";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
-  outlinePath,
   isContentPath,
   isOutlinePath,
   isSkillPath,
@@ -65,7 +66,7 @@ export interface ContentPanelHandle {
     toolId: string;
   }) => void;
   handleDiffApprove: (toolId: string) => Promise<void>;
-  handleDiffReject: (toolId: string) => void;
+  handleDiffReject: (toolId: string) => Promise<void>;
 }
 
 // 3.8 后续：onContentChange/onDirtyChange 删，activeContent/isDirty 迁 useEditorStore。
@@ -146,6 +147,29 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       useEditorStore.getState().setIsDirty(isDirty);
     }, [activeTab?.isDirty, activeTab?.outlineIsDirty, activeTab?.viewMode]);
 
+    const resolveChapter = useCallback(
+      async (path: string): Promise<chapter.Chapter | undefined> => {
+        if (!path.startsWith("chapters/") && !isOutlinePath(path)) return undefined;
+        const chapters = await qc.fetchQuery({
+          queryKey: chapterKeys.list(novelId),
+          queryFn: () => GetChapters(novelId),
+        });
+        const matching = chapters?.find(
+          (item) => item.file_path === path || item.outline_file_path === path,
+        );
+        if (matching) return matching;
+        await qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
+        const refreshed = await qc.fetchQuery({
+          queryKey: chapterKeys.list(novelId),
+          queryFn: () => GetChapters(novelId),
+        });
+        return refreshed?.find(
+          (item) => item.file_path === path || item.outline_file_path === path,
+        );
+      },
+      [qc, novelId],
+    );
+
     // ── 大纲内容加载（handleSetViewMode 与恢复 tab effect 共用） ──
 
     const loadOutlineContent = useCallback(
@@ -157,18 +181,22 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         ) {
           return;
         }
-        const derivedOutline = outlinePath(
-          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-        );
-        fetchContent(novelId, derivedOutline)
+        const outline = tab.outlinePath
+          ? Promise.resolve(tab.outlinePath)
+          : resolveChapter(tab.path).then((item) => {
+              if (item) updateTab(tab.id, { outlinePath: item.outline_file_path });
+              return item?.outline_file_path;
+            });
+        outline
+          .then((path) => (path ? fetchContent(novelId, path) : undefined))
           .then((oc) => {
-            updateTab(tab.id, { outlineContent: oc || "" });
+            if (oc !== undefined) updateTab(tab.id, { outlineContent: oc || "" });
           })
           .catch(() => {
-            updateTab(tab.id, { outlineContent: "" });
+            if (tab.outlinePath) updateTab(tab.id, { outlineContent: "" });
           });
       },
-      [novelId, fetchContent, updateTab],
+      [novelId, fetchContent, resolveChapter, updateTab],
     );
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
@@ -237,6 +265,21 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
+        if (mode !== "content" && !tab.outlinePath) {
+          void resolveChapter(tab.path)
+            .then((item) => {
+              if (!item) return;
+              const resolvedTab = { ...tab, outlinePath: item.outline_file_path };
+              updateTab(tabId, {
+                outlinePath: item.outline_file_path,
+                viewMode: mode,
+              });
+              loadOutlineContent(resolvedTab);
+            })
+            .catch(() => undefined);
+          return;
+        }
+
         updateTab(tabId, { viewMode: mode });
 
         // 切换到大纲（预览或编辑）时，如果未加载（或上次加载时文件不存在）则重新加载
@@ -247,7 +290,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           loadOutlineContent(tab);
         }
       },
-      [tabs, updateTab, loadOutlineContent],
+      [tabs, updateTab, loadOutlineContent, resolveChapter],
     );
 
     // ── 阅读位置键（正文/大纲各自独立，见 useEditorTabsStore）──────
@@ -261,9 +304,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           isContentPath(tab.path) &&
           tab.path !== "goink.md"
         ) {
-          p = outlinePath(
-            parseInt(tab.path.replace(/.*\//, "").replace(".md", ""), 10),
-          );
+          if (!tab.outlinePath) return undefined;
+          p = tab.outlinePath;
         }
         return `${novelId}:${p}:${mode}`;
       },
@@ -340,18 +382,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const handleOutlineEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
+        const tab = tabs.find((t) => t.id === tabId);
+        if (!tab?.outlinePath) return;
         updateTab(tabId, { outlineContent: content, outlineIsDirty: true });
         useEditorStore.getState().setActiveContent(content);
 
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        const tab = tabs.find((t) => t.id === tabId);
-        if (!tab) return;
-        const outlineP = outlinePath(
-          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-        );
         savingRef.current = {
           id: tabId,
-          path: outlineP,
+          path: tab.outlinePath,
           content,
           dirtyKey: "outlineIsDirty",
         };
@@ -468,13 +507,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             needRefresh = true;
             refreshKey = "content";
           } else {
-            const derivedOutline =
-              isContentPath(tab.path) && tab.path !== "goink.md"
-                ? outlinePath(
-                    parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-                  )
-                : null;
-            if (derivedOutline && derivedOutline === data.path) {
+            if (tab.outlinePath === data.path) {
               needRefresh = true;
               refreshKey = "outlineContent";
             }
@@ -505,10 +538,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     const titleFromPath = useCallback(
       (p: string): string => {
-        if (p.startsWith("chapters/")) {
-          const num = parseInt(p.replace("chapters/", "").replace(".md", ""));
-          return t("sidebar.chapterN", { n: num });
-        }
         if (p === "goink.md") return t("content.storyStatus");
         if (isSkillPath(p))
           return `${t("content.skillLabel")}${skillNameFromPath(p)}`;
@@ -524,9 +553,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         readOnly?: boolean,
         initialViewMode?: string,
       ) => {
-        const display = title || titleFromPath(path);
         const existing = tabs.find((t) => t.path === path && t.type === "file");
         if (existing) {
+          if (!existing.outlinePath && path.startsWith("chapters/")) {
+            void resolveChapter(path)
+              .then((item) => {
+                if (item) updateTab(existing.id, { outlinePath: item.outline_file_path });
+              })
+              .catch(() => undefined);
+          }
           if (initialViewMode) {
             updateTab(existing.id, {
               viewMode: initialViewMode as EditorTab["viewMode"],
@@ -544,12 +579,21 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           (skReadOnly ? "preview" : isSkillPath(path) ? "preview" : "content");
 
         setIsLoading(true);
-        fetchContent(novelId, path)
-          .then((content) => {
+        Promise.all([
+          fetchContent(novelId, path).catch(() => ""),
+          resolveChapter(path).catch(() => undefined),
+        ])
+          .then(([content, item]) => {
             const c = content ?? "";
+            const display =
+              title ||
+              (item
+                ? `${t("sidebar.chapterN", { n: item.reading_number })} ${item.title}`
+                : titleFromPath(path));
             openTab({
               type: "file",
               path,
+              outlinePath: item?.outline_file_path,
               title: display,
               content: c,
               isDirty: false,
@@ -558,19 +602,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             });
             // 3.8 后续：activeContent 迁 useEditorStore。
             useEditorStore.getState().setActiveContent(c);
-          })
-          .catch(() => {
-            openTab({
-              type: "file",
-              path,
-              title: display,
-              content: "",
-              isDirty: false,
-              viewMode: initialMode,
-              readOnly: skReadOnly,
-            });
-            // 3.8 后续：activeContent 迁 useEditorStore。
-            useEditorStore.getState().setActiveContent("");
           })
           .finally(() => setIsLoading(false));
       },
@@ -582,6 +613,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         setActiveTabId,
         titleFromPath,
         updateTab,
+        resolveChapter,
+        t,
       ],
     );
 
@@ -649,18 +682,19 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       }
     }, [activeTab?.id, activeTab?.content, doHighlight]);
 
-    function filePathFromDiff(diffPath: string): {
-      filePath: string;
-      viewMode: "content" | "outline";
-    } {
-      if (isOutlinePath(diffPath)) {
-        return {
-          filePath: diffPath.replace("outlines/", "chapters/"),
-          viewMode: "outline",
-        };
-      }
-      return { filePath: diffPath, viewMode: "content" };
-    }
+    const filePathFromDiff = useCallback(
+      async (diffPath: string): Promise<{
+        filePath: string;
+        viewMode: "content" | "outline";
+      }> => {
+        const item = await resolveChapter(diffPath).catch(() => undefined);
+        if (item?.outline_file_path === diffPath) {
+          return { filePath: item.file_path, viewMode: "outline" };
+        }
+        return { filePath: diffPath, viewMode: "content" };
+      },
+      [resolveChapter],
+    );
 
     // ── 审批操作（由 WorkspaceView 通过 ref 调用）───────────
 
@@ -669,7 +703,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
         if (!dt) return;
 
-        const { filePath, viewMode } = filePathFromDiff(dt.path);
+        const { filePath, viewMode } = await filePathFromDiff(dt.path);
         const ft = tabs.find((t) => t.type === "file" && t.path === filePath);
 
         if (ft) {
@@ -690,21 +724,21 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         }
 
         closeTab(dt.id);
-        doOpenFile(filePath);
+        doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [novelId, tabs, fetchContent, updateTab, closeTab, doOpenFile],
+      [novelId, tabs, fetchContent, updateTab, closeTab, doOpenFile, filePathFromDiff],
     );
 
     const handleDiffReject = useCallback(
-      (toolId: string) => {
+      async (toolId: string) => {
         const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
         if (!dt) return;
 
-        const { filePath } = filePathFromDiff(dt.path);
+        const { filePath, viewMode } = await filePathFromDiff(dt.path);
         closeTab(dt.id);
-        doOpenFile(filePath);
+        doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [tabs, closeTab, doOpenFile],
+      [tabs, closeTab, doOpenFile, filePathFromDiff],
     );
 
     // ── 暴露给父组件的方法 ──────────────────────────────────

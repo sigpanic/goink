@@ -899,7 +899,8 @@ describe("ChapterManagementView", () => {
         volume_id: null,
         reading_number: 1,
         title: "开篇",
-        file_path: "chapters/001.md",
+        file_path: "chapters/id_1.md",
+        outline_file_path: "outlines/id_1.md",
         word_count: 10,
       },
     ]);
@@ -909,7 +910,7 @@ describe("ChapterManagementView", () => {
     });
     const tabId = useEditorTabsStore
       .getState()
-      .openTab(1, { type: "file", path: "chapters/001.md", title: "开篇" });
+      .openTab(1, { type: "file", path: "chapters/id_1.md", title: "开篇" });
     renderView();
     await screen.findByText("开篇");
     fireEvent.click(
@@ -939,7 +940,8 @@ describe("ChapterManagementView", () => {
           volume_id: null,
           reading_number: 1,
           title: "开篇",
-          file_path: "chapters/001.md",
+          file_path: "chapters/id_1.md",
+          outline_file_path: "outlines/id_1.md",
           word_count: 10,
         },
       ])
@@ -947,14 +949,15 @@ describe("ChapterManagementView", () => {
     const store = useEditorTabsStore.getState();
     store.openTab(1, {
       type: "file",
-      path: "chapters/001.md",
+      path: "chapters/id_1.md",
+      outlinePath: "outlines/id_1.md",
       title: "开篇",
       isDirty: true,
     });
-    store.openTab(1, { type: "file", path: "outlines/001.md", title: "大纲" });
+    store.openTab(1, { type: "file", path: "outlines/id_1.md", title: "大纲" });
     const qc = renderView();
-    qc.setQueryData(contentKeys.detail(1, "chapters/001.md"), "正文");
-    qc.setQueryData(contentKeys.detail(1, "outlines/001.md"), "大纲");
+    qc.setQueryData(contentKeys.detail(1, "chapters/id_1.md"), "正文");
+    qc.setQueryData(contentKeys.detail(1, "outlines/id_1.md"), "大纲");
     await screen.findByText("开篇");
     fireEvent.click(
       screen.getByRole("button", {
@@ -972,10 +975,10 @@ describe("ChapterManagementView", () => {
     );
     expect(useEditorTabsStore.getState().byNovel["1"].tabs).toHaveLength(0);
     expect(
-      qc.getQueryData(contentKeys.detail(1, "chapters/001.md")),
+      qc.getQueryData(contentKeys.detail(1, "chapters/id_1.md")),
     ).toBeUndefined();
     expect(
-      qc.getQueryData(contentKeys.detail(1, "outlines/001.md")),
+      qc.getQueryData(contentKeys.detail(1, "outlines/id_1.md")),
     ).toBeUndefined();
   });
 });

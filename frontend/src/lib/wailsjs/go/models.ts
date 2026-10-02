@@ -994,6 +994,7 @@ export namespace chapter {
 	    // Go type: time
 	    updated_at: any;
 	    file_path: string;
+	    outline_file_path: string;
 	    reading_number: number;
 	
 	    static createFrom(source: any = {}) {
@@ -1012,6 +1013,7 @@ export namespace chapter {
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.file_path = source["file_path"];
+	        this.outline_file_path = source["outline_file_path"];
 	        this.reading_number = source["reading_number"];
 	    }
 	
