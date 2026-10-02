@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/chapter"
@@ -23,6 +24,9 @@ type SaveContentInput struct {
 // GetContent 返回小说仓库中指定路径的文件内容。文件不存在时返回空字符串。
 // 内置 skill 路径（/builtin/skills/）从内存读取。
 func (a *App) GetContent(novelID int64, path string) (string, error) {
+	if err := a.validateChapterContentPath(novelID, path); err != nil {
+		return "", err
+	}
 	if strings.HasPrefix(path, "/builtin/skills/") {
 		name := strings.TrimSuffix(strings.TrimPrefix(path, "/builtin/skills/"), ".md")
 		if a.skill == nil {
@@ -47,6 +51,9 @@ func (a *App) GetContent(novelID int64, path string) (string, error) {
 
 // SaveContent 保存小说仓库中指定路径的文件内容。
 func (a *App) SaveContent(input SaveContentInput) error {
+	if err := a.validateChapterContentPath(input.NovelID, input.Path); err != nil {
+		return err
+	}
 	if isSkillPath(input.Path) {
 		if _, err := skill.ParseBytes([]byte(input.Content), ""); err != nil {
 			return fmt.Errorf("skill 格式错误: %w", err)
@@ -85,6 +92,26 @@ func (a *App) SaveContent(input SaveContentInput) error {
 	}
 
 	return nil
+}
+
+func (a *App) validateChapterContentPath(novelID int64, filePath string) error {
+	clean := strings.ToLower(path.Clean(strings.ReplaceAll(filePath, "\\", "/")))
+	if !strings.HasPrefix(clean, "chapters/") && !strings.HasPrefix(clean, "outlines/") {
+		return nil
+	}
+
+	ref, ok := git.ParseChapterLikePath(filePath)
+	if !ok || ref.IsNew || ref.ID <= 0 {
+		return fmt.Errorf("章节路径无效: %q", filePath)
+	}
+	canonical := git.ChapterPath(ref.ID)
+	if ref.IsOutline {
+		canonical = git.OutlinePath(ref.ID)
+	}
+	if filePath != canonical {
+		return fmt.Errorf("章节路径非规范格式: %q，应使用 %q", filePath, canonical)
+	}
+	return a.ensureChapterIDsInNovel(novelID, []int64{ref.ID})
 }
 
 func isSkillPath(p string) bool {

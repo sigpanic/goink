@@ -1,11 +1,13 @@
 package app
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,11 +16,89 @@ import (
 func TestGetContent_NonExistent(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)
-	novelID := novel.ID
+	ch := createTestChapter(t, app, novel.ID)
 
-	content, err := app.GetContent(novelID, "chapters/999.md")
+	content, err := app.GetContent(novel.ID, ch.OutlineFilePath)
 	require.NoError(t, err)
 	assert.Equal(t, "", content)
+}
+
+func TestContentRejectsNonCanonicalChapterPaths(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	ch := createTestChapter(t, app, novel.ID)
+	paths := []string{
+		"chapters/001.md",
+		"outlines/001.md",
+		"outlines/NaN.md",
+		"chapters/new.md",
+		"outlines/new.md",
+		"chapters/id_0.md",
+		"chapters/id_999999.md",
+		"chapters\\001.md",
+		"./chapters/001.md",
+		fmt.Sprintf("chapters/1/id_%d.md", ch.ID),
+		fmt.Sprintf("outlines/1/id_%d.md", ch.ID),
+		fmt.Sprintf("chapters/id_0%d.md", ch.ID),
+	}
+	for _, filePath := range paths {
+		t.Run(filePath, func(t *testing.T) {
+			_, err := app.GetContent(novel.ID, filePath)
+			require.Error(t, err)
+			err = app.SaveContent(SaveContentInput{
+				NovelID: novel.ID,
+				Path:    filePath,
+				Content: "should not be written",
+			})
+			require.Error(t, err)
+			fullPath, err := git.ResolvePath(filePath, novel.ID)
+			require.NoError(t, err)
+			_, err = os.Stat(fullPath)
+			require.ErrorIs(t, err, os.ErrNotExist)
+		})
+	}
+}
+
+func TestContentRejectsChapterFromAnotherNovel(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	otherNovel := createTestNovel(t, app)
+	otherChapter := createTestChapter(t, app, otherNovel.ID)
+
+	for _, filePath := range []string{otherChapter.FilePath, otherChapter.OutlineFilePath} {
+		_, err := app.GetContent(novel.ID, filePath)
+		require.Error(t, err)
+		err = app.SaveContent(SaveContentInput{
+			NovelID: novel.ID,
+			Path:    filePath,
+			Content: "should not be written",
+		})
+		require.Error(t, err)
+		fullPath, err := git.ResolvePath(filePath, novel.ID)
+		require.NoError(t, err)
+		_, err = os.Stat(fullPath)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
+}
+
+func TestContentDoesNotReadOrOverwriteExistingLegacyChapter(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	legacyPath := filepath.Join(config.NovelDirPath(novel.ID), "chapters", "001.md")
+	require.NoError(t, os.MkdirAll(filepath.Dir(legacyPath), 0o755))
+	require.NoError(t, os.WriteFile(legacyPath, []byte("legacy content"), 0o644))
+
+	_, err := app.GetContent(novel.ID, "chapters/001.md")
+	require.Error(t, err)
+	err = app.SaveContent(SaveContentInput{
+		NovelID: novel.ID,
+		Path:    "chapters/001.md",
+		Content: "replacement",
+	})
+	require.Error(t, err)
+	data, err := os.ReadFile(legacyPath)
+	require.NoError(t, err)
+	assert.Equal(t, "legacy content", string(data))
 }
 
 func TestSaveAndGetContent(t *testing.T) {
@@ -67,4 +147,14 @@ func TestSaveContent_ChapterPath(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, chapters, 1)
 	assert.Greater(t, chapters[0].WordCount, 0)
+
+	err = app.SaveContent(SaveContentInput{
+		NovelID: novelID,
+		Path:    ch.OutlineFilePath,
+		Content: "Chapter outline",
+	})
+	require.NoError(t, err)
+	outline, err := app.GetContent(novelID, ch.OutlineFilePath)
+	require.NoError(t, err)
+	assert.Equal(t, "Chapter outline", outline)
 }
