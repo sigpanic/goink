@@ -11,21 +11,39 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import ChapterManagementView from "./ChapterManagementView";
 
-const { mockGetChapters, mockGetVolumes } = vi.hoisted(() => ({
+const {
+  mockGetChapters,
+  mockGetVolumes,
+  mockPlaceVolume,
+  mockUpdateVolume,
+  mockDeleteVolume,
+} = vi.hoisted(() => ({
   mockGetChapters: vi.fn(),
   mockGetVolumes: vi.fn(),
+  mockPlaceVolume: vi.fn(),
+  mockUpdateVolume: vi.fn(),
+  mockDeleteVolume: vi.fn(),
 }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   GetChapters: mockGetChapters,
   GetVolumes: mockGetVolumes,
+  PlaceVolume: mockPlaceVolume,
+  UpdateVolume: mockUpdateVolume,
+  DeleteVolume: mockDeleteVolume,
 }));
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (
       key: string,
-      options?: { n?: number; count?: number; start?: number; end?: number },
+      options?: {
+        n?: number;
+        count?: number;
+        start?: number;
+        end?: number;
+        name?: string;
+      },
     ) => {
       if (key === "sidebar.chapterN") return `Ch.${options?.n}`;
       if (key === "sidebar.wordCount") return `${options?.count} words`;
@@ -33,6 +51,7 @@ vi.mock("react-i18next", () => ({
         return `${options?.count} chapters`;
       if (key === "sidebar.chapterRange")
         return `Ch.${options?.start}-Ch.${options?.end}`;
+      if (options?.name) return `${key} ${options.name}`;
       return key;
     },
   }),
@@ -52,6 +71,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mockGetChapters.mockResolvedValue([]);
   mockGetVolumes.mockResolvedValue([]);
+  mockPlaceVolume.mockResolvedValue({});
+  mockUpdateVolume.mockResolvedValue(undefined);
+  mockDeleteVolume.mockResolvedValue(undefined);
   vi.mocked(EventsOn).mockReturnValue(vi.fn());
 });
 
@@ -208,5 +230,130 @@ describe("ChapterManagementView", () => {
     expect(mockGetChapters).toHaveBeenCalledTimes(1);
     act(() => onFileChanged?.({ novel_id: 1, path: "chapters/1.md" }));
     await waitFor(() => expect(mockGetChapters).toHaveBeenCalledTimes(2));
+  });
+
+  it("可在指定卷前新建卷，成功后刷新卷和章节", async () => {
+    mockGetVolumes.mockResolvedValue([
+      { id: 10, name: "第一卷", sort_order: 1 },
+    ]);
+    renderView();
+    await screen.findByRole("button", { name: "第一卷" });
+    fireEvent.click(
+      screen.getByRole("button", { name: "chapterManagement.createVolume" }),
+    );
+    fireEvent.change(screen.getByLabelText("chapterManagement.volumeName"), {
+      target: { value: "序章" },
+    });
+    fireEvent.change(screen.getByLabelText("chapterManagement.insertBefore"), {
+      target: { value: "10" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+    await waitFor(() =>
+      expect(mockPlaceVolume).toHaveBeenCalledWith({
+        novel_id: 1,
+        name: "序章",
+        before_volume_id: 10,
+      }),
+    );
+    await waitFor(() => expect(mockGetChapters).toHaveBeenCalledTimes(2));
+    expect(mockGetVolumes).toHaveBeenCalledTimes(2);
+  });
+
+  it("支持重命名，且有章节的卷不能从前端删除", async () => {
+    mockGetVolumes.mockResolvedValue([
+      { id: 10, name: "第一卷", sort_order: 1 },
+    ]);
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 1,
+        volume_id: 10,
+        reading_number: 1,
+        title: "开篇",
+        word_count: 10,
+      },
+    ]);
+    renderView();
+    await screen.findByText("开篇");
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "chapterManagement.renameVolume 第一卷",
+      }),
+    );
+    fireEvent.change(screen.getByLabelText("chapterManagement.volumeName"), {
+      target: { value: "新版第一卷" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "common.save" }));
+    await waitFor(() =>
+      expect(mockUpdateVolume).toHaveBeenCalledWith(1, 10, "新版第一卷"),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "chapterManagement.deleteVolume 第一卷",
+      }),
+    );
+    expect(mockDeleteVolume).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("chapterManagement.deleteVolumeConfirm 第一卷"),
+    ).not.toBeInTheDocument();
+  });
+
+  it("空卷确认后删除；拖拽仅传源卷和锚点卷 ID", async () => {
+    mockGetVolumes.mockResolvedValue([
+      { id: 10, name: "第一卷", sort_order: 1 },
+      { id: 20, name: "第二卷", sort_order: 2 },
+      { id: 30, name: "第三卷", sort_order: 3 },
+    ]);
+    renderView();
+    await screen.findByRole("button", { name: "第三卷" });
+    const transfer = {
+      effectAllowed: "none",
+      dropEffect: "none",
+      setData: vi.fn(),
+    };
+    const source = screen.getByRole("button", {
+      name: "chapterManagement.dragVolume 第三卷",
+    });
+    fireEvent.dragStart(source, { dataTransfer: transfer });
+    fireEvent.dragOver(screen.getByRole("button", { name: "第一卷" }), {
+      dataTransfer: transfer,
+    });
+    fireEvent.drop(screen.getByRole("button", { name: "第一卷" }), {
+      dataTransfer: transfer,
+    });
+    await waitFor(() =>
+      expect(mockPlaceVolume).toHaveBeenCalledWith({
+        novel_id: 1,
+        source_volume_id: 30,
+        before_volume_id: 10,
+      }),
+    );
+    fireEvent.dragStart(
+      screen.getByRole("button", {
+        name: "chapterManagement.dragVolume 第一卷",
+      }),
+      { dataTransfer: transfer },
+    );
+    fireEvent.dragOver(screen.getByText("chapterManagement.moveToEnd"), {
+      dataTransfer: transfer,
+    });
+    fireEvent.drop(screen.getByText("chapterManagement.moveToEnd"), {
+      dataTransfer: transfer,
+    });
+    await waitFor(() =>
+      expect(mockPlaceVolume).toHaveBeenCalledWith({
+        novel_id: 1,
+        source_volume_id: 10,
+      }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "chapterManagement.deleteVolume 第二卷",
+      }),
+    );
+    expect(
+      screen.getByText("chapterManagement.deleteVolumeConfirm 第二卷"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "common.confirm" }));
+    await waitFor(() => expect(mockDeleteVolume).toHaveBeenCalledWith(1, 20));
   });
 });

@@ -7,6 +7,7 @@ import type { chapter } from "@/lib/wailsjs/go/models";
 import { chapterKeys } from "@/lib/queryKeys";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useVolumes } from "@/components/volume/useVolumes";
+import VolumeRail from "@/components/volume/VolumeRail";
 
 interface Props {
   novelId: number;
@@ -240,38 +241,19 @@ export default function ChapterManagementView({ novelId }: Props) {
             </div>
           ) : (
             <>
-              <section
-                aria-label={t("chapterManagement.volumes")}
-                className="sticky top-0 z-10 rounded-lg bg-background py-2"
-              >
-                <h2 className="mb-3 text-sm font-medium text-muted-foreground">
-                  {t("chapterManagement.volumes")}
-                </h2>
-                {volumes.length === 0 && (
-                  <p className="mb-3 text-sm text-muted-foreground">
-                    {t("chapterManagement.noVolumes")}
-                  </p>
-                )}
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {volumes.map((volume) => (
-                    <button
-                      key={volume.id}
-                      type="button"
-                      onClick={() => jumpToGroup(groupKey(volume.id))}
-                      className="shrink-0 rounded-lg border bg-card px-3 py-2 text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {volume.name}
-                    </button>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => jumpToGroup(groupKey(null))}
-                    className="shrink-0 rounded-lg border border-dashed px-3 py-2 text-sm text-muted-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {t("chapterManagement.unassigned")}
-                  </button>
-                </div>
-              </section>
+              <VolumeRail
+                novelId={novelId}
+                volumes={volumes}
+                chapterCounts={
+                  new Map(
+                    volumes.map((volume) => [
+                      volume.id,
+                      groups.byVolume.get(volume.id)?.length ?? 0,
+                    ]),
+                  )
+                }
+                onNavigate={(volumeId) => jumpToGroup(groupKey(volumeId))}
+              />
 
               {chapters.length === 0 && (
                 <p className="text-sm text-muted-foreground">
