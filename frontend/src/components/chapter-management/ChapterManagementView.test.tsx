@@ -537,6 +537,10 @@ describe("ChapterManagementView", () => {
         name: "chapterManagement.insertAfterChapter",
       }),
     );
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "chapterManagement.chapterPosition" }),
+    ).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("chapterManagement.chapterTitle"), {
       target: { value: "插入章" },
     });

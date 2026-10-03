@@ -145,6 +145,7 @@ export default function SidePanel({
         />
       ) : activePanel === "chapters" ? (
         <ChapterList
+          key={novelId}
           novelId={novelId}
           onSelectChapter={onSelectChapter}
           onSelectGoink={onSelectGoink}

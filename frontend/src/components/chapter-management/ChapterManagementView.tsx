@@ -12,6 +12,7 @@ import { toErrorMessage } from "@/utils/error";
 import { toastError } from "@/utils/toast";
 import ChapterGroup from "./ChapterGroup";
 import ChapterEditorForm, { type ChapterEditor } from "./ChapterEditorForm";
+import ChapterCreateDialog from "./ChapterCreateDialog";
 import ChapterDeletionFeedback, {
   type BlockedChapterDeletion,
 } from "./ChapterDeletionFeedback";
@@ -343,7 +344,21 @@ export default function ChapterManagementView({ novelId }: Props) {
                     void placeChapter(dragChapterId, volumeId, null);
                 }}
               />
-              {editor && (
+              {editor?.kind === "create" && (
+                <ChapterCreateDialog
+                  editor={editor}
+                  volumes={volumes}
+                  targetItems={groupItems(editor.volumeId)}
+                  busy={busy}
+                  showPosition
+                  onChange={setEditor}
+                  onSubmit={(event) => {
+                    void submitEditor(event);
+                  }}
+                  onClose={() => setEditor(null)}
+                />
+              )}
+              {editor?.kind === "move" && (
                 <ChapterEditorForm
                   editor={editor}
                   volumes={volumes}

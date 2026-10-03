@@ -1,17 +1,21 @@
-import { useState, useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { ChevronRight, FileText, Pencil, Plus, Download } from "lucide-react";
-import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
-import { Button } from "@/components/ui/button";
-import type { chapter } from "@/lib/wailsjs/go/models";
+import { Download, FileText, Plus } from "lucide-react";
+import type { chapter, volume } from "@/lib/wailsjs/go/models";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { chapterKeys, maxChapterKeys } from "@/lib/queryKeys";
-import { useChapters } from "./useChapters";
-import { useCreateChapter } from "./useCreateChapter";
-import { useUpdateChapterTitle } from "./useUpdateChapterTitle";
+import { toastError } from "@/utils/toast";
+import { toErrorMessage } from "@/utils/error";
 import { useEditorStore } from "@/stores/useEditorStore";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
+import type { ChapterEditor } from "@/components/chapter-management/ChapterEditorForm";
+import ChapterCreateDialog from "@/components/chapter-management/ChapterCreateDialog";
+import { useChapterStructureMutations } from "@/components/chapter-management/useChapterStructureMutations";
+import { useVolumes } from "@/components/volume/useVolumes";
+import { useChapters } from "./useChapters";
+import { useUpdateChapterTitle } from "./useUpdateChapterTitle";
+import SidebarChapterGroup, { SIDEBAR_BLOCK_SIZE } from "./SidebarChapterGroup";
 
 interface Props {
   novelId: number;
@@ -20,7 +24,21 @@ interface Props {
   onExportNovel: () => void;
 }
 
-const BLOCK_SIZE = 100;
+interface ChapterGroup {
+  key: string;
+  volumeId: number | null;
+  name: string;
+  items: chapter.Chapter[];
+}
+
+const EMPTY_CHAPTERS: chapter.Chapter[] = [];
+const EMPTY_VOLUMES: volume.Volume[] = [];
+type GroupExpansion = { expanded: boolean; anchorId?: number };
+type RangeSelection = { index: number; anchorId?: number };
+
+function groupKey(volumeId: number | null): string {
+  return volumeId === null ? "unassigned" : `volume:${volumeId}`;
+}
 
 export default function ChapterList({
   novelId,
@@ -30,311 +48,292 @@ export default function ChapterList({
 }: Props) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  // 3.8 后续：target 迁 useEditorStore，ChapterList 自己订阅 tabTarget（高亮选中章节/goink）。
-  const target = useEditorStore((s) => s.tabTarget);
+  const target = useEditorStore((state) => state.tabTarget);
+  const activeTabPath = useEditorTabsStore((state) => {
+    const entry = state.byNovel[String(novelId)];
+    return entry?.tabs.find((tab) => tab.id === entry.activeTabId)?.path;
+  });
+  const chapterQuery = useChapters(novelId);
+  const volumeQuery = useVolumes(novelId);
+  const { place } = useChapterStructureMutations(novelId);
+  const updateTitle = useUpdateChapterTitle(novelId);
+  const chapters = chapterQuery.data ?? EMPTY_CHAPTERS;
+  const volumes = useMemo(
+    () =>
+      [...(volumeQuery.data ?? EMPTY_VOLUMES)].sort(
+        (a, b) => a.sort_order - b.sort_order || a.id - b.id,
+      ),
+    [volumeQuery.data],
+  );
+  const [editor, setEditor] = useState<ChapterEditor | null>(null);
+  const [expandedGroups, setExpandedGroups] = useState<
+    Record<string, GroupExpansion>
+  >({});
+  const [selectedRanges, setSelectedRanges] = useState<
+    Record<string, RangeSelection>
+  >({});
 
-  // 5.2 commit 1: GetChapters 走 query（直接 import wailsjs，不用 useApp）。
-  // query 错误走全局中间件，组件加 isError 内连显示 + retry（对齐 ReaderList/PreferenceList）。
-  // 5.2 commit 2: CreateChapter/UpdateChapterTitle 走 mutation（onSuccess invalidate 接管 refetch）。
-  const { data: chapters = [], isError, refetch } = useChapters(novelId);
-  const createChapterMutation = useCreateChapter(novelId);
-  const updateChapterTitleMutation = useUpdateChapterTitle(novelId);
-  const [chapterTitle, setChapterTitle] = useState("");
-  const [showCreateChapter, setShowCreateChapter] = useState(false);
-  const [expandedBlocks, setExpandedBlocks] = useState<Set<number>>(new Set());
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [createError, setCreateError] = useState("");
-
-  // file:changed 时刷新章节列表（字数统计、新章等）
-  // 5.2 commit 3: 改 qc.invalidateQueries（chapterKeys.list 活跃 query 自动 refetch）。
-  // path 属 chapters/ 时同时失效 maxChapterKeys（storyarc windowCenter 跟随，补 AI 写章场景）。
-  // refetch 保留给 isError retry 按钮（立即重拉语义，与 invalidate 标 stale 不同用途）。
   useEffect(() => {
-    const unsub = EventsOn("file:changed", (data: any) => {
-      if (data.novel_id !== novelId) return;
-      if (
-        data.path &&
-        (data.path.startsWith("chapters/") ||
+    const unsubscribe = EventsOn(
+      "file:changed",
+      (data: { novel_id?: number; path?: string }) => {
+        if (data.novel_id !== novelId || !data.path) return;
+        if (
+          data.path.startsWith("chapters/") ||
           data.path.startsWith("outlines/") ||
-          data.path === "goink.md")
-      ) {
-        qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
-        if (data.path.startsWith("chapters/")) {
-          qc.invalidateQueries({ queryKey: maxChapterKeys.detail(novelId) });
+          data.path === "goink.md"
+        ) {
+          void qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
+          if (data.path.startsWith("chapters/")) {
+            void qc.invalidateQueries({
+              queryKey: maxChapterKeys.detail(novelId),
+            });
+          }
         }
-      }
-    });
-    return () => unsub();
+      },
+    );
+    return () => unsubscribe();
   }, [novelId, qc]);
 
-  // ── 章节分块 ────────────────────────────────────────────
-
-  const chapterBlocks = useMemo(() => {
-    const sorted = [...chapters].sort(
-      (a, b) => b.reading_number - a.reading_number,
-    );
-    const blocks: {
-      key: number;
-      start: number;
-      end: number;
-      chs: chapter.Chapter[];
-    }[] = [];
-    for (let i = 0; i < sorted.length; i += BLOCK_SIZE) {
-      const slice = sorted.slice(i, Math.min(i + BLOCK_SIZE, sorted.length));
-      slice.sort((a, b) => a.reading_number - b.reading_number);
-      blocks.push({
-        key: i / BLOCK_SIZE,
-        start: slice[0].reading_number,
-        end: slice[slice.length - 1].reading_number,
-        chs: slice,
+  const groups = useMemo(() => {
+    const byVolume = new Map<number, ChapterGroup>();
+    for (const item of volumes) {
+      byVolume.set(item.id, {
+        key: groupKey(item.id),
+        volumeId: item.id,
+        name: item.name,
+        items: [],
       });
     }
-    return blocks;
-  }, [chapters]);
+    const unassigned: ChapterGroup = {
+      key: groupKey(null),
+      volumeId: null,
+      name: t("chapterManagement.unassigned"),
+      items: [],
+    };
+    for (const item of chapters) {
+      const group =
+        item.volume_id == null ? unassigned : byVolume.get(item.volume_id);
+      (group ?? unassigned).items.push(item);
+    }
+    for (const group of byVolume.values()) {
+      group.items.sort((a, b) => a.reading_number - b.reading_number);
+    }
+    unassigned.items.sort((a, b) => a.reading_number - b.reading_number);
+    return [...byVolume.values(), unassigned];
+  }, [chapters, volumes, t]);
 
-  function toggleBlock(key: number) {
-    setExpandedBlocks((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
+  const selectedPath = activeTabPath ?? target?.path;
+  const activeChapter = chapters.find(
+    (item) =>
+      item.file_path === selectedPath ||
+      item.outline_file_path === selectedPath,
+  );
+  const activeChapterId = activeChapter?.id;
+  const activeGroupKey = activeChapter
+    ? groupKey(activeChapter.volume_id ?? null)
+    : null;
+  const activeGroup = groups.find((group) => group.key === activeGroupKey);
+  const activeRangeIndex = activeChapter
+    ? Math.floor(
+        Math.max(
+          0,
+          activeGroup?.items.findIndex(
+            (item) => item.id === activeChapter.id,
+          ) ?? 0,
+        ) / SIDEBAR_BLOCK_SIZE,
+      )
+    : 0;
+  const defaultGroupKey =
+    activeGroupKey ?? groupKey(volumes[volumes.length - 1]?.id ?? null);
+
+  function openCreate(volumeId: number | null) {
+    setEditor({ kind: "create", volumeId, beforeId: null, title: "" });
   }
 
-  async function handleCreateChapter() {
-    if (!chapterTitle.trim()) return;
+  async function submitEditor(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editor || editor.kind !== "create" || place.isPending) return;
+    const title = editor.title.trim();
+    if (!title) return;
     try {
-      await createChapterMutation.mutateAsync({
+      const created = await place.mutateAsync({
         novel_id: novelId,
-        title: chapterTitle.trim(),
+        title,
+        ...(editor.volumeId !== null
+          ? { target_volume_id: editor.volumeId }
+          : {}),
       });
-      setChapterTitle("");
-      setShowCreateChapter(false);
-      setCreateError("");
-      // 5.2 commit 2: onSuccess invalidate chapterKeys.list + maxChapterKeys，不需要 refetch
-    } catch (err) {
-      setCreateError(toErrorMessage(err));
+      const key = groupKey(editor.volumeId);
+      const itemCount =
+        groups.find((group) => group.key === key)?.items.length ?? 0;
+      setExpandedGroups((previous) => ({
+        ...previous,
+        [key]: { expanded: true, anchorId: created.id },
+      }));
+      setSelectedRanges((previous) => ({
+        ...previous,
+        [key]: {
+          index: Math.floor(itemCount / SIDEBAR_BLOCK_SIZE),
+          anchorId: created.id,
+        },
+      }));
+      setEditor(null);
+      onSelectChapter(created);
+    } catch (error) {
+      toastError(toErrorMessage(error));
     }
   }
 
-  function startEdit(ch: chapter.Chapter) {
-    setEditingId(ch.id);
-    setEditTitle(ch.title);
-  }
-
-  async function commitEdit() {
-    if (editingId == null) return;
-    const ch = chapters.find((c) => c.id === editingId);
-    if (!ch) return;
-    const newTitle = editTitle.trim();
-    if (newTitle && newTitle !== ch.title) {
-      try {
-        await updateChapterTitleMutation.mutateAsync({
-          chapterID: ch.id,
-          title: newTitle,
-        });
-        // 5.2 commit 2: onSuccess invalidate chapterKeys.list，不需要 refetch
-      } catch (err) {
-        toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
-        console.error(err);
-      }
-    }
-    setEditingId(null);
-  }
-
-  function cancelEdit() {
-    setEditingId(null);
-  }
+  const loadError = chapterQuery.isError || volumeQuery.isError;
+  const loading =
+    novelId > 0 && (chapterQuery.isPending || volumeQuery.isPending);
 
   return (
     <>
-      <div className="flex items-center justify-between px-3 py-2.5 border-b">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+      <div className="flex items-center justify-between border-b px-3 py-2.5">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t("sidebar.chaptersCount", { count: chapters.length })}
         </span>
         <div className="flex items-center gap-0.5">
           <button
+            type="button"
             onClick={onExportNovel}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            aria-label={t("sidebar.export")}
             title={t("sidebar.export")}
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
-            <Download className="w-3.5 h-3.5" />
+            <Download aria-hidden="true" className="h-3.5 w-3.5" />
           </button>
           <button
-            onClick={() => setShowCreateChapter(true)}
-            className="w-6 h-6 flex items-center justify-center rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            type="button"
+            onClick={() =>
+              openCreate(
+                activeChapter
+                  ? (activeChapter.volume_id ?? null)
+                  : (volumes[volumes.length - 1]?.id ?? null),
+              )
+            }
+            disabled={novelId <= 0 || loadError || loading || place.isPending}
+            aria-label={t("chapterManagement.createChapter")}
+            title={t("chapterManagement.createChapter")}
+            className="flex h-6 w-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
           >
-            <Plus className="w-4 h-4" />
+            <Plus aria-hidden="true" className="h-4 w-4" />
           </button>
         </div>
       </div>
 
-      {showCreateChapter && (
-        <div className="p-3 border-b space-y-2">
-          <input
-            type="text"
-            value={chapterTitle}
-            autoFocus
-            onChange={(e) => {
-              setChapterTitle(e.target.value);
-              setCreateError("");
-            }}
-            onKeyDown={(e) => e.key === "Enter" && handleCreateChapter()}
-            placeholder={t("sidebar.chapterTitle")}
-            className="w-full h-8 rounded-md border bg-background px-2.5 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
-          {createError && (
-            <p className="text-xs text-destructive">{createError}</p>
-          )}
-          <div className="flex gap-2">
-            <Button size="sm" onClick={handleCreateChapter}>
-              {t("sidebar.add")}
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => {
-                setShowCreateChapter(false);
-                setChapterTitle("");
-                setCreateError("");
-              }}
-            >
-              {t("sidebar.cancel")}
-            </Button>
-          </div>
-        </div>
+      {editor && (
+        <ChapterCreateDialog
+          editor={editor}
+          volumes={volumes}
+          targetItems={EMPTY_CHAPTERS}
+          busy={place.isPending}
+          showPosition={false}
+          onChange={setEditor}
+          onSubmit={(event) => void submitEditor(event)}
+          onClose={() => setEditor(null)}
+        />
       )}
 
       <button
+        type="button"
         onClick={onSelectGoink}
-        className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left hover:bg-muted/50 transition-colors relative border-b border-border/50
-          ${target?.path === "goink.md" ? "bg-primary/10 font-medium" : ""}`}
+        className={`relative flex w-full items-center gap-2.5 border-b border-border/50 px-3 py-1.5 text-left transition-colors hover:bg-muted/50 ${selectedPath === "goink.md" ? "bg-primary/10 font-medium" : ""}`}
       >
-        {target?.path === "goink.md" && (
-          <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
+        {selectedPath === "goink.md" && (
+          <span className="absolute left-0 top-1/2 h-5 w-0.5 -translate-y-1/2 rounded-r-full bg-primary" />
         )}
-        <FileText className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-        <span className="flex-1 text-sm truncate">
+        <FileText
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+        />
+        <span className="flex-1 truncate text-sm">
           {t("sidebar.storyStatus")}
         </span>
       </button>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        {isError ? (
-          <div className="flex items-center justify-center h-full">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+        {novelId <= 0 ? (
+          <p className="p-4 text-center text-xs text-muted-foreground">
+            {t("chapterManagement.selectNovel")}
+          </p>
+        ) : loadError ? (
+          <div className="flex h-full items-center justify-center">
             <div className="text-center">
-              <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+              <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/30" />
               <p className="text-xs text-destructive">
-                {t("chapter.loadFailed")}
+                {t(
+                  chapterQuery.isError
+                    ? "chapter.loadFailed"
+                    : "chapterManagement.loadFailed",
+                )}
               </p>
               <button
-                onClick={() => refetch()}
-                className="text-xs text-primary underline mt-1"
+                type="button"
+                onClick={() => {
+                  void chapterQuery.refetch();
+                  void volumeQuery.refetch();
+                }}
+                className="mt-1 text-xs text-primary underline"
               >
                 {t("common.retry")}
               </button>
             </div>
           </div>
-        ) : chapters.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <FileText className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">
-                {t("sidebar.noChapters")}
-              </p>
-              <p className="text-xs text-muted-foreground/60 mt-0.5">
-                {t("sidebar.createFirstChapter")}
-              </p>
-            </div>
-          </div>
+        ) : loading ? (
+          <p className="p-4 text-center text-xs text-muted-foreground">
+            {t("chapterManagement.loading")}
+          </p>
         ) : (
-          chapterBlocks.map((block) => {
-            const isExpanded = expandedBlocks.has(block.key);
-            const range =
-              block.start === block.end
-                ? t("sidebar.chapterN", { n: block.start })
-                : t("sidebar.chapterRange", {
-                    start: block.start,
-                    end: block.end,
-                  });
+          groups.map((group) => {
+            const anchorId =
+              group.key === activeGroupKey ? activeChapterId : undefined;
+            const defaultRange =
+              group.key === activeGroupKey
+                ? activeRangeIndex
+                : Math.max(
+                    0,
+                    Math.ceil(group.items.length / SIDEBAR_BLOCK_SIZE) - 1,
+                  );
+            const expansion = expandedGroups[group.key];
+            const expanded =
+              expansion && expansion.anchorId === anchorId
+                ? expansion.expanded
+                : group.key === defaultGroupKey;
+            const range = selectedRanges[group.key];
             return (
-              <div key={block.key}>
-                <button
-                  onClick={() => toggleBlock(block.key)}
-                  className="w-full flex items-center gap-1.5 px-3 py-1.5 text-left hover:bg-muted/30 transition-colors border-b border-border/50"
-                >
-                  <ChevronRight
-                    className={`w-3.5 h-3.5 text-muted-foreground shrink-0 transition-transform duration-200 ${isExpanded ? "rotate-90" : ""}`}
-                  />
-                  <span className="text-xs text-muted-foreground">{range}</span>
-                  <span className="text-[10px] text-muted-foreground/50 ml-auto">
-                    {t("sidebar.chapterCountShort", {
-                      count: block.chs.length,
-                    })}
-                  </span>
-                </button>
-                {isExpanded && (
-                  <div>
-                    {block.chs.map((ch) => (
-                      <div
-                        key={ch.id}
-                        className="group flex items-center w-full relative"
-                      >
-                        <button
-                          onClick={() => onSelectChapter(ch)}
-                          className={`flex items-center gap-2.5 pl-5 pr-2 py-1.5 text-left hover:bg-muted/50 transition-colors flex-1 min-w-0
-                            ${target?.path === ch.file_path ? "bg-primary/10 font-medium" : ""}`}
-                        >
-                          {target?.path === ch.file_path && (
-                            <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary rounded-r-full" />
-                          )}
-                          <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap tabular-nums">
-                            {t("sidebar.chapterN", { n: ch.reading_number })}
-                          </span>
-                          {editingId === ch.id ? (
-                            <input
-                              value={editTitle}
-                              onChange={(e) => setEditTitle(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") commitEdit();
-                                if (e.key === "Escape") cancelEdit();
-                              }}
-                              onBlur={commitEdit}
-                              autoFocus
-                              onClick={(e) => e.stopPropagation()}
-                              className="flex-1 h-6 rounded border bg-background px-1.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            />
-                          ) : (
-                            <span
-                              className="flex-1 text-sm truncate"
-                              title={ch.title}
-                            >
-                              {ch.title}
-                            </span>
-                          )}
-                          {ch.word_count > 0 && editingId !== ch.id && (
-                            <span className="text-[10px] text-muted-foreground/60 shrink-0">
-                              {t("sidebar.wordCount", { count: ch.word_count })}
-                            </span>
-                          )}
-                        </button>
-                        {editingId !== ch.id && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              startEdit(ch);
-                            }}
-                            className="absolute right-0 top-1/2 -translate-y-1/2 w-6 h-6 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 hover:bg-muted text-muted-foreground hover:text-foreground transition-all z-10"
-                          >
-                            <Pencil className="w-3 h-3" />
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <SidebarChapterGroup
+                key={group.key}
+                name={group.name}
+                chapters={group.items}
+                expanded={expanded}
+                selectedPath={selectedPath}
+                rangeIndex={
+                  range && range.anchorId === anchorId
+                    ? range.index
+                    : defaultRange
+                }
+                busy={place.isPending}
+                onToggle={() =>
+                  setExpandedGroups((previous) => ({
+                    ...previous,
+                    [group.key]: { expanded: !expanded, anchorId },
+                  }))
+                }
+                onRangeSelect={(index) =>
+                  setSelectedRanges((previous) => ({
+                    ...previous,
+                    [group.key]: { index, anchorId },
+                  }))
+                }
+                onCreate={() => openCreate(group.volumeId)}
+                onSelectChapter={onSelectChapter}
+                onRenameChapter={async (item, title) => {
+                  await updateTitle.mutateAsync({ chapterID: item.id, title });
+                }}
+              />
             );
           })
         )}

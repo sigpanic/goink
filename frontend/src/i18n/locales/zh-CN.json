@@ -131,6 +131,9 @@
     "create": "创建",
     "chapterN": "第{{n}}章",
     "chapterRange": "第{{start}} - {{end}}章",
+    "chapterSection": "{{name}}的章节区间",
+    "renameChapter": "重命名章节“{{title}}”",
+    "addAtGroupEnd": "追加到所选分组末尾",
     "chapterCountShort": "{{count}}章",
     "wordCount": "{{count}}字"
   },
