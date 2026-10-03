@@ -5,9 +5,8 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { imp, novel, chapter } from "@/lib/wailsjs/go/models";
+import type { imp, novel } from "@/lib/wailsjs/go/models";
 import ActivityBar from "@/components/shell/ActivityBar";
 import StatusBar from "@/components/shell/StatusBar";
 import WindowControls from "@/components/shell/WindowControls";
@@ -57,6 +56,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useUpdateCheck } from "@/components/update/useUpdateCheck";
+import { useContentNavigation } from "./workspace/useContentNavigation";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -189,28 +189,19 @@ export default function WorkspaceView({
 
   // ── SidePanel → ContentPanel 桥接 ─────────────────────────
 
-  function handleSelectChapter(ch: chapter.Chapter) {
-    const chTitle = `${t("sidebar.chapterN", { n: ch.reading_number })} ${ch.title}`;
-    // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
-    useEditorStore
-      .getState()
-      .setTabTarget({ path: ch.file_path, title: chTitle });
-    contentRef.current?.openFile(ch.file_path, chTitle);
-  }
-
-  function handleSelectGoink() {
-    useEditorStore.getState().setTabTarget({
-      path: "goink.md",
-      title: t("workspace.storyStatus"),
-    });
-    contentRef.current?.openFile("goink.md", t("workspace.storyStatus"));
-  }
-
-  function handleSelectVolumeOutline(path: string, volumeName: string) {
-    const title = t("sidebar.volumeOutlineTitle", { name: volumeName });
-    useEditorStore.getState().setTabTarget({ path, title });
-    contentRef.current?.openFile(path, title);
-  }
+  const {
+    handleSelectChapter,
+    handleSelectGoink,
+    handleSelectVolumeOutline,
+    handleSelectSkill,
+    handleEditSkill,
+    handleNewSkill,
+    handleSearchNavigateChapter,
+  } = useContentNavigation({
+    contentRef,
+    setActivePanel,
+    setActiveSkillName,
+  });
 
   // ── Approval ────────────────────────────────────────────
 
@@ -293,26 +284,6 @@ export default function WorkspaceView({
   ) {
     focusEntity(panelId, entityId, type);
     setActivePanel(panelId);
-  }
-
-  function handleSearchNavigateChapter(
-    filePath: string,
-    title: string,
-    _chapterNum: number,
-    matchPos: number,
-    matchLen: number,
-  ) {
-    flushSync(() => setActivePanel("chapters"));
-    if (matchPos >= 0 && matchLen > 0) {
-      contentRef.current?.openFileWithHighlight(
-        filePath,
-        title,
-        matchPos,
-        matchLen,
-      );
-    } else {
-      contentRef.current?.openFile(filePath, title);
-    }
   }
 
   async function handleSelectNovel(n: novel.Novel) {
@@ -437,23 +408,9 @@ export default function WorkspaceView({
               setDescription={setDescription}
               onCreateNovel={handleCreateNovel}
               activeSkillName={activeSkillName}
-              onSelectSkill={(path, title, readOnly) => {
-                setActiveSkillName(title);
-                contentRef.current?.openFile(path, title, readOnly);
-              }}
-              onEditSkill={(path, title, readOnly) => {
-                setActiveSkillName(title);
-                contentRef.current?.openFile(path, title, readOnly, "edit");
-              }}
-              onNewSkill={(name) => {
-                setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
-                contentRef.current?.openFile(
-                  `skills/${name}.md`,
-                  `${t("workspace.skillLabel")}${name}`,
-                  false,
-                  "edit",
-                );
-              }}
+              onSelectSkill={handleSelectSkill}
+              onEditSkill={handleEditSkill}
+              onNewSkill={handleNewSkill}
               onSearchNavigateEntity={handleSearchNavigateEntity}
               onSearchNavigateChapter={handleSearchNavigateChapter}
               onSelectStyleSample={(id) => setStyleSampleFocusId(id)}

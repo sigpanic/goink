@@ -6,6 +6,7 @@ import {
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
+import type { chapter } from "@/lib/wailsjs/go/models";
 import WorkspaceView from "./WorkspaceView";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { useEditorStore } from "@/stores/useEditorStore";
@@ -150,8 +151,14 @@ vi.mock("@/components/shell/StatusBar", () => ({
 // SidePanel mock：接收搜索导航回调，渲染按钮触发（测 handleSearchNavigate* 路径）
 vi.mock("@/components/sidebar/SidePanel", () => ({
   default: (props: {
+    activeSkillName?: string | null;
     onSelectNovel?: (n: { id: number; title: string }) => void;
+    onSelectChapter?: (ch: chapter.Chapter) => void;
+    onSelectGoink?: () => void;
     onSelectVolumeOutline?: (path: string, name: string) => void;
+    onSelectSkill?: (path: string, title: string, readOnly: boolean) => void;
+    onEditSkill?: (path: string, title: string, readOnly: boolean) => void;
+    onNewSkill?: (name: string) => void;
     onSearchNavigateEntity?: (panelId: string, entityId: number) => void;
     onSearchNavigateChapter?: (
       filePath: string,
@@ -161,7 +168,10 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
       matchLen: number,
     ) => void;
   }) => (
-    <div data-testid="side-panel">
+    <div
+      data-testid="side-panel"
+      data-active-skill-name={props.activeSkillName}
+    >
       <button onClick={() => props.onSearchNavigateEntity?.("characters", 5)}>
         nav-entity-characters
       </button>
@@ -208,6 +218,32 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
       >
         nav-volume-outline
       </button>
+      <button
+        onClick={() =>
+          props.onSelectChapter?.({
+            id: 42,
+            file_path: "chapters/id_42.md",
+            reading_number: 7,
+            title: "重逢",
+          } as chapter.Chapter)
+        }
+      >
+        nav-select-chapter
+      </button>
+      <button onClick={() => props.onSelectGoink?.()}>nav-goink</button>
+      <button
+        onClick={() =>
+          props.onSelectSkill?.("skills/read.md", "阅读技能", true)
+        }
+      >
+        nav-select-skill
+      </button>
+      <button
+        onClick={() => props.onEditSkill?.("skills/edit.md", "编辑技能", false)}
+      >
+        nav-edit-skill
+      </button>
+      <button onClick={() => props.onNewSkill?.("draft")}>nav-new-skill</button>
     </div>
   ),
 }));
@@ -497,6 +533,22 @@ describe("WorkspaceView search navigation", () => {
     expect(contentRefSpies.openFile).not.toHaveBeenCalled();
   });
 
+  it("从其他面板搜索章节时先挂载编辑器再打开并高亮", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("btn-profile"));
+    expect(screen.queryByTestId("content-panel")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("nav-chapter-highlight"));
+    expect(screen.getByTestId("content-panel")).toBeInTheDocument();
+    expect(contentRefSpies.openFileWithHighlight).toHaveBeenCalledWith(
+      "path/ch1.md",
+      "第一章",
+      10,
+      5,
+    );
+  });
+
   it("chapter 跳转无高亮(matchPos=-1)调 openFile", async () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
@@ -532,6 +584,50 @@ describe("WorkspaceView search navigation", () => {
       path: "volumes/id_10.md",
       title: "sidebar.volumeOutlineTitle",
     });
+  });
+
+  it("内容导航保留章节、故事状态及技能的打开参数", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+
+    fireEvent.click(screen.getByText("nav-select-chapter"));
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "chapters/id_42.md",
+      "sidebar.chapterN 重逢",
+    );
+    expect(useEditorStore.getState().tabTarget?.path).toBe("chapters/id_42.md");
+
+    fireEvent.click(screen.getByText("nav-goink"));
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "goink.md",
+      "workspace.storyStatus",
+    );
+    expect(useEditorStore.getState().tabTarget?.path).toBe("goink.md");
+
+    fireEvent.click(screen.getByText("nav-select-skill"));
+    fireEvent.click(screen.getByText("nav-edit-skill"));
+    fireEvent.click(screen.getByText("nav-new-skill"));
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "skills/read.md",
+      "阅读技能",
+      true,
+    );
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "skills/edit.md",
+      "编辑技能",
+      false,
+      "edit",
+    );
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "skills/draft.md",
+      "workspace.skillLabeldraft",
+      false,
+      "edit",
+    );
+    expect(screen.getByTestId("side-panel")).toHaveAttribute(
+      "data-active-skill-name",
+      "workspace.skillLabeldraft",
+    );
   });
 });
 
