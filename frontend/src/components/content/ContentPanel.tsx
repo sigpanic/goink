@@ -122,14 +122,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     }, [tabs]);
 
     useEffect(() => {
-      const pending = savingRef.current;
-      if (pending && !tabs.some((tab) => tab.id === pending.id)) {
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        savingRef.current = null;
-      }
-    }, [tabs]);
-
-    useEffect(() => {
       return () => {
         if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
       };
@@ -571,7 +563,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       ) => {
         const existing = tabs.find((t) => t.path === path && t.type === "file");
         if (existing) {
-          if (title && existing.title !== title) {
+          if (isVolumeOutlinePath(path) && title && existing.title !== title) {
             updateTab(existing.id, { title });
           }
           if (!existing.outlinePath && path.startsWith("chapters/")) {

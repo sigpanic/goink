@@ -280,6 +280,34 @@ describe("ContentPanel", () => {
     expect(screen.getByTestId("markdown")).toHaveTextContent("edited outline");
   });
 
+  it("keeps a queued chapter save when its tab closes", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "draft",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    const view = render(<ContentPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    mockTabsState = [];
+    mockActiveTabIdState = null;
+    view.rerender(<ContentPanel />);
+
+    await vi.waitFor(() =>
+      expect(mockSaveContent).toHaveBeenCalledWith({
+        novel_id: 1,
+        path: "chapters/id_1.md",
+        content: "edited outline",
+      }),
+    );
+  });
+
   it("opens file with empty content on GetContent failure", async () => {
     // 5.2 commit 1: fetchContent 失败时 tab 塞空内容（保留原 behavior）
     mockFetchContent.mockRejectedValue(new Error("not found"));
