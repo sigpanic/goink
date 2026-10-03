@@ -234,6 +234,52 @@ describe("ContentPanel", () => {
     expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
   });
 
+  it("opens a volume outline as standalone Markdown and saves to its returned path", async () => {
+    const path = "volumes/id_10.md";
+    mockFetchContent.mockResolvedValue("");
+    mockOpenTab.mockImplementation((tab: any) => {
+      mockTabsState = [{ ...tab, id: "volume-tab" }];
+      mockActiveTabIdState = "volume-tab";
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: any) => {
+      mockTabsState = mockTabsState.map((tab) =>
+        tab.id === id ? { ...tab, ...patch } : tab,
+      );
+    });
+
+    const ref = { current: null as ContentPanelHandle | null };
+    const view = render(<ContentPanel ref={ref} />);
+    await act(async () => {
+      ref.current?.openFile(path, "第一卷 · 卷纲");
+    });
+    expect(mockFetchContent).toHaveBeenCalledWith(1, path);
+    expect(mockGetChapters).not.toHaveBeenCalled();
+    expect(mockOpenTab).toHaveBeenCalledWith(
+      expect.objectContaining({ path, viewMode: "content", content: "" }),
+    );
+
+    view.rerender(<ContentPanel ref={ref} />);
+    expect(
+      screen.getByRole("button", { name: "content.preview" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "content.outline" }),
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+    expect(mockSaveContent).toHaveBeenCalledWith({
+      novel_id: 1,
+      path,
+      content: "edited outline",
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "content.preview" }));
+    view.rerender(<ContentPanel ref={ref} />);
+    expect(screen.getByTestId("markdown")).toHaveTextContent("edited outline");
+  });
+
   it("opens file with empty content on GetContent failure", async () => {
     // 5.2 commit 1: fetchContent 失败时 tab 塞空内容（保留原 behavior）
     mockFetchContent.mockRejectedValue(new Error("not found"));

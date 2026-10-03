@@ -66,12 +66,23 @@ function makeChapter(id: number, number: number, volumeId: number | null) {
   };
 }
 
-const firstVolume = { id: 10, name: "第一卷", sort_order: 1 };
-const secondVolume = { id: 20, name: "第二卷", sort_order: 2 };
+const firstVolume = {
+  id: 10,
+  name: "第一卷",
+  sort_order: 1,
+  outline_file_path: "volumes/id_10.md",
+};
+const secondVolume = {
+  id: 20,
+  name: "第二卷",
+  sort_order: 2,
+  outline_file_path: "volumes/id_20.md",
+};
 const defaultProps = {
   novelId: 1,
   onSelectChapter: vi.fn(),
   onSelectGoink: vi.fn(),
+  onSelectVolumeOutline: vi.fn(),
   onExportNovel: vi.fn(),
 };
 
@@ -157,6 +168,33 @@ describe("ChapterList", () => {
       .click(within(groups[0]).getByRole("button", { name: /第一卷/ }));
     expect(within(groups[0]).getByText("Chapter 1")).toBeInTheDocument();
     expect(within(groups[0]).queryByText("Chapter 2")).not.toBeInTheDocument();
+  });
+
+  it("opens a volume outline from its group and reveals the active outline group", async () => {
+    mockUseVolumes.mockReturnValue({
+      data: [firstVolume, secondVolume],
+      isPending: false,
+      isError: false,
+      refetch: vi.fn(),
+    });
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: secondVolume.outline_file_path,
+      title: "第二卷 · 卷纲",
+    });
+    const user = userEvent.setup();
+    render(<ChapterList {...defaultProps} />);
+
+    const secondGroup = screen.getAllByRole("region")[1];
+    const outlineButton = within(secondGroup).getByRole("button", {
+      name: "sidebar.openVolumeOutline",
+    });
+    expect(outlineButton).toHaveClass("bg-primary/10");
+    await user.click(outlineButton);
+    expect(defaultProps.onSelectVolumeOutline).toHaveBeenCalledWith(
+      "volumes/id_20.md",
+      "第二卷",
+    );
   });
 
   it("selects one range within a long volume and reveals the active chapter", async () => {

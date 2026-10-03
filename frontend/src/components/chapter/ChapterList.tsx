@@ -21,6 +21,7 @@ interface Props {
   novelId: number;
   onSelectChapter: (ch: chapter.Chapter) => void;
   onSelectGoink: () => void;
+  onSelectVolumeOutline: (path: string, volumeName: string) => void;
   onExportNovel: () => void;
 }
 
@@ -28,6 +29,7 @@ interface ChapterGroup {
   key: string;
   volumeId: number | null;
   name: string;
+  outlinePath?: string;
   items: chapter.Chapter[];
 }
 
@@ -44,6 +46,7 @@ export default function ChapterList({
   novelId,
   onSelectChapter,
   onSelectGoink,
+  onSelectVolumeOutline,
   onExportNovel,
 }: Props) {
   const { t } = useTranslation();
@@ -102,6 +105,7 @@ export default function ChapterList({
         key: groupKey(item.id),
         volumeId: item.id,
         name: item.name,
+        outlinePath: item.outline_file_path,
         items: [],
       });
     }
@@ -129,10 +133,15 @@ export default function ChapterList({
       item.file_path === selectedPath ||
       item.outline_file_path === selectedPath,
   );
+  const activeOutlineVolume = volumes.find(
+    (item) => item.outline_file_path === selectedPath,
+  );
   const activeChapterId = activeChapter?.id;
   const activeGroupKey = activeChapter
     ? groupKey(activeChapter.volume_id ?? null)
-    : null;
+    : activeOutlineVolume
+      ? groupKey(activeOutlineVolume.id)
+      : null;
   const activeGroup = groups.find((group) => group.key === activeGroupKey);
   const activeRangeIndex = activeChapter
     ? Math.floor(
@@ -307,6 +316,7 @@ export default function ChapterList({
               <SidebarChapterGroup
                 key={group.key}
                 name={group.name}
+                outlinePath={group.outlinePath}
                 chapters={group.items}
                 expanded={expanded}
                 selectedPath={selectedPath}
@@ -329,6 +339,10 @@ export default function ChapterList({
                   }))
                 }
                 onCreate={() => openCreate(group.volumeId)}
+                onSelectVolumeOutline={() => {
+                  if (group.outlinePath)
+                    onSelectVolumeOutline(group.outlinePath, group.name);
+                }}
                 onSelectChapter={onSelectChapter}
                 onRenameChapter={async (item, title) => {
                   await updateTitle.mutateAsync({ chapterID: item.id, title });

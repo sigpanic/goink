@@ -296,8 +296,9 @@ describe("ChapterManagementView", () => {
   });
 
   it("支持重命名，且有章节的卷不能从前端删除", async () => {
+    const outlinePath = "volumes/id_10.md";
     mockGetVolumes.mockResolvedValue([
-      { id: 10, name: "第一卷", sort_order: 1 },
+      { id: 10, name: "第一卷", sort_order: 1, outline_file_path: outlinePath },
     ]);
     mockGetChapters.mockResolvedValue([
       {
@@ -308,6 +309,11 @@ describe("ChapterManagementView", () => {
         word_count: 10,
       },
     ]);
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: outlinePath,
+      title: "sidebar.volumeOutlineTitle 第一卷",
+    });
     renderView();
     await screen.findByText("开篇");
     fireEvent.click(
@@ -321,6 +327,11 @@ describe("ChapterManagementView", () => {
     fireEvent.click(screen.getByRole("button", { name: "common.save" }));
     await waitFor(() =>
       expect(mockUpdateVolume).toHaveBeenCalledWith(1, 10, "新版第一卷"),
+    );
+    await waitFor(() =>
+      expect(useEditorTabsStore.getState().byNovel["1"]?.tabs[0]?.title).toBe(
+        "sidebar.volumeOutlineTitle 新版第一卷",
+      ),
     );
     fireEvent.click(
       screen.getByRole("button", {
@@ -391,6 +402,39 @@ describe("ChapterManagementView", () => {
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "common.confirm" }));
     await waitFor(() => expect(mockDeleteVolume).toHaveBeenCalledWith(1, 20));
+  });
+
+  it("deleting a volume closes its outline tab and clears cached content", async () => {
+    const outlinePath = "volumes/id_10.md";
+    mockGetVolumes.mockResolvedValue([
+      { id: 10, name: "第一卷", sort_order: 1, outline_file_path: outlinePath },
+    ]);
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: outlinePath,
+      title: "第一卷 · 卷纲",
+      isDirty: true,
+    });
+    const qc = renderView();
+    qc.setQueryData(contentKeys.detail(1, outlinePath), "draft");
+    await screen.findByRole("button", { name: "第一卷" });
+
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "chapterManagement.deleteVolume 第一卷",
+      }),
+    );
+    expect(
+      screen.getByText("chapterManagement.deleteVolumeConfirmUnsaved 第一卷"),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "common.confirm" }));
+    await waitFor(() => {
+      expect(mockDeleteVolume).toHaveBeenCalledWith(1, 10);
+      expect(useEditorTabsStore.getState().byNovel["1"]?.tabs).toEqual([]);
+      expect(
+        qc.getQueryData(contentKeys.detail(1, outlinePath)),
+      ).toBeUndefined();
+    });
   });
 
   it("卷标签右半区可把第一卷移到第二位，并显示落点和成功反馈", async () => {

@@ -206,6 +206,12 @@ export default function WorkspaceView({
     contentRef.current?.openFile("goink.md", t("workspace.storyStatus"));
   }
 
+  function handleSelectVolumeOutline(path: string, volumeName: string) {
+    const title = t("sidebar.volumeOutlineTitle", { name: volumeName });
+    useEditorStore.getState().setTabTarget({ path, title });
+    contentRef.current?.openFile(path, title);
+  }
+
   // ── Approval ────────────────────────────────────────────
 
   async function handleApprove(toolId: string, feedback: string) {
@@ -421,6 +427,7 @@ export default function WorkspaceView({
               onSelectNovel={handleSelectNovel}
               onSelectChapter={handleSelectChapter}
               onSelectGoink={handleSelectGoink}
+              onSelectVolumeOutline={handleSelectVolumeOutline}
               onExportNovel={(id) => setExportNovelId(id)}
               showCreate={showCreate}
               setShowCreate={setShowCreate}

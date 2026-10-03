@@ -8,6 +8,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import WorkspaceView from "./WorkspaceView";
 import { useFocusStore } from "@/stores/useFocusStore";
+import { useEditorStore } from "@/stores/useEditorStore";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 
 // 3.1 useNovels 引入 useQuery，render 需包 QueryClientProvider。
@@ -150,6 +151,7 @@ vi.mock("@/components/shell/StatusBar", () => ({
 vi.mock("@/components/sidebar/SidePanel", () => ({
   default: (props: {
     onSelectNovel?: (n: { id: number; title: string }) => void;
+    onSelectVolumeOutline?: (path: string, name: string) => void;
     onSearchNavigateEntity?: (panelId: string, entityId: number) => void;
     onSearchNavigateChapter?: (
       filePath: string,
@@ -198,6 +200,13 @@ vi.mock("@/components/sidebar/SidePanel", () => ({
       </button>
       <button onClick={() => props.onSelectNovel?.({ id: 2, title: "小说2" })}>
         nav-select-novel
+      </button>
+      <button
+        onClick={() =>
+          props.onSelectVolumeOutline?.("volumes/id_10.md", "第一卷")
+        }
+      >
+        nav-volume-outline
       </button>
     </div>
   ),
@@ -509,6 +518,20 @@ describe("WorkspaceView search navigation", () => {
       0,
       5,
     );
+  });
+
+  it("卷纲入口将后端路径交给编辑器并更新侧栏选中目标", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(screen.getByText("nav-volume-outline"));
+    expect(contentRefSpies.openFile).toHaveBeenCalledWith(
+      "volumes/id_10.md",
+      "sidebar.volumeOutlineTitle",
+    );
+    expect(useEditorStore.getState().tabTarget).toEqual({
+      path: "volumes/id_10.md",
+      title: "sidebar.volumeOutlineTitle",
+    });
   });
 });
 

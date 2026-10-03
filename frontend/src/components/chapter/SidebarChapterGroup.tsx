@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ChevronRight, Pencil, Plus } from "lucide-react";
+import { ChevronRight, FileText, Pencil, Plus } from "lucide-react";
 import type { chapter } from "@/lib/wailsjs/go/models";
 import PopSelect from "@/components/shared/PopSelect";
 import { toastError } from "@/utils/toast";
@@ -10,6 +10,7 @@ export const SIDEBAR_BLOCK_SIZE = 100;
 
 interface Props {
   name: string;
+  outlinePath?: string;
   chapters: chapter.Chapter[];
   expanded: boolean;
   selectedPath?: string;
@@ -18,12 +19,14 @@ interface Props {
   onToggle: () => void;
   onRangeSelect: (index: number) => void;
   onCreate: () => void;
+  onSelectVolumeOutline: () => void;
   onSelectChapter: (item: chapter.Chapter) => void;
   onRenameChapter: (item: chapter.Chapter, title: string) => Promise<void>;
 }
 
 export default function SidebarChapterGroup({
   name,
+  outlinePath,
   chapters,
   expanded,
   selectedPath,
@@ -32,6 +35,7 @@ export default function SidebarChapterGroup({
   onToggle,
   onRangeSelect,
   onCreate,
+  onSelectVolumeOutline,
   onSelectChapter,
   onRenameChapter,
 }: Props) {
@@ -103,6 +107,20 @@ export default function SidebarChapterGroup({
       </div>
       {expanded && (
         <div>
+          {outlinePath && (
+            <button
+              type="button"
+              onClick={onSelectVolumeOutline}
+              aria-label={t("sidebar.openVolumeOutline", { name })}
+              className={`flex w-full items-center gap-2 px-5 py-1.5 text-left text-sm hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring ${selectedPath === outlinePath ? "bg-primary/10 font-medium" : ""}`}
+            >
+              <FileText
+                aria-hidden="true"
+                className="h-3.5 w-3.5 text-muted-foreground"
+              />
+              <span>{t("sidebar.volumeOutline")}</span>
+            </button>
+          )}
           {blocks.length > 0 && (
             <div className="px-5 pb-2">
               <PopSelect

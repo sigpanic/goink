@@ -32,6 +32,14 @@ export function isOutlinePath(p: string): boolean {
   return p.startsWith("outlines/");
 }
 
+export function isVolumeOutlinePath(p: string): boolean {
+  return /^volumes\/id_[1-9]\d*\.md$/.test(p);
+}
+
+export function isStandaloneMarkdownPath(p: string): boolean {
+  return p === "goink.md" || isVolumeOutlinePath(p);
+}
+
 export function isSkillPath(p: string): boolean {
   return (
     p.startsWith("skills/") ||

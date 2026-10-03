@@ -27,12 +27,21 @@ describe("editor tab persistence", () => {
       outlinePath: "outlines/id_42.md",
       title: "第七章",
     });
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: "volumes/id_10.md",
+      title: "第一卷 · 卷纲",
+    });
     window.dispatchEvent(new Event("beforeunload"));
     const stored = JSON.parse(localStorage.getItem("goink_tabs_all") ?? "{}");
     expect(stored.version).toBe(2);
     expect(stored.byNovel["1"].tabs[0]).toMatchObject({
       path: "chapters/id_42.md",
       outlinePath: "outlines/id_42.md",
+    });
+    expect(stored.byNovel["1"].tabs[1]).toMatchObject({
+      path: "volumes/id_10.md",
+      title: "第一卷 · 卷纲",
     });
   });
 });

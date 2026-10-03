@@ -1,9 +1,12 @@
 import { useState, type DragEvent, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
+import { useQueryClient } from "@tanstack/react-query";
 import { Check, GripVertical, Pencil, Plus, Trash2 } from "lucide-react";
 import type { volume } from "@/lib/wailsjs/go/models";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import PopSelect from "@/components/shared/PopSelect";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
+import { contentKeys } from "@/lib/queryKeys";
 import { toErrorMessage } from "@/utils/error";
 import { toastError } from "@/utils/toast";
 import { useVolumeMutations } from "./useVolumeMutations";
@@ -32,6 +35,7 @@ export default function VolumeRail({
   onChapterDrop,
 }: Props) {
   const { t } = useTranslation();
+  const qc = useQueryClient();
   const { place, rename, remove } = useVolumeMutations(novelId);
   const {
     railRef,
@@ -52,6 +56,13 @@ export default function VolumeRail({
   >(null);
   const busy = place.isPending || rename.isPending || remove.isPending;
   const deleteVolume = volumes.find((item) => item.id === deleteId);
+  const deleteHasUnsaved =
+    deleteVolume !== undefined &&
+    (useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs ?? []).some(
+      (tab) =>
+        tab.path === deleteVolume.outline_file_path &&
+        (tab.isDirty || tab.outlineIsDirty),
+    );
 
   function openCreate() {
     setName("");
@@ -78,6 +89,19 @@ export default function VolumeRail({
         });
       } else {
         await rename.mutateAsync({ id: editor.id, name: trimmed });
+        const outlinePath = volumes.find(
+          (item) => item.id === editor.id,
+        )?.outline_file_path;
+        if (outlinePath) {
+          const tabStore = useEditorTabsStore.getState();
+          for (const tab of tabStore.byNovel[String(novelId)]?.tabs ?? []) {
+            if (tab.type === "file" && tab.path === outlinePath) {
+              tabStore.updateTab(novelId, tab.id, {
+                title: t("sidebar.volumeOutlineTitle", { name: trimmed }),
+              });
+            }
+          }
+        }
       }
       setEditor(null);
     } catch (error) {
@@ -235,6 +259,17 @@ export default function VolumeRail({
     if (deleteId === null) return;
     try {
       await remove.mutateAsync(deleteId);
+      const outlinePath = deleteVolume?.outline_file_path;
+      if (outlinePath) {
+        const tabStore = useEditorTabsStore.getState();
+        for (const tab of tabStore.byNovel[String(novelId)]?.tabs ?? []) {
+          if (tab.path === outlinePath) tabStore.closeTab(novelId, tab.id);
+        }
+        qc.removeQueries({
+          queryKey: contentKeys.detail(novelId, outlinePath),
+          exact: true,
+        });
+      }
       setDeleteId(null);
     } catch (error) {
       toastError(toErrorMessage(error));
@@ -440,9 +475,14 @@ export default function VolumeRail({
         title={t("chapterManagement.deleteVolume", {
           name: deleteVolume?.name ?? "",
         })}
-        message={t("chapterManagement.deleteVolumeConfirm", {
-          name: deleteVolume?.name ?? "",
-        })}
+        message={t(
+          deleteHasUnsaved
+            ? "chapterManagement.deleteVolumeConfirmUnsaved"
+            : "chapterManagement.deleteVolumeConfirm",
+          {
+            name: deleteVolume?.name ?? "",
+          },
+        )}
         danger
         loading={remove.isPending}
         onConfirm={confirmDelete}

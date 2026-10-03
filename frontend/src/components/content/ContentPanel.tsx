@@ -31,7 +31,9 @@ import Markdown from "@/components/Markdown";
 import {
   isContentPath,
   isOutlinePath,
+  isStandaloneMarkdownPath,
   isSkillPath,
+  isVolumeOutlinePath,
   skillNameFromPath,
   sourceFromPath,
 } from "./types";
@@ -117,6 +119,14 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     }, [novelId]);
     useEffect(() => {
       tabsRef.current = tabs;
+    }, [tabs]);
+
+    useEffect(() => {
+      const pending = savingRef.current;
+      if (pending && !tabs.some((tab) => tab.id === pending.id)) {
+        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+        savingRef.current = null;
+      }
     }, [tabs]);
 
     useEffect(() => {
@@ -249,7 +259,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           const tab = tabs.find((t) => t.id === activeTabId);
           if (
             tab?.type === "file" &&
-            (isSkillPath(tab.path) || tab.path === "goink.md")
+            (isSkillPath(tab.path) || isStandaloneMarkdownPath(tab.path))
           ) {
             e.preventDefault();
             const newMode = tab.viewMode === "preview" ? "content" : "preview";
@@ -561,6 +571,9 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       ) => {
         const existing = tabs.find((t) => t.path === path && t.type === "file");
         if (existing) {
+          if (title && existing.title !== title) {
+            updateTab(existing.id, { title });
+          }
           if (!existing.outlinePath && path.startsWith("chapters/")) {
             void resolveChapter(path)
               .then((item) => {
@@ -903,7 +916,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             {activeTab.title}
           </span>
           <div className="flex items-center gap-0.5 shrink-0">
-            {activeTab.path === "goink.md" ? (
+            {isStandaloneMarkdownPath(activeTab.path) ? (
               <button
                 onClick={() =>
                   updateTab(activeTab.id, {
@@ -968,10 +981,16 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
           ) : viewMode === "preview" ? (
-            <SkillPreview
-              content={activeTab.content ?? ""}
-              source={sourceFromPath(activeTab.path)}
-            />
+            isVolumeOutlinePath(activeTab.path) ? (
+              <div className="h-full overflow-auto px-6 py-4">
+                <Markdown content={activeTab.content ?? ""} />
+              </div>
+            ) : (
+              <SkillPreview
+                content={activeTab.content ?? ""}
+                source={sourceFromPath(activeTab.path)}
+              />
+            )
           ) : viewMode === "edit" ? (
             <SkillEditForm
               content={activeTab.content ?? ""}
