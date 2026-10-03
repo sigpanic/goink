@@ -27,6 +27,9 @@ func (a *App) GetContent(novelID int64, path string) (string, error) {
 	if err := a.validateChapterContentPath(novelID, path); err != nil {
 		return "", err
 	}
+	if err := a.validateVolumeContentPath(novelID, path); err != nil {
+		return "", err
+	}
 	if strings.HasPrefix(path, "/builtin/skills/") {
 		name := strings.TrimSuffix(strings.TrimPrefix(path, "/builtin/skills/"), ".md")
 		if a.skill == nil {
@@ -52,6 +55,9 @@ func (a *App) GetContent(novelID int64, path string) (string, error) {
 // SaveContent 保存小说仓库中指定路径的文件内容。
 func (a *App) SaveContent(input SaveContentInput) error {
 	if err := a.validateChapterContentPath(input.NovelID, input.Path); err != nil {
+		return err
+	}
+	if err := a.validateVolumeContentPath(input.NovelID, input.Path); err != nil {
 		return err
 	}
 	if isSkillPath(input.Path) {
@@ -112,6 +118,22 @@ func (a *App) validateChapterContentPath(novelID int64, filePath string) error {
 		return fmt.Errorf("章节路径非规范格式: %q，应使用 %q", filePath, canonical)
 	}
 	return a.ensureChapterIDsInNovel(novelID, []int64{ref.ID})
+}
+
+func (a *App) validateVolumeContentPath(novelID int64, filePath string) error {
+	normalized := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
+	clean := path.Clean(normalized)
+	if normalized != "volumes" && !strings.HasPrefix(normalized, "volumes/") &&
+		clean != "volumes" && !strings.HasPrefix(clean, "volumes/") {
+		return nil
+	}
+
+	volumeID, ok := git.ParseVolumePath(filePath)
+	if !ok || filePath != git.VolumePath(volumeID) {
+		return fmt.Errorf("卷纲路径无效: %q", filePath)
+	}
+	_, err := a.volume.GetByID(a.ctx, nil, novelID, volumeID)
+	return err
 }
 
 func isSkillPath(p string) bool {

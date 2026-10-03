@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/sigpanic/goink/internal/config"
@@ -21,6 +22,79 @@ func TestGetContent_NonExistent(t *testing.T) {
 	content, err := app.GetContent(novel.ID, ch.OutlineFilePath)
 	require.NoError(t, err)
 	assert.Equal(t, "", content)
+}
+
+func TestVolumeOutlineContentPath(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	otherNovel := createTestNovel(t, app)
+	name := "第一卷"
+	v, err := app.PlaceVolume(PlaceVolumeInput{NovelID: novel.ID, Name: &name})
+	require.NoError(t, err)
+	path := v.OutlineFilePath
+
+	content, err := app.GetContent(novel.ID, path)
+	require.NoError(t, err)
+	assert.Empty(t, content)
+	require.NoError(t, app.SaveContent(SaveContentInput{
+		NovelID: novel.ID,
+		Path:    path,
+		Content: "卷纲内容",
+	}))
+	content, err = app.GetContent(novel.ID, path)
+	require.NoError(t, err)
+	assert.Equal(t, "卷纲内容", content)
+
+	invalidPaths := []string{
+		fmt.Sprintf("volumes/%d.md", v.ID),
+		fmt.Sprintf("volumes/id_0%d.md", v.ID),
+		fmt.Sprintf("volumes/id_%d.txt", v.ID),
+		"volumes/id_0.md",
+		"volumes/id_999999.md",
+		"./" + path,
+		strings.Replace(path, "/", "\\", 1),
+		"volumes/../goink.md",
+	}
+	for _, invalidPath := range invalidPaths {
+		t.Run(invalidPath, func(t *testing.T) {
+			_, err := app.GetContent(novel.ID, invalidPath)
+			require.Error(t, err)
+			err = app.SaveContent(SaveContentInput{
+				NovelID: novel.ID,
+				Path:    invalidPath,
+				Content: "should not be written",
+			})
+			require.Error(t, err)
+		})
+	}
+	content, err = app.GetContent(novel.ID, "goink.md")
+	require.NoError(t, err)
+	assert.NotEqual(t, "should not be written", content)
+
+	_, err = app.GetContent(otherNovel.ID, path)
+	require.Error(t, err)
+	require.Error(t, app.SaveContent(SaveContentInput{
+		NovelID: otherNovel.ID,
+		Path:    path,
+		Content: "foreign outline",
+	}))
+	foreignPath, err := git.ResolvePath(path, otherNovel.ID)
+	require.NoError(t, err)
+	_, err = os.Stat(foreignPath)
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	require.NoError(t, app.DeleteVolume(novel.ID, v.ID))
+	_, err = app.GetContent(novel.ID, path)
+	require.Error(t, err)
+	require.Error(t, app.SaveContent(SaveContentInput{
+		NovelID: novel.ID,
+		Path:    path,
+		Content: "orphan outline",
+	}))
+	deletedPath, err := git.ResolvePath(path, novel.ID)
+	require.NoError(t, err)
+	_, err = os.Stat(deletedPath)
+	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
 func TestContentRejectsNonCanonicalChapterPaths(t *testing.T) {

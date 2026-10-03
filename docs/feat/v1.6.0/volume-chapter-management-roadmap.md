@@ -20,6 +20,8 @@
 | 6 | `feat(frontend): manage chapter structure` | 接入 `PlaceChapter` 创建和拖拽编排、删除确认及引用清单；支持卷内和跨卷拖拽到指定位置、卷或未分卷组。 | 前端 build/test、关键交互测试 |
 | 7 | `feat(frontend): group writing sidebar by volume` | 写作侧栏按卷分组、卷内百章区间选择；以共用的紧凑表单从顶部或目标组追加章节，创建后打开新章。卷纲文件入口留待后续读写提交。 | 前端 build/lint/test、侧栏导航与创建测试 |
 | 8 | `feat(frontend): share chapter creation dialog` | 侧栏与章节管理页共用新建章节弹窗、表单与校验；保留各入口的默认卷和插入规则，移动章节继续使用内嵌表单。 | 前端 build/lint/test、弹窗交互与创建回归测试 |
+| 9 | `feat(app): expose and validate volume outline paths` | 卷查询和创建/移动结果返回后端计算的卷纲路径；通用内容 API 校验 `volumes/id_{id}.md` 的规范格式及小说归属，重新生成 Wails 绑定。 | Go build/test、路径与跨小说读写测试、绑定检查 |
+| 10 | `feat(frontend): edit volume outlines from writing sidebar` | 卷分组内打开卷纲独立标签，复用 Markdown 预览、Monaco 编辑和保存；删除卷后清理标签及缓存。 | 前端 build/lint/test、打开/保存/恢复/删除回归测试 |
 
 ## 顺序约束
 

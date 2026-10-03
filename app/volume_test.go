@@ -19,24 +19,29 @@ func TestVolumeManagementAPI(t *testing.T) {
 	firstName := "第一卷"
 	first, err := app.PlaceVolume(PlaceVolumeInput{NovelID: novel.ID, Name: &firstName})
 	require.NoError(t, err)
+	assert.Equal(t, git.VolumePath(first.ID), first.OutlineFilePath)
 	secondName := "第二卷"
 	second, err := app.PlaceVolume(PlaceVolumeInput{NovelID: novel.ID, Name: &secondName})
 	require.NoError(t, err)
+	assert.Equal(t, git.VolumePath(second.ID), second.OutlineFilePath)
 
 	volumes, err := app.GetVolumes(novel.ID)
 	require.NoError(t, err)
 	require.Len(t, volumes, 2)
 	assert.Equal(t, []int64{first.ID, second.ID}, []int64{volumes[0].ID, volumes[1].ID})
+	assert.Equal(t, []string{first.OutlineFilePath, second.OutlineFilePath}, []string{volumes[0].OutlineFilePath, volumes[1].OutlineFilePath})
 
 	require.NoError(t, app.UpdateVolume(novel.ID, second.ID, "终卷"))
-	_, err = app.PlaceVolume(PlaceVolumeInput{NovelID: novel.ID, SourceVolumeID: &first.ID})
+	moved, err := app.PlaceVolume(PlaceVolumeInput{NovelID: novel.ID, SourceVolumeID: &first.ID})
 	require.NoError(t, err)
+	assert.Equal(t, first.OutlineFilePath, moved.OutlineFilePath)
 
 	volumes, err = app.GetVolumes(novel.ID)
 	require.NoError(t, err)
 	require.Len(t, volumes, 2)
 	assert.Equal(t, "终卷", volumes[0].Name)
 	assert.Equal(t, []int64{second.ID, first.ID}, []int64{volumes[0].ID, volumes[1].ID})
+	assert.Equal(t, []string{second.OutlineFilePath, first.OutlineFilePath}, []string{volumes[0].OutlineFilePath, volumes[1].OutlineFilePath})
 
 	require.NoError(t, git.WriteFile(novel.ID, git.VolumePath(first.ID), "第一卷大纲"))
 	require.NoError(t, app.DeleteVolume(novel.ID, first.ID))

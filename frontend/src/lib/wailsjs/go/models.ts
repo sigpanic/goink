@@ -2747,6 +2747,7 @@ export namespace volume {
 	    created_at: any;
 	    // Go type: time
 	    updated_at: any;
+	    outline_file_path: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Volume(source);
@@ -2760,6 +2761,7 @@ export namespace volume {
 	        this.sort_order = source["sort_order"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.outline_file_path = source["outline_file_path"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
