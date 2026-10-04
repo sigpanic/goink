@@ -392,7 +392,10 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	// RAG 刷新是异步的，切块时读的是 DB 里的标题。
 	if !ref.IsNew && a.Title != "" && ch.Title != a.Title {
 		if err := chStore.UpdateTitle(ctx, nil, tc.NovelID, ch.ID, a.Title); err != nil {
-			if rollbackErr := git.WriteFile(tc.NovelID, physical, current); rollbackErr != nil {
+			if rollbackErr := git.WriteFileIfUnchanged(tc.NovelID, physical, proposed, current); rollbackErr != nil {
+				if errors.Is(rollbackErr, git.ErrFileChanged) {
+					return nil, fmt.Errorf("update chapter title（标题未更新，正文已被后续修改，未回退 %s）: %w", physical, err)
+				}
 				return nil, fmt.Errorf("update chapter title（正文已写入 %s，标题未更新）: %v；回退正文失败: %w", physical, err, rollbackErr)
 			}
 			return nil, fmt.Errorf("update chapter title（正文已回退 %s）: %w", physical, err)
