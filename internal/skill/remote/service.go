@@ -3,6 +3,7 @@ package remote
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -165,7 +166,8 @@ func (s *Service) GetRemoteSkillContent(ctx context.Context, name string) (strin
 //  4. 触发热重载（失败只 Warn，不返回 error，因为文件已成功写入）
 //
 // 不做存在性判断，前端弹确认框处理覆盖语义。
-func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, novelID int64) error {
+// 写入前仍须在进程锁内比较前端确认的内容，阻止确认期间发生的覆盖。
+func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, novelID int64, expectedContent string) error {
 	// 路径校验：与 app.DeleteSkill 一致，name 必须是纯文件名（不含路径分隔符/后缀），
 	// 防止远程 index.json 被污染时 name 含 ../ 逃出 skills 目录写任意文件
 	safeName := strings.TrimSuffix(filepath.Base(name), ".md")
@@ -191,7 +193,10 @@ func (s *Service) InstallRemoteSkill(ctx context.Context, name, target string, n
 	if err != nil {
 		return &apperr.BusinessError{CodeVal: apperr.CodeInvalid, Msg: "remote: invalid skill path", Cause: err}
 	}
-	if err := os.WriteFile(dst, []byte(content), 0o644); err != nil {
+	if err := git.WriteFileAtPathIfUnchanged(dst, expectedContent, content); err != nil {
+		if errors.Is(err, git.ErrFileChanged) {
+			return &apperr.BusinessError{CodeVal: apperr.CodeConflict, Msg: "remote: target skill changed", Cause: err}
+		}
 		return fmt.Errorf("remote: write skill file %s: %w", dst, err)
 	}
 

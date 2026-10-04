@@ -3,6 +3,7 @@ import { InstallRemoteSkill } from "@/lib/wailsjs/go/app/App";
 import type { app } from "@/lib/wailsjs/go/models";
 import { contentKeys, skillKeys } from "@/lib/queryKeys";
 import { unwrapResult } from "@/utils/wailsResult";
+import { reportAIFileChange } from "@/components/content/aiFileChanges";
 
 // useInstallRemoteSkill: 安装远程技能 mutation（apperr 新 API）。
 // mutationFn 用 unwrapResult 解包 Result[struct]，err_code 非空时 throw AppErr
@@ -33,9 +34,18 @@ export function useInstallRemoteSkill(novelId: number) {
         input.target === "novel"
           ? `skills/${input.name}.md`
           : `~/.goink/skills/${input.name}.md`;
-      qc.invalidateQueries({
-        queryKey: contentKeys.detail(input.novel_id, path),
-      });
+      if (input.target === "user") {
+        void qc.invalidateQueries({ queryKey: skillKeys.all });
+        void qc.invalidateQueries({
+          predicate: ({ queryKey }) =>
+            queryKey[0] === contentKeys.all[0] && queryKey[2] === path,
+        });
+      } else {
+        void qc.invalidateQueries({
+          queryKey: contentKeys.detail(input.novel_id, path),
+        });
+      }
+      reportAIFileChange({ novelId: input.novel_id, path });
     },
   });
 }

@@ -1020,6 +1020,7 @@
       "novelRequired": "请先选择小说再安装到小说层",
       "installSuccess": "Skill 安装成功",
       "installFailed": "Skill 安装失败",
+      "targetChanged": "本地技能已变化，请查看最新内容后重新确认",
       "overwriteTitle": "覆盖确认",
       "overwriteWarning": "如果继续，将使用远程内容替换本地 {{target}} 的 skill",
       "targetUser": "用户层",

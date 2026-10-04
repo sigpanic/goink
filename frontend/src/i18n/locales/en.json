@@ -1045,6 +1045,7 @@
       "novelRequired": "Select a novel first to install to the novel level",
       "installSuccess": "Skill installed successfully",
       "installFailed": "Skill installation failed",
+      "targetChanged": "The local skill changed. Review the latest content and confirm again.",
       "overwriteTitle": "Overwrite Confirmation",
       "overwriteWarning": "If you continue, the local {{target}} skill will be replaced with the remote content",
       "targetUser": "user level",

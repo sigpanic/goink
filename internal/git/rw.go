@@ -138,6 +138,15 @@ func WriteFileIfUnchanged(novelID int64, path, expected, content string) error {
 	if err != nil {
 		return err
 	}
+	return writeFilePathIfUnchanged(fullPath, path, expected, content)
+}
+
+// WriteFileAtPathIfUnchanged 供已验证绝对路径的调用方共用同一进程写锁。
+func WriteFileAtPathIfUnchanged(fullPath, expected, content string) error {
+	return writeFilePathIfUnchanged(fullPath, fullPath, expected, content)
+}
+
+func writeFilePathIfUnchanged(fullPath, path, expected, content string) error {
 	fileWriteMu.Lock()
 	defer fileWriteMu.Unlock()
 	current, err := os.ReadFile(fullPath)

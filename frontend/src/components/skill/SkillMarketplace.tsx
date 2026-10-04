@@ -17,7 +17,7 @@ import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { skillKeys } from "@/lib/queryKeys";
+import { contentKeys, skillKeys } from "@/lib/queryKeys";
 import { AppErr } from "@/utils/wailsResult";
 import { useSkills } from "./useSkills";
 import { useRemoteSkills } from "./useRemoteSkills";
@@ -122,10 +122,12 @@ export default function SkillMarketplace({
   const [contentError, setContentError] = useState("");
 
   const [installTarget, setInstallTarget] = useState<InstallTarget>("user");
+  const [checkingTarget, setCheckingTarget] = useState<InstallTarget | null>(null);
   // 5.4 commit 4: installing 由 mutation.isPending 推导（删 useState），mutation onSuccess 失效 skills + remote-skills。
   // installTarget 仍需 useState：在 doInstall 之前 setInstallTarget 标记哪个按钮 loading，mutation 不持此信息。
   const installMutation = useInstallRemoteSkill(novelId);
   const installing = installMutation.isPending;
+  const installBusy = installing || checkingTarget !== null;
 
   // 5.4 commit 3: skills（已安装索引）走 useSkills query（commit 1 建），与 SkillList 共享缓存。
   // installedNames/installedVersions 由 query data 推导，删 loadInstalledIndex + useState。
@@ -221,14 +223,12 @@ export default function SkillMarketplace({
     async (target: InstallTarget, name: string): Promise<string> => {
       if (target === "novel" && !novelId) return "";
       const path = pathForSource(target, name);
-      try {
-        const content = await fetchContent(novelId, path);
-        return content || "";
-      } catch {
-        return "";
-      }
+      const queryKey = contentKeys.detail(novelId, path);
+      await qc.cancelQueries({ queryKey });
+      await qc.invalidateQueries({ queryKey, refetchType: "none" });
+      return fetchContent(novelId, path);
     },
-    [fetchContent, novelId],
+    [fetchContent, novelId, qc],
   );
 
   // Install skill（commit 4: 走 useInstallRemoteSkill mutation + unwrapResult，删 InstallRemoteSkill 直接 import）。
@@ -236,12 +236,13 @@ export default function SkillMarketplace({
   // mutateAsync 稳定引用（TanStack Query 保证），进 deps 不会触发 doInstall 重建。
   const installMutateAsync = installMutation.mutateAsync;
   const doInstall = useCallback(
-    async (target: InstallTarget, name: string) => {
+    async (target: InstallTarget, name: string, expectedContent: string) => {
       try {
         await installMutateAsync({
           name,
           target,
           novel_id: novelId,
+          expected_content: expectedContent,
         });
         // success — 触发回调，回 browse（query 失效由 mutation onSuccess 处理）
         onInstalled?.();
@@ -250,6 +251,29 @@ export default function SkillMarketplace({
         setLocalContent("");
         setRemoteContentForConfirm("");
       } catch (e: unknown) {
+        if (e instanceof AppErr && e.errCode === "conflict") {
+          setCheckingTarget(target);
+          try {
+            const latest = await probeLocal(target, name);
+            setLocalContent(latest);
+            let remote = remoteContent;
+            if (!remote) {
+              remote = await qc.fetchQuery({
+                queryKey: skillKeys.remoteContent(name),
+                queryFn: () => fetchRemoteSkillContent(name),
+              });
+            }
+            setRemoteContentForConfirm(remote);
+            setPhase("confirm_overwrite");
+            toastError(t("skill.marketplace.targetChanged"));
+          } catch (readError: unknown) {
+            setPhase("detail");
+            toastError(t("skill.marketplace.installFailed") + ": " + toErrorMessage(readError));
+          } finally {
+            setCheckingTarget(null);
+          }
+          return;
+        }
         // 统一到 catch toast（删 err_code 分支）：AppErr 用 classifyError 映射短码文案，
         // 非 AppErr（如网络层错误）走 installFailed + msg 兜底。
         if (e instanceof AppErr) {
@@ -262,50 +286,58 @@ export default function SkillMarketplace({
         }
       }
     },
-    [installMutateAsync, novelId, t, onInstalled],
+    [installMutateAsync, novelId, t, onInstalled, probeLocal, remoteContent, qc],
   );
 
   // Click install button — probe then install or enter confirm_overwrite
   const handleInstall = useCallback(
     async (target: InstallTarget) => {
       if (!selectedSkill) return;
+      if (installBusy) return;
       if (target === "novel" && !novelId) {
         toastError(t("skill.marketplace.novelRequired"));
         return;
       }
       setInstallTarget(target);
-      const local = await probeLocal(target, selectedSkill.name);
-      if (local) {
-        // has same-name local skill → enter confirm_overwrite phase
-        setLocalContent(local);
-        // 从 useRemoteSkillContent query 缓存取 content，或 fetchQuery 拉取（走同一 queryKey 复用缓存）
-        let remote = remoteContent;
-        if (!remote) {
-          try {
-            remote = await qc.fetchQuery({
-              queryKey: skillKeys.remoteContent(selectedSkill.name),
-              queryFn: () => fetchRemoteSkillContent(selectedSkill.name),
-            });
-          } catch (e: unknown) {
-            const cls = classifyQueryError(e, t);
-            setContentError(cls?.message ?? "");
-            remote = "";
+      setCheckingTarget(target);
+      try {
+        const local = await probeLocal(target, selectedSkill.name);
+        if (local) {
+          // has same-name local skill → enter confirm_overwrite phase
+          setLocalContent(local);
+          // 从 useRemoteSkillContent query 缓存取 content，或 fetchQuery 拉取（走同一 queryKey 复用缓存）
+          let remote = remoteContent;
+          if (!remote) {
+            try {
+              remote = await qc.fetchQuery({
+                queryKey: skillKeys.remoteContent(selectedSkill.name),
+                queryFn: () => fetchRemoteSkillContent(selectedSkill.name),
+              });
+            } catch (e: unknown) {
+              const cls = classifyQueryError(e, t);
+              setContentError(cls?.message ?? "");
+              remote = "";
+            }
           }
+          setRemoteContentForConfirm(remote);
+          setPhase("confirm_overwrite");
+        } else {
+          await doInstall(target, selectedSkill.name, local);
         }
-        setRemoteContentForConfirm(remote);
-        setPhase("confirm_overwrite");
-      } else {
-        await doInstall(target, selectedSkill.name);
+      } catch (e: unknown) {
+        toastError(t("skill.marketplace.installFailed") + ": " + toErrorMessage(e));
+      } finally {
+        setCheckingTarget(null);
       }
     },
-    [selectedSkill, novelId, t, probeLocal, qc, doInstall, remoteContent],
+    [selectedSkill, installBusy, novelId, t, probeLocal, qc, doInstall, remoteContent],
   );
 
   // Confirm overwrite
   const handleConfirmOverwrite = useCallback(async () => {
     if (!selectedSkill) return;
-    await doInstall(installTarget, selectedSkill.name);
-  }, [selectedSkill, installTarget, doInstall]);
+    await doInstall(installTarget, selectedSkill.name, localContent);
+  }, [selectedSkill, installTarget, localContent, doInstall]);
 
   // Refresh button — invalidate queries（query 自动 refetch）
   const handleRefresh = useCallback(() => {
@@ -424,10 +456,10 @@ export default function SkillMarketplace({
             <div className="flex items-center gap-2 shrink-0">
               <button
                 onClick={() => handleInstall("user")}
-                disabled={installing}
+                disabled={installBusy}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium border border-border hover:bg-muted transition-colors disabled:opacity-50"
               >
-                {installing && installTarget === "user" ? (
+                {installBusy && installTarget === "user" ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     {t("skill.marketplace.installing")}
@@ -444,10 +476,10 @@ export default function SkillMarketplace({
               </button>
               <button
                 onClick={() => handleInstall("novel")}
-                disabled={installing || !novelId}
+                disabled={installBusy || !novelId}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
-                {installing && installTarget === "novel" ? (
+                {installBusy && installTarget === "novel" ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                     {t("skill.marketplace.installing")}
@@ -497,7 +529,7 @@ export default function SkillMarketplace({
               </button>
               <button
                 onClick={handleConfirmOverwrite}
-                disabled={installing}
+                disabled={installBusy || !!contentError}
                 className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg text-sm font-medium bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors disabled:opacity-50"
               >
                 {installing ? (

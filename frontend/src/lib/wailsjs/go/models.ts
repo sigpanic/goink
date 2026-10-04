@@ -410,6 +410,7 @@ export namespace app {
 	    name: string;
 	    target: string;
 	    novel_id: number;
+	    expected_content?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstallRemoteSkillInput(source);
@@ -420,6 +421,7 @@ export namespace app {
 	        this.name = source["name"];
 	        this.target = source["target"];
 	        this.novel_id = source["novel_id"];
+	        this.expected_content = source["expected_content"];
 	    }
 	}
 	export class ListRemoteSkillsInput {
