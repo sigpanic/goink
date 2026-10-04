@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SaveContent } from "@/lib/wailsjs/go/app/App";
 import type { app } from "@/lib/wailsjs/go/models";
-import { contentKeys } from "@/lib/queryKeys";
+import { contentKeys, skillKeys } from "@/lib/queryKeys";
 
 // useSaveContent: 保存文件内容 mutation。
 // mutationFn 直接 import wailsjs SaveContent（不用 useApp），单参 input（含 novel_id + path + content）。
@@ -15,9 +15,19 @@ export function useSaveContent() {
   return useMutation({
     mutationFn: (input: app.SaveContentInput) => SaveContent(input),
     onSuccess: (_data, input) => {
-      qc.invalidateQueries({
-        queryKey: contentKeys.detail(input.novel_id, input.path),
-      });
+      if (input.path.startsWith("~/.goink/skills/")) {
+        void qc.invalidateQueries({
+          predicate: ({ queryKey }) =>
+            queryKey[0] === contentKeys.all[0] && queryKey[2] === input.path,
+        });
+        void qc.invalidateQueries({ queryKey: skillKeys.all });
+      } else {
+        void qc.invalidateQueries({
+          queryKey: contentKeys.detail(input.novel_id, input.path),
+        });
+        if (input.path.startsWith("skills/"))
+          void qc.invalidateQueries({ queryKey: skillKeys.list(input.novel_id) });
+      }
     },
   });
 }

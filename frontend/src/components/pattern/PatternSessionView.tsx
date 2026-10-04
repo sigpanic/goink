@@ -2,12 +2,15 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toErrorMessage } from "@/utils/error";
-import { ExtractPattern, CancelExtractPattern } from "@/lib/wailsjs/go/app/App";
+import { ExtractPattern, CancelExtractPattern, GetContent } from "@/lib/wailsjs/go/app/App";
 import { useSaveContent } from "@/components/content/useSaveContent";
+import { isContentConflict } from "@/components/content/editorSaveQueue";
+import { reportAIFileChange } from "@/components/content/aiFileChanges";
 import { usePatternProgress } from "@/hooks/usePatternProgress";
 import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import PatternProgressView from "./PatternProgressView";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 
 interface Props {
   taskId: string;
@@ -47,6 +50,8 @@ export default function PatternSessionView({
   const [status, setStatus] = useState<Status>("running");
   const [result, setResult] = useState<ExtractResult | null>(null);
   const [error, setError] = useState("");
+  const [overwriteContent, setOverwriteContent] = useState<string | null>(null);
+  const [checkingSave, setCheckingSave] = useState(false);
   // 5.3 pattern commit 2: SaveContent 走 useSaveContent mutation（复用 5.2 content 领域），
   //   loading 由 mutation.isPending 推导，删手动 setLoading state。
   //   流式 ExtractPattern/CancelExtractPattern 改直接 import wailsjs（删 useApp），保持本地 state + try/catch。
@@ -110,7 +115,7 @@ export default function PatternSessionView({
     onExit();
   };
 
-  const handleSave = async () => {
+  const saveGenerated = async (expectedContent: string) => {
     if (!result) return;
     setError("");
     try {
@@ -118,10 +123,31 @@ export default function PatternSessionView({
         novel_id: result.novelId,
         path: result.filePath,
         content: result.rawContent,
+        expected_content: expectedContent,
       });
+      reportAIFileChange({ novelId: result.novelId, path: result.filePath });
+      setOverwriteContent(null);
       onExit();
     } catch (e: unknown) {
+      setOverwriteContent(null);
+      setError(isContentConflict(e)
+        ? t("skill.generatedTargetChanged")
+        : toErrorMessage(e, t("extract.saveFailed")));
+    }
+  };
+
+  const handleSave = async () => {
+    if (!result) return;
+    setError("");
+    setCheckingSave(true);
+    try {
+      const existing = await GetContent(result.novelId, result.filePath);
+      if (existing) setOverwriteContent(existing);
+      else await saveGenerated(existing);
+    } catch (e: unknown) {
       setError(toErrorMessage(e, t("extract.saveFailed")));
+    } finally {
+      setCheckingSave(false);
     }
   };
 
@@ -159,23 +185,25 @@ export default function PatternSessionView({
             <div className="flex items-center gap-2">
               <button
                 onClick={onExit}
+                disabled={checkingSave || saveMutation.isPending}
                 className="h-8 px-3 rounded-lg text-sm border border-border hover:bg-muted transition-colors"
               >
                 {t("extract.cancel")}
               </button>
               <button
                 onClick={runExtract}
+                disabled={checkingSave || saveMutation.isPending}
                 className="h-8 px-3 rounded-lg text-sm border border-border hover:bg-muted transition-colors"
               >
                 {t("extract.reExtract")}
               </button>
               <button
                 onClick={handleSave}
-                disabled={saveMutation.isPending}
+                disabled={checkingSave || saveMutation.isPending}
                 className="inline-flex items-center gap-1.5 h-8 px-4 rounded-lg text-sm font-medium bg-action-save text-action-save-foreground hover:bg-action-save/80 disabled:opacity-50 transition-colors"
               >
                 <Save className="w-3.5 h-3.5" />
-                {saveMutation.isPending
+                {checkingSave || saveMutation.isPending
                   ? t("extract.saving")
                   : t("extract.saveToUserSkill")}
               </button>
@@ -255,6 +283,20 @@ export default function PatternSessionView({
           />
         </div>
       )}
+      <ConfirmDialog
+        open={overwriteContent !== null}
+        title={t("skill.generatedOverwriteTitle")}
+        message={t("skill.generatedOverwriteMessage", { name: result?.name })}
+        confirmText={t("skill.generatedConfirmOverwrite")}
+        danger
+        loading={saveMutation.isPending}
+        onClose={() => {
+          if (!saveMutation.isPending) setOverwriteContent(null);
+        }}
+        onConfirm={() => {
+          if (overwriteContent !== null) void saveGenerated(overwriteContent);
+        }}
+      />
     </div>
   );
 }
