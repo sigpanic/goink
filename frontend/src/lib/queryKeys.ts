@@ -20,6 +20,7 @@ export const volumeKeys = {
 // 与 chapterKeys 区分：chapterKeys 是章节元数据列表（GetChapters），contentKeys 是文件内容缓存。
 // 5.2 commit 1：useFileContent 基于 queryClient.fetchQuery 走此 key，多 tab 共享缓存。
 export const contentKeys = {
+  all: ["content"] as const,
   detail: (novelId: number, filePath: string) =>
     ["content", novelId, filePath] as const,
 };

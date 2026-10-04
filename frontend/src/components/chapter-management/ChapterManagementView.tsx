@@ -1,9 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import type { chapter } from "@/lib/wailsjs/go/models";
-import { chapterKeys, contentKeys } from "@/lib/queryKeys";
+import { contentKeys } from "@/lib/queryKeys";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useVolumes } from "@/components/volume/useVolumes";
 import VolumeRail from "@/components/volume/VolumeRail";
@@ -60,23 +59,6 @@ export default function ChapterManagementView({ novelId }: Props) {
       ),
     [volumeQuery.data],
   );
-
-  useEffect(() => {
-    if (!novelId) return;
-    const unsubscribe = EventsOn(
-      "file:changed",
-      (data: { novel_id?: number; path?: string }) => {
-        if (data?.novel_id !== novelId) return;
-        if (
-          data.path?.startsWith("chapters/") ||
-          data.path?.startsWith("outlines/")
-        ) {
-          void qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
-        }
-      },
-    );
-    return () => unsubscribe();
-  }, [novelId, qc]);
 
   const groups = useMemo(() => {
     const byVolume = new Map<number, chapter.Chapter[]>();

@@ -1,10 +1,7 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
 import { useTranslation } from "react-i18next";
-import { useQueryClient } from "@tanstack/react-query";
 import { Download, FileText, Plus } from "lucide-react";
 import type { chapter, volume } from "@/lib/wailsjs/go/models";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
-import { chapterKeys, maxChapterKeys } from "@/lib/queryKeys";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useEditorStore } from "@/stores/useEditorStore";
@@ -50,7 +47,6 @@ export default function ChapterList({
   onExportNovel,
 }: Props) {
   const { t } = useTranslation();
-  const qc = useQueryClient();
   const target = useEditorStore((state) => state.tabTarget);
   const activeTabPath = useEditorTabsStore((state) => {
     const entry = state.byNovel[String(novelId)];
@@ -75,28 +71,6 @@ export default function ChapterList({
   const [selectedRanges, setSelectedRanges] = useState<
     Record<string, RangeSelection>
   >({});
-
-  useEffect(() => {
-    const unsubscribe = EventsOn(
-      "file:changed",
-      (data: { novel_id?: number; path?: string }) => {
-        if (data.novel_id !== novelId || !data.path) return;
-        if (
-          data.path.startsWith("chapters/") ||
-          data.path.startsWith("outlines/") ||
-          data.path === "goink.md"
-        ) {
-          void qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
-          if (data.path.startsWith("chapters/")) {
-            void qc.invalidateQueries({
-              queryKey: maxChapterKeys.detail(novelId),
-            });
-          }
-        }
-      },
-    );
-    return () => unsubscribe();
-  }, [novelId, qc]);
 
   const groups = useMemo(() => {
     const byVolume = new Map<number, ChapterGroup>();

@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
-  act,
   fireEvent,
   render,
   screen,
@@ -8,7 +7,6 @@ import {
   within,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { contentKeys } from "@/lib/queryKeys";
 import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 import ChapterManagementView from "./ChapterManagementView";
@@ -106,7 +104,6 @@ beforeEach(() => {
   mockPlaceChapter.mockResolvedValue({});
   mockDeleteChapter.mockResolvedValue({ deleted: true, references: [] });
   useEditorTabsStore.getState().closeAllTabs(1);
-  vi.mocked(EventsOn).mockReturnValue(vi.fn());
 });
 
 describe("ChapterManagementView", () => {
@@ -243,23 +240,6 @@ describe("ChapterManagementView", () => {
       await screen.findByText("chapterManagement.noVolumes"),
     ).toBeInTheDocument();
     expect(mockGetVolumes).toHaveBeenCalledTimes(2);
-  });
-
-  it("章节文件变化后重新读取当前小说章节", async () => {
-    let onFileChanged:
-      ((data: { novel_id: number; path: string }) => void) | undefined;
-    vi.mocked(EventsOn).mockImplementation((_name, callback) => {
-      onFileChanged = callback;
-      return vi.fn();
-    });
-    renderView();
-    await screen.findByText("chapterManagement.noVolumes");
-    expect(mockGetChapters).toHaveBeenCalledTimes(1);
-
-    act(() => onFileChanged?.({ novel_id: 2, path: "chapters/2.md" }));
-    expect(mockGetChapters).toHaveBeenCalledTimes(1);
-    act(() => onFileChanged?.({ novel_id: 1, path: "chapters/1.md" }));
-    await waitFor(() => expect(mockGetChapters).toHaveBeenCalledTimes(2));
   });
 
   it("可在指定卷前新建卷，成功后刷新卷和章节", async () => {

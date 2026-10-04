@@ -40,10 +40,6 @@ vi.mock("@/components/chapter-management/useChapterStructureMutations", () => ({
 vi.mock("./useUpdateChapterTitle", () => ({
   useUpdateChapterTitle: () => ({ mutateAsync: mockUpdateChapterTitle }),
 }));
-vi.mock("@/lib/wailsjs/runtime/runtime", () => ({
-  EventsOn: vi.fn(() => vi.fn()),
-}));
-
 function render(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return originalRender(ui, {
