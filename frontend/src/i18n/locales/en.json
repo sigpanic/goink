@@ -1189,6 +1189,7 @@
     "conflictRetry": "Retry loading",
     "conflictChangedAgain": "Content changed during review. The comparison has been refreshed; choose again.",
     "conflictTabClosed": "The file tab was closed",
+    "saveSkillBeforeClose": "Save your skill changes before closing the tab",
     "noContent": "No content",
     "name": "Name",
     "summary": "Summary",

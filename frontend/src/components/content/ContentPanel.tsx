@@ -27,7 +27,7 @@ import OutlineViewer from "./OutlineViewer";
 import SkillPreview from "./SkillPreview";
 import { useFileContent } from "./useFileContent";
 import { useSaveContent } from "./useSaveContent";
-import { getEditorSaveQueue } from "./editorSaveQueue";
+import { getEditorSaveQueue, isContentConflict } from "./editorSaveQueue";
 import ContentConflictNotice from "./ContentConflictNotice";
 import { useEditorFileSync } from "./useEditorFileSync";
 import SkillEditForm from "@/components/skill/SkillEditForm";
@@ -353,24 +353,42 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         tabId: string,
         path: string,
         content: string,
-        dirtyKey: "isDirty" | "outlineIsDirty" = "isDirty",
       ) => {
-        if (!novelIdRef.current) return;
-        try {
-          // 5.2 commit 2: SaveContent 走 mutation（onSuccess 失效 contentKeys.detail），
-          // 调用方负责 updateTab(isDirty:false) + toastError（tab 是本地 state，不进 query cache）。
-          await mutateSaveContent({
-            novel_id: novelIdRef.current,
+        if (!novelId) throw new Error(t("common.saveFailed"));
+        const original = useEditorTabsStore
+          .getState()
+          .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
+        const expected = original?.contentBase ?? original?.content ?? "";
+        let saveError: unknown;
+        editorSaveQueue.schedule(
+          { novelId, tabId, path, content, dirtyKey: "isDirty", expectedContent: expected },
+          (expectedContent) => mutateSaveContent({
+            novel_id: novelId,
             path,
             content,
-          });
-          updateTab(tabId, { [dirtyKey]: false });
-        } catch (err) {
-          toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
-          console.error(err);
-        }
+            expected_content: expectedContent,
+          }),
+          (written) => updateTab(tabId, { contentBase: written }),
+          () => {
+            const latest = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
+            if (!latest || latest.content !== content || latest.contentConflict || latest.contentNeedsRefresh)
+              return;
+            updateTab(tabId, { isDirty: false, viewMode: "preview" });
+          },
+          (error) => {
+            saveError = error;
+            if (isContentConflict(error))
+              updateTab(tabId, { contentConflict: true });
+            toastError(t("common.saveFailed") + ": " + toErrorMessage(error));
+            console.error(error);
+          },
+        );
+        if (!(await editorSaveQueue.flush(novelId, path)))
+          throw saveError ?? new Error(t("common.saveFailed"));
       },
-      [mutateSaveContent, updateTab, t],
+      [mutateSaveContent, updateTab, t, novelId, editorSaveQueue],
     );
 
     const handleCloseTab = useCallback(
@@ -382,6 +400,10 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           : tabs.find((item) => item.id === id);
         if (!tab) return;
         if (tab?.type === "file") {
+          if (tab.isDirty && isSkillPath(tab.path) && !editorSaveQueue.isPending(novelId, tab.path)) {
+            toastError(t("content.saveSkillBeforeClose"));
+            return;
+          }
           if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
             return;
           if (
@@ -398,12 +420,16 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         if (latest?.isDirty || latest?.outlineIsDirty) return;
         closeTab(id);
       },
-      [tabs, editorSaveQueue, novelId, closeTab],
+      [tabs, editorSaveQueue, novelId, closeTab, t],
     );
 
     const handleCloseAllTabs = useCallback(async () => {
       for (const tab of tabs) {
         if (tab.type !== "file") continue;
+        if (tab.isDirty && isSkillPath(tab.path) && !editorSaveQueue.isPending(novelId, tab.path)) {
+          toastError(t("content.saveSkillBeforeClose"));
+          return;
+        }
         if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
           return;
         if (
@@ -417,7 +443,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
       if (remaining?.some((tab) => tab.isDirty || tab.outlineIsDirty)) return;
       closeAllTabs();
-    }, [tabs, editorSaveQueue, novelId, closeAllTabs]);
+    }, [tabs, editorSaveQueue, novelId, closeAllTabs, t]);
 
     // Ctrl+S 立即保存
     useEffect(() => {
@@ -1025,21 +1051,43 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             )
           ) : viewMode === "edit" ? (
             <SkillEditForm
+              key={activeTab.id}
               content={activeTab.content ?? ""}
+              isDirty={!!activeTab.isDirty}
               source={sourceFromPath(activeTab.path)}
               readOnly={activeTab.readOnly}
-              onSave={async (newContent) => {
-                await doSave(
-                  activeTab.id,
-                  activeTab.path,
-                  newContent as string,
-                );
+              onDraftChange={(content) => {
                 updateTab(activeTab.id, {
-                  content: newContent,
-                  viewMode: "preview",
+                  content,
+                  isDirty: true,
                 });
               }}
-              onCancel={() => updateTab(activeTab.id, { viewMode: "preview" })}
+              onSave={(newContent) =>
+                doSave(activeTab.id, activeTab.path, newContent)
+              }
+              onCancel={() => {
+                const current = useEditorTabsStore
+                  .getState()
+                  .byNovel[String(novelId)]?.tabs.find(
+                    (item) => item.id === activeTab.id,
+                  );
+                if (editorSaveQueue.isPending(novelId, activeTab.path)) {
+                  try {
+                    editorSaveQueue.discard(novelId, activeTab.path);
+                  } catch {
+                    toastError(t("skill.saving"));
+                    return;
+                  }
+                }
+                updateTab(activeTab.id, {
+                  content: current?.contentBase ?? "",
+                  isDirty: false,
+                  contentConflict: false,
+                  viewMode: "preview",
+                });
+                if (current?.contentConflict || current?.contentNeedsRefresh)
+                  void refreshApprovedFile(current, activeTab.path, "content");
+              }}
             />
           ) : viewMode === "content" ? (
             <ContentEditor

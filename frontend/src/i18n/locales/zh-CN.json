@@ -1153,6 +1153,7 @@
     "conflictRetry": "重试读取",
     "conflictChangedAgain": "比较期间内容再次变化，差异已刷新，请重新选择。",
     "conflictTabClosed": "文件标签已关闭",
+    "saveSkillBeforeClose": "请先保存技能修改，再关闭标签页",
     "noContent": "暂无内容",
     "name": "名称",
     "summary": "简介",
