@@ -13,6 +13,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useEditorTabs } from "./useEditorTabs";
+import { useEditorTabsStore } from "./useEditorTabsStore";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
@@ -26,6 +27,7 @@ import OutlineViewer from "./OutlineViewer";
 import SkillPreview from "./SkillPreview";
 import { useFileContent } from "./useFileContent";
 import { useSaveContent } from "./useSaveContent";
+import { getEditorSaveQueue } from "./editorSaveQueue";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
@@ -83,6 +85,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // 5.2 commit 2: SaveContent 走 useSaveContent mutation（onSuccess 失效 contentKeys.detail），useApp 清零。
     const { fetchContent } = useFileContent();
     const saveContentMutation = useSaveContent();
+    const mutateSaveContent = saveContentMutation.mutateAsync;
+    const editorSaveQueue = getEditorSaveQueue(qc);
     const {
       tabs,
       activeTab,
@@ -98,14 +102,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     const { theme } = useThemeStore();
     const [isLoading, setIsLoading] = useState(false);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-    const savingRef = useRef<{
-      id: string;
-      path: string;
-      content: string;
-      dirtyKey: "isDirty" | "outlineIsDirty";
-    } | null>(null);
     const pendingHighlightRef = useRef<{
       matchPos: number;
       matchLen: number;
@@ -113,6 +110,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const didApplyHighlightRef = useRef(false); // handleEditorMount 已应用高亮时跳过清除
     const novelIdRef = useRef(novelId);
     const tabsRef = useRef(tabs);
+    const activeTabRef = useRef(activeTab);
+    activeTabRef.current = activeTab;
 
     useEffect(() => {
       novelIdRef.current = novelId;
@@ -120,12 +119,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     useEffect(() => {
       tabsRef.current = tabs;
     }, [tabs]);
-
-    useEffect(() => {
-      return () => {
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      };
-    }, []);
 
     useEffect(() => {
       if (activeTab?.type === "file") {
@@ -333,7 +326,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         try {
           // 5.2 commit 2: SaveContent 走 mutation（onSuccess 失效 contentKeys.detail），
           // 调用方负责 updateTab(isDirty:false) + toastError（tab 是本地 state，不进 query cache）。
-          await saveContentMutation.mutateAsync({
+          await mutateSaveContent({
             novel_id: novelIdRef.current,
             path,
             content,
@@ -344,22 +337,100 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           console.error(err);
         }
       },
-      [saveContentMutation.mutateAsync, updateTab, t],
+      [mutateSaveContent, updateTab, t],
     );
+
+    const scheduleEditorSave = useCallback(
+      (
+        tabId: string,
+        path: string,
+        content: string,
+        dirtyKey: "isDirty" | "outlineIsDirty",
+      ) => {
+        editorSaveQueue.schedule(
+          { novelId, tabId, path, content, dirtyKey },
+          () =>
+            mutateSaveContent({
+              novel_id: novelId,
+              path,
+              content,
+            }),
+          () => updateTab(tabId, { [dirtyKey]: false }),
+          (err) => {
+            toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
+            console.error(err);
+          },
+        );
+      },
+      [editorSaveQueue, novelId, mutateSaveContent, updateTab, t],
+    );
+
+    const handleCloseTab = useCallback(
+      async (id: string) => {
+        const storedTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+        const tab = storedTabs
+          ? storedTabs.find((item) => item.id === id)
+          : tabs.find((item) => item.id === id);
+        if (!tab) return;
+        if (tab?.type === "file") {
+          if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
+            return;
+          if (
+            tab.outlineIsDirty &&
+            tab.outlinePath &&
+            !(await editorSaveQueue.flush(novelId, tab.outlinePath))
+          )
+            return;
+        }
+        const latestTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+        const latest = latestTabs?.find((item) => item.id === id);
+        if (latestTabs && !latest) return;
+        if (latest?.isDirty || latest?.outlineIsDirty) return;
+        closeTab(id);
+      },
+      [tabs, editorSaveQueue, novelId, closeTab],
+    );
+
+    const handleCloseAllTabs = useCallback(async () => {
+      for (const tab of tabs) {
+        if (tab.type !== "file") continue;
+        if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
+          return;
+        if (
+          tab.outlineIsDirty &&
+          tab.outlinePath &&
+          !(await editorSaveQueue.flush(novelId, tab.outlinePath))
+        )
+          return;
+      }
+      const remaining =
+        useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+      if (remaining?.some((tab) => tab.isDirty || tab.outlineIsDirty)) return;
+      closeAllTabs();
+    }, [tabs, editorSaveQueue, novelId, closeAllTabs]);
 
     // Ctrl+S 立即保存
     useEffect(() => {
       const handler = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "s") {
           e.preventDefault();
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          const s = savingRef.current;
-          if (s) doSave(s.id, s.path, s.content, s.dirtyKey);
+          const activeNovelId = novelIdRef.current;
+          const entry =
+            useEditorTabsStore.getState().byNovel[String(activeNovelId)];
+          const tab =
+            entry?.tabs.find((item) => item.id === entry.activeTabId) ??
+            activeTabRef.current;
+          if (tab?.type !== "file") return;
+          const path =
+            tab.viewMode === "outline-edit" ? tab.outlinePath : tab.path;
+          if (path) void editorSaveQueue.flush(activeNovelId, path);
         }
       };
       window.addEventListener("keydown", handler);
       return () => window.removeEventListener("keydown", handler);
-    }, [doSave]);
+    }, [editorSaveQueue]);
 
     const handleEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
@@ -368,22 +439,11 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         // 3.8 后续：activeContent 迁 useEditorStore。
         useEditorStore.getState().setActiveContent(content);
 
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
-        savingRef.current = {
-          id: tabId,
-          path: tab.path,
-          content,
-          dirtyKey: "isDirty",
-        };
-        saveTimerRef.current = setTimeout(() => {
-          if (!savingRef.current) return;
-          const s = savingRef.current;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
-        }, 500);
+        scheduleEditorSave(tabId, tab.path, content, "isDirty");
       },
-      [tabs, updateTab, doSave],
+      [tabs, updateTab, scheduleEditorSave],
     );
 
     // 大纲编辑：内容存 outlineContent，保存路径派生 outlinePath
@@ -395,20 +455,9 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         updateTab(tabId, { outlineContent: content, outlineIsDirty: true });
         useEditorStore.getState().setActiveContent(content);
 
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        savingRef.current = {
-          id: tabId,
-          path: tab.outlinePath,
-          content,
-          dirtyKey: "outlineIsDirty",
-        };
-        saveTimerRef.current = setTimeout(() => {
-          if (!savingRef.current) return;
-          const s = savingRef.current;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
-        }, 500);
+        scheduleEditorSave(tabId, tab.outlinePath, content, "outlineIsDirty");
       },
-      [tabs, updateTab, doSave],
+      [tabs, updateTab, scheduleEditorSave],
     );
 
     const monacoRef = useRef<any>(null);
@@ -478,11 +527,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       (editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
+        const tab = activeTabRef.current;
+        const path =
+          tab?.viewMode === "outline-edit" ? tab.outlinePath : tab?.path;
+        const mountedNovelId = novelIdRef.current;
         editor.onDidBlurEditorText(() => {
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          const s = savingRef.current;
-          if (!s) return;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
+          if (path) void editorSaveQueue.flush(mountedNovelId, path);
         });
         // 编辑器挂载后检查待处理高亮（直接取 Monaco model 内容，避免 ref 时序问题）。
         const pending = pendingHighlightRef.current;
@@ -495,7 +545,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           }
         }
       },
-      [doSave, doHighlight],
+      [editorSaveQueue, doHighlight],
     );
 
     // ── file:changed 事件监听 ─────────────────────────────────
@@ -773,7 +823,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         openFile: doOpenFile,
         openFileWithHighlight: doOpenFileWithHighlight,
         clearHighlight,
-        closeAllTabs,
+        closeAllTabs: handleCloseAllTabs,
         openDiffTab,
         handleDiffApprove,
         handleDiffReject,
@@ -782,7 +832,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         doOpenFile,
         doOpenFileWithHighlight,
         clearHighlight,
-        closeAllTabs,
+        handleCloseAllTabs,
         openDiffTab,
         handleDiffApprove,
         handleDiffReject,
@@ -806,7 +856,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             tabs={tabs}
             activeTabId={activeTabId}
             onSelect={setActiveTabId}
-            onClose={closeTab}
+            onClose={handleCloseTab}
           />
           <div className="flex-1 flex items-center justify-center">
             {tabs.length === 0 ? (
@@ -839,7 +889,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             tabs={tabs}
             activeTabId={activeTabId}
             onSelect={setActiveTabId}
-            onClose={closeTab}
+            onClose={handleCloseTab}
           />
           <div className="flex items-center px-4 py-2 border-b shrink-0 select-none">
             <span className="text-sm font-medium truncate">
@@ -901,7 +951,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           tabs={tabs}
           activeTabId={activeTabId}
           onSelect={setActiveTabId}
-          onClose={closeTab}
+          onClose={handleCloseTab}
         />
         <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 select-none">
           <span className="text-sm font-medium truncate">

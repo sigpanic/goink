@@ -8,6 +8,8 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";
+import { useEditorTabsStore } from "./useEditorTabsStore";
+import type { EditorTab } from "./types";
 import { toastError } from "@/utils/toast";
 
 const { mockGetChapters } = vi.hoisted(() => ({
@@ -39,20 +41,39 @@ vi.mock("@/utils/toast", async (importOriginal) => {
 
 // Mock child components
 vi.mock("./TabBar", () => ({
-  default: ({ tabs }: any) => (
+  default: ({ tabs, onClose }: any) => (
     <div data-testid="tab-bar">
       {tabs.map((t: any) => (
-        <span key={t.id}>{t.title}</span>
+        <span key={t.id}>
+          {t.title}
+          <button onClick={() => onClose(t.id)}>close-{t.id}</button>
+        </span>
       ))}
     </div>
   ),
 }));
 
 vi.mock("./ContentEditor", () => ({
-  default: ({ value, onChange }: any) => (
+  default: ({ value, onChange, onMount }: any) => (
     <div data-testid="content-editor">
       {value}
       <button onClick={() => onChange?.("edited outline")}>edit content</button>
+      <button
+        onClick={() => {
+          let onBlur = () => {};
+          onMount(
+            {
+              onDidBlurEditorText: (callback: () => void) => {
+                onBlur = callback;
+              },
+            },
+            {},
+          );
+          onBlur();
+        }}
+      >
+        blur editor
+      </button>
     </div>
   ),
 }));
@@ -169,6 +190,7 @@ describe("ContentPanel", () => {
     mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
     mockGetChapters.mockResolvedValue([]);
+    useEditorTabsStore.setState({ byNovel: {}, positions: {} });
   });
 
   it("renders empty state when no tabs", () => {
@@ -241,11 +263,13 @@ describe("ContentPanel", () => {
       mockTabsState = [{ ...tab, id: "volume-tab" }];
       mockActiveTabIdState = "volume-tab";
     });
-    mockUpdateTab.mockImplementation((id: string, patch: any) => {
-      mockTabsState = mockTabsState.map((tab) =>
-        tab.id === id ? { ...tab, ...patch } : tab,
-      );
-    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
 
     const ref = { current: null as ContentPanelHandle | null };
     const view = render(<ContentPanel ref={ref} />);
@@ -266,6 +290,7 @@ describe("ContentPanel", () => {
       screen.queryByRole("button", { name: "content.outline" }),
     ).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    view.rerender(<ContentPanel ref={ref} />);
     await act(async () => {
       fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     });
@@ -305,6 +330,151 @@ describe("ContentPanel", () => {
         path: "chapters/id_1.md",
         content: "edited outline",
       }),
+    );
+  });
+
+  it("切换工作区页面卸载编辑器后，待保存稿件仍会写入", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "初稿",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    const view = render(<ContentPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    view.unmount();
+
+    await vi.waitFor(() =>
+      expect(mockSaveContent).toHaveBeenCalledWith({
+        novel_id: 1,
+        path: "chapters/id_1.md",
+        content: "edited outline",
+      }),
+    );
+  });
+
+  it("编辑器失焦立即保存当前文件", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "初稿",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    render(<ContentPanel />);
+
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "blur editor" }));
+    });
+
+    expect(mockSaveContent).toHaveBeenCalledWith({
+      novel_id: 1,
+      path: "chapters/id_1.md",
+      content: "edited outline",
+    });
+  });
+
+  it("关闭标签要等该文件保存成功", async () => {
+    let resolveSave!: () => void;
+    mockSaveContent.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveSave = resolve;
+        }),
+    );
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "初稿",
+        viewMode: "content",
+        isDirty: false,
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: {
+        "1": { tabs: mockTabsState, activeTabId: "chapter-tab" },
+      },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    mockCloseTab.mockImplementation((id: string) => {
+      useEditorTabsStore.getState().closeTab(1, id);
+    });
+
+    render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    fireEvent.click(screen.getByRole("button", { name: "close-chapter-tab" }));
+    fireEvent.click(screen.getByRole("button", { name: "close-chapter-tab" }));
+
+    expect(mockSaveContent).toHaveBeenCalledOnce();
+    expect(mockCloseTab).not.toHaveBeenCalled();
+    resolveSave();
+    await vi.waitFor(() =>
+      expect(mockCloseTab).toHaveBeenCalledWith("chapter-tab"),
+    );
+    expect(mockCloseTab).toHaveBeenCalledOnce();
+  });
+
+  it("保存失败时关闭标签仍保留未保存稿件", async () => {
+    mockSaveContent.mockRejectedValueOnce(new Error("disk full"));
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "初稿",
+        viewMode: "content",
+        isDirty: false,
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: {
+        "1": { tabs: mockTabsState, activeTabId: "chapter-tab" },
+      },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+
+    render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    fireEvent.click(screen.getByRole("button", { name: "close-chapter-tab" }));
+
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalled());
+    expect(mockCloseTab).not.toHaveBeenCalled();
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0].content).toBe(
+      "edited outline",
+    );
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0].isDirty).toBe(
+      true,
     );
   });
 
@@ -371,6 +541,7 @@ describe("ContentPanel", () => {
 
     view.rerender(<ContentPanel ref={ref} />);
     fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    view.rerender(<ContentPanel ref={ref} />);
     await act(async () => {
       fireEvent.keyDown(window, { key: "s", ctrlKey: true });
     });
