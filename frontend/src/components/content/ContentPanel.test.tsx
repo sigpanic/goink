@@ -11,12 +11,15 @@ import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";
 import { useEditorTabsStore } from "./useEditorTabsStore";
 import type { EditorTab } from "./types";
 import { toastError } from "@/utils/toast";
+import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 
-const { mockGetChapters } = vi.hoisted(() => ({
+const { mockGetChapters, mockGetContent } = vi.hoisted(() => ({
   mockGetChapters: vi.fn(),
+  mockGetContent: vi.fn(),
 }));
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   GetChapters: mockGetChapters,
+  GetContent: mockGetContent,
 }));
 
 // 5.2 commit 1: useFileContent 引入 useQueryClient，render 需包 QueryClientProvider。
@@ -104,8 +107,11 @@ vi.mock("@/components/Markdown", () => ({
 }));
 
 vi.mock("@monaco-editor/react", () => ({
-  DiffEditor: ({ original, modified }: any) => (
-    <div data-testid="diff-editor">
+  DiffEditor: ({ original, modified, options }: any) => (
+    <div
+      data-testid="diff-editor"
+      data-side-by-side={String(options?.renderSideBySide)}
+    >
       <span>{original}</span>
       <span>{modified}</span>
     </div>
@@ -190,6 +196,7 @@ describe("ContentPanel", () => {
     mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
     mockGetChapters.mockResolvedValue([]);
+    mockGetContent.mockResolvedValue("file content");
     useEditorTabsStore.setState({ byNovel: {}, positions: {} });
   });
 
@@ -298,6 +305,7 @@ describe("ContentPanel", () => {
       novel_id: 1,
       path,
       content: "edited outline",
+      expected_content: "",
     });
 
     fireEvent.click(screen.getByRole("button", { name: "content.preview" }));
@@ -329,6 +337,7 @@ describe("ContentPanel", () => {
         novel_id: 1,
         path: "chapters/id_1.md",
         content: "edited outline",
+        expected_content: "draft",
       }),
     );
   });
@@ -355,6 +364,7 @@ describe("ContentPanel", () => {
         novel_id: 1,
         path: "chapters/id_1.md",
         content: "edited outline",
+        expected_content: "初稿",
       }),
     );
   });
@@ -382,6 +392,7 @@ describe("ContentPanel", () => {
       novel_id: 1,
       path: "chapters/id_1.md",
       content: "edited outline",
+      expected_content: "初稿",
     });
   });
 
@@ -478,6 +489,310 @@ describe("ContentPanel", () => {
     );
   });
 
+  it("AI 修改脏文件时保留本地稿件并暂停待保存任务", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "本地稿件",
+        contentBase: "旧版",
+        isDirty: true,
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    const view = render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    const listener = vi
+      .mocked(EventsOn)
+      .mock.calls.find(([name]) => name === "file:changed")?.[1];
+    expect(listener).toBeDefined();
+    mockGetContent.mockResolvedValue("AI 新版");
+    await act(async () => {
+      await listener?.({ novel_id: 1, path: "chapters/id_1.md" });
+    });
+    view.rerender(<ContentPanel />);
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "edited outline",
+      isDirty: true,
+      contentConflict: true,
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "content.conflictNotice",
+    );
+    expect(
+      await screen.findByRole("dialog", { name: "content.conflictTitle" }),
+    ).toBeInTheDocument();
+    expect(await screen.findByTestId("diff-editor")).toHaveAttribute(
+      "data-side-by-side",
+      "true",
+    );
+    expect(screen.getByText("AI 新版")).toBeInTheDocument();
+    await new Promise((resolve) => setTimeout(resolve, 600));
+    expect(mockSaveContent).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.conflictUseDisk" }),
+      );
+    });
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "AI 新版",
+      contentBase: "AI 新版",
+      isDirty: false,
+      contentConflict: false,
+    });
+  });
+
+  it("条件写入冲突后可确认用本地稿件覆盖最新磁盘版", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "旧版",
+        contentBase: "旧版",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    mockSaveContent
+      .mockRejectedValueOnce(new Error("CONTENT_CONFLICT: changed"))
+      .mockResolvedValueOnce(undefined);
+    mockGetContent
+      .mockResolvedValueOnce("AI 新版")
+      .mockResolvedValueOnce("AI 新版")
+      .mockResolvedValue("edited outline");
+    const view = render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+    view.rerender(<ContentPanel />);
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "edited outline",
+      isDirty: true,
+      contentConflict: true,
+    });
+    expect(
+      await screen.findByRole("dialog", { name: "content.conflictTitle" }),
+    ).toBeInTheDocument();
+    await screen.findByTestId("diff-editor");
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.conflictSaveLocal" }),
+      );
+    });
+    expect(mockSaveContent).toHaveBeenLastCalledWith({
+      novel_id: 1,
+      path: "chapters/id_1.md",
+      content: "edited outline",
+      expected_content: "AI 新版",
+    });
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "edited outline",
+      contentBase: "edited outline",
+      isDirty: false,
+      contentConflict: false,
+    });
+  });
+
+  it("查看 diff 后磁盘再次变化时刷新对比并要求重新选择", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "旧版",
+        contentBase: "旧版",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    mockSaveContent
+      .mockRejectedValueOnce(new Error("CONTENT_CONFLICT: changed"))
+      .mockResolvedValueOnce(undefined);
+    mockGetContent
+      .mockResolvedValueOnce("AI 版本一")
+      .mockResolvedValue("AI 版本二");
+    const view = render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+    view.rerender(<ContentPanel />);
+    expect(await screen.findByText("AI 版本一")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.conflictSaveLocal" }),
+      );
+    });
+    expect(mockSaveContent).toHaveBeenCalledOnce();
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "content.conflictChangedAgain",
+    );
+    expect(screen.getByText("AI 版本二")).toBeInTheDocument();
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0].isDirty).toBe(
+      true,
+    );
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.conflictSaveLocal" }),
+      );
+    });
+    expect(mockSaveContent).toHaveBeenLastCalledWith({
+      novel_id: 1,
+      path: "chapters/id_1.md",
+      content: "edited outline",
+      expected_content: "AI 版本二",
+    });
+  });
+
+  it("保存本地版刚成功又发生 AI 写入时继续保留双栏选择", async () => {
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "旧版",
+        contentBase: "旧版",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    mockSaveContent
+      .mockRejectedValueOnce(new Error("CONTENT_CONFLICT: changed"))
+      .mockResolvedValueOnce(undefined);
+    mockGetContent
+      .mockResolvedValueOnce("AI 版本一")
+      .mockResolvedValueOnce("AI 版本一")
+      .mockResolvedValue("AI 版本二");
+    const view = render(<ContentPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+    await act(async () => {
+      fireEvent.keyDown(window, { key: "s", ctrlKey: true });
+    });
+    view.rerender(<ContentPanel />);
+    expect(await screen.findByText("AI 版本一")).toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "content.conflictSaveLocal" }),
+      );
+    });
+    expect(mockSaveContent).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "content.conflictChangedAgain",
+    );
+    expect(screen.getByText("AI 版本二")).toBeInTheDocument();
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "edited outline",
+      isDirty: true,
+      contentConflict: true,
+    });
+  });
+
+  it("AI 刷新读取期间开始输入时不回填旧请求结果", async () => {
+    let resolveRead!: (value: string) => void;
+    mockFetchContent.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "旧版",
+        contentBase: "旧版",
+        isDirty: false,
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+    render(<ContentPanel />);
+    const listener = vi
+      .mocked(EventsOn)
+      .mock.calls.find(([name]) => name === "file:changed")?.[1];
+    expect(listener).toBeDefined();
+    await act(async () => {
+      const refresh = listener?.({ novel_id: 1, path: "chapters/id_1.md" });
+      fireEvent.click(screen.getByRole("button", { name: "edit content" }));
+      resolveRead("AI 新版");
+      await refresh;
+    });
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "edited outline",
+      isDirty: true,
+      contentConflict: true,
+    });
+  });
+
   it("opens file with empty content on GetContent failure", async () => {
     // 5.2 commit 1: fetchContent 失败时 tab 塞空内容（保留原 behavior）
     mockFetchContent.mockRejectedValue(new Error("not found"));
@@ -549,6 +864,7 @@ describe("ContentPanel", () => {
       novel_id: 1,
       path: "outlines/id_42.md",
       content: "edited outline",
+      expected_content: "file content",
     });
   });
 

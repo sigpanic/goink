@@ -17,8 +17,7 @@ import { useEditorTabsStore } from "./useEditorTabsStore";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
-import { chapterKeys, contentKeys } from "@/lib/queryKeys";
+import { chapterKeys } from "@/lib/queryKeys";
 import { GetChapters } from "@/lib/wailsjs/go/app/App";
 import type { chapter } from "@/lib/wailsjs/go/models";
 import TabBar from "./TabBar";
@@ -28,6 +27,8 @@ import SkillPreview from "./SkillPreview";
 import { useFileContent } from "./useFileContent";
 import { useSaveContent } from "./useSaveContent";
 import { getEditorSaveQueue } from "./editorSaveQueue";
+import ContentConflictNotice from "./ContentConflictNotice";
+import { useEditorFileSync } from "./useEditorFileSync";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
@@ -109,16 +110,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     } | null>(null);
     const didApplyHighlightRef = useRef(false); // handleEditorMount 已应用高亮时跳过清除
     const novelIdRef = useRef(novelId);
-    const tabsRef = useRef(tabs);
     const activeTabRef = useRef(activeTab);
     activeTabRef.current = activeTab;
 
     useEffect(() => {
       novelIdRef.current = novelId;
     }, [novelId]);
-    useEffect(() => {
-      tabsRef.current = tabs;
-    }, [tabs]);
 
     useEffect(() => {
       if (activeTab?.type === "file") {
@@ -188,10 +185,14 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           .then((path) => (path ? fetchContent(novelId, path) : undefined))
           .then((oc) => {
             if (oc !== undefined)
-              updateTab(tab.id, { outlineContent: oc || "" });
+              updateTab(tab.id, {
+                outlineContent: oc || "",
+                outlineContentBase: oc || "",
+              });
           })
           .catch(() => {
-            if (tab.outlinePath) updateTab(tab.id, { outlineContent: "" });
+            if (tab.outlinePath)
+              updateTab(tab.id, { outlineContent: "", outlineContentBase: "" });
           });
       },
       [novelId, fetchContent, resolveChapter, updateTab],
@@ -216,7 +217,10 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         loadedRef.current.add(tab.id + ":content");
         fetchContent(novelId, tab.path)
           .then((content) => {
-            updateTab(tab.id, { content: content ?? "" });
+            updateTab(tab.id, {
+              content: content ?? "",
+              contentBase: content ?? "",
+            });
           })
           .catch(() => {
             updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
@@ -340,30 +344,19 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       [mutateSaveContent, updateTab, t],
     );
 
-    const scheduleEditorSave = useCallback(
-      (
-        tabId: string,
-        path: string,
-        content: string,
-        dirtyKey: "isDirty" | "outlineIsDirty",
-      ) => {
-        editorSaveQueue.schedule(
-          { novelId, tabId, path, content, dirtyKey },
-          () =>
-            mutateSaveContent({
-              novel_id: novelId,
-              path,
-              content,
-            }),
-          () => updateTab(tabId, { [dirtyKey]: false }),
-          (err) => {
-            toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
-            console.error(err);
-          },
-        );
-      },
-      [editorSaveQueue, novelId, mutateSaveContent, updateTab, t],
-    );
+    const {
+      scheduleSave: scheduleEditorSave,
+      loadConflictSnapshot,
+      chooseConflictVersion,
+      refreshApprovedFile,
+    } = useEditorFileSync({
+      novelId,
+      tabs,
+      queue: editorSaveQueue,
+      fetchContent,
+      updateTab,
+      mutateSaveContent,
+    });
 
     const handleCloseTab = useCallback(
       async (id: string) => {
@@ -435,29 +428,49 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const handleEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
+        const tab =
+          useEditorTabsStore
+            .getState()
+            .byNovel[String(novelId)]?.tabs.find((t) => t.id === tabId) ??
+          tabs.find((t) => t.id === tabId);
+        if (!tab) return;
         updateTab(tabId, { content, isDirty: true });
         // 3.8 后续：activeContent 迁 useEditorStore。
         useEditorStore.getState().setActiveContent(content);
 
-        const tab = tabs.find((t) => t.id === tabId);
-        if (!tab) return;
-        scheduleEditorSave(tabId, tab.path, content, "isDirty");
+        scheduleEditorSave(
+          tabId,
+          tab.path,
+          content,
+          tab.contentBase ?? tab.content ?? "",
+          "isDirty",
+        );
       },
-      [tabs, updateTab, scheduleEditorSave],
+      [tabs, novelId, updateTab, scheduleEditorSave],
     );
 
     // 大纲编辑：内容存 outlineContent，保存路径派生 outlinePath
     const handleOutlineEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
-        const tab = tabs.find((t) => t.id === tabId);
+        const tab =
+          useEditorTabsStore
+            .getState()
+            .byNovel[String(novelId)]?.tabs.find((t) => t.id === tabId) ??
+          tabs.find((t) => t.id === tabId);
         if (!tab?.outlinePath) return;
         updateTab(tabId, { outlineContent: content, outlineIsDirty: true });
         useEditorStore.getState().setActiveContent(content);
 
-        scheduleEditorSave(tabId, tab.outlinePath, content, "outlineIsDirty");
+        scheduleEditorSave(
+          tabId,
+          tab.outlinePath,
+          content,
+          tab.outlineContentBase ?? tab.outlineContent ?? "",
+          "outlineIsDirty",
+        );
       },
-      [tabs, updateTab, scheduleEditorSave],
+      [tabs, novelId, updateTab, scheduleEditorSave],
     );
 
     const monacoRef = useRef<any>(null);
@@ -548,50 +561,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       [editorSaveQueue, doHighlight],
     );
 
-    // ── file:changed 事件监听 ─────────────────────────────────
-    // 用 ref 读取最新 tabs，避免因 tabs 变化频繁重建订阅丢失事件
-
-    useEffect(() => {
-      const unsub = EventsOn("file:changed", async (data: any) => {
-        if (data.novel_id !== novelIdRef.current) return;
-
-        for (const tab of tabsRef.current) {
-          if (tab.type !== "file") continue;
-
-          let needRefresh = false;
-          let refreshKey: "content" | "outlineContent" = "content";
-
-          if (tab.path === data.path) {
-            needRefresh = true;
-            refreshKey = "content";
-          } else {
-            if (tab.outlinePath === data.path) {
-              needRefresh = true;
-              refreshKey = "outlineContent";
-            }
-          }
-
-          if (needRefresh) {
-            try {
-              // 5.2 commit 3: 改 qc.invalidateQueries + fetchContent（走 query 缓存通道，不经 useApp）。
-              // 先 invalidate 标 stale，再 fetchContent 才会重新拉取（否则 fetchQuery 返回旧缓存）。
-              qc.invalidateQueries({
-                queryKey: contentKeys.detail(data.novel_id, data.path),
-              });
-              const fresh = await fetchContent(data.novel_id, data.path);
-              const patch: Partial<EditorTab> = { [refreshKey]: fresh };
-              if (refreshKey === "content") patch.isDirty = false;
-              if (refreshKey === "outlineContent") patch.outlineIsDirty = false;
-              updateTab(tab.id, patch);
-            } catch {
-              /* 文件可能被删 */
-            }
-          }
-        }
-      });
-      return () => unsub();
-    }, [qc, fetchContent, updateTab]);
-
     // ── 打开/激活文件 tab ──────────────────────────────────
 
     const titleFromPath = useCallback(
@@ -660,6 +629,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               outlinePath: item?.outline_file_path,
               title: display,
               content: c,
+              contentBase: c,
               isDirty: false,
               viewMode: initialMode,
               readOnly: skReadOnly,
@@ -772,35 +742,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const { filePath, viewMode } = await filePathFromDiff(dt.path);
         const ft = tabs.find((t) => t.type === "file" && t.path === filePath);
 
-        if (ft) {
-          try {
-            const fresh = await fetchContent(novelId, dt.path);
-            const patch: Partial<EditorTab> = { viewMode };
-            if (viewMode === "outline") {
-              patch.outlineContent = fresh;
-              patch.outlineIsDirty = false;
-            } else {
-              patch.content = fresh;
-              patch.isDirty = false;
-            }
-            updateTab(ft.id, patch);
-          } catch {
-            /* ignored */
-          }
-        }
+        if (ft) await refreshApprovedFile(ft, dt.path, viewMode);
 
         closeTab(dt.id);
         doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [
-        novelId,
-        tabs,
-        fetchContent,
-        updateTab,
-        closeTab,
-        doOpenFile,
-        filePathFromDiff,
-      ],
+      [tabs, closeTab, doOpenFile, filePathFromDiff, refreshApprovedFile],
     );
 
     const handleDiffReject = useCallback(
@@ -945,6 +892,14 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     // File tab
     const viewMode = activeTab.viewMode || "content";
+    const conflictOutline =
+      viewMode === "outline" || viewMode === "outline-edit";
+    const conflictPath = conflictOutline
+      ? activeTab.outlinePath
+      : activeTab.path;
+    const hasConflict = conflictOutline
+      ? activeTab.outlineContentConflict
+      : activeTab.contentConflict;
     return (
       <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
         <TabBar
@@ -1016,6 +971,17 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             )}
           </div>
         </div>
+
+        {hasConflict && conflictPath && (
+          <ContentConflictNotice
+            key={`${activeTab.id}:${conflictPath}`}
+            tabId={activeTab.id}
+            path={conflictPath}
+            outline={conflictOutline}
+            onLoad={loadConflictSnapshot}
+            onChoose={chooseConflictVersion}
+          />
+        )}
 
         <div className="flex-1 min-h-0">
           {isLoading ? (

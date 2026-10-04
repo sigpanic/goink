@@ -7,8 +7,12 @@ export type EditorTab = {
   // file tab
   content?: string;
   outlineContent?: string;
+  contentBase?: string;
+  outlineContentBase?: string;
   isDirty?: boolean;
   outlineIsDirty?: boolean;
+  contentConflict?: boolean;
+  outlineContentConflict?: boolean;
   viewMode?: "content" | "outline" | "outline-edit" | "preview" | "edit";
   readOnly?: boolean;
   // diff tab
