@@ -97,7 +97,7 @@ export default function ContentConflictNotice({
     <>
       <div
         role="alert"
-        className="flex flex-wrap items-center gap-2 border-b border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm"
+        className="flex flex-wrap items-center gap-2 border-b border-warning-border bg-warning px-4 py-2 text-sm"
       >
         <span className="mr-auto">{t("content.conflictNotice")}</span>
         {!open && (
@@ -149,7 +149,7 @@ export default function ContentConflictNotice({
               {changed && (
                 <p
                   role="status"
-                  className="border-b bg-amber-500/10 px-5 py-2 text-sm text-amber-700 dark:text-amber-300"
+                  className="border-b bg-warning px-5 py-2 text-sm text-warning-foreground"
                 >
                   {t("content.conflictChangedAgain")}
                 </p>
