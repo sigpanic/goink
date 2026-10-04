@@ -10,7 +10,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { ExtractStyle, CancelExtract, GetContent } from "@/lib/wailsjs/go/app/App";
+import {
+  ExtractStyle,
+  CancelExtract,
+  GetContent,
+} from "@/lib/wailsjs/go/app/App";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSaveContent } from "@/components/content/useSaveContent";
@@ -297,27 +301,32 @@ export default function StyleView({
     }
   }, [selected, selectedModel, reasoningEffort, phase, t]);
 
-  const saveGenerated = useCallback(async (expectedContent: string) => {
-    if (!result) return;
-    try {
-      await saveMutation.mutateAsync({
-        novel_id: novelId,
-        path: result.filePath,
-        content: result.rawContent,
-        expected_content: expectedContent,
-      });
-      reportAIFileChange({ novelId, path: result.filePath });
-      setOverwriteContent(null);
-      setPhase("browse");
-      setResult(null);
-      setSelected(new Set());
-    } catch (e) {
-      setOverwriteContent(null);
-      setError(isContentConflict(e)
-        ? t("skill.generatedTargetChanged")
-        : toErrorMessage(e, t("styleSample.saveFailed")));
-    }
-  }, [result, saveMutation.mutateAsync, t, novelId]);
+  const saveGenerated = useCallback(
+    async (expectedContent: string) => {
+      if (!result) return;
+      try {
+        await saveMutation.mutateAsync({
+          novel_id: novelId,
+          path: result.filePath,
+          content: result.rawContent,
+          expected_content: expectedContent,
+        });
+        reportAIFileChange({ novelId, path: result.filePath });
+        setOverwriteContent(null);
+        setPhase("browse");
+        setResult(null);
+        setSelected(new Set());
+      } catch (e) {
+        setOverwriteContent(null);
+        setError(
+          isContentConflict(e)
+            ? t("skill.generatedTargetChanged")
+            : toErrorMessage(e, t("styleSample.saveFailed")),
+        );
+      }
+    },
+    [result, saveMutation.mutateAsync, t, novelId],
+  );
 
   const handleSave = useCallback(async () => {
     if (!result) return;

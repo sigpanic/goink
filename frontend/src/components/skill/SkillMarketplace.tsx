@@ -122,7 +122,9 @@ export default function SkillMarketplace({
   const [contentError, setContentError] = useState("");
 
   const [installTarget, setInstallTarget] = useState<InstallTarget>("user");
-  const [checkingTarget, setCheckingTarget] = useState<InstallTarget | null>(null);
+  const [checkingTarget, setCheckingTarget] = useState<InstallTarget | null>(
+    null,
+  );
   // 5.4 commit 4: installing 由 mutation.isPending 推导（删 useState），mutation onSuccess 失效 skills + remote-skills。
   // installTarget 仍需 useState：在 doInstall 之前 setInstallTarget 标记哪个按钮 loading，mutation 不持此信息。
   const installMutation = useInstallRemoteSkill(novelId);
@@ -268,7 +270,11 @@ export default function SkillMarketplace({
             toastError(t("skill.marketplace.targetChanged"));
           } catch (readError: unknown) {
             setPhase("detail");
-            toastError(t("skill.marketplace.installFailed") + ": " + toErrorMessage(readError));
+            toastError(
+              t("skill.marketplace.installFailed") +
+                ": " +
+                toErrorMessage(readError),
+            );
           } finally {
             setCheckingTarget(null);
           }
@@ -286,7 +292,15 @@ export default function SkillMarketplace({
         }
       }
     },
-    [installMutateAsync, novelId, t, onInstalled, probeLocal, remoteContent, qc],
+    [
+      installMutateAsync,
+      novelId,
+      t,
+      onInstalled,
+      probeLocal,
+      remoteContent,
+      qc,
+    ],
   );
 
   // Click install button — probe then install or enter confirm_overwrite
@@ -325,12 +339,23 @@ export default function SkillMarketplace({
           await doInstall(target, selectedSkill.name, local);
         }
       } catch (e: unknown) {
-        toastError(t("skill.marketplace.installFailed") + ": " + toErrorMessage(e));
+        toastError(
+          t("skill.marketplace.installFailed") + ": " + toErrorMessage(e),
+        );
       } finally {
         setCheckingTarget(null);
       }
     },
-    [selectedSkill, installBusy, novelId, t, probeLocal, qc, doInstall, remoteContent],
+    [
+      selectedSkill,
+      installBusy,
+      novelId,
+      t,
+      probeLocal,
+      qc,
+      doInstall,
+      remoteContent,
+    ],
   );
 
   // Confirm overwrite

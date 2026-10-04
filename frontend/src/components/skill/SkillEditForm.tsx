@@ -33,9 +33,10 @@ function parseDraft(content: string): SkillDraft {
   const frontmatterEnd = content.startsWith("---")
     ? content.indexOf("\n---", 3)
     : -1;
-  const bodyText = frontmatterEnd < 0
-    ? body
-    : content.slice(frontmatterEnd + 4).replace(/^\n\n?/, "");
+  const bodyText =
+    frontmatterEnd < 0
+      ? body
+      : content.slice(frontmatterEnd + 4).replace(/^\n\n?/, "");
   return {
     name: meta.name || "",
     description: meta.description || "",
@@ -44,7 +45,9 @@ function parseDraft(content: string): SkillDraft {
     author: meta.author || "",
     version: meta.version || "1",
     bodyText,
-    extraFields: Object.entries(meta).filter(([key]) => !KNOWN_FIELDS.includes(key)),
+    extraFields: Object.entries(meta).filter(
+      ([key]) => !KNOWN_FIELDS.includes(key),
+    ),
   };
 }
 
@@ -142,7 +145,10 @@ export default function SkillEditForm({
 
   return (
     <div className="overflow-y-auto h-full" onKeyDown={handleKeyDown}>
-      <fieldset disabled={saving} className="max-w-2xl mx-auto px-6 py-6 space-y-4">
+      <fieldset
+        disabled={saving}
+        className="max-w-2xl mx-auto px-6 py-6 space-y-4"
+      >
         {error && (
           <div className="sticky top-0 z-10 px-3 py-2.5 text-sm font-medium text-destructive-foreground bg-destructive border border-destructive rounded-md shadow-sm">
             {error}
@@ -204,13 +210,14 @@ export default function SkillEditForm({
               </option>
             ))}
           </select>
-          {draft.mode === "always" && (source === "user" || source === "novel") && (
-            <p className="mt-1.5 text-xs text-muted-foreground">
-              {source === "user"
-                ? t("skill.alwaysScopeUser")
-                : t("skill.alwaysScopeNovel")}
-            </p>
-          )}
+          {draft.mode === "always" &&
+            (source === "user" || source === "novel") && (
+              <p className="mt-1.5 text-xs text-muted-foreground">
+                {source === "user"
+                  ? t("skill.alwaysScopeUser")
+                  : t("skill.alwaysScopeNovel")}
+              </p>
+            )}
         </div>
 
         <div className="flex gap-4">

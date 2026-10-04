@@ -211,7 +211,9 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           .catch(() => {
             const current = useEditorTabsStore
               .getState()
-              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tab.id);
+              .byNovel[String(novelId)]?.tabs.find(
+                (item) => item.id === tab.id,
+              );
             if (
               tab.outlinePath &&
               current?.outlineContent == null &&
@@ -223,7 +225,13 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               });
           });
       },
-      [novelId, readLatestContent, resolveChapter, updateTab, applyLoadedContent],
+      [
+        novelId,
+        readLatestContent,
+        resolveChapter,
+        updateTab,
+        applyLoadedContent,
+      ],
     );
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
@@ -250,7 +258,9 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           .catch(() => {
             const current = useEditorTabsStore
               .getState()
-              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tab.id);
+              .byNovel[String(novelId)]?.tabs.find(
+                (item) => item.id === tab.id,
+              );
             if (current?.content == null && !current?.isDirty)
               updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
           });
@@ -268,7 +278,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         loadOutlineContent(tab);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- initRef.current is mutable and not a valid dependency; effect should only re-run when tabs/novelId change
-    }, [tabs, novelId, t, updateTab, loadOutlineContent, readLatestContent, applyLoadedContent]);
+    }, [
+      tabs,
+      novelId,
+      t,
+      updateTab,
+      loadOutlineContent,
+      readLatestContent,
+      applyLoadedContent,
+    ]);
 
     // Ctrl+Shift+V 切换技能预览
     useEffect(() => {
@@ -349,11 +367,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // ── 保存逻辑 ────────────────────────────────────────────
 
     const doSave = useCallback(
-      async (
-        tabId: string,
-        path: string,
-        content: string,
-      ) => {
+      async (tabId: string, path: string, content: string) => {
         if (!novelId) throw new Error(t("common.saveFailed"));
         const original = useEditorTabsStore
           .getState()
@@ -361,19 +375,32 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const expected = original?.contentBase ?? original?.content ?? "";
         let saveError: unknown;
         editorSaveQueue.schedule(
-          { novelId, tabId, path, content, dirtyKey: "isDirty", expectedContent: expected },
-          (expectedContent) => mutateSaveContent({
-            novel_id: novelId,
+          {
+            novelId,
+            tabId,
             path,
             content,
-            expected_content: expectedContent,
-          }),
+            dirtyKey: "isDirty",
+            expectedContent: expected,
+          },
+          (expectedContent) =>
+            mutateSaveContent({
+              novel_id: novelId,
+              path,
+              content,
+              expected_content: expectedContent,
+            }),
           (written) => updateTab(tabId, { contentBase: written }),
           () => {
             const latest = useEditorTabsStore
               .getState()
               .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
-            if (!latest || latest.content !== content || latest.contentConflict || latest.contentNeedsRefresh)
+            if (
+              !latest ||
+              latest.content !== content ||
+              latest.contentConflict ||
+              latest.contentNeedsRefresh
+            )
               return;
             updateTab(tabId, { isDirty: false, viewMode: "preview" });
           },
@@ -400,7 +427,11 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           : tabs.find((item) => item.id === id);
         if (!tab) return;
         if (tab?.type === "file") {
-          if (tab.isDirty && isSkillPath(tab.path) && !editorSaveQueue.isPending(novelId, tab.path)) {
+          if (
+            tab.isDirty &&
+            isSkillPath(tab.path) &&
+            !editorSaveQueue.isPending(novelId, tab.path)
+          ) {
             toastError(t("content.saveSkillBeforeClose"));
             return;
           }
@@ -426,7 +457,11 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const handleCloseAllTabs = useCallback(async () => {
       for (const tab of tabs) {
         if (tab.type !== "file") continue;
-        if (tab.isDirty && isSkillPath(tab.path) && !editorSaveQueue.isPending(novelId, tab.path)) {
+        if (
+          tab.isDirty &&
+          isSkillPath(tab.path) &&
+          !editorSaveQueue.isPending(novelId, tab.path)
+        ) {
           toastError(t("content.saveSkillBeforeClose"));
           return;
         }

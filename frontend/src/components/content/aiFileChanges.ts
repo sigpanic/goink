@@ -33,10 +33,7 @@ export function reportAIFileChange(change: AIFileChange): void {
   const tabsStore = useEditorTabsStore.getState();
   for (const [novelKey, entry] of Object.entries(tabsStore.byNovel)) {
     const tabNovelId = Number(novelKey);
-    if (
-      tabNovelId !== novelId &&
-      !path.startsWith("~/.goink/skills/")
-    )
+    if (tabNovelId !== novelId && !path.startsWith("~/.goink/skills/"))
       continue;
     for (const tab of entry.tabs) {
       if (tab.type !== "file") continue;

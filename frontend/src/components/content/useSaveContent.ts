@@ -26,7 +26,9 @@ export function useSaveContent() {
           queryKey: contentKeys.detail(input.novel_id, input.path),
         });
         if (input.path.startsWith("skills/"))
-          void qc.invalidateQueries({ queryKey: skillKeys.list(input.novel_id) });
+          void qc.invalidateQueries({
+            queryKey: skillKeys.list(input.novel_id),
+          });
       }
     },
   });

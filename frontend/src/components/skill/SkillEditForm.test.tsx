@@ -1,8 +1,15 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import SkillEditForm from "./SkillEditForm";
 
-const original = "---\nname: 旧技能\ndescription: 说明\nmode: auto\nversion: 1\ncustom: 保留\n---\n\n旧正文";
+const original =
+  "---\nname: 旧技能\ndescription: 说明\nmode: auto\nversion: 1\ncustom: 保留\n---\n\n旧正文";
 
 describe("SkillEditForm", () => {
   it("未保存稿件在父组件更新及重挂载后保持，采用磁盘版时才重置", async () => {
@@ -44,16 +51,19 @@ describe("SkillEditForm", () => {
       <SkillEditForm {...props} content={original} isDirty={false} />,
     );
     await waitFor(() =>
-      expect(screen.getByPlaceholderText("skill.contentPlaceholder")).toHaveValue(
-        "旧正文",
-      ),
+      expect(
+        screen.getByPlaceholderText("skill.contentPlaceholder"),
+      ).toHaveValue("旧正文"),
     );
   });
 
   it("保存期间禁用输入；失败后保留稿件和编辑状态", async () => {
     let rejectSave!: (error: Error) => void;
     const onSave = vi.fn(
-      () => new Promise<void>((_resolve, reject) => { rejectSave = reject; }),
+      () =>
+        new Promise<void>((_resolve, reject) => {
+          rejectSave = reject;
+        }),
     );
     const onDraftChange = vi.fn();
     render(
@@ -70,14 +80,20 @@ describe("SkillEditForm", () => {
     });
     fireEvent.click(screen.getByRole("button", { name: "skill.save" }));
 
-    expect(screen.getByPlaceholderText("skill.contentPlaceholder")).toBeDisabled();
-    expect(onSave).toHaveBeenCalledWith(expect.stringContaining("不能丢的正文"));
+    expect(
+      screen.getByPlaceholderText("skill.contentPlaceholder"),
+    ).toBeDisabled();
+    expect(onSave).toHaveBeenCalledWith(
+      expect.stringContaining("不能丢的正文"),
+    );
     await act(async () => rejectSave(new Error("磁盘写入失败")));
 
     expect(screen.getByText("磁盘写入失败")).toBeInTheDocument();
     expect(screen.getByPlaceholderText("skill.contentPlaceholder")).toHaveValue(
       "不能丢的正文",
     );
-    expect(screen.getByPlaceholderText("skill.contentPlaceholder")).toBeEnabled();
+    expect(
+      screen.getByPlaceholderText("skill.contentPlaceholder"),
+    ).toBeEnabled();
   });
 });

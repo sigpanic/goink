@@ -274,11 +274,27 @@ describe("StyleView", () => {
 
   it("confirms overwriting a nonempty user skill with its original content", async () => {
     mockListStyleSamples.mockResolvedValue({
-      items: [{ id: 1, name: "Sample", content: "sample", tags: [], is_global: true, novel_id: 0 }],
+      items: [
+        {
+          id: 1,
+          name: "Sample",
+          content: "sample",
+          tags: [],
+          is_global: true,
+          novel_id: 0,
+        },
+      ],
       total: 1,
       total_pages: 1,
     });
-    mockGetModels.mockResolvedValue([{ Key: "test/model", ModelName: "Test", ProviderName: "test", ModelID: "model" }]);
+    mockGetModels.mockResolvedValue([
+      {
+        Key: "test/model",
+        ModelName: "Test",
+        ProviderName: "test",
+        ModelID: "model",
+      },
+    ]);
     mockExtractStyle.mockResolvedValue({
       name: "Generated",
       file_path: "~/.goink/skills/generated.md",
@@ -290,7 +306,9 @@ describe("StyleView", () => {
     fireEvent.click(await screen.findByText("select"));
     fireEvent.click(screen.getByText("styleSample.startExtract"));
     fireEvent.click(await screen.findByText("styleSample.saveToUserSkill"));
-    expect(await screen.findByText("skill.generatedOverwriteTitle")).toBeInTheDocument();
+    expect(
+      await screen.findByText("skill.generatedOverwriteTitle"),
+    ).toBeInTheDocument();
     expect(mockSaveContent).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByText("skill.generatedConfirmOverwrite"));
@@ -306,25 +324,45 @@ describe("StyleView", () => {
 
   it("keeps the generated result when the target changes after confirmation", async () => {
     mockListStyleSamples.mockResolvedValue({
-      items: [{ id: 1, name: "Sample", content: "sample", tags: [], is_global: true, novel_id: 0 }],
+      items: [
+        {
+          id: 1,
+          name: "Sample",
+          content: "sample",
+          tags: [],
+          is_global: true,
+          novel_id: 0,
+        },
+      ],
       total: 1,
       total_pages: 1,
     });
-    mockGetModels.mockResolvedValue([{ Key: "test/model", ModelName: "Test", ProviderName: "test", ModelID: "model" }]);
+    mockGetModels.mockResolvedValue([
+      {
+        Key: "test/model",
+        ModelName: "Test",
+        ProviderName: "test",
+        ModelID: "model",
+      },
+    ]);
     mockExtractStyle.mockResolvedValue({
       name: "Generated",
       file_path: "~/.goink/skills/generated.md",
       raw_content: "new skill",
     });
     mockGetContent.mockResolvedValue("old skill");
-    mockSaveContent.mockRejectedValueOnce(new Error("CONTENT_CONFLICT: changed"));
+    mockSaveContent.mockRejectedValueOnce(
+      new Error("CONTENT_CONFLICT: changed"),
+    );
 
     renderWithProvider(<StyleView novelId={1} />);
     fireEvent.click(await screen.findByText("select"));
     fireEvent.click(screen.getByText("styleSample.startExtract"));
     fireEvent.click(await screen.findByText("styleSample.saveToUserSkill"));
     fireEvent.click(await screen.findByText("skill.generatedConfirmOverwrite"));
-    expect(await screen.findByText("skill.generatedTargetChanged")).toBeInTheDocument();
+    expect(
+      await screen.findByText("skill.generatedTargetChanged"),
+    ).toBeInTheDocument();
     expect(screen.getByText("styleSample.saveToUserSkill")).toBeInTheDocument();
   });
 });

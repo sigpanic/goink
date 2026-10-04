@@ -66,7 +66,10 @@ describe("SkillMarketplace installation", () => {
         total_pages: 1,
       },
     });
-    mockGetRemoteSkillContent.mockResolvedValue({ err_code: "", data: "remote body" });
+    mockGetRemoteSkillContent.mockResolvedValue({
+      err_code: "",
+      data: "remote body",
+    });
     mockInstallRemoteSkill.mockResolvedValue({ err_code: "", data: {} });
   });
 
@@ -99,15 +102,22 @@ describe("SkillMarketplace installation", () => {
         novel_id: 1,
         expected_content: "current local body",
       });
-      expect(qc.getQueryState(contentKeys.detail(2, path))?.isInvalidated).toBe(true);
+      expect(qc.getQueryState(contentKeys.detail(2, path))?.isInvalidated).toBe(
+        true,
+      );
       expect(qc.getQueryState(skillKeys.list(2))?.isInvalidated).toBe(true);
     });
   });
 
   it("reopens confirmation with the latest target after a conflict", async () => {
-    mockGetContent.mockResolvedValueOnce("").mockResolvedValueOnce("newly appeared body");
+    mockGetContent
+      .mockResolvedValueOnce("")
+      .mockResolvedValueOnce("newly appeared body");
     mockInstallRemoteSkill
-      .mockResolvedValueOnce({ err_code: "conflict", err_msg: "target changed" })
+      .mockResolvedValueOnce({
+        err_code: "conflict",
+        err_msg: "target changed",
+      })
       .mockResolvedValueOnce({ err_code: "", data: {} });
     renderMarketplace();
 
@@ -140,9 +150,13 @@ describe("SkillMarketplace installation", () => {
     await openSkill();
     fireEvent.click(screen.getByText("skill.marketplace.installToUser"));
     await vi.waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith("skill.marketplace.installFailed: read failed");
+      expect(toastError).toHaveBeenCalledWith(
+        "skill.marketplace.installFailed: read failed",
+      );
     });
     expect(mockInstallRemoteSkill).not.toHaveBeenCalled();
-    expect(screen.getByText("skill.marketplace.installToUser")).toBeInTheDocument();
+    expect(
+      screen.getByText("skill.marketplace.installToUser"),
+    ).toBeInTheDocument();
   });
 });

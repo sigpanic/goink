@@ -53,15 +53,17 @@ describe("useAIFileCacheInvalidation", () => {
       byNovel: {
         "1": {
           activeTabId: "chapter",
-          tabs: [{
-            id: "chapter",
-            type: "file",
-            path: "chapters/id_3.md",
-            outlinePath: "outlines/id_3.md",
-            title: "第三章",
-            content: "旧正文",
-            outlineContent: "旧大纲",
-          }],
+          tabs: [
+            {
+              id: "chapter",
+              type: "file",
+              path: "chapters/id_3.md",
+              outlinePath: "outlines/id_3.md",
+              title: "第三章",
+              content: "旧正文",
+              outlineContent: "旧大纲",
+            },
+          ],
         },
       },
     });
@@ -129,19 +131,26 @@ describe("useAIFileCacheInvalidation", () => {
     const { qc } = setup();
     const path = "chapters/id_3.md";
     let resolveOld!: (content: string) => void;
-    const pending = qc.fetchQuery({
-      queryKey: contentKeys.detail(1, path),
-      queryFn: () => new Promise<string>((resolve) => { resolveOld = resolve; }),
-    }).catch(() => undefined);
+    const pending = qc
+      .fetchQuery({
+        queryKey: contentKeys.detail(1, path),
+        queryFn: () =>
+          new Promise<string>((resolve) => {
+            resolveOld = resolve;
+          }),
+      })
+      .catch(() => undefined);
 
     emit(1, path);
     resolveOld("过期正文");
     await pending;
     const readFresh = vi.fn().mockResolvedValue("AI 正文");
-    expect(await qc.fetchQuery({
-      queryKey: contentKeys.detail(1, path),
-      queryFn: readFresh,
-    })).toBe("AI 正文");
+    expect(
+      await qc.fetchQuery({
+        queryKey: contentKeys.detail(1, path),
+        queryFn: readFresh,
+      }),
+    ).toBe("AI 正文");
     expect(readFresh).toHaveBeenCalledOnce();
   });
 

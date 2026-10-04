@@ -33,10 +33,16 @@ describe("useSaveContent", () => {
     });
 
     for (const novelId of [1, 2]) {
-      expect(qc.getQueryState(contentKeys.detail(novelId, path))?.isInvalidated).toBe(true);
-      expect(qc.getQueryState(skillKeys.list(novelId))?.isInvalidated).toBe(true);
+      expect(
+        qc.getQueryState(contentKeys.detail(novelId, path))?.isInvalidated,
+      ).toBe(true);
+      expect(qc.getQueryState(skillKeys.list(novelId))?.isInvalidated).toBe(
+        true,
+      );
     }
-    expect(qc.getQueryState(contentKeys.detail(2, "goink.md"))?.isInvalidated).toBe(false);
+    expect(
+      qc.getQueryState(contentKeys.detail(2, "goink.md"))?.isInvalidated,
+    ).toBe(false);
     qc.clear();
   });
 });

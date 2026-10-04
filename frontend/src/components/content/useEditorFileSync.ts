@@ -2,10 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { contentKeys } from "@/lib/queryKeys";
-import {
-  aiFileVersion,
-  subscribeAIFileChanges,
-} from "./aiFileChanges";
+import { aiFileVersion, subscribeAIFileChanges } from "./aiFileChanges";
 import { GetContent } from "@/lib/wailsjs/go/app/App";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -102,7 +99,9 @@ export function useEditorFileSync({
       if (aiFileVersion(currentNovelId, path) !== loaded.version) return false;
       const current = useEditorTabsStore
         .getState()
-        .byNovel[String(currentNovelId)]?.tabs.find((item) => item.id === tabId);
+        .byNovel[String(currentNovelId)]?.tabs.find(
+          (item) => item.id === tabId,
+        );
       const keys = fields(outline);
       if (
         !current ||

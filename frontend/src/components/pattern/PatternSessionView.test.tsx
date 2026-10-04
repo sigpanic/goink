@@ -3,11 +3,13 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import PatternSessionView from "./PatternSessionView";
 
-const { mockExtractPattern, mockGetContent, mockSaveContent } = vi.hoisted(() => ({
-  mockExtractPattern: vi.fn(),
-  mockGetContent: vi.fn(),
-  mockSaveContent: vi.fn(),
-}));
+const { mockExtractPattern, mockGetContent, mockSaveContent } = vi.hoisted(
+  () => ({
+    mockExtractPattern: vi.fn(),
+    mockGetContent: vi.fn(),
+    mockSaveContent: vi.fn(),
+  }),
+);
 
 vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/wailsjs/go/app/App")>()),
@@ -70,20 +72,28 @@ describe("PatternSessionView generated skill save", () => {
       });
       expect(onExit).toHaveBeenCalledOnce();
     });
-    expect(screen.queryByText("skill.generatedOverwriteTitle")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("skill.generatedOverwriteTitle"),
+    ).not.toBeInTheDocument();
   });
 
   it("keeps the generated result after a confirmed overwrite conflicts", async () => {
     mockGetContent.mockResolvedValue("original skill");
-    mockSaveContent.mockRejectedValueOnce(new Error("CONTENT_CONFLICT: changed"));
+    mockSaveContent.mockRejectedValueOnce(
+      new Error("CONTENT_CONFLICT: changed"),
+    );
     const onExit = renderSession();
     fireEvent.click(await screen.findByText("extract.saveToUserSkill"));
 
-    expect(await screen.findByText("skill.generatedOverwriteTitle")).toBeInTheDocument();
+    expect(
+      await screen.findByText("skill.generatedOverwriteTitle"),
+    ).toBeInTheDocument();
     expect(mockSaveContent).not.toHaveBeenCalled();
     fireEvent.click(screen.getByText("skill.generatedConfirmOverwrite"));
 
-    expect(await screen.findByText("skill.generatedTargetChanged")).toBeInTheDocument();
+    expect(
+      await screen.findByText("skill.generatedTargetChanged"),
+    ).toBeInTheDocument();
     expect(mockSaveContent).toHaveBeenCalledWith({
       novel_id: 3,
       path: "~/.goink/skills/generated.md",
