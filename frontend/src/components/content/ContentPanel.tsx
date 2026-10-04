@@ -18,6 +18,7 @@ import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
 import { chapterKeys } from "@/lib/queryKeys";
+import { aiFileVersion } from "./aiFileChanges";
 import { GetChapters } from "@/lib/wailsjs/go/app/App";
 import type { chapter } from "@/lib/wailsjs/go/models";
 import TabBar from "./TabBar";
@@ -113,6 +114,22 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const activeTabRef = useRef(activeTab);
     activeTabRef.current = activeTab;
 
+    const {
+      scheduleSave: scheduleEditorSave,
+      loadConflictSnapshot,
+      chooseConflictVersion,
+      refreshApprovedFile,
+      readLatestContent,
+      applyLoadedContent,
+    } = useEditorFileSync({
+      novelId,
+      tabs,
+      queue: editorSaveQueue,
+      fetchContent,
+      updateTab,
+      mutateSaveContent,
+    });
+
     useEffect(() => {
       novelIdRef.current = novelId;
     }, [novelId]);
@@ -182,20 +199,31 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               return item?.outline_file_path;
             });
         outline
-          .then((path) => (path ? fetchContent(novelId, path) : undefined))
-          .then((oc) => {
-            if (oc !== undefined)
-              updateTab(tab.id, {
-                outlineContent: oc || "",
-                outlineContentBase: oc || "",
-              });
+          .then((path) =>
+            path && novelIdRef.current === novelId
+              ? readLatestContent(path).then((loaded) => ({ path, loaded }))
+              : undefined,
+          )
+          .then((result) => {
+            if (result)
+              applyLoadedContent(tab.id, result.path, true, result.loaded);
           })
           .catch(() => {
-            if (tab.outlinePath)
-              updateTab(tab.id, { outlineContent: "", outlineContentBase: "" });
+            const current = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tab.id);
+            if (
+              tab.outlinePath &&
+              current?.outlineContent == null &&
+              !current?.outlineNeedsRefresh
+            )
+              applyLoadedContent(tab.id, tab.outlinePath, true, {
+                content: "",
+                version: aiFileVersion(novelId, tab.outlinePath),
+              });
           });
       },
-      [novelId, fetchContent, resolveChapter, updateTab],
+      [novelId, readLatestContent, resolveChapter, updateTab, applyLoadedContent],
     );
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
@@ -215,15 +243,16 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       );
       for (const tab of needsLoadContent) {
         loadedRef.current.add(tab.id + ":content");
-        fetchContent(novelId, tab.path)
-          .then((content) => {
-            updateTab(tab.id, {
-              content: content ?? "",
-              contentBase: content ?? "",
-            });
+        readLatestContent(tab.path)
+          .then((loaded) => {
+            applyLoadedContent(tab.id, tab.path, false, loaded);
           })
           .catch(() => {
-            updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
+            const current = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tab.id);
+            if (current?.content == null && !current?.isDirty)
+              updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
           });
       }
       // 加载大纲（恢复后 viewMode 是 outline/outline-edit 时）
@@ -239,7 +268,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         loadOutlineContent(tab);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- initRef.current is mutable and not a valid dependency; effect should only re-run when tabs/novelId change
-    }, [tabs, novelId, fetchContent, t, updateTab, loadOutlineContent]);
+    }, [tabs, novelId, t, updateTab, loadOutlineContent, readLatestContent, applyLoadedContent]);
 
     // Ctrl+Shift+V 切换技能预览
     useEffect(() => {
@@ -343,20 +372,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       },
       [mutateSaveContent, updateTab, t],
     );
-
-    const {
-      scheduleSave: scheduleEditorSave,
-      loadConflictSnapshot,
-      chooseConflictVersion,
-      refreshApprovedFile,
-    } = useEditorFileSync({
-      novelId,
-      tabs,
-      queue: editorSaveQueue,
-      fetchContent,
-      updateTab,
-      mutateSaveContent,
-    });
 
     const handleCloseTab = useCallback(
       async (id: string) => {
@@ -613,11 +628,20 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
         setIsLoading(true);
         Promise.all([
-          fetchContent(novelId, path).catch(() => ""),
+          readLatestContent(path).catch(() => ({
+            content: "",
+            version: aiFileVersion(novelId, path),
+          })),
           resolveChapter(path).catch(() => undefined),
         ])
-          .then(([content, item]) => {
-            const c = content ?? "";
+          .then(async ([initial, item]) => {
+            if (novelIdRef.current !== novelId) return;
+            let loaded = initial;
+            while (loaded.version !== aiFileVersion(novelId, path)) {
+              loaded = await readLatestContent(path, true);
+            }
+            if (novelIdRef.current !== novelId) return;
+            const c = loaded.content;
             const display =
               title ||
               (item
@@ -642,7 +666,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       [
         novelId,
         tabs,
-        fetchContent,
+        readLatestContent,
         openTab,
         setActiveTabId,
         titleFromPath,
@@ -742,7 +766,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const { filePath, viewMode } = await filePathFromDiff(dt.path);
         const ft = tabs.find((t) => t.type === "file" && t.path === filePath);
 
-        if (ft) await refreshApprovedFile(ft, dt.path, viewMode);
+        if (ft) await refreshApprovedFile(ft, dt.path, viewMode, true);
 
         closeTab(dt.id);
         doOpenFile(filePath, undefined, undefined, viewMode);

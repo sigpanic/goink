@@ -14,6 +14,7 @@ import {
   skillKeys,
 } from "@/lib/queryKeys";
 import { useAIFileCacheInvalidation } from "./useAIFileCacheInvalidation";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 
 type FileChangedEvent = { novel_id?: number; path?: string };
 let onFileChanged: ((event: FileChangedEvent) => void) | undefined;
@@ -38,6 +39,7 @@ function emit(novelId: number, path: string) {
 beforeEach(() => {
   onFileChanged = undefined;
   unsubscribe.mockClear();
+  useEditorTabsStore.setState({ byNovel: {}, positions: {} });
   vi.mocked(EventsOn).mockImplementation((name, callback) => {
     expect(name).toBe("file:changed");
     onFileChanged = callback;
@@ -46,6 +48,33 @@ beforeEach(() => {
 });
 
 describe("useAIFileCacheInvalidation", () => {
+  it("编辑器未挂载时仍标记已打开文件供恢复后刷新", () => {
+    useEditorTabsStore.setState({
+      byNovel: {
+        "1": {
+          activeTabId: "chapter",
+          tabs: [{
+            id: "chapter",
+            type: "file",
+            path: "chapters/id_3.md",
+            outlinePath: "outlines/id_3.md",
+            title: "第三章",
+            content: "旧正文",
+            outlineContent: "旧大纲",
+          }],
+        },
+      },
+    });
+    setup();
+
+    emit(1, "outlines/id_3.md");
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: "旧正文",
+      outlineContent: "旧大纲",
+      outlineNeedsRefresh: true,
+    });
+  });
+
   it("章节列表正在显示时，AI 修改章节后重新读取列表", async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { staleTime: 30_000, retry: false } },
@@ -94,6 +123,26 @@ describe("useAIFileCacheInvalidation", () => {
     expect(qc.getQueryData(otherPath)).toBe("故事状态");
     expect(qc.getQueryState(otherPath)?.isInvalidated).toBe(false);
     expect(qc.getQueryState(otherNovel)?.isInvalidated).toBe(false);
+  });
+
+  it("AI 事件取消在途的旧内容读取，旧结果不能重新填入缓存", async () => {
+    const { qc } = setup();
+    const path = "chapters/id_3.md";
+    let resolveOld!: (content: string) => void;
+    const pending = qc.fetchQuery({
+      queryKey: contentKeys.detail(1, path),
+      queryFn: () => new Promise<string>((resolve) => { resolveOld = resolve; }),
+    }).catch(() => undefined);
+
+    emit(1, path);
+    resolveOld("过期正文");
+    await pending;
+    const readFresh = vi.fn().mockResolvedValue("AI 正文");
+    expect(await qc.fetchQuery({
+      queryKey: contentKeys.detail(1, path),
+      queryFn: readFresh,
+    })).toBe("AI 正文");
+    expect(readFresh).toHaveBeenCalledOnce();
   });
 
   it.each([

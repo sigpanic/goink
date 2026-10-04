@@ -13,6 +13,8 @@ export type EditorTab = {
   outlineIsDirty?: boolean;
   contentConflict?: boolean;
   outlineContentConflict?: boolean;
+  contentNeedsRefresh?: boolean;
+  outlineNeedsRefresh?: boolean;
   viewMode?: "content" | "outline" | "outline-edit" | "preview" | "edit";
   readOnly?: boolean;
   // diff tab

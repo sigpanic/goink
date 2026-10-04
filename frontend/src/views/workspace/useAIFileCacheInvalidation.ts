@@ -7,6 +7,7 @@ import {
   maxChapterKeys,
   skillKeys,
 } from "@/lib/queryKeys";
+import { reportAIFileChange } from "@/components/content/aiFileChanges";
 
 interface FileChangedEvent {
   novel_id?: number;
@@ -29,11 +30,18 @@ export function useAIFileCacheInvalidation() {
         return;
 
       if (filePath.startsWith("~/.goink/skills/")) {
-        void qc.invalidateQueries({
-          predicate: ({ queryKey }) =>
+        const filter = {
+          predicate: ({ queryKey }: { queryKey: readonly unknown[] }) =>
             queryKey[0] === contentKeys.all[0] && queryKey[2] === filePath,
+        };
+        void qc.cancelQueries(filter);
+        void qc.invalidateQueries({
+          predicate: filter.predicate,
         });
       } else {
+        void qc.cancelQueries({
+          queryKey: contentKeys.detail(novelId, filePath),
+        });
         void qc.invalidateQueries({
           queryKey: contentKeys.detail(novelId, filePath),
         });
@@ -56,6 +64,8 @@ export function useAIFileCacheInvalidation() {
       } else if (filePath.startsWith("~/.goink/skills/")) {
         void qc.invalidateQueries({ queryKey: skillKeys.all });
       }
+
+      reportAIFileChange({ novelId, path: filePath });
     });
   }, [qc]);
 }

@@ -11,7 +11,7 @@ import ContentPanel, { type ContentPanelHandle } from "./ContentPanel";
 import { useEditorTabsStore } from "./useEditorTabsStore";
 import type { EditorTab } from "./types";
 import { toastError } from "@/utils/toast";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
+import { reportAIFileChange } from "./aiFileChanges";
 
 const { mockGetChapters, mockGetContent } = vi.hoisted(() => ({
   mockGetChapters: vi.fn(),
@@ -261,6 +261,105 @@ describe("ContentPanel", () => {
     });
 
     expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
+  });
+
+  it("打开文件期间收到 AI 事件时采用事件后的磁盘内容", async () => {
+    let resolveRead!: (value: string) => void;
+    mockFetchContent.mockImplementationOnce(
+      () => new Promise<string>((resolve) => { resolveRead = resolve; }),
+    );
+    mockGetContent.mockResolvedValue("AI 新版");
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    act(() => ref.current?.openFile("goink.md", "故事状态"));
+    act(() => reportAIFileChange({ novelId: 1, path: "goink.md" }));
+    await act(async () => resolveRead("旧版"));
+
+    expect(mockGetContent).toHaveBeenCalledWith(1, "goink.md");
+    expect(mockOpenTab).toHaveBeenCalledWith(
+      expect.objectContaining({ path: "goink.md", content: "AI 新版" }),
+    );
+  });
+
+  it("连续 AI 事件使较早的读取结果不能回填干净标签", async () => {
+    let resolveOldRead!: (value: string) => void;
+    mockGetContent
+      .mockImplementationOnce(
+        () => new Promise<string>((resolve) => { resolveOldRead = resolve; }),
+      )
+      .mockResolvedValueOnce("第二次 AI 修改");
+    mockTabsState = [
+      {
+        id: "volume-tab",
+        type: "file",
+        path: "volumes/id_2.md",
+        title: "卷纲",
+        content: "原文",
+        contentBase: "原文",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "volume-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "volume-tab" } },
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: Partial<EditorTab>) => {
+      useEditorTabsStore.getState().updateTab(1, id, patch);
+      mockTabsState = mockTabsState.map((tab) =>
+        tab.id === id ? { ...tab, ...patch } : tab,
+      );
+    });
+    render(<ContentPanel />);
+
+    act(() => reportAIFileChange({ novelId: 1, path: "volumes/id_2.md" }));
+    act(() => reportAIFileChange({ novelId: 1, path: "volumes/id_2.md" }));
+    await act(async () => resolveOldRead("第一次 AI 修改"));
+
+    await vi.waitFor(() =>
+      expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+        content: "第二次 AI 修改",
+        contentBase: "第二次 AI 修改",
+        contentNeedsRefresh: false,
+      }),
+    );
+  });
+
+  it("编辑器隐藏期间收到 AI 事件，重新显示时刷新干净标签", async () => {
+    mockGetContent.mockResolvedValue("隐藏期间的新稿");
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_1.md",
+        title: "第一章",
+        content: "旧稿",
+        contentBase: "旧稿",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "chapter-tab" } },
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: Partial<EditorTab>) => {
+      useEditorTabsStore.getState().updateTab(1, id, patch);
+      mockTabsState = mockTabsState.map((tab) =>
+        tab.id === id ? { ...tab, ...patch } : tab,
+      );
+    });
+    const view = render(<ContentPanel />);
+    view.unmount();
+    act(() => reportAIFileChange({ novelId: 1, path: "chapters/id_1.md" }));
+    mockTabsState = useEditorTabsStore.getState().byNovel["1"].tabs;
+
+    render(<ContentPanel />);
+    await vi.waitFor(() =>
+      expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+        content: "隐藏期间的新稿",
+        contentNeedsRefresh: false,
+      }),
+    );
   });
 
   it("opens a volume outline as standalone Markdown and saves to its returned path", async () => {
@@ -516,13 +615,9 @@ describe("ContentPanel", () => {
     );
     const view = render(<ContentPanel />);
     fireEvent.click(screen.getByRole("button", { name: "edit content" }));
-    const listener = vi
-      .mocked(EventsOn)
-      .mock.calls.find(([name]) => name === "file:changed")?.[1];
-    expect(listener).toBeDefined();
     mockGetContent.mockResolvedValue("AI 新版");
     await act(async () => {
-      await listener?.({ novel_id: 1, path: "chapters/id_1.md" });
+      reportAIFileChange({ novelId: 1, path: "chapters/id_1.md" });
     });
     view.rerender(<ContentPanel />);
     expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
@@ -745,7 +840,7 @@ describe("ContentPanel", () => {
 
   it("AI 刷新读取期间开始输入时不回填旧请求结果", async () => {
     let resolveRead!: (value: string) => void;
-    mockFetchContent.mockImplementationOnce(
+    mockGetContent.mockImplementationOnce(
       () =>
         new Promise<string>((resolve) => {
           resolveRead = resolve;
@@ -776,15 +871,10 @@ describe("ContentPanel", () => {
       },
     );
     render(<ContentPanel />);
-    const listener = vi
-      .mocked(EventsOn)
-      .mock.calls.find(([name]) => name === "file:changed")?.[1];
-    expect(listener).toBeDefined();
     await act(async () => {
-      const refresh = listener?.({ novel_id: 1, path: "chapters/id_1.md" });
+      reportAIFileChange({ novelId: 1, path: "chapters/id_1.md" });
       fireEvent.click(screen.getByRole("button", { name: "edit content" }));
       resolveRead("AI 新版");
-      await refresh;
     });
     expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
       content: "edited outline",
@@ -809,9 +899,9 @@ describe("ContentPanel", () => {
     });
 
     // Should still open the tab with empty content
-    expect(mockOpenTab).toHaveBeenCalledWith(
+    await vi.waitFor(() => expect(mockOpenTab).toHaveBeenCalledWith(
       expect.objectContaining({ content: "", path: "chapters/id_1.md" }),
-    );
+    ));
   });
 
   it("uses the backend outline path when loading and saving an ID-based chapter", async () => {
@@ -827,8 +917,10 @@ describe("ContentPanel", () => {
     mockOpenTab.mockImplementation((tab: any) => {
       mockTabsState = [{ ...tab, id: "f42" }];
       mockActiveTabIdState = "f42";
+      useEditorTabsStore.getState().openTab(1, { ...tab, id: "f42" });
     });
     mockUpdateTab.mockImplementation((id: string, patch: any) => {
+      useEditorTabsStore.getState().updateTab(1, id, patch);
       mockTabsState = mockTabsState.map((tab) =>
         tab.id === id ? { ...tab, ...patch } : tab,
       );

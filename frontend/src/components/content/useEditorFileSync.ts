@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { contentKeys } from "@/lib/queryKeys";
+import {
+  aiFileVersion,
+  subscribeAIFileChanges,
+} from "./aiFileChanges";
 import { GetContent } from "@/lib/wailsjs/go/app/App";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -36,12 +39,14 @@ function fields(outline: boolean) {
         base: "outlineContentBase" as const,
         dirty: "outlineIsDirty" as const,
         conflict: "outlineContentConflict" as const,
+        stale: "outlineNeedsRefresh" as const,
       }
     : {
         content: "content" as const,
         base: "contentBase" as const,
         dirty: "isDirty" as const,
         conflict: "contentConflict" as const,
+        stale: "contentNeedsRefresh" as const,
       };
 }
 
@@ -56,12 +61,67 @@ export function useEditorFileSync({
   const qc = useQueryClient();
   const { t } = useTranslation();
   const novelIdRef = useRef(novelId);
-  const tabsRef = useRef(tabs);
-  const eventVersionsRef = useRef(new Map<string, number>());
+  const refreshesRef = useRef(new Set<string>());
   useEffect(() => {
     novelIdRef.current = novelId;
-    tabsRef.current = tabs;
-  }, [novelId, tabs]);
+  }, [novelId]);
+
+  const readLatestContent = useCallback(
+    async (
+      path: string,
+      fresh = false,
+    ): Promise<{ content: string; version: number }> => {
+      const currentNovelId = novelIdRef.current;
+      let version = aiFileVersion(currentNovelId, path);
+      let content: string;
+      try {
+        content = fresh
+          ? await GetContent(currentNovelId, path)
+          : await fetchContent(currentNovelId, path);
+      } catch (error) {
+        if (version === aiFileVersion(currentNovelId, path)) throw error;
+        content = await GetContent(currentNovelId, path);
+      }
+      while (version !== aiFileVersion(currentNovelId, path)) {
+        version = aiFileVersion(currentNovelId, path);
+        content = await GetContent(currentNovelId, path);
+      }
+      return { content, version };
+    },
+    [fetchContent],
+  );
+
+  const applyLoadedContent = useCallback(
+    (
+      tabId: string,
+      path: string,
+      outline: boolean,
+      loaded: { content: string; version: number },
+    ): boolean => {
+      const currentNovelId = novelIdRef.current;
+      if (aiFileVersion(currentNovelId, path) !== loaded.version) return false;
+      const current = useEditorTabsStore
+        .getState()
+        .byNovel[String(currentNovelId)]?.tabs.find((item) => item.id === tabId);
+      const keys = fields(outline);
+      if (
+        !current ||
+        (outline ? current.outlinePath : current.path) !== path ||
+        current[keys.dirty] ||
+        queue.isPending(currentNovelId, path)
+      )
+        return false;
+      updateTab(tabId, {
+        [keys.content]: loaded.content,
+        [keys.base]: loaded.content,
+        [keys.dirty]: false,
+        [keys.conflict]: false,
+        [keys.stale]: false,
+      });
+      return true;
+    },
+    [queue, updateTab],
+  );
 
   const scheduleSave = useCallback(
     (
@@ -130,13 +190,12 @@ export function useEditorFileSync({
       const currentNovelId = novelIdRef.current;
       queue.pause(currentNovelId, path);
       await queue.waitForIdle(currentNovelId, path);
-      const eventKey = `${currentNovelId}:${path}`;
       let diskContent = "";
       let eventVersion = 0;
       for (let attempt = 0; attempt < 3; attempt++) {
-        const before = eventVersionsRef.current.get(eventKey) ?? 0;
+        const before = aiFileVersion(currentNovelId, path);
         diskContent = await GetContent(currentNovelId, path);
-        eventVersion = eventVersionsRef.current.get(eventKey) ?? 0;
+        eventVersion = aiFileVersion(currentNovelId, path);
         if (before === eventVersion) break;
         if (attempt === 2) throw new Error(t("content.conflictChangedAgain"));
       }
@@ -184,6 +243,7 @@ export function useEditorFileSync({
           [keys.base]: shown.diskContent,
           [keys.dirty]: false,
           [keys.conflict]: false,
+          [keys.stale]: false,
         });
         return { status: "resolved" };
       }
@@ -207,7 +267,10 @@ export function useEditorFileSync({
           });
           return { status: "changed", snapshot: afterSave };
         }
-        updateTab(tabId, { [keys.conflict]: false });
+        updateTab(tabId, {
+          [keys.conflict]: false,
+          [keys.stale]: false,
+        });
         return { status: "resolved" };
       }
       const afterFailure = await loadConflictSnapshot(tabId, path, outline);
@@ -224,84 +287,80 @@ export function useEditorFileSync({
   );
 
   const refreshApprovedFile = useCallback(
-    async (tab: EditorTab, path: string, viewMode: "content" | "outline") => {
+    async (
+      tab: EditorTab,
+      path: string,
+      viewMode: "content" | "outline",
+      activate = false,
+    ) => {
       const outline = viewMode === "outline";
-      if (protectDraft(tab, path, outline)) return;
+      const refreshKey = `${tab.id}:${path}`;
+      if (refreshesRef.current.has(refreshKey)) return;
+      refreshesRef.current.add(refreshKey);
       try {
-        const fresh = await fetchContent(novelIdRef.current, path);
-        const current = useEditorTabsStore
-          .getState()
-          .byNovel[String(novelIdRef.current)]?.tabs.find(
-            (item) => item.id === tab.id,
-          );
-        if (!current || protectDraft(current, path, outline)) return;
-        const keys = fields(outline);
-        updateTab(tab.id, {
-          viewMode,
-          [keys.content]: fresh,
-          [keys.base]: fresh,
-          [keys.dirty]: false,
-        });
+        while (true) {
+          if (protectDraft(tab, path, outline)) return;
+          const loaded = await readLatestContent(path, true);
+          const current = useEditorTabsStore
+            .getState()
+            .byNovel[String(novelIdRef.current)]?.tabs.find(
+              (item) => item.id === tab.id,
+            );
+          if (!current || protectDraft(current, path, outline)) return;
+          if (aiFileVersion(novelIdRef.current, path) !== loaded.version)
+            continue;
+          const applied = applyLoadedContent(tab.id, path, outline, loaded);
+          if (activate && applied) {
+            updateTab(tab.id, { viewMode });
+          }
+          return;
+        }
       } catch {
         /* ignored */
+      } finally {
+        refreshesRef.current.delete(refreshKey);
       }
     },
-    [fetchContent, protectDraft, updateTab],
+    [applyLoadedContent, protectDraft, readLatestContent, updateTab],
   );
 
-  // ── file:changed 事件监听 ─────────────────────────────────
-  // 用 ref 读取最新 tabs，避免因 tabs 变化频繁重建订阅丢失事件
   useEffect(() => {
-    const unsub = EventsOn(
-      "file:changed",
-      async (data: { novel_id: number; path: string }) => {
-        if (data.novel_id !== novelIdRef.current) return;
-        const eventKey = `${data.novel_id}:${data.path}`;
-        eventVersionsRef.current.set(
-          eventKey,
-          (eventVersionsRef.current.get(eventKey) ?? 0) + 1,
-        );
-        const currentTabs =
-          useEditorTabsStore.getState().byNovel[String(data.novel_id)]?.tabs ??
-          tabsRef.current;
-        for (const tab of currentTabs) {
-          if (tab.type !== "file") continue;
-          const outline =
-            tab.outlinePath === data.path && tab.path !== data.path;
-          if (tab.path !== data.path && !outline) continue;
-          if (protectDraft(tab, data.path, outline)) continue;
-          const keys = fields(outline);
-          try {
-            // 5.2 commit 3: 改 qc.invalidateQueries + fetchContent（走 query 缓存通道，不经 useApp）。
-            // 先 invalidate 标 stale，再 fetchContent 才会重新拉取（否则 fetchQuery 返回旧缓存）。
-            qc.invalidateQueries({
-              queryKey: contentKeys.detail(data.novel_id, data.path),
-            });
-            const fresh = await fetchContent(data.novel_id, data.path);
-            const current = useEditorTabsStore
-              .getState()
-              .byNovel[String(data.novel_id)]?.tabs.find(
-                (item) => item.id === tab.id,
-              );
-            if (!current || protectDraft(current, data.path, outline)) continue;
-            updateTab(tab.id, {
-              [keys.content]: fresh,
-              [keys.base]: fresh,
-              [keys.dirty]: false,
-            });
-          } catch {
-            /* 文件可能被删 */
-          }
+    return subscribeAIFileChanges(({ novelId: changedNovelId, path }) => {
+      if (
+        changedNovelId !== novelIdRef.current &&
+        !path.startsWith("~/.goink/skills/")
+      )
+        return;
+      const currentTabs =
+        useEditorTabsStore.getState().byNovel[String(novelIdRef.current)]
+          ?.tabs ?? [];
+      for (const tab of currentTabs) {
+        if (tab.type !== "file") continue;
+        if (tab.path === path) {
+          void refreshApprovedFile(tab, path, "content");
+        } else if (tab.outlinePath === path) {
+          void refreshApprovedFile(tab, path, "outline");
         }
-      },
-    );
-    return () => unsub();
-  }, [qc, fetchContent, updateTab, protectDraft]);
+      }
+    });
+  }, [refreshApprovedFile]);
+
+  useEffect(() => {
+    for (const tab of tabs) {
+      if (tab.type !== "file") continue;
+      if (tab.contentNeedsRefresh)
+        void refreshApprovedFile(tab, tab.path, "content");
+      if (tab.outlineNeedsRefresh && tab.outlinePath)
+        void refreshApprovedFile(tab, tab.outlinePath, "outline");
+    }
+  }, [tabs, refreshApprovedFile]);
 
   return {
     scheduleSave,
     loadConflictSnapshot,
     chooseConflictVersion,
     refreshApprovedFile,
+    readLatestContent,
+    applyLoadedContent,
   };
 }
