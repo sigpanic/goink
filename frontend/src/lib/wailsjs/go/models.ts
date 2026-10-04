@@ -520,6 +520,7 @@ export namespace app {
 	    novel_id: number;
 	    path: string;
 	    content: string;
+	    expected_content?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SaveContentInput(source);
@@ -530,6 +531,7 @@ export namespace app {
 	        this.novel_id = source["novel_id"];
 	        this.path = source["path"];
 	        this.content = source["content"];
+	        this.expected_content = source["expected_content"];
 	    }
 	}
 	export class SaveSettingsInput {

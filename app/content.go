@@ -16,9 +16,10 @@ import (
 
 // SaveContentInput 是保存文件内容的入参。
 type SaveContentInput struct {
-	NovelID int64  `json:"novel_id"`
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	NovelID         int64   `json:"novel_id"`
+	Path            string  `json:"path"`
+	Content         string  `json:"content"`
+	ExpectedContent *string `json:"expected_content,omitempty"`
 }
 
 // GetContent 返回小说仓库中指定路径的文件内容。文件不存在时返回空字符串。
@@ -66,7 +67,16 @@ func (a *App) SaveContent(input SaveContentInput) error {
 		}
 	}
 
-	if err := git.WriteFile(input.NovelID, input.Path, input.Content); err != nil {
+	var err error
+	if input.ExpectedContent != nil {
+		err = git.WriteFileIfUnchanged(input.NovelID, input.Path, *input.ExpectedContent, input.Content)
+	} else {
+		err = git.WriteFile(input.NovelID, input.Path, input.Content)
+	}
+	if errors.Is(err, git.ErrFileChanged) {
+		return fmt.Errorf("CONTENT_CONFLICT: 磁盘内容已变化，请处理冲突后再保存: %w", err)
+	}
+	if err != nil {
 		return err
 	}
 

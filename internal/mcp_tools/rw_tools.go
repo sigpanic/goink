@@ -153,11 +153,10 @@ func requestApproval(ctx context.Context, tc ToolContext, payload map[string]any
 // writeApproved 写入前的并发冲突检查 + 落盘 + file:changed 事件。
 // res 非 nil 表示业务失败（并发冲突/路径非法），err 表示系统错误。
 func writeApproved(ctx context.Context, tc ToolContext, path, current, proposed string) (res *ToolResult, err error) {
-	// 写入前重读对比，阻止并发冲突
-	if fresh, err := git.ReadFile(tc.NovelID, path); err == nil && fresh != current {
-		return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
-	}
-	if err := git.WriteFile(tc.NovelID, path, proposed); err != nil {
+	if err := git.WriteFileIfUnchanged(tc.NovelID, path, current, proposed); err != nil {
+		if errors.Is(err, git.ErrFileChanged) {
+			return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
+		}
 		if errors.Is(err, git.ErrPathEscape) {
 			return &ToolResult{Success: false, Error: "路径非法: " + path}, nil
 		}
@@ -345,14 +344,6 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		return res, nil
 	}
 
-	// 并发冲突检查（new 通道写全新文件，跳过）。
-	// 必须在 DB 变更前执行，避免写入被拒时留下脏记录。
-	if !ref.IsNew {
-		if fresh, err := git.ReadFile(tc.NovelID, physical); err == nil && fresh != current {
-			return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
-		}
-	}
-
 	// 新建在外层事务中取得 id 并写入首个文件；文件失败时回滚记录与排序调整。
 	// 已有章节的标题更新仍延后到正文落盘之后，见下。
 	if ref.IsNew {
@@ -386,7 +377,10 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 			return nil, err
 		}
 		ch = created
-	} else if err := git.WriteFile(tc.NovelID, physical, proposed); err != nil {
+	} else if err := git.WriteFileIfUnchanged(tc.NovelID, physical, current, proposed); err != nil {
+		if errors.Is(err, git.ErrFileChanged) {
+			return &ToolResult{Success: false, Error: "文件已被修改，请重新读取最新内容后重试"}, nil
+		}
 		if errors.Is(err, git.ErrPathEscape) {
 			return &ToolResult{Success: false, Error: "路径非法: " + physical}, nil
 		}
@@ -406,12 +400,11 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		ch.Title = a.Title
 	}
 
-	emitFileChanged(ctx, tc.NovelID, physical)
-
 	// 正文（非大纲）落盘后的维护链路：向量/搜索缓存/字数/写作日志
 	if !ref.IsOutline {
 		maintainChapterAfterEdit(ctx, tc, ch, proposed)
 	}
+	emitFileChanged(ctx, tc.NovelID, physical)
 
 	data := map[string]any{
 		"path":        physical,

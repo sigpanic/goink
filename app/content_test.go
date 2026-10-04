@@ -192,6 +192,33 @@ func TestSaveAndGetContent(t *testing.T) {
 	assert.Equal(t, "Hello, world!", content)
 }
 
+func TestSaveContentRejectsStaleEditorVersion(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	path := "goink.md"
+	initial, err := app.GetContent(novel.ID, path)
+	require.NoError(t, err)
+	require.NoError(t, git.WriteFile(novel.ID, path, "AI update"))
+
+	err = app.SaveContent(SaveContentInput{
+		NovelID:         novel.ID,
+		Path:            path,
+		Content:         "stale draft",
+		ExpectedContent: &initial,
+	})
+	require.ErrorContains(t, err, "CONTENT_CONFLICT")
+	content, err := app.GetContent(novel.ID, path)
+	require.NoError(t, err)
+	assert.Equal(t, "AI update", content)
+
+	require.NoError(t, app.SaveContent(SaveContentInput{
+		NovelID:         novel.ID,
+		Path:            path,
+		Content:         "reconciled draft",
+		ExpectedContent: &content,
+	}))
+}
+
 func TestSaveContent_ChapterPath(t *testing.T) {
 	app := setupTestApp(t)
 	novel := createTestNovel(t, app)

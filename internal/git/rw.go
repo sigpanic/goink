@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sigpanic/goink/internal/config"
 )
@@ -102,6 +103,10 @@ func ParseVolumePath(path string) (int64, bool) {
 // ── 文件读写 ──────────────────────────────────────────────
 // path 为相对于小说仓库根目录的路径，如 "chapters/id_1.md"、"goink.md"。
 
+var fileWriteMu sync.Mutex
+
+var ErrFileChanged = errors.New("git: file changed since it was read")
+
 func ReadFile(novelID int64, path string) (string, error) {
 	fullPath, err := ResolvePath(path, novelID)
 	if err != nil {
@@ -122,6 +127,30 @@ func WriteFile(novelID int64, path, content string) error {
 	if err != nil {
 		return err
 	}
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
+	return writeFilePath(fullPath, path, content)
+}
+
+// WriteFileIfUnchanged 将比较与写入放在同一个进程锁内，避免应用内写入互相覆盖。
+func WriteFileIfUnchanged(novelID int64, path, expected, content string) error {
+	fullPath, err := ResolvePath(path, novelID)
+	if err != nil {
+		return err
+	}
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
+	current, err := os.ReadFile(fullPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("git: read %s before write: %w", path, err)
+	}
+	if string(current) != expected {
+		return ErrFileChanged
+	}
+	return writeFilePath(fullPath, path, content)
+}
+
+func writeFilePath(fullPath, path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return fmt.Errorf("git: mkdir for %s: %w", path, err)
 	}
@@ -137,6 +166,8 @@ func RemoveFile(novelID int64, path string) error {
 	if err != nil {
 		return err
 	}
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
 	if err := os.Remove(fullPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("git: remove %s: %w", path, err)
 	}
