@@ -7,6 +7,8 @@ import (
 	"log/slog"
 
 	"gorm.io/gorm"
+
+	"github.com/sigpanic/goink/internal/git"
 )
 
 // ErrNotFound 卷不存在，或不属于该小说。
@@ -135,6 +137,7 @@ func (s *Store) Place(ctx context.Context, tx *gorm.DB, input PlaceInput) (*Volu
 	if err != nil {
 		return nil, err
 	}
+	placed.OutlineFilePath = git.VolumePath(placed.ID)
 	return &placed, nil
 }
 
@@ -200,6 +203,7 @@ func (s *Store) GetByID(ctx context.Context, tx *gorm.DB, novelID, volumeID int6
 	if err != nil {
 		return nil, fmt.Errorf("volume store: get: %w", err)
 	}
+	v.OutlineFilePath = git.VolumePath(v.ID)
 	return &v, nil
 }
 
@@ -211,6 +215,9 @@ func (s *Store) ListByNovel(ctx context.Context, tx *gorm.DB, novelID int64) ([]
 		Order("sort_order ASC").
 		Find(&volumes).Error; err != nil {
 		return nil, fmt.Errorf("volume store: list: %w", err)
+	}
+	for i := range volumes {
+		volumes[i].OutlineFilePath = git.VolumePath(volumes[i].ID)
 	}
 	return volumes, nil
 }
@@ -228,6 +235,7 @@ func (s *Store) LastByNovel(ctx context.Context, tx *gorm.DB, novelID int64) (*V
 	if err != nil {
 		return nil, fmt.Errorf("volume store: last: %w", err)
 	}
+	v.OutlineFilePath = git.VolumePath(v.ID)
 	return &v, nil
 }
 

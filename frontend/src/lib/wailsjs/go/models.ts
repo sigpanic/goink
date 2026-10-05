@@ -410,6 +410,7 @@ export namespace app {
 	    name: string;
 	    target: string;
 	    novel_id: number;
+	    expected_content?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new InstallRemoteSkillInput(source);
@@ -420,6 +421,7 @@ export namespace app {
 	        this.name = source["name"];
 	        this.target = source["target"];
 	        this.novel_id = source["novel_id"];
+	        this.expected_content = source["expected_content"];
 	    }
 	}
 	export class ListRemoteSkillsInput {
@@ -520,6 +522,7 @@ export namespace app {
 	    novel_id: number;
 	    path: string;
 	    content: string;
+	    expected_content?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SaveContentInput(source);
@@ -530,6 +533,7 @@ export namespace app {
 	        this.novel_id = source["novel_id"];
 	        this.path = source["path"];
 	        this.content = source["content"];
+	        this.expected_content = source["expected_content"];
 	    }
 	}
 	export class SaveSettingsInput {
@@ -994,6 +998,7 @@ export namespace chapter {
 	    // Go type: time
 	    updated_at: any;
 	    file_path: string;
+	    outline_file_path: string;
 	    reading_number: number;
 	
 	    static createFrom(source: any = {}) {
@@ -1012,6 +1017,7 @@ export namespace chapter {
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
 	        this.file_path = source["file_path"];
+	        this.outline_file_path = source["outline_file_path"];
 	        this.reading_number = source["reading_number"];
 	    }
 	
@@ -2745,6 +2751,7 @@ export namespace volume {
 	    created_at: any;
 	    // Go type: time
 	    updated_at: any;
+	    outline_file_path: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Volume(source);
@@ -2758,6 +2765,7 @@ export namespace volume {
 	        this.sort_order = source["sort_order"];
 	        this.created_at = this.convertValues(source["created_at"], null);
 	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.outline_file_path = source["outline_file_path"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

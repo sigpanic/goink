@@ -90,7 +90,7 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 |---|---|---|---|
 | 5.1 | `refactor(mcp_tools): cross-ref tools use chapter_id` | timeline / storyarc 的未来计划位置改 `target_reading_number`；所有已发生章节字段改 `*_chapter_id`，AI 直接传 id 不转译 | ❌ |
 | 5.2 | `feat(mcp_tools): get_chapter_list returns volume and live number` | `get_chapter_list` 返回分页元数据及按卷分组的 Markdown 目录；每章展示稳定 id、实时 reading_number、标题和字数 | ❌ |
-| 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
+| 5.3 | `feat(rw_tools): support volume outline paths` | 卷纲路径 `volumes/id_{id}.md` 支持（严格路径解析 + 卷归属校验 + 读写分支） | ❌ |
 | 5.3b | `refactor(writing): logs use chapter_id` | writing_log model / Store / 测试及 rw_tools 写入链路改用 `chapter_id`；app 调用方留待 L6 | ✅ |
 | 5.4 | `refactor(mcp_tools): memory/delete tools use chapter_id` | memory_tools 章节过滤改 id、结果以 id 关联章节并用实时 reading_number 展示；delete_tools 已确认无旧编号引用 | ✅ |
 | 5.4b | `fix(reader): keep planted chapter references nullable` | `planted_chapter_id` 保持可空，迁移反查失败为 NULL；MCP/search 对缺失引用降级展示。`chapter.Store` 统一批量归属查询，MCP/App 各自转换错误；章节引用维持逻辑外键，不加数据库 FK | ✅ |
@@ -100,17 +100,17 @@ GORM model 层 6 张表 11 个字段已确认无遗漏。vec_novel_{id} 虚拟�
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 6.1 | `refactor(app): migrate existing chapter flows to IDs` | 既有章节、reader、timeline、story arc 的 App API，以及正文保存刷新与字数日志、导入、导出全部改按 chapter id；未来位置继续用 `reading_number`；新建默认追加到最后一卷，无卷则追加未分卷；App 写入引用批量校验章节归属；v160 对缺失旧列安全跳过 | ✅ |
-| 6.2 | `feat(volume): app-layer CRUD` | app: PlaceVolume（创建或按锚点移动）/ UpdateVolume / DeleteVolume / GetVolumes（删卷前检查关联章节）；后置，wails 绑定自动生成 | ❌ |
-| 6.3 | `feat(chapter): app-layer delete/insert/move` | app: DeleteChapter（交叉引用检测拒绝 + 删文件 + 删记录 + RAG 清理）/ InsertChapter / MoveChapterToVolume；后置 | ❌ |
+| 6.2 | `feat(volume): app-layer CRUD` | app: PlaceVolume（创建或按锚点移动）/ UpdateVolume / DeleteVolume / GetVolumes（删卷前检查关联章节）；Wails 绑定自动生成 | ✅ |
+| 6.3 | `feat(chapter): app-layer delete/insert/move` | app: DeleteChapter（交叉引用检测拒绝 + 删文件 + 删记录 + RAG 清理）/ PlaceChapter（创建或移动）；Wails 绑定自动生成 | ✅ |
 
 ### L7 前端
 
 | # | Commit message | 做什么 | 可编译 |
 |---|---|---|---|
 | 7.0 | `refactor(frontend): consume stable chapter references` | 先迁移既有 UI，不新增章节管理能力：章节列表/Pattern 用 `reading_number` 展示、`chapter_id` 写入；Reader、Timeline、Story arc 的已发生章节引用改 `*_chapter_id`，未来位置改 `target_reading_number`；搜索和聊天展示同步字段。按界面领域分多次提交，完成后恢复前端构建。 | 🟡 进行中 |
-| 7.1 | `feat(frontend): chapter management tab skeleton` | 新增独立 tab"章节管理"：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 主骨架；现有 ChapterList 保留；i18n key | ✅（后端 API 对接后置） |
-| 7.2 | `feat(frontend): volume management panel` | 卷管理面板：CRUD UI + 排序；按卷分组渲染 | ✅（后端 API 对接后置） |
-| 7.3 | `feat(frontend): chapter operations UI` | 章节 [⋮] 菜单：删除 / 插入 / 移动；拖拽跨卷移动 | ✅（后端 API 对接后置） |
+| 7.1 | `feat(frontend): add chapter management workspace` | 新增独立 tab“章节管理”：panel.ts + ActivityBar + WorkspaceView 分支 + ChapterManagementView 只读分组展示；现有 ChapterList 保留；i18n key | ✅ 已提交 |
+| 7.2 | `feat(frontend): manage volumes in chapter workspace` | 在卷轨道创建、重命名、删除空卷，并按锚点拖拽排序；按卷分组渲染 | ✅ 已提交 |
+| 7.3 | `feat(frontend): manage chapter structure` | 章节操作菜单：前后插入、移动、删除；组末创建；拖拽卷内或跨卷移动 | ✅ 实现完成，待 review |
 
 ### L1b 收尾 — 删旧字段
 

@@ -160,16 +160,21 @@ func (a *App) GetRemoteSkillContent(name string) *apperr.Result[string] {
 // InstallRemoteSkillInput 是 InstallRemoteSkill 的入参。
 // Target 取值 "user" 或 "novel"；Target=novel 时 NovelID 必填。
 type InstallRemoteSkillInput struct {
-	Name    string `json:"name"`
-	Target  string `json:"target"`   // "user" or "novel"
-	NovelID int64  `json:"novel_id"` // target=novel 时必填
+	Name            string  `json:"name"`
+	Target          string  `json:"target"`   // "user" or "novel"
+	NovelID         int64   `json:"novel_id"` // target=novel 时必填
+	ExpectedContent *string `json:"expected_content"`
 }
 
 // InstallRemoteSkill 将指定远程 skill 安装到目标层（user 或 novel）。
 // 安装成功后触发 skill.Store 热重载（失败只 Warn 不返回 error）。
 // 后端不做存在性判断，前端弹确认框处理覆盖语义。
+// expected_content 是用户看到目标时的内容，服务端在写入时校验它。
 func (a *App) InstallRemoteSkill(input InstallRemoteSkillInput) *apperr.Result[apperr.Empty] {
-	if err := a.remote.InstallRemoteSkill(a.ctx, input.Name, input.Target, input.NovelID); err != nil {
+	if input.ExpectedContent == nil {
+		return apperr.Err[apperr.Empty](apperr.NewInvalid("expected_content is required"))
+	}
+	if err := a.remote.InstallRemoteSkill(a.ctx, input.Name, input.Target, input.NovelID, *input.ExpectedContent); err != nil {
 		return apperr.Err[apperr.Empty](err)
 	}
 	return apperr.Ok(apperr.Empty{})

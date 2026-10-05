@@ -10,6 +10,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/volume"
 )
@@ -50,6 +51,11 @@ func TestChListAllByNovel(t *testing.T) {
 	}
 	if chapters[0].ReadingNumber != 1 || chapters[1].ReadingNumber != 2 {
 		t.Errorf("reading numbers = %d/%d, want 1/2", chapters[0].ReadingNumber, chapters[1].ReadingNumber)
+	}
+	for _, ch := range chapters {
+		if ch.FilePath != git.ChapterPath(ch.ID) || ch.OutlineFilePath != git.OutlinePath(ch.ID) {
+			t.Errorf("chapter %d paths = %q/%q", ch.ID, ch.FilePath, ch.OutlineFilePath)
+		}
 	}
 }
 

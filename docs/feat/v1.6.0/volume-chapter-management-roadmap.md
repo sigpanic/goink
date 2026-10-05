@@ -15,9 +15,13 @@
 | 1 | `docs(v1.6.0): define unified volume and chapter management` | 固化单一 Tab、章节操作语义和本路线。 | 文档 review |
 | 2 | `feat(app): expose volume management APIs` | 暴露统一的 `PlaceVolume`、卷重命名、删除、查询 API；补 App 层测试，并重新生成 Wails 绑定。 | Go 测试、Wails 绑定生成 |
 | 3 | `feat(chapter): add structural management operations` | 增加统一的 `PlaceChapter`：创建或移动章节到目标分组的锚点位置，并提供引用受保护删除；处理正文/大纲/RAG 生命周期并补测试。 | Go 测试 |
-| 4 | `feat(frontend): add chapter management workspace` | 新增 ActivityBar 入口和全宽“章节管理”主区域，按卷及未分卷组展示实时编号；保留现有写作侧边栏章节列表。 | 前端 build/test |
+| 4 | `feat(frontend): add chapter management workspace` | 新增 ActivityBar 入口和宽屏“章节管理”主区域，按卷及未分卷组只读展示实时编号；保留现有写作侧边栏章节列表及聊天运行状态。 | 前端 build/lint、路由与分组测试 |
 | 5 | `feat(frontend): manage volumes in chapter workspace` | 接入卷创建、重命名、删除阻塞提示和基于 `PlaceVolume` 的拖拽排序。 | 前端 build/test |
 | 6 | `feat(frontend): manage chapter structure` | 接入 `PlaceChapter` 创建和拖拽编排、删除确认及引用清单；支持卷内和跨卷拖拽到指定位置、卷或未分卷组。 | 前端 build/test、关键交互测试 |
+| 7 | `feat(frontend): group writing sidebar by volume` | 写作侧栏按卷分组、卷内百章区间选择；以共用的紧凑表单从顶部或目标组追加章节，创建后打开新章。卷纲文件入口留待后续读写提交。 | 前端 build/lint/test、侧栏导航与创建测试 |
+| 8 | `feat(frontend): share chapter creation dialog` | 侧栏与章节管理页共用新建章节弹窗、表单与校验；保留各入口的默认卷和插入规则，移动章节继续使用内嵌表单。 | 前端 build/lint/test、弹窗交互与创建回归测试 |
+| 9 | `feat(app): expose and validate volume outline paths` | 卷查询和创建/移动结果返回后端计算的卷纲路径；通用内容 API 校验 `volumes/id_{id}.md` 的规范格式及小说归属，重新生成 Wails 绑定。 | Go build/test、路径与跨小说读写测试、绑定检查 |
+| 10 | `feat(frontend): edit volume outlines from writing sidebar` | 卷分组内打开卷纲独立标签，复用 Markdown 预览、Monaco 编辑和保存；删除卷后清理标签及缓存。 | 前端 build/lint/test、打开/保存/恢复/删除回归测试 |
 
 ## 顺序约束
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/chapter"
@@ -15,14 +16,21 @@ import (
 
 // SaveContentInput 是保存文件内容的入参。
 type SaveContentInput struct {
-	NovelID int64  `json:"novel_id"`
-	Path    string `json:"path"`
-	Content string `json:"content"`
+	NovelID         int64   `json:"novel_id"`
+	Path            string  `json:"path"`
+	Content         string  `json:"content"`
+	ExpectedContent *string `json:"expected_content,omitempty"`
 }
 
 // GetContent 返回小说仓库中指定路径的文件内容。文件不存在时返回空字符串。
 // 内置 skill 路径（/builtin/skills/）从内存读取。
 func (a *App) GetContent(novelID int64, path string) (string, error) {
+	if err := a.validateChapterContentPath(novelID, path); err != nil {
+		return "", err
+	}
+	if err := a.validateVolumeContentPath(novelID, path); err != nil {
+		return "", err
+	}
 	if strings.HasPrefix(path, "/builtin/skills/") {
 		name := strings.TrimSuffix(strings.TrimPrefix(path, "/builtin/skills/"), ".md")
 		if a.skill == nil {
@@ -47,13 +55,28 @@ func (a *App) GetContent(novelID int64, path string) (string, error) {
 
 // SaveContent 保存小说仓库中指定路径的文件内容。
 func (a *App) SaveContent(input SaveContentInput) error {
+	if err := a.validateChapterContentPath(input.NovelID, input.Path); err != nil {
+		return err
+	}
+	if err := a.validateVolumeContentPath(input.NovelID, input.Path); err != nil {
+		return err
+	}
 	if isSkillPath(input.Path) {
 		if _, err := skill.ParseBytes([]byte(input.Content), ""); err != nil {
 			return fmt.Errorf("skill 格式错误: %w", err)
 		}
 	}
 
-	if err := git.WriteFile(input.NovelID, input.Path, input.Content); err != nil {
+	var err error
+	if input.ExpectedContent != nil {
+		err = git.WriteFileIfUnchanged(input.NovelID, input.Path, *input.ExpectedContent, input.Content)
+	} else {
+		err = git.WriteFile(input.NovelID, input.Path, input.Content)
+	}
+	if errors.Is(err, git.ErrFileChanged) {
+		return fmt.Errorf("CONTENT_CONFLICT: 磁盘内容已变化，请处理冲突后再保存: %w", err)
+	}
+	if err != nil {
 		return err
 	}
 
@@ -85,6 +108,42 @@ func (a *App) SaveContent(input SaveContentInput) error {
 	}
 
 	return nil
+}
+
+func (a *App) validateChapterContentPath(novelID int64, filePath string) error {
+	clean := strings.ToLower(path.Clean(strings.ReplaceAll(filePath, "\\", "/")))
+	if !strings.HasPrefix(clean, "chapters/") && !strings.HasPrefix(clean, "outlines/") {
+		return nil
+	}
+
+	ref, ok := git.ParseChapterLikePath(filePath)
+	if !ok || ref.IsNew || ref.ID <= 0 {
+		return fmt.Errorf("章节路径无效: %q", filePath)
+	}
+	canonical := git.ChapterPath(ref.ID)
+	if ref.IsOutline {
+		canonical = git.OutlinePath(ref.ID)
+	}
+	if filePath != canonical {
+		return fmt.Errorf("章节路径非规范格式: %q，应使用 %q", filePath, canonical)
+	}
+	return a.ensureChapterIDsInNovel(novelID, []int64{ref.ID})
+}
+
+func (a *App) validateVolumeContentPath(novelID int64, filePath string) error {
+	normalized := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
+	clean := path.Clean(normalized)
+	if normalized != "volumes" && !strings.HasPrefix(normalized, "volumes/") &&
+		clean != "volumes" && !strings.HasPrefix(clean, "volumes/") {
+		return nil
+	}
+
+	volumeID, ok := git.ParseVolumePath(filePath)
+	if !ok || filePath != git.VolumePath(volumeID) {
+		return fmt.Errorf("卷纲路径无效: %q", filePath)
+	}
+	_, err := a.volume.GetByID(a.ctx, nil, novelID, volumeID)
+	return err
 }
 
 func isSkillPath(p string) bool {

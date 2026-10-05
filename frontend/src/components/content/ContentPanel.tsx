@@ -13,24 +13,31 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useEditorTabs } from "./useEditorTabs";
+import { useEditorTabsStore } from "./useEditorTabsStore";
 import { useNovelStore } from "@/components/novel/useNovelStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
-import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
-import { contentKeys } from "@/lib/queryKeys";
+import { chapterKeys } from "@/lib/queryKeys";
+import { aiFileVersion } from "./aiFileChanges";
+import { GetChapters } from "@/lib/wailsjs/go/app/App";
+import type { chapter } from "@/lib/wailsjs/go/models";
 import TabBar from "./TabBar";
 import ContentEditor from "./ContentEditor";
 import OutlineViewer from "./OutlineViewer";
 import SkillPreview from "./SkillPreview";
 import { useFileContent } from "./useFileContent";
 import { useSaveContent } from "./useSaveContent";
+import { getEditorSaveQueue, isContentConflict } from "./editorSaveQueue";
+import ContentConflictNotice from "./ContentConflictNotice";
+import { useEditorFileSync } from "./useEditorFileSync";
 import SkillEditForm from "@/components/skill/SkillEditForm";
 import Markdown from "@/components/Markdown";
 import {
-  outlinePath,
   isContentPath,
   isOutlinePath,
+  isStandaloneMarkdownPath,
   isSkillPath,
+  isVolumeOutlinePath,
   skillNameFromPath,
   sourceFromPath,
 } from "./types";
@@ -65,7 +72,7 @@ export interface ContentPanelHandle {
     toolId: string;
   }) => void;
   handleDiffApprove: (toolId: string) => Promise<void>;
-  handleDiffReject: (toolId: string) => void;
+  handleDiffReject: (toolId: string) => Promise<void>;
 }
 
 // 3.8 后续：onContentChange/onDirtyChange 删，activeContent/isDirty 迁 useEditorStore。
@@ -80,6 +87,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // 5.2 commit 2: SaveContent 走 useSaveContent mutation（onSuccess 失效 contentKeys.detail），useApp 清零。
     const { fetchContent } = useFileContent();
     const saveContentMutation = useSaveContent();
+    const mutateSaveContent = saveContentMutation.mutateAsync;
+    const editorSaveQueue = getEditorSaveQueue(qc);
     const {
       tabs,
       activeTab,
@@ -95,34 +104,35 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     const { theme } = useThemeStore();
     const [isLoading, setIsLoading] = useState(false);
-    const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
-    const savingRef = useRef<{
-      id: string;
-      path: string;
-      content: string;
-      dirtyKey: "isDirty" | "outlineIsDirty";
-    } | null>(null);
     const pendingHighlightRef = useRef<{
       matchPos: number;
       matchLen: number;
     } | null>(null);
     const didApplyHighlightRef = useRef(false); // handleEditorMount 已应用高亮时跳过清除
     const novelIdRef = useRef(novelId);
-    const tabsRef = useRef(tabs);
+    const activeTabRef = useRef(activeTab);
+    activeTabRef.current = activeTab;
+
+    const {
+      scheduleSave: scheduleEditorSave,
+      loadConflictSnapshot,
+      chooseConflictVersion,
+      refreshApprovedFile,
+      readLatestContent,
+      applyLoadedContent,
+    } = useEditorFileSync({
+      novelId,
+      tabs,
+      queue: editorSaveQueue,
+      fetchContent,
+      updateTab,
+      mutateSaveContent,
+    });
 
     useEffect(() => {
       novelIdRef.current = novelId;
     }, [novelId]);
-    useEffect(() => {
-      tabsRef.current = tabs;
-    }, [tabs]);
-
-    useEffect(() => {
-      return () => {
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      };
-    }, []);
 
     useEffect(() => {
       if (activeTab?.type === "file") {
@@ -146,6 +156,30 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       useEditorStore.getState().setIsDirty(isDirty);
     }, [activeTab?.isDirty, activeTab?.outlineIsDirty, activeTab?.viewMode]);
 
+    const resolveChapter = useCallback(
+      async (path: string): Promise<chapter.Chapter | undefined> => {
+        if (!path.startsWith("chapters/") && !isOutlinePath(path))
+          return undefined;
+        const chapters = await qc.fetchQuery({
+          queryKey: chapterKeys.list(novelId),
+          queryFn: () => GetChapters(novelId),
+        });
+        const matching = chapters?.find(
+          (item) => item.file_path === path || item.outline_file_path === path,
+        );
+        if (matching) return matching;
+        await qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
+        const refreshed = await qc.fetchQuery({
+          queryKey: chapterKeys.list(novelId),
+          queryFn: () => GetChapters(novelId),
+        });
+        return refreshed?.find(
+          (item) => item.file_path === path || item.outline_file_path === path,
+        );
+      },
+      [qc, novelId],
+    );
+
     // ── 大纲内容加载（handleSetViewMode 与恢复 tab effect 共用） ──
 
     const loadOutlineContent = useCallback(
@@ -157,18 +191,47 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         ) {
           return;
         }
-        const derivedOutline = outlinePath(
-          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-        );
-        fetchContent(novelId, derivedOutline)
-          .then((oc) => {
-            updateTab(tab.id, { outlineContent: oc || "" });
+        const outline = tab.outlinePath
+          ? Promise.resolve(tab.outlinePath)
+          : resolveChapter(tab.path).then((item) => {
+              if (item)
+                updateTab(tab.id, { outlinePath: item.outline_file_path });
+              return item?.outline_file_path;
+            });
+        outline
+          .then((path) =>
+            path && novelIdRef.current === novelId
+              ? readLatestContent(path).then((loaded) => ({ path, loaded }))
+              : undefined,
+          )
+          .then((result) => {
+            if (result)
+              applyLoadedContent(tab.id, result.path, true, result.loaded);
           })
           .catch(() => {
-            updateTab(tab.id, { outlineContent: "" });
+            const current = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find(
+                (item) => item.id === tab.id,
+              );
+            if (
+              tab.outlinePath &&
+              current?.outlineContent == null &&
+              !current?.outlineNeedsRefresh
+            )
+              applyLoadedContent(tab.id, tab.outlinePath, true, {
+                content: "",
+                version: aiFileVersion(novelId, tab.outlinePath),
+              });
           });
       },
-      [novelId, fetchContent, updateTab],
+      [
+        novelId,
+        readLatestContent,
+        resolveChapter,
+        updateTab,
+        applyLoadedContent,
+      ],
     );
 
     // 从 localStorage 恢复 tab 后，自动加载文件内容
@@ -188,12 +251,18 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       );
       for (const tab of needsLoadContent) {
         loadedRef.current.add(tab.id + ":content");
-        fetchContent(novelId, tab.path)
-          .then((content) => {
-            updateTab(tab.id, { content: content ?? "" });
+        readLatestContent(tab.path)
+          .then((loaded) => {
+            applyLoadedContent(tab.id, tab.path, false, loaded);
           })
           .catch(() => {
-            updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
+            const current = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find(
+                (item) => item.id === tab.id,
+              );
+            if (current?.content == null && !current?.isDirty)
+              updateTab(tab.id, { content: t("content.loadFailedCloseTab") });
           });
       }
       // 加载大纲（恢复后 viewMode 是 outline/outline-edit 时）
@@ -209,7 +278,15 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         loadOutlineContent(tab);
       }
       // eslint-disable-next-line react-hooks/exhaustive-deps -- initRef.current is mutable and not a valid dependency; effect should only re-run when tabs/novelId change
-    }, [tabs, novelId, fetchContent, t, updateTab, loadOutlineContent]);
+    }, [
+      tabs,
+      novelId,
+      t,
+      updateTab,
+      loadOutlineContent,
+      readLatestContent,
+      applyLoadedContent,
+    ]);
 
     // Ctrl+Shift+V 切换技能预览
     useEffect(() => {
@@ -218,7 +295,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           const tab = tabs.find((t) => t.id === activeTabId);
           if (
             tab?.type === "file" &&
-            (isSkillPath(tab.path) || tab.path === "goink.md")
+            (isSkillPath(tab.path) || isStandaloneMarkdownPath(tab.path))
           ) {
             e.preventDefault();
             const newMode = tab.viewMode === "preview" ? "content" : "preview";
@@ -237,6 +314,24 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const tab = tabs.find((t) => t.id === tabId);
         if (!tab) return;
 
+        if (mode !== "content" && !tab.outlinePath) {
+          void resolveChapter(tab.path)
+            .then((item) => {
+              if (!item) return;
+              const resolvedTab = {
+                ...tab,
+                outlinePath: item.outline_file_path,
+              };
+              updateTab(tabId, {
+                outlinePath: item.outline_file_path,
+                viewMode: mode,
+              });
+              loadOutlineContent(resolvedTab);
+            })
+            .catch(() => undefined);
+          return;
+        }
+
         updateTab(tabId, { viewMode: mode });
 
         // 切换到大纲（预览或编辑）时，如果未加载（或上次加载时文件不存在）则重新加载
@@ -247,7 +342,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           loadOutlineContent(tab);
         }
       },
-      [tabs, updateTab, loadOutlineContent],
+      [tabs, updateTab, loadOutlineContent, resolveChapter],
     );
 
     // ── 阅读位置键（正文/大纲各自独立，见 useEditorTabsStore）──────
@@ -261,9 +356,8 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           isContentPath(tab.path) &&
           tab.path !== "goink.md"
         ) {
-          p = outlinePath(
-            parseInt(tab.path.replace(/.*\//, "").replace(".md", ""), 10),
-          );
+          if (!tab.outlinePath) return undefined;
+          p = tab.outlinePath;
         }
         return `${novelId}:${p}:${mode}`;
       },
@@ -273,95 +367,186 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // ── 保存逻辑 ────────────────────────────────────────────
 
     const doSave = useCallback(
-      async (
-        tabId: string,
-        path: string,
-        content: string,
-        dirtyKey: "isDirty" | "outlineIsDirty" = "isDirty",
-      ) => {
-        if (!novelIdRef.current) return;
-        try {
-          // 5.2 commit 2: SaveContent 走 mutation（onSuccess 失效 contentKeys.detail），
-          // 调用方负责 updateTab(isDirty:false) + toastError（tab 是本地 state，不进 query cache）。
-          await saveContentMutation.mutateAsync({
-            novel_id: novelIdRef.current,
+      async (tabId: string, path: string, content: string) => {
+        if (!novelId) throw new Error(t("common.saveFailed"));
+        const original = useEditorTabsStore
+          .getState()
+          .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
+        const expected = original?.contentBase ?? original?.content ?? "";
+        let saveError: unknown;
+        editorSaveQueue.schedule(
+          {
+            novelId,
+            tabId,
             path,
             content,
-          });
-          updateTab(tabId, { [dirtyKey]: false });
-        } catch (err) {
-          toastError(t("common.saveFailed") + ": " + toErrorMessage(err));
-          console.error(err);
-        }
+            dirtyKey: "isDirty",
+            expectedContent: expected,
+          },
+          (expectedContent) =>
+            mutateSaveContent({
+              novel_id: novelId,
+              path,
+              content,
+              expected_content: expectedContent,
+            }),
+          (written) => updateTab(tabId, { contentBase: written }),
+          () => {
+            const latest = useEditorTabsStore
+              .getState()
+              .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
+            if (
+              !latest ||
+              latest.content !== content ||
+              latest.contentConflict ||
+              latest.contentNeedsRefresh
+            )
+              return;
+            updateTab(tabId, { isDirty: false, viewMode: "preview" });
+          },
+          (error) => {
+            saveError = error;
+            if (isContentConflict(error))
+              updateTab(tabId, { contentConflict: true });
+            toastError(t("common.saveFailed") + ": " + toErrorMessage(error));
+            console.error(error);
+          },
+        );
+        if (!(await editorSaveQueue.flush(novelId, path)))
+          throw saveError ?? new Error(t("common.saveFailed"));
       },
-      [saveContentMutation.mutateAsync, updateTab, t],
+      [mutateSaveContent, updateTab, t, novelId, editorSaveQueue],
     );
+
+    const handleCloseTab = useCallback(
+      async (id: string) => {
+        const storedTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+        const tab = storedTabs
+          ? storedTabs.find((item) => item.id === id)
+          : tabs.find((item) => item.id === id);
+        if (!tab) return;
+        if (tab?.type === "file") {
+          if (
+            tab.isDirty &&
+            isSkillPath(tab.path) &&
+            !editorSaveQueue.isPending(novelId, tab.path)
+          ) {
+            toastError(t("content.saveSkillBeforeClose"));
+            return;
+          }
+          if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
+            return;
+          if (
+            tab.outlineIsDirty &&
+            tab.outlinePath &&
+            !(await editorSaveQueue.flush(novelId, tab.outlinePath))
+          )
+            return;
+        }
+        const latestTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+        const latest = latestTabs?.find((item) => item.id === id);
+        if (latestTabs && !latest) return;
+        if (latest?.isDirty || latest?.outlineIsDirty) return;
+        closeTab(id);
+      },
+      [tabs, editorSaveQueue, novelId, closeTab, t],
+    );
+
+    const handleCloseAllTabs = useCallback(async () => {
+      for (const tab of tabs) {
+        if (tab.type !== "file") continue;
+        if (
+          tab.isDirty &&
+          isSkillPath(tab.path) &&
+          !editorSaveQueue.isPending(novelId, tab.path)
+        ) {
+          toastError(t("content.saveSkillBeforeClose"));
+          return;
+        }
+        if (tab.isDirty && !(await editorSaveQueue.flush(novelId, tab.path)))
+          return;
+        if (
+          tab.outlineIsDirty &&
+          tab.outlinePath &&
+          !(await editorSaveQueue.flush(novelId, tab.outlinePath))
+        )
+          return;
+      }
+      const remaining =
+        useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs;
+      if (remaining?.some((tab) => tab.isDirty || tab.outlineIsDirty)) return;
+      closeAllTabs();
+    }, [tabs, editorSaveQueue, novelId, closeAllTabs, t]);
 
     // Ctrl+S 立即保存
     useEffect(() => {
       const handler = (e: KeyboardEvent) => {
         if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "s") {
           e.preventDefault();
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          const s = savingRef.current;
-          if (s) doSave(s.id, s.path, s.content, s.dirtyKey);
+          const activeNovelId = novelIdRef.current;
+          const entry =
+            useEditorTabsStore.getState().byNovel[String(activeNovelId)];
+          const tab =
+            entry?.tabs.find((item) => item.id === entry.activeTabId) ??
+            activeTabRef.current;
+          if (tab?.type !== "file") return;
+          const path =
+            tab.viewMode === "outline-edit" ? tab.outlinePath : tab.path;
+          if (path) void editorSaveQueue.flush(activeNovelId, path);
         }
       };
       window.addEventListener("keydown", handler);
       return () => window.removeEventListener("keydown", handler);
-    }, [doSave]);
+    }, [editorSaveQueue]);
 
     const handleEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
+        const tab =
+          useEditorTabsStore
+            .getState()
+            .byNovel[String(novelId)]?.tabs.find((t) => t.id === tabId) ??
+          tabs.find((t) => t.id === tabId);
+        if (!tab) return;
         updateTab(tabId, { content, isDirty: true });
         // 3.8 后续：activeContent 迁 useEditorStore。
         useEditorStore.getState().setActiveContent(content);
 
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        const tab = tabs.find((t) => t.id === tabId);
-        if (!tab) return;
-        savingRef.current = {
-          id: tabId,
-          path: tab.path,
+        scheduleEditorSave(
+          tabId,
+          tab.path,
           content,
-          dirtyKey: "isDirty",
-        };
-        saveTimerRef.current = setTimeout(() => {
-          if (!savingRef.current) return;
-          const s = savingRef.current;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
-        }, 500);
+          tab.contentBase ?? tab.content ?? "",
+          "isDirty",
+        );
       },
-      [tabs, updateTab, doSave],
+      [tabs, novelId, updateTab, scheduleEditorSave],
     );
 
     // 大纲编辑：内容存 outlineContent，保存路径派生 outlinePath
     const handleOutlineEditorChange = useCallback(
       (tabId: string, value: string | undefined) => {
         const content = value ?? "";
+        const tab =
+          useEditorTabsStore
+            .getState()
+            .byNovel[String(novelId)]?.tabs.find((t) => t.id === tabId) ??
+          tabs.find((t) => t.id === tabId);
+        if (!tab?.outlinePath) return;
         updateTab(tabId, { outlineContent: content, outlineIsDirty: true });
         useEditorStore.getState().setActiveContent(content);
 
-        if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-        const tab = tabs.find((t) => t.id === tabId);
-        if (!tab) return;
-        const outlineP = outlinePath(
-          parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-        );
-        savingRef.current = {
-          id: tabId,
-          path: outlineP,
+        scheduleEditorSave(
+          tabId,
+          tab.outlinePath,
           content,
-          dirtyKey: "outlineIsDirty",
-        };
-        saveTimerRef.current = setTimeout(() => {
-          if (!savingRef.current) return;
-          const s = savingRef.current;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
-        }, 500);
+          tab.outlineContentBase ?? tab.outlineContent ?? "",
+          "outlineIsDirty",
+        );
       },
-      [tabs, updateTab, doSave],
+      [tabs, novelId, updateTab, scheduleEditorSave],
     );
 
     const monacoRef = useRef<any>(null);
@@ -431,11 +616,12 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       (editor, monaco) => {
         editorRef.current = editor;
         monacoRef.current = monaco;
+        const tab = activeTabRef.current;
+        const path =
+          tab?.viewMode === "outline-edit" ? tab.outlinePath : tab?.path;
+        const mountedNovelId = novelIdRef.current;
         editor.onDidBlurEditorText(() => {
-          if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-          const s = savingRef.current;
-          if (!s) return;
-          doSave(s.id, s.path, s.content, s.dirtyKey);
+          if (path) void editorSaveQueue.flush(mountedNovelId, path);
         });
         // 编辑器挂载后检查待处理高亮（直接取 Monaco model 内容，避免 ref 时序问题）。
         const pending = pendingHighlightRef.current;
@@ -448,67 +634,13 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           }
         }
       },
-      [doSave, doHighlight],
+      [editorSaveQueue, doHighlight],
     );
-
-    // ── file:changed 事件监听 ─────────────────────────────────
-    // 用 ref 读取最新 tabs，避免因 tabs 变化频繁重建订阅丢失事件
-
-    useEffect(() => {
-      const unsub = EventsOn("file:changed", async (data: any) => {
-        if (data.novel_id !== novelIdRef.current) return;
-
-        for (const tab of tabsRef.current) {
-          if (tab.type !== "file") continue;
-
-          let needRefresh = false;
-          let refreshKey: "content" | "outlineContent" = "content";
-
-          if (tab.path === data.path) {
-            needRefresh = true;
-            refreshKey = "content";
-          } else {
-            const derivedOutline =
-              isContentPath(tab.path) && tab.path !== "goink.md"
-                ? outlinePath(
-                    parseInt(tab.path.replace(/.*\//, "").replace(".md", "")),
-                  )
-                : null;
-            if (derivedOutline && derivedOutline === data.path) {
-              needRefresh = true;
-              refreshKey = "outlineContent";
-            }
-          }
-
-          if (needRefresh) {
-            try {
-              // 5.2 commit 3: 改 qc.invalidateQueries + fetchContent（走 query 缓存通道，不经 useApp）。
-              // 先 invalidate 标 stale，再 fetchContent 才会重新拉取（否则 fetchQuery 返回旧缓存）。
-              qc.invalidateQueries({
-                queryKey: contentKeys.detail(data.novel_id, data.path),
-              });
-              const fresh = await fetchContent(data.novel_id, data.path);
-              const patch: Partial<EditorTab> = { [refreshKey]: fresh };
-              if (refreshKey === "content") patch.isDirty = false;
-              if (refreshKey === "outlineContent") patch.outlineIsDirty = false;
-              updateTab(tab.id, patch);
-            } catch {
-              /* 文件可能被删 */
-            }
-          }
-        }
-      });
-      return () => unsub();
-    }, [qc, fetchContent, updateTab]);
 
     // ── 打开/激活文件 tab ──────────────────────────────────
 
     const titleFromPath = useCallback(
       (p: string): string => {
-        if (p.startsWith("chapters/")) {
-          const num = parseInt(p.replace("chapters/", "").replace(".md", ""));
-          return t("sidebar.chapterN", { n: num });
-        }
         if (p === "goink.md") return t("content.storyStatus");
         if (isSkillPath(p))
           return `${t("content.skillLabel")}${skillNameFromPath(p)}`;
@@ -524,9 +656,21 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         readOnly?: boolean,
         initialViewMode?: string,
       ) => {
-        const display = title || titleFromPath(path);
         const existing = tabs.find((t) => t.path === path && t.type === "file");
         if (existing) {
+          if (isVolumeOutlinePath(path) && title && existing.title !== title) {
+            updateTab(existing.id, { title });
+          }
+          if (!existing.outlinePath && path.startsWith("chapters/")) {
+            void resolveChapter(path)
+              .then((item) => {
+                if (item)
+                  updateTab(existing.id, {
+                    outlinePath: item.outline_file_path,
+                  });
+              })
+              .catch(() => undefined);
+          }
           if (initialViewMode) {
             updateTab(existing.id, {
               viewMode: initialViewMode as EditorTab["viewMode"],
@@ -544,14 +688,33 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           (skReadOnly ? "preview" : isSkillPath(path) ? "preview" : "content");
 
         setIsLoading(true);
-        fetchContent(novelId, path)
-          .then((content) => {
-            const c = content ?? "";
+        Promise.all([
+          readLatestContent(path).catch(() => ({
+            content: "",
+            version: aiFileVersion(novelId, path),
+          })),
+          resolveChapter(path).catch(() => undefined),
+        ])
+          .then(async ([initial, item]) => {
+            if (novelIdRef.current !== novelId) return;
+            let loaded = initial;
+            while (loaded.version !== aiFileVersion(novelId, path)) {
+              loaded = await readLatestContent(path, true);
+            }
+            if (novelIdRef.current !== novelId) return;
+            const c = loaded.content;
+            const display =
+              title ||
+              (item
+                ? `${t("sidebar.chapterN", { n: item.reading_number })} ${item.title}`
+                : titleFromPath(path));
             openTab({
               type: "file",
               path,
+              outlinePath: item?.outline_file_path,
               title: display,
               content: c,
+              contentBase: c,
               isDirty: false,
               viewMode: initialMode,
               readOnly: skReadOnly,
@@ -559,29 +722,18 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             // 3.8 后续：activeContent 迁 useEditorStore。
             useEditorStore.getState().setActiveContent(c);
           })
-          .catch(() => {
-            openTab({
-              type: "file",
-              path,
-              title: display,
-              content: "",
-              isDirty: false,
-              viewMode: initialMode,
-              readOnly: skReadOnly,
-            });
-            // 3.8 后续：activeContent 迁 useEditorStore。
-            useEditorStore.getState().setActiveContent("");
-          })
           .finally(() => setIsLoading(false));
       },
       [
         novelId,
         tabs,
-        fetchContent,
+        readLatestContent,
         openTab,
         setActiveTabId,
         titleFromPath,
         updateTab,
+        resolveChapter,
+        t,
       ],
     );
 
@@ -649,18 +801,21 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
       }
     }, [activeTab?.id, activeTab?.content, doHighlight]);
 
-    function filePathFromDiff(diffPath: string): {
-      filePath: string;
-      viewMode: "content" | "outline";
-    } {
-      if (isOutlinePath(diffPath)) {
-        return {
-          filePath: diffPath.replace("outlines/", "chapters/"),
-          viewMode: "outline",
-        };
-      }
-      return { filePath: diffPath, viewMode: "content" };
-    }
+    const filePathFromDiff = useCallback(
+      async (
+        diffPath: string,
+      ): Promise<{
+        filePath: string;
+        viewMode: "content" | "outline";
+      }> => {
+        const item = await resolveChapter(diffPath).catch(() => undefined);
+        if (item?.outline_file_path === diffPath) {
+          return { filePath: item.file_path, viewMode: "outline" };
+        }
+        return { filePath: diffPath, viewMode: "content" };
+      },
+      [resolveChapter],
+    );
 
     // ── 审批操作（由 WorkspaceView 通过 ref 调用）───────────
 
@@ -669,42 +824,27 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
         if (!dt) return;
 
-        const { filePath, viewMode } = filePathFromDiff(dt.path);
+        const { filePath, viewMode } = await filePathFromDiff(dt.path);
         const ft = tabs.find((t) => t.type === "file" && t.path === filePath);
 
-        if (ft) {
-          try {
-            const fresh = await fetchContent(novelId, dt.path);
-            const patch: Partial<EditorTab> = { viewMode };
-            if (viewMode === "outline") {
-              patch.outlineContent = fresh;
-              patch.outlineIsDirty = false;
-            } else {
-              patch.content = fresh;
-              patch.isDirty = false;
-            }
-            updateTab(ft.id, patch);
-          } catch {
-            /* ignored */
-          }
-        }
+        if (ft) await refreshApprovedFile(ft, dt.path, viewMode, true);
 
         closeTab(dt.id);
-        doOpenFile(filePath);
+        doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [novelId, tabs, fetchContent, updateTab, closeTab, doOpenFile],
+      [tabs, closeTab, doOpenFile, filePathFromDiff, refreshApprovedFile],
     );
 
     const handleDiffReject = useCallback(
-      (toolId: string) => {
+      async (toolId: string) => {
         const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
         if (!dt) return;
 
-        const { filePath } = filePathFromDiff(dt.path);
+        const { filePath, viewMode } = await filePathFromDiff(dt.path);
         closeTab(dt.id);
-        doOpenFile(filePath);
+        doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [tabs, closeTab, doOpenFile],
+      [tabs, closeTab, doOpenFile, filePathFromDiff],
     );
 
     // ── 暴露给父组件的方法 ──────────────────────────────────
@@ -715,7 +855,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         openFile: doOpenFile,
         openFileWithHighlight: doOpenFileWithHighlight,
         clearHighlight,
-        closeAllTabs,
+        closeAllTabs: handleCloseAllTabs,
         openDiffTab,
         handleDiffApprove,
         handleDiffReject,
@@ -724,7 +864,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         doOpenFile,
         doOpenFileWithHighlight,
         clearHighlight,
-        closeAllTabs,
+        handleCloseAllTabs,
         openDiffTab,
         handleDiffApprove,
         handleDiffReject,
@@ -748,7 +888,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             tabs={tabs}
             activeTabId={activeTabId}
             onSelect={setActiveTabId}
-            onClose={closeTab}
+            onClose={handleCloseTab}
           />
           <div className="flex-1 flex items-center justify-center">
             {tabs.length === 0 ? (
@@ -781,7 +921,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
             tabs={tabs}
             activeTabId={activeTabId}
             onSelect={setActiveTabId}
-            onClose={closeTab}
+            onClose={handleCloseTab}
           />
           <div className="flex items-center px-4 py-2 border-b shrink-0 select-none">
             <span className="text-sm font-medium truncate">
@@ -837,20 +977,28 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
 
     // File tab
     const viewMode = activeTab.viewMode || "content";
+    const conflictOutline =
+      viewMode === "outline" || viewMode === "outline-edit";
+    const conflictPath = conflictOutline
+      ? activeTab.outlinePath
+      : activeTab.path;
+    const hasConflict = conflictOutline
+      ? activeTab.outlineContentConflict
+      : activeTab.contentConflict;
     return (
       <main className="flex-1 bg-background flex flex-col min-w-0 min-h-0 border-r overflow-hidden">
         <TabBar
           tabs={tabs}
           activeTabId={activeTabId}
           onSelect={setActiveTabId}
-          onClose={closeTab}
+          onClose={handleCloseTab}
         />
         <div className="flex items-center justify-between px-4 py-2 border-b shrink-0 select-none">
           <span className="text-sm font-medium truncate">
             {activeTab.title}
           </span>
           <div className="flex items-center gap-0.5 shrink-0">
-            {activeTab.path === "goink.md" ? (
+            {isStandaloneMarkdownPath(activeTab.path) ? (
               <button
                 onClick={() =>
                   updateTab(activeTab.id, {
@@ -909,33 +1057,72 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           </div>
         </div>
 
+        {hasConflict && conflictPath && (
+          <ContentConflictNotice
+            key={`${activeTab.id}:${conflictPath}`}
+            tabId={activeTab.id}
+            path={conflictPath}
+            outline={conflictOutline}
+            onLoad={loadConflictSnapshot}
+            onChoose={chooseConflictVersion}
+          />
+        )}
+
         <div className="flex-1 min-h-0">
           {isLoading ? (
             <div className="flex items-center justify-center h-full">
               <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
             </div>
           ) : viewMode === "preview" ? (
-            <SkillPreview
-              content={activeTab.content ?? ""}
-              source={sourceFromPath(activeTab.path)}
-            />
+            isVolumeOutlinePath(activeTab.path) ? (
+              <div className="h-full overflow-auto px-6 py-4">
+                <Markdown content={activeTab.content ?? ""} />
+              </div>
+            ) : (
+              <SkillPreview
+                content={activeTab.content ?? ""}
+                source={sourceFromPath(activeTab.path)}
+              />
+            )
           ) : viewMode === "edit" ? (
             <SkillEditForm
+              key={activeTab.id}
               content={activeTab.content ?? ""}
+              isDirty={!!activeTab.isDirty}
               source={sourceFromPath(activeTab.path)}
               readOnly={activeTab.readOnly}
-              onSave={async (newContent) => {
-                await doSave(
-                  activeTab.id,
-                  activeTab.path,
-                  newContent as string,
-                );
+              onDraftChange={(content) => {
                 updateTab(activeTab.id, {
-                  content: newContent,
-                  viewMode: "preview",
+                  content,
+                  isDirty: true,
                 });
               }}
-              onCancel={() => updateTab(activeTab.id, { viewMode: "preview" })}
+              onSave={(newContent) =>
+                doSave(activeTab.id, activeTab.path, newContent)
+              }
+              onCancel={() => {
+                const current = useEditorTabsStore
+                  .getState()
+                  .byNovel[String(novelId)]?.tabs.find(
+                    (item) => item.id === activeTab.id,
+                  );
+                if (editorSaveQueue.isPending(novelId, activeTab.path)) {
+                  try {
+                    editorSaveQueue.discard(novelId, activeTab.path);
+                  } catch {
+                    toastError(t("skill.saving"));
+                    return;
+                  }
+                }
+                updateTab(activeTab.id, {
+                  content: current?.contentBase ?? "",
+                  isDirty: false,
+                  contentConflict: false,
+                  viewMode: "preview",
+                });
+                if (current?.contentConflict || current?.contentNeedsRefresh)
+                  void refreshApprovedFile(current, activeTab.path, "content");
+              }}
             />
           ) : viewMode === "content" ? (
             <ContentEditor

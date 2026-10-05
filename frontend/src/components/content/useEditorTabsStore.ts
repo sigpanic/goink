@@ -1,10 +1,5 @@
 import { create } from "zustand";
-import {
-  chapterNumFromPath,
-  isContentPath,
-  outlinePath,
-  type EditorTab,
-} from "@/components/content/types";
+import { isContentPath, type EditorTab } from "@/components/content/types";
 
 // useEditorTabsStore: 编辑器 tab 集的全局内存单例 + 持久化。
 //
@@ -22,7 +17,7 @@ import {
 //   天然契合未来统一容器 tab 模型（子 tab 即独立 path）。schema 变更走版本号迁移。
 
 const STORAGE_KEY = "goink_tabs_all";
-const STORAGE_VERSION = 1;
+const STORAGE_VERSION = 2;
 const PERSIST_DEBOUNCE_MS = 300;
 
 let idSeq = 0;
@@ -33,7 +28,7 @@ function nextId(type: EditorTab["type"]): string {
 // TabMeta：持久化的 tab 字段（不含运行时 content / diff 等）。
 type TabMeta = Pick<
   EditorTab,
-  "path" | "title" | "type" | "viewMode" | "readOnly"
+  "path" | "outlinePath" | "title" | "type" | "viewMode" | "readOnly"
 >;
 
 // ReadingPosition：单个 (novelId, path, mode) 的阅读位置。
@@ -93,6 +88,7 @@ function toPersisted(state: EditorTabsStoreState): PersistedEnvelope {
       .filter((t) => t.type !== "diff")
       .map((t) => ({
         path: t.path,
+        outlinePath: t.outlinePath,
         title: t.title,
         type: t.type,
         viewMode: t.viewMode,
@@ -193,15 +189,14 @@ function withNovel(
 //   - 大纲/大纲编辑：`novelId:outlines/NNN.md:outline` / `:outline-edit`
 function positionKeysForTab(
   novelId: number,
-  tab: Pick<EditorTab, "path">,
+  tab: Pick<EditorTab, "path" | "outlinePath">,
 ): string[] {
   const ns = `${novelId}:`;
   const keys = new Set<string>([`${ns}${tab.path}:content`]);
   // chapters/NNN.md（goink.md 除外）才有对应的大纲文件键
-  if (isContentPath(tab.path) && tab.path !== "goink.md") {
-    const outlineP = outlinePath(chapterNumFromPath(tab.path));
-    keys.add(`${ns}${outlineP}:outline`);
-    keys.add(`${ns}${outlineP}:outline-edit`);
+  if (isContentPath(tab.path) && tab.path !== "goink.md" && tab.outlinePath) {
+    keys.add(`${ns}${tab.outlinePath}:outline`);
+    keys.add(`${ns}${tab.outlinePath}:outline-edit`);
   }
   return [...keys];
 }

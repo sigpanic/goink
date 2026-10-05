@@ -18,6 +18,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/testsupport"
 	"github.com/sigpanic/goink/internal/volume"
@@ -485,7 +486,7 @@ func TestReadNewMD_Rejected(t *testing.T) {
 func TestVolumeOutlineReadWrite(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	volumeID := seedVolume(t, db, tc.NovelID, "第一卷", 1)
-	path := fmt.Sprintf("volumes/%d.md", volumeID)
+	path := fmt.Sprintf("volumes/id_%d.md", volumeID)
 
 	created := execEdit(t, ctx, tc, editArgs(path, "full_replace", "# 入城卷\n- 目标：进京"))
 	if !created.Success {
@@ -515,12 +516,30 @@ func TestVolumeOutlineReadWrite(t *testing.T) {
 
 func TestVolumeOutlineRejectsUnknownVolume(t *testing.T) {
 	_, tc, ctx := setupRWEnv(t)
-	res := execEdit(t, ctx, tc, editArgs("volumes/99.md", "full_replace", "# 孤儿卷纲"))
+	res := execEdit(t, ctx, tc, editArgs("volumes/id_99.md", "full_replace", "# 孤儿卷纲"))
 	if res.Success {
 		t.Fatal("expected unknown volume to be rejected")
 	}
 	if !contains(res.Error, "卷不存在") {
 		t.Errorf("error = %s, want missing volume error", res.Error)
+	}
+}
+
+func TestVolumeOutlineRejectsLegacyPath(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	volumeID := seedVolume(t, db, tc.NovelID, "第一卷", 1)
+	legacyPath := fmt.Sprintf("volumes/%d.md", volumeID)
+
+	for _, res := range []*mcp_tools.ToolResult{
+		execEdit(t, ctx, tc, editArgs(legacyPath, "full_replace", "# 旧路径")),
+		execRead(t, ctx, tc, legacyPath),
+	} {
+		if res.Success || !contains(res.Error, "无效文件路径") {
+			t.Errorf("legacy path result = %+v, want invalid path", res)
+		}
+	}
+	if _, err := os.Stat(novelFile(t, tc.NovelID, legacyPath)); !os.IsNotExist(err) {
+		t.Errorf("legacy path should not create a file: %v", err)
 	}
 }
 
@@ -673,6 +692,57 @@ func TestExistingChapter_ContentRolledBackWhenTitleUpdateFails(t *testing.T) {
 	}
 	if got := mustReadFile(t, path); got != "夜色沉沉。" {
 		t.Errorf("file content = %q, want 夜色沉沉。", got)
+	}
+}
+
+func TestExistingChapter_TitleFailurePreservesNewerContent(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	vol := seedVolume(t, db, 1, "第一卷", 1)
+	created := execEdit(t, ctx, tc,
+		editArgsTitle(fmt.Sprintf("chapters/%d/new.md", vol), "full_replace", "原正文。", "原标题"))
+	if !created.Success {
+		t.Fatalf("create chapter failed: %s", created.Error)
+	}
+	id := created.Data["chapter_id"].(int64)
+	relPath := fmt.Sprintf("chapters/id_%d.md", id)
+	path := novelFile(t, 1, relPath)
+
+	if err := db.Exec(`CREATE TRIGGER reject_chapter_title_update
+		BEFORE UPDATE OF title ON chapters
+		BEGIN
+			SELECT RAISE(ABORT, 'title update rejected');
+		END`).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	injected := false
+	if err := db.Callback().Update().Before("gorm:update").Register("write_newer_chapter_content", func(tx *gorm.DB) {
+		if injected || tx.Statement.Table != "chapters" {
+			return
+		}
+		injected = true
+		if err := git.WriteFileIfUnchanged(1, relPath, "AI 正文。", "后续正文。"); err != nil {
+			t.Errorf("write newer content: %v", err)
+		}
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	res := execEdit(t, ctx, tc, editArgsTitle(relPath, "full_replace", "AI 正文。", "新标题"))
+	if res.Success || res.ErrKind != mcp_tools.ErrKindSystem {
+		t.Fatalf("result = %+v, want system failure", res)
+	}
+	if !strings.Contains(res.Error, "正文已被后续修改，未回退") {
+		t.Errorf("Error = %q, want preserved newer content state", res.Error)
+	}
+	if !injected {
+		t.Fatal("expected a newer write before title update failed")
+	}
+	if got := mustReadFile(t, path); got != "后续正文。" {
+		t.Errorf("file content = %q, want 后续正文。", got)
+	}
+	if got := fetchChapter(t, db, id).Title; got != "原标题" {
+		t.Errorf("title = %q, want 原标题", got)
 	}
 }
 

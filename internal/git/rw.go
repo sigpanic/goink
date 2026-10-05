@@ -9,6 +9,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/sigpanic/goink/internal/config"
 )
@@ -42,7 +43,7 @@ func OutlinePath(id int64) string {
 
 // VolumePath 返回卷纲文件相对路径（按卷 id）。
 func VolumePath(volumeID int64) string {
-	return fmt.Sprintf("volumes/%d.md", volumeID)
+	return fmt.Sprintf("volumes/id_%d.md", volumeID)
 }
 
 // ChapterPathRef 是章节正文或章节大纲虚拟路径的解析结果。
@@ -55,7 +56,7 @@ type ChapterPathRef struct {
 }
 
 var chapterLikePathRe = regexp.MustCompile(`^(chapters|outlines)/(?:([0-9]+)/)?(?:id_([0-9]+)|new)\.md$`)
-var volumePathRe = regexp.MustCompile(`^volumes/([1-9][0-9]*)\.md$`)
+var volumePathRe = regexp.MustCompile(`^volumes/id_([1-9][0-9]*)\.md$`)
 
 // ParseChapterLikePath 解析 rw_tools 支持的章节正文或大纲虚拟路径。
 // 支持扁平主格式和带卷 ID 的容错别名；旧的纯数字章节号路径不被接受。
@@ -102,6 +103,10 @@ func ParseVolumePath(path string) (int64, bool) {
 // ── 文件读写 ──────────────────────────────────────────────
 // path 为相对于小说仓库根目录的路径，如 "chapters/id_1.md"、"goink.md"。
 
+var fileWriteMu sync.Mutex
+
+var ErrFileChanged = errors.New("git: file changed since it was read")
+
 func ReadFile(novelID int64, path string) (string, error) {
 	fullPath, err := ResolvePath(path, novelID)
 	if err != nil {
@@ -122,6 +127,39 @@ func WriteFile(novelID int64, path, content string) error {
 	if err != nil {
 		return err
 	}
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
+	return writeFilePath(fullPath, path, content)
+}
+
+// WriteFileIfUnchanged 将比较与写入放在同一个进程锁内，避免应用内写入互相覆盖。
+func WriteFileIfUnchanged(novelID int64, path, expected, content string) error {
+	fullPath, err := ResolvePath(path, novelID)
+	if err != nil {
+		return err
+	}
+	return writeFilePathIfUnchanged(fullPath, path, expected, content)
+}
+
+// WriteFileAtPathIfUnchanged 供已验证绝对路径的调用方共用同一进程写锁。
+func WriteFileAtPathIfUnchanged(fullPath, expected, content string) error {
+	return writeFilePathIfUnchanged(fullPath, fullPath, expected, content)
+}
+
+func writeFilePathIfUnchanged(fullPath, path, expected, content string) error {
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
+	current, err := os.ReadFile(fullPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("git: read %s before write: %w", path, err)
+	}
+	if string(current) != expected {
+		return ErrFileChanged
+	}
+	return writeFilePath(fullPath, path, content)
+}
+
+func writeFilePath(fullPath, path, content string) error {
 	if err := os.MkdirAll(filepath.Dir(fullPath), 0755); err != nil {
 		return fmt.Errorf("git: mkdir for %s: %w", path, err)
 	}
@@ -137,6 +175,8 @@ func RemoveFile(novelID int64, path string) error {
 	if err != nil {
 		return err
 	}
+	fileWriteMu.Lock()
+	defer fileWriteMu.Unlock()
 	if err := os.Remove(fullPath); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("git: remove %s: %w", path, err)
 	}

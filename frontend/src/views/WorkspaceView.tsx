@@ -5,9 +5,8 @@ import {
   useCallback,
   useRef,
 } from "react";
-import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
-import type { imp, novel, chapter } from "@/lib/wailsjs/go/models";
+import type { imp, novel } from "@/lib/wailsjs/go/models";
 import ActivityBar from "@/components/shell/ActivityBar";
 import StatusBar from "@/components/shell/StatusBar";
 import WindowControls from "@/components/shell/WindowControls";
@@ -22,6 +21,7 @@ import TimelineView from "@/components/timeline/TimelineView";
 import ReaderView from "@/components/reader/ReaderView";
 import PreferenceView from "@/components/preference/PreferenceView";
 import NovelSettingView from "@/components/novel-setting/NovelSettingView";
+import ChapterManagementView from "@/components/chapter-management/ChapterManagementView";
 import BookshelfView from "@/components/novel/BookshelfView";
 import NovelDialogs from "@/components/novel/NovelDialogs";
 import ImportProgressDialog from "@/components/novel/ImportProgressDialog";
@@ -56,6 +56,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import { useUpdateCheck } from "@/components/update/useUpdateCheck";
+import { useContentNavigation } from "./workspace/useContentNavigation";
+import { useAIFileCacheInvalidation } from "./workspace/useAIFileCacheInvalidation";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -86,6 +88,7 @@ export default function WorkspaceView({
   // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
   const { data: novels = [], isLoading: novelsLoading } = useNovels();
   const queryClient = useQueryClient();
+  useAIFileCacheInvalidation();
   // 小说领域 UI 状态：activeNovelId 留 WorkspaceView（路由用）；
   // 对话框开关 + setter 由 NovelDialogs 订阅（3.6）；唯独 setExportNovelId 留此
   // —— SidePanel 通过 onExportNovel 触发开 dialog，setter 引用稳定不引发重渲染。
@@ -188,22 +191,19 @@ export default function WorkspaceView({
 
   // ── SidePanel → ContentPanel 桥接 ─────────────────────────
 
-  function handleSelectChapter(ch: chapter.Chapter) {
-    const chTitle = `${t("sidebar.chapterN", { n: ch.reading_number })} ${ch.title}`;
-    // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
-    useEditorStore
-      .getState()
-      .setTabTarget({ path: ch.file_path, title: chTitle });
-    contentRef.current?.openFile(ch.file_path, chTitle);
-  }
-
-  function handleSelectGoink() {
-    useEditorStore.getState().setTabTarget({
-      path: "goink.md",
-      title: t("workspace.storyStatus"),
-    });
-    contentRef.current?.openFile("goink.md", t("workspace.storyStatus"));
-  }
+  const {
+    handleSelectChapter,
+    handleSelectGoink,
+    handleSelectVolumeOutline,
+    handleSelectSkill,
+    handleEditSkill,
+    handleNewSkill,
+    handleSearchNavigateChapter,
+  } = useContentNavigation({
+    contentRef,
+    setActivePanel,
+    setActiveSkillName,
+  });
 
   // ── Approval ────────────────────────────────────────────
 
@@ -224,7 +224,7 @@ export default function WorkspaceView({
       toastError(toErrorMessage(err, t("approval.rejectFailed")));
       return;
     }
-    contentRef.current?.handleDiffReject(toolId);
+    await contentRef.current?.handleDiffReject(toolId);
   }
 
   function handleApprovalFileEdit(data: {
@@ -286,26 +286,6 @@ export default function WorkspaceView({
   ) {
     focusEntity(panelId, entityId, type);
     setActivePanel(panelId);
-  }
-
-  function handleSearchNavigateChapter(
-    filePath: string,
-    title: string,
-    _chapterNum: number,
-    matchPos: number,
-    matchLen: number,
-  ) {
-    flushSync(() => setActivePanel("chapters"));
-    if (matchPos >= 0 && matchLen > 0) {
-      contentRef.current?.openFileWithHighlight(
-        filePath,
-        title,
-        matchPos,
-        matchLen,
-      );
-    } else {
-      contentRef.current?.openFile(filePath, title);
-    }
   }
 
   async function handleSelectNovel(n: novel.Novel) {
@@ -413,13 +393,14 @@ export default function WorkspaceView({
         <div className="flex-1 flex min-h-0 overflow-hidden">
           <ActivityBar onSelect={handleActivitySelect} />
 
-          {!sidebarClosed && (
+          {!sidebarClosed && activePanel !== "chapter-management" && (
             <SidePanel
               novels={novels}
               novelId={activeNovelId}
               onSelectNovel={handleSelectNovel}
               onSelectChapter={handleSelectChapter}
               onSelectGoink={handleSelectGoink}
+              onSelectVolumeOutline={handleSelectVolumeOutline}
               onExportNovel={(id) => setExportNovelId(id)}
               showCreate={showCreate}
               setShowCreate={setShowCreate}
@@ -429,23 +410,9 @@ export default function WorkspaceView({
               setDescription={setDescription}
               onCreateNovel={handleCreateNovel}
               activeSkillName={activeSkillName}
-              onSelectSkill={(path, title, readOnly) => {
-                setActiveSkillName(title);
-                contentRef.current?.openFile(path, title, readOnly);
-              }}
-              onEditSkill={(path, title, readOnly) => {
-                setActiveSkillName(title);
-                contentRef.current?.openFile(path, title, readOnly, "edit");
-              }}
-              onNewSkill={(name) => {
-                setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
-                contentRef.current?.openFile(
-                  `skills/${name}.md`,
-                  `${t("workspace.skillLabel")}${name}`,
-                  false,
-                  "edit",
-                );
-              }}
+              onSelectSkill={handleSelectSkill}
+              onEditSkill={handleEditSkill}
+              onNewSkill={handleNewSkill}
               onSearchNavigateEntity={handleSearchNavigateEntity}
               onSearchNavigateChapter={handleSearchNavigateChapter}
               onSelectStyleSample={(id) => setStyleSampleFocusId(id)}
@@ -454,7 +421,14 @@ export default function WorkspaceView({
             />
           )}
 
-          {activePanel === "novels" ? (
+          {activePanel === "chapter-management" ? (
+            <ErrorBoundary>
+              <ChapterManagementView
+                key={activeNovelId}
+                novelId={activeNovelId}
+              />
+            </ErrorBoundary>
+          ) : activePanel === "novels" ? (
             <BookshelfView
               onSelectNovel={handleSelectNovel}
               onSaveCover={handleSaveCover}
@@ -520,7 +494,15 @@ export default function WorkspaceView({
             </ErrorBoundary>
           ) : null}
 
-          {activePanel !== "profile" && (
+          <div
+            style={{
+              display:
+                activePanel === "chapter-management" ||
+                activePanel === "profile"
+                  ? "none"
+                  : "contents",
+            }}
+          >
             <ChatPanel
               novelId={activeNovelId}
               onApprove={handleApprove}
@@ -529,7 +511,7 @@ export default function WorkspaceView({
               chatPanelWidth={chatPanelWidth}
               onChatPanelResize={setChatPanelWidth}
             />
-          )}
+          </div>
         </div>
 
         <StatusBar />

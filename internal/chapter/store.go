@@ -81,6 +81,7 @@ func (s *Store) ListByNovel(ctx context.Context, tx *gorm.DB, novelID int64, opt
 
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].OutlineFilePath = git.OutlinePath(chapters[i].ID)
 		if order == chapterOrderAsc {
 			chapters[i].ReadingNumber = pp.Offset() + i + 1
 		} else {
@@ -102,6 +103,7 @@ func (s *Store) ListAllByNovel(ctx context.Context, tx *gorm.DB, novelID int64) 
 	}
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].OutlineFilePath = git.OutlinePath(chapters[i].ID)
 		chapters[i].ReadingNumber = i + 1
 	}
 	return chapters, nil
@@ -199,6 +201,7 @@ func (s *Store) GetByID(ctx context.Context, tx *gorm.DB, novelID, chapterID int
 		return nil, fmt.Errorf("chapter store: get by id: %w", err)
 	}
 	ch.FilePath = git.ChapterPath(ch.ID)
+	ch.OutlineFilePath = git.OutlinePath(ch.ID)
 	readingNumber, err := s.GetReadingNumberByID(ctx, tx, novelID, chapterID)
 	if err != nil {
 		return nil, err
@@ -389,6 +392,7 @@ func (s *Store) SearchByNovel(ctx context.Context, tx *gorm.DB, novelID int64, q
 	}
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].OutlineFilePath = git.OutlinePath(chapters[i].ID)
 	}
 	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, tx, novelID)
 	if err != nil {
@@ -411,6 +415,7 @@ func (s *Store) GetRecent(ctx context.Context, tx *gorm.DB, novelID int64, limit
 	}
 	for i := range chapters {
 		chapters[i].FilePath = git.ChapterPath(chapters[i].ID)
+		chapters[i].OutlineFilePath = git.OutlinePath(chapters[i].ID)
 	}
 	readingNumbers, err := s.GetReadingNumbersByNovel(ctx, tx, novelID)
 	if err != nil {

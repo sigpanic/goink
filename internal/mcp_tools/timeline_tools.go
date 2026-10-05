@@ -144,6 +144,7 @@ func (t *CreateTimelineEntryTool) Name() string { return "create_timeline_entry"
 func (t *CreateTimelineEntryTool) Description() string {
 	return "批量创建伏笔或用户指令（1-6条）。保证原子性，失败时返回具体条目原因。" +
 		"每章写完后发现新埋的伏笔或用户指令时调用。" +
+		"创建前先查询已有条目；内容相近时更新原条目，避免重复创建。" +
 		"category 为 foreshadowing（伏笔）或 user_directive（用户创作指令）。"
 }
 func (t *CreateTimelineEntryTool) Category() ToolCategory { return CategoryWritingAssistant }
@@ -297,7 +298,7 @@ func (t *UpdateChapterPlanTool) Name() string { return "update_chapter_plan" }
 func (t *UpdateChapterPlanTool) Description() string {
 	return "更新章节创作计划。三个槽位：\n" +
 		"- next：下一章的写作计划\n" +
-		"- near：近期的写作计划\n" +
+		"- near：近期 3-10 章的写作方向\n" +
 		"- far：远期的写作方向\n" +
 		"同一 scope 重复调用会覆盖旧值。写新章前应更新计划以反映最新进展。"
 }

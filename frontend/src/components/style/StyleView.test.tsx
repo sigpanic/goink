@@ -67,6 +67,9 @@ const {
   mockUpdateStyleSample,
   mockGetModels,
   mockGetSettings,
+  mockExtractStyle,
+  mockGetContent,
+  mockSaveContent,
   mockI18n,
 } = vi.hoisted(() => ({
   mockListStyleSamples: vi.fn(),
@@ -76,6 +79,9 @@ const {
   mockUpdateStyleSample: vi.fn(),
   mockGetModels: vi.fn(),
   mockGetSettings: vi.fn(),
+  mockExtractStyle: vi.fn(),
+  mockGetContent: vi.fn(),
+  mockSaveContent: vi.fn(),
   // 中间件用 i18n.exists/t，mock 让 exists 返回 true + t 返回 key 本身（对齐现有断言文案）。
   mockI18n: {
     exists: vi.fn().mockReturnValue(true),
@@ -97,9 +103,10 @@ vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
     DeleteStyleSample: mockDeleteStyleSample,
     GetModels: mockGetModels,
     GetSettings: mockGetSettings,
-    ExtractStyle: vi.fn(),
+    ExtractStyle: mockExtractStyle,
     CancelExtract: vi.fn(),
-    SaveContent: vi.fn(),
+    GetContent: mockGetContent,
+    SaveContent: mockSaveContent,
   };
 });
 
@@ -130,6 +137,7 @@ describe("StyleView", () => {
     });
     mockGetModels.mockResolvedValue([]);
     mockGetSettings.mockResolvedValue({ selected_model_key: "" });
+    mockSaveContent.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -262,5 +270,99 @@ describe("StyleView", () => {
         "styleSample.loadFailed: not found",
       );
     });
+  });
+
+  it("confirms overwriting a nonempty user skill with its original content", async () => {
+    mockListStyleSamples.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          name: "Sample",
+          content: "sample",
+          tags: [],
+          is_global: true,
+          novel_id: 0,
+        },
+      ],
+      total: 1,
+      total_pages: 1,
+    });
+    mockGetModels.mockResolvedValue([
+      {
+        Key: "test/model",
+        ModelName: "Test",
+        ProviderName: "test",
+        ModelID: "model",
+      },
+    ]);
+    mockExtractStyle.mockResolvedValue({
+      name: "Generated",
+      file_path: "~/.goink/skills/generated.md",
+      raw_content: "new skill",
+    });
+    mockGetContent.mockResolvedValue("old skill");
+
+    renderWithProvider(<StyleView novelId={1} />);
+    fireEvent.click(await screen.findByText("select"));
+    fireEvent.click(screen.getByText("styleSample.startExtract"));
+    fireEvent.click(await screen.findByText("styleSample.saveToUserSkill"));
+    expect(
+      await screen.findByText("skill.generatedOverwriteTitle"),
+    ).toBeInTheDocument();
+    expect(mockSaveContent).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByText("skill.generatedConfirmOverwrite"));
+    await vi.waitFor(() => {
+      expect(mockSaveContent).toHaveBeenCalledWith({
+        novel_id: 1,
+        path: "~/.goink/skills/generated.md",
+        content: "new skill",
+        expected_content: "old skill",
+      });
+    });
+  });
+
+  it("keeps the generated result when the target changes after confirmation", async () => {
+    mockListStyleSamples.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          name: "Sample",
+          content: "sample",
+          tags: [],
+          is_global: true,
+          novel_id: 0,
+        },
+      ],
+      total: 1,
+      total_pages: 1,
+    });
+    mockGetModels.mockResolvedValue([
+      {
+        Key: "test/model",
+        ModelName: "Test",
+        ProviderName: "test",
+        ModelID: "model",
+      },
+    ]);
+    mockExtractStyle.mockResolvedValue({
+      name: "Generated",
+      file_path: "~/.goink/skills/generated.md",
+      raw_content: "new skill",
+    });
+    mockGetContent.mockResolvedValue("old skill");
+    mockSaveContent.mockRejectedValueOnce(
+      new Error("CONTENT_CONFLICT: changed"),
+    );
+
+    renderWithProvider(<StyleView novelId={1} />);
+    fireEvent.click(await screen.findByText("select"));
+    fireEvent.click(screen.getByText("styleSample.startExtract"));
+    fireEvent.click(await screen.findByText("styleSample.saveToUserSkill"));
+    fireEvent.click(await screen.findByText("skill.generatedConfirmOverwrite"));
+    expect(
+      await screen.findByText("skill.generatedTargetChanged"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("styleSample.saveToUserSkill")).toBeInTheDocument();
   });
 });

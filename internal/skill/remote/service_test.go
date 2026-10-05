@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/githubapi"
 )
 
@@ -275,7 +276,7 @@ func TestInstallRemoteSkill_UserLayer(t *testing.T) {
 	reloader := &mockReloader{}
 	svc, _, _, skillDir := newTestService(t, fetcher, reloader)
 
-	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0)
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0, "")
 	require.NoError(t, err)
 
 	// 验证文件已写入
@@ -291,6 +292,53 @@ func TestInstallRemoteSkill_UserLayer(t *testing.T) {
 	assert.False(t, reloader.novelReloaded[0])
 }
 
+func TestInstallRemoteSkill_ChangedTargetRequiresNewConfirmation(t *testing.T) {
+	fetcher := &mockFetcher{
+		content: map[string][]byte{"skills/my-skill.md": []byte("# remote content")},
+		err:     map[string]error{},
+	}
+	reloader := &mockReloader{}
+	svc, _, _, skillDir := newTestService(t, fetcher, reloader)
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	dst := filepath.Join(skillDir, "my-skill.md")
+	require.NoError(t, os.WriteFile(dst, []byte("newer local content"), 0o644))
+
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0, "old local content")
+	require.Error(t, err)
+	assert.Equal(t, apperr.CodeConflict, apperr.CodeFromError(err))
+	current, readErr := os.ReadFile(dst)
+	require.NoError(t, readErr)
+	assert.Equal(t, "newer local content", string(current))
+	assert.False(t, reloader.userReloaded)
+
+	err = svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0, "newer local content")
+	require.NoError(t, err)
+	current, readErr = os.ReadFile(dst)
+	require.NoError(t, readErr)
+	assert.Equal(t, "# remote content", string(current))
+	assert.True(t, reloader.userReloaded)
+}
+
+func TestInstallRemoteSkill_NewTargetAppearedAfterProbe(t *testing.T) {
+	fetcher := &mockFetcher{
+		content: map[string][]byte{"skills/my-skill.md": []byte("# remote content")},
+		err:     map[string]error{},
+	}
+	reloader := &mockReloader{}
+	svc, _, _, skillDir := newTestService(t, fetcher, reloader)
+	require.NoError(t, os.MkdirAll(skillDir, 0o755))
+	dst := filepath.Join(skillDir, "my-skill.md")
+	require.NoError(t, os.WriteFile(dst, []byte("new local content"), 0o644))
+
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 42, "")
+	require.Error(t, err)
+	assert.Equal(t, apperr.CodeConflict, apperr.CodeFromError(err))
+	current, readErr := os.ReadFile(dst)
+	require.NoError(t, readErr)
+	assert.Equal(t, "new local content", string(current))
+	assert.False(t, reloader.novelReloaded[42])
+}
+
 // TestInstallRemoteSkill_NovelLayer target=novel，验证文件写入 + ReloadNovel 被调用。
 func TestInstallRemoteSkill_NovelLayer(t *testing.T) {
 	fetcher := &mockFetcher{
@@ -300,7 +348,7 @@ func TestInstallRemoteSkill_NovelLayer(t *testing.T) {
 	reloader := &mockReloader{}
 	svc, _, _, skillDir := newTestService(t, fetcher, reloader)
 
-	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 42)
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 42, "")
 	require.NoError(t, err)
 
 	// 验证文件已写入
@@ -326,7 +374,7 @@ func TestInstallRemoteSkill_NovelLayerZeroID(t *testing.T) {
 	reloader := &mockReloader{}
 	svc, _, _, _ := newTestService(t, fetcher, reloader)
 
-	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 0)
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 0, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "non-zero novelID")
 	// 失败时不应触发 reload
@@ -343,7 +391,7 @@ func TestInstallRemoteSkill_InvalidTarget(t *testing.T) {
 	reloader := &mockReloader{}
 	svc, _, _, _ := newTestService(t, fetcher, reloader)
 
-	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "invalid", 0)
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "invalid", 0, "")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid target")
 	// 失败时不应触发 reload
@@ -363,7 +411,7 @@ func TestInstallRemoteSkill_ReloadFailureStillSucceeds(t *testing.T) {
 	}
 	svc, _, _, skillDir := newTestService(t, fetcher, reloader)
 
-	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0)
+	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0, "")
 	require.NoError(t, err, "reload 失败不应导致 InstallRemoteSkill 失败")
 
 	// 文件应已写入

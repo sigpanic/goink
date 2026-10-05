@@ -25,6 +25,8 @@ func TestChapterStructureOperations(t *testing.T) {
 	firstTitle := "第一章"
 	first, err := app.PlaceChapter(PlaceChapterInput{NovelID: novel.ID, Title: &firstTitle, TargetVolumeID: &volume.ID})
 	require.NoError(t, err)
+	assert.Equal(t, git.ChapterPath(first.ID), first.FilePath)
+	assert.Equal(t, git.OutlinePath(first.ID), first.OutlineFilePath)
 	secondTitle := "第二章"
 	second, err := app.PlaceChapter(PlaceChapterInput{NovelID: novel.ID, Title: &secondTitle, TargetVolumeID: &volume.ID})
 	require.NoError(t, err)
@@ -36,11 +38,16 @@ func TestChapterStructureOperations(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, []int64{first.ID, inserted.ID, second.ID}, []int64{chapters[0].ID, chapters[1].ID, chapters[2].ID})
 	assert.Equal(t, []int{1, 2, 3}, []int{chapters[0].ReadingNumber, chapters[1].ReadingNumber, chapters[2].ReadingNumber})
+	for _, ch := range chapters {
+		assert.Equal(t, git.ChapterPath(ch.ID), ch.FilePath)
+		assert.Equal(t, git.OutlinePath(ch.ID), ch.OutlineFilePath)
+	}
 
 	moved, err := app.PlaceChapter(PlaceChapterInput{NovelID: novel.ID, SourceChapterID: &inserted.ID})
 	require.NoError(t, err)
 	assert.Nil(t, moved.VolumeID)
 	assert.Equal(t, 3, moved.ReadingNumber)
+	assert.Equal(t, git.OutlinePath(moved.ID), moved.OutlineFilePath)
 }
 
 func TestPlaceChapterMovesWithinAndAcrossVolumes(t *testing.T) {

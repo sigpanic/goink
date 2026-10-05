@@ -83,6 +83,7 @@ func (s *Service) Place(ctx context.Context, input PlaceInput) (*Chapter, error)
 				return err
 			}
 			placed.FilePath = git.ChapterPath(placed.ID)
+			placed.OutlineFilePath = git.OutlinePath(placed.ID)
 			if err := git.WriteFile(input.NovelID, placed.FilePath, ""); err != nil {
 				return fmt.Errorf("create chapter file: %w", err)
 			}
@@ -98,6 +99,7 @@ func (s *Service) Place(ctx context.Context, input PlaceInput) (*Chapter, error)
 			return nil, err
 		}
 		placed.FilePath = git.ChapterPath(placed.ID)
+		placed.OutlineFilePath = git.OutlinePath(placed.ID)
 	}
 	readingNumber, err := s.store.GetReadingNumberByID(ctx, nil, input.NovelID, placed.ID)
 	if err != nil {

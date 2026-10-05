@@ -10,10 +10,16 @@ import {
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
-import { ExtractStyle, CancelExtract } from "@/lib/wailsjs/go/app/App";
+import {
+  ExtractStyle,
+  CancelExtract,
+  GetContent,
+} from "@/lib/wailsjs/go/app/App";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSaveContent } from "@/components/content/useSaveContent";
+import { isContentConflict } from "@/components/content/editorSaveQueue";
+import { reportAIFileChange } from "@/components/content/aiFileChanges";
 import type { llm } from "@/lib/wailsjs/go/models";
 import { useNovels } from "@/components/novel/useNovels";
 import { useStyleSamples } from "./useStyleSamples";
@@ -89,6 +95,8 @@ export default function StyleView({
     filePath: string;
     rawContent: string;
   } | null>(null);
+  const [overwriteContent, setOverwriteContent] = useState<string | null>(null);
+  const [checkingSave, setCheckingSave] = useState(false);
 
   // 3.9: novels 走 useNovels query（与 WorkspaceView/GeneralConfigTab/PatternExtractView 共享缓存）。
   const { data: novels = [] } = useNovels();
@@ -293,21 +301,47 @@ export default function StyleView({
     }
   }, [selected, selectedModel, reasoningEffort, phase, t]);
 
+  const saveGenerated = useCallback(
+    async (expectedContent: string) => {
+      if (!result) return;
+      try {
+        await saveMutation.mutateAsync({
+          novel_id: novelId,
+          path: result.filePath,
+          content: result.rawContent,
+          expected_content: expectedContent,
+        });
+        reportAIFileChange({ novelId, path: result.filePath });
+        setOverwriteContent(null);
+        setPhase("browse");
+        setResult(null);
+        setSelected(new Set());
+      } catch (e) {
+        setOverwriteContent(null);
+        setError(
+          isContentConflict(e)
+            ? t("skill.generatedTargetChanged")
+            : toErrorMessage(e, t("styleSample.saveFailed")),
+        );
+      }
+    },
+    [result, saveMutation.mutateAsync, t, novelId],
+  );
+
   const handleSave = useCallback(async () => {
     if (!result) return;
+    setError("");
+    setCheckingSave(true);
     try {
-      await saveMutation.mutateAsync({
-        novel_id: novelId,
-        path: result.filePath,
-        content: result.rawContent,
-      });
-      setPhase("browse");
-      setResult(null);
-      setSelected(new Set());
+      const existing = await GetContent(novelId, result.filePath);
+      if (existing) setOverwriteContent(existing);
+      else await saveGenerated(existing);
     } catch (e) {
       setError(toErrorMessage(e, t("styleSample.saveFailed")));
+    } finally {
+      setCheckingSave(false);
     }
-  }, [result, saveMutation.mutateAsync, t, novelId]);
+  }, [result, novelId, saveGenerated, t]);
 
   const handleUpdate = useCallback(async () => {
     if (!detailId) return;
@@ -353,6 +387,7 @@ export default function StyleView({
             </span>
             <div className="flex items-center gap-2">
               <button
+                disabled={checkingSave || saveMutation.isPending}
                 onClick={() => {
                   setPhase("browse");
                   setResult(null);
@@ -363,6 +398,7 @@ export default function StyleView({
                 {t("styleSample.cancel")}
               </button>
               <button
+                disabled={checkingSave || saveMutation.isPending}
                 onClick={() => {
                   setPhase("browse");
                   setResult(null);
@@ -374,10 +410,10 @@ export default function StyleView({
               </button>
               <button
                 onClick={handleSave}
-                disabled={saveMutation.isPending}
+                disabled={checkingSave || saveMutation.isPending}
                 className="h-8 px-5 rounded-lg text-sm font-medium bg-action-save text-action-save-foreground hover:bg-action-save/80 disabled:opacity-50 transition-colors"
               >
-                {saveMutation.isPending
+                {checkingSave || saveMutation.isPending
                   ? t("styleSample.saving")
                   : t("styleSample.saveToUserSkill")}
               </button>
@@ -742,6 +778,20 @@ export default function StyleView({
         confirmText={t("common.delete")}
         onClose={() => setDeleteTarget(null)}
         onConfirm={confirmDelete}
+      />
+      <ConfirmDialog
+        open={overwriteContent !== null}
+        title={t("skill.generatedOverwriteTitle")}
+        message={t("skill.generatedOverwriteMessage", { name: result?.name })}
+        confirmText={t("skill.generatedConfirmOverwrite")}
+        danger
+        loading={saveMutation.isPending}
+        onClose={() => {
+          if (!saveMutation.isPending) setOverwriteContent(null);
+        }}
+        onConfirm={() => {
+          if (overwriteContent !== null) void saveGenerated(overwriteContent);
+        }}
       />
     </div>
   );

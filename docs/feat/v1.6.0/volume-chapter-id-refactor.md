@@ -61,7 +61,7 @@
 | 删除流程 | 仅前端入口；删文件 + 删 DB 记录 + 检测 timeline/arc_node/reader 引用（有则拒绝）；`delete_record` mcp_tool 不扩展支持 chapter 表 |
 | 跨卷移动 | 更新 chapter.volume_id，并将 sort_order 追加到目标分组末尾 |
 | 分卷 | volume 表：`id/novel_id/name/sort_order/created_at/updated_at` |
-| AI 卷感知 | list_chapters 返回 `id + volume_name + 实时章节号 + 标题`；AI 新建章节时传 volume_name（rw_tools 经 chapters/new.md 反查 volume_id），可读写卷纲（volumes/{id}.md） |
+| AI 卷感知 | list_chapters 返回 `id + volume_name + 实时章节号 + 标题`；AI 新建章节时传 volume_name（rw_tools 经 chapters/new.md 反查 volume_id），可读写卷纲（volumes/id_{id}.md） |
 
 ## 五、DB Schema 变更
 
@@ -83,7 +83,7 @@
 
 约束：`(novel_id, sort_order)` 唯一索引，`(novel_id, name)` 唯一索引
 
-卷纲存文件系统（不入库）：`volumes/{volume_id}.md`，类似现有 `chapters/id_{id}.md`、`outlines/id_{id}.md`、`goink.md` 的文件模型。卷纲内容：创作主题、目标章节范围、节奏、关键角色/伏笔等。AI 可通过 rw_tools 读写卷纲（路径正则扩展支持 `volumes/{正整数}.md`）；读写前必须校验该卷存在且属于当前小说，避免创建孤儿卷纲文件。
+卷纲存文件系统（不入库）：`volumes/id_{volume_id}.md`，类似现有 `chapters/id_{id}.md`、`outlines/id_{id}.md`、`goink.md` 的文件模型。卷纲内容：创作主题、目标章节范围、节奏、关键角色/伏笔等。AI 可通过 rw_tools 读写卷纲（路径只接受 `volumes/id_{正整数}.md`）；读写前必须校验该卷存在且属于当前小说，避免创建孤儿卷纲文件。此命名在首次发布前统一，不迁移旧格式卷纲文件。
 
 ### 5.3 time_entries 表（GORM 表名，结构体 TimelineEntry）
 
@@ -345,7 +345,7 @@ app 层：
 AI 通道（经 rw_tools，非 mcp_tool）：
 - AI 新建章节走 `chapters/new.md` 占位（见第十一节），可传 `volume_name` 让 rw_tools 反查 `volume_id`
 - AI 不感知卷 CRUD（不提供 create/update/delete volume 工具，结构操作仅前端）
-- AI 可通过 rw_tools 读写卷纲文件 `volumes/{id}.md`
+- AI 可通过 rw_tools 读写卷纲文件 `volumes/id_{id}.md`
 
 ### 10.3 章节排序
 
@@ -402,7 +402,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 
 ### 11.5 前端新建章节（独立通道）
 
-前端章节管理 tab 的"新建章节"按钮走 app.CreateChapter（不走 rw_tools），直接建记录拿 id 写空文件，用户填标题/选卷。与 AI 走 chapters/new.md 是两条独立通道，互不影响。
+前端章节管理 tab 的“新建章节”按钮走 app.PlaceChapter（不走 rw_tools），直接建记录拿 id 写空文件，用户填标题/选卷。与 AI 走 chapters/new.md 是两条独立通道，互不影响。
 
 ## 十二、前端 UI 改造点（独立 tab 章节管理）
 
@@ -416,7 +416,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 | [frontend/src/components/shell/ActivityBar.tsx](../../../frontend/src/components/shell/ActivityBar.tsx) | activities[] 加一项（图标 + labelKey） |
 | [frontend/src/views/WorkspaceView.tsx](../../../frontend/src/views/WorkspaceView.tsx) | 主区域加分支 `activePanel === "chapter-management" ? <ChapterManagementView novelId={...} /> : ...` |
 | 新建 `frontend/src/components/chapter-management/` | ChapterManagementView 主组件 + 卷管理面板 + 拖拽逻辑 |
-| 后端 [app/chapter.go](../../../app/chapter.go) + [chapter/store.go](../../../internal/chapter/store.go) | 加 DeleteChapter/InsertChapter/MoveChapterToVolume + volume CRUD（供前端调用） |
+| 后端 [app/chapter.go](../../../app/chapter.go) + [chapter/store.go](../../../internal/chapter/store.go) | 提供 DeleteChapter/PlaceChapter + volume CRUD（供前端调用） |
 | i18n locales（`frontend/src/i18n/locales/`） | 加 `shell.chapterManagement` 等 key |
 
 ### 12.2 章节管理 tab 布局
@@ -447,15 +447,14 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 ### 12.4 章节删除入口
 
 - 章节行 [⋮] 菜单 → "删除"
-- 弹窗确认 + 显示交叉引用清单（timeline/arc_node/reader/character_relations 的引用）
-- 有引用则禁用删除按钮并提示"请先清理以下引用：..."
-- 确认删除后调 app.DeleteChapter(chapterID)，后端检测引用 + 删文件 + 删记录 + RAG 清理
+- 弹窗确认后调 app.DeleteChapter(novelID, chapterID)，由后端检测引用 + 删文件 + 删记录 + RAG 清理
+- 若返回引用阻塞清单（timeline/arc_node/reader/character_relations），展示“请先清理以下引用：...”；此时章节未删除
 
 ### 12.5 章节插入入口
 
 - 章节行 [⋮] 菜单 → "在此章前插入" / "在此章后插入"
 - 弹窗填标题 + 选卷
-- 调 app.InsertChapter(afterChapterID, volumeID, title)
+- 调 app.PlaceChapter，传目标卷和目标组内的锚点章节 ID；末尾插入时锚点为空
 
 ### 12.6 卷管理面板
 
@@ -466,7 +465,7 @@ edit 工具 description 加一条：新建章节时 path 传 `chapters/new.md`�
 
 ### 12.7 跨卷移动
 
-- 拖拽章节行到目标卷标签 → 调 app.MoveChapterToVolume(chapterID, volumeID)
+- 拖拽章节行到目标卷标签 → 调 app.PlaceChapter，目标卷为该卷、锚点为空
 - 移动后章节号实时重排（实时计算）
 
 ### 12.8 现有 ChapterList（SidePanel 内）保留

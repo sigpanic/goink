@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   Library,
   List,
+  FolderTree,
   Search,
   Settings,
   Globe,
@@ -29,6 +30,11 @@ const activities: Activity[] = [
   { id: "search", icon: Search, labelKey: "shell.search" },
   { id: "novels", icon: Library, labelKey: "shell.bookshelf" },
   { id: "chapters", icon: List, labelKey: "shell.chapters" },
+  {
+    id: "chapter-management",
+    icon: FolderTree,
+    labelKey: "shell.chapterManagement",
+  },
   { id: "preferences", icon: Settings, labelKey: "shell.preference" },
   { id: "novel-settings", icon: Globe, labelKey: "shell.novelSetting" },
   { id: "characters", icon: Users, labelKey: "shell.characters" },

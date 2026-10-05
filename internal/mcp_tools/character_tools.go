@@ -290,6 +290,7 @@ func (t *UpdateCharacterRelationshipTool) Description() string {
 	return "更新角色关系。两种用法（互斥，不可同时传）：" +
 		"1) 编辑已有关系——只传 relation_id，修改描述措辞，不要传 source_character_id/target_character_id；" +
 		"2) 创建或演变关系——只传 source_character_id + target_character_id（不要传 relation_id）。两个角色之前无关系时即新建；已有关系时旧关系自动归档为历史，新关系设为当前。" +
+		"关系有方向；需要描述双方的关系时，按两个方向分别调用一次。" +
 		"relation_describe 用自然语言描述，如'师徒但暗中互相提防'，不要用简单枚举词。"
 }
 func (t *UpdateCharacterRelationshipTool) Category() ToolCategory { return CategoryWritingAssistant }

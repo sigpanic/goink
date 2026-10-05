@@ -9,23 +9,26 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 - 执行任何 Git 命令前，先确认当前 CWD 是本次任务的 worktree 根目录；不要把其他 worktree 的路径传给 Git 命令。
 - Git 默认只执行只读操作：`status`、`diff`、`log`、`show`、`branch`、`tag`、`ls-files`、`blame`、`grep`、`rev-parse`、`rev-list`、`stash list` 等。
 - 未经用户明确许可，不要执行任何 Git 写操作；执行前必须先向用户说明将执行的具体操作并获得许可。包括 `add`、`commit`、`push`、`pull`、`fetch`、`merge`、`rebase`、`reset`、`revert`、`checkout`、`stash`、`clean`、创建/删除分支或 tag，以及修改 Git 配置。
+- 用户明确要求回滚改动时，核对目标范围和现有差异后，优先使用 Git 操作精确恢复，不要手写反向补丁；若目标文件混有需要保留的改动，不要整文件覆盖。Git 写操作仍须遵守上述授权要求。
 - 修改完成后不要自动 `add`、commit 或 push，也不要主动询问“是否 commit”；完成代码后先停止并等待用户 review，只有用户明确指示后才进行 Git 写操作。
 - 用户授权提交后，如 pre-commit、测试或其他验证发现问题并因此新增或修改任何文件，原提交授权不覆盖这些新改动；修复后必须停止，等待用户重新 review 并再次明确授权，不能自行继续 `add`、commit、amend、revert 或 reset。
 - Commit message 使用英文、具体描述、无 emoji、无 `Co-Authored-By`，必须遵循 Conventional Commits：`<type>(<optional-scope>): <description>`。
 - 允许的 type 只有：`feat`、`fix`、`docs`、`style`、`refactor`、`perf`、`test`、`build`、`ci`、`chore`、`revert`。
 - Commit message 必须包含 subject 和 body；subject 后空一行，再用 body 说明改了什么以及为什么改，不能只有 subject。
+- Commit body 必须让后续 `git blame` 读者独立理解具体做了什么、为什么选择该设计；对非显然的行为，应说明是有意设计还是临时过渡、在什么条件下可以删除或替换，以及已知限制、风险和容易踩的坑。不要只重复 subject 或罗列修改文件。
 - 需要多段 commit message 时，必须以 `git commit -F - <<'EOF'` heredoc 传入真实换行；不要在 `-m` 字符串中写字面量 `\\n`。
 - Issue 引用使用 body 末尾的 `Refs #NN`，不要使用 `fixes`、`closes` 或 `resolves`，除非用户明确要求关闭 issue。
 
 ## 开发流程与授权边界
 
-- 默认流程是：先讨论设计方案 → 编写或更新设计文档 → 设定实现与 commit 路线 → 用户确认 → 开始写代码 → 验证 → 等待用户 review → 用户明确授权后执行 Git 写操作。
+- 默认流程是：先讨论设计方案 → 设定实现与 commit 路线 → 用户确认 → 开始写代码 → 验证 → 等待用户 review → 用户明确授权后执行 Git 写操作；用户明确要求文档时，在实现前编写或更新设计文档。
 - 对涉及多个文件、数据结构、API、数据库、UI 流程或行为变化的任务，必须先说明设计、影响范围、风险和验证方案；用户确认前不要写代码。
-- 设计确认后，先把方案沉淀到合适的 `docs/` 文档，或在用户明确同意不写文档时跳过；不要只把重要设计留在对话里。
+- 仅当用户明确要求文档时，设计确认后先把方案沉淀到合适的 `docs/` 文档；未要求文档时，在对话中说明设计、影响范围和 commit 路线即可。
 - 开始实现前，列出预计的文件范围、实现步骤和 commit 拆分/路线；不要在没有路线的情况下随意边改边提交。
 - 未经用户明确允许，不要自行创建、修改或删除代码文件。可以进行只读检查、分析、提出方案和文档草稿；代码实现必须等用户确认。
 - 纯格式化、明显的拼写修正或用户明确要求“直接修复”的小改动可以直接处理，但仍需遵守其他规则，并在完成后等待 review。
 - 写完代码后报告变更和验证结果，停下来等待用户 review；不得因为测试通过就自动暂存、提交、推送或合并。
+- 每个实现阶段完成后，向用户说明做了什么、怎么做的、为什么这样做、解决了什么问题，并报告验证结果、已知限制和提交状态；汇报应具体到本阶段的实际改动，便于 review。
 
 ## 构建与验证
 

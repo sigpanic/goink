@@ -10,6 +10,8 @@ import (
 
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
+
+	"github.com/sigpanic/goink/internal/git"
 )
 
 // testVolLogger 返回丢弃输出的 logger（store 需要非 nil logger）。
@@ -93,6 +95,9 @@ func TestVolumePlaceCreatesAtEnd(t *testing.T) {
 
 	v1 := mustPlace(t, db, 1, "第一卷", nil)
 	v2 := mustPlace(t, db, 1, "第二卷", nil)
+	if v1.OutlineFilePath != git.VolumePath(v1.ID) || v2.OutlineFilePath != git.VolumePath(v2.ID) {
+		t.Errorf("placed volume outline paths = %q/%q", v1.OutlineFilePath, v2.OutlineFilePath)
+	}
 
 	if v1.SortOrder != 1 || v2.SortOrder != 2 {
 		t.Errorf("sort_order = %d/%d, want 1/2", v1.SortOrder, v2.SortOrder)
@@ -126,6 +131,10 @@ func TestVolumeGetByIDForeignNovel(t *testing.T) {
 	db := openVolDB(t)
 	ctx := context.Background()
 	v := mustPlace(t, db, 1, "第一卷", nil)
+	got, err := newTestStore(db).GetByID(ctx, nil, 1, v.ID)
+	if err != nil || got.OutlineFilePath != git.VolumePath(v.ID) {
+		t.Errorf("GetByID outline path = %v, err = %v", got, err)
+	}
 
 	if _, err := newTestStore(db).GetByID(ctx, nil, 2, v.ID); !errors.Is(err, ErrNotFound) {
 		t.Errorf("err = %v, want ErrNotFound", err)
@@ -214,6 +223,9 @@ func TestVolumeListAndLast(t *testing.T) {
 	if last == nil || last.ID != v2.ID {
 		t.Errorf("last = %+v, want id=%d", last, v2.ID)
 	}
+	if last != nil && last.OutlineFilePath != git.VolumePath(v2.ID) {
+		t.Errorf("last outline path = %q", last.OutlineFilePath)
+	}
 }
 
 // ── Place 移动 ────────────────────────────────────────────
@@ -231,8 +243,12 @@ func TestVolumePlaceMovesAndInserts(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := s.Place(ctx, nil, PlaceInput{NovelID: 1, SourceVolumeID: &v3.ID, BeforeVolumeID: &v1.ID}); err != nil {
+	moved, err := s.Place(ctx, nil, PlaceInput{NovelID: 1, SourceVolumeID: &v3.ID, BeforeVolumeID: &v1.ID})
+	if err != nil {
 		t.Fatalf("move before: %v", err)
+	}
+	if moved.OutlineFilePath != git.VolumePath(v3.ID) {
+		t.Errorf("moved outline path = %q", moved.OutlineFilePath)
 	}
 	if err := assertVolumeOrder(ctx, s, 1, []int64{v3.ID, v1.ID, v2.ID}); err != nil {
 		t.Fatal(err)
@@ -255,6 +271,9 @@ func assertVolumeOrder(ctx context.Context, s *Store, novelID int64, want []int6
 		return fmt.Errorf("list length = %d, want %d", len(list), len(want))
 	}
 	for i, v := range list {
+		if v.OutlineFilePath != git.VolumePath(v.ID) {
+			return fmt.Errorf("position %d outline path = %q", i, v.OutlineFilePath)
+		}
 		if v.ID != want[i] {
 			return fmt.Errorf("position %d = id %d, want %d", i, v.ID, want[i])
 		}
