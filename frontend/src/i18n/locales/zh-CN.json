@@ -258,7 +258,9 @@
     "viewAll": "查看全部（{{count}} 个）",
     "diffChapter": "第{{n}}章",
     "diffStoryStatus": "故事状态",
-    "diffChapterOutline": "第{{n}}章大纲"
+    "diffChapterOutline": "第{{n}}章大纲",
+    "diffNewChapter": "新建章节",
+    "diffNewOutline": "新建大纲"
   },
   "approval": {
     "approveFailed": "审批通过失败",

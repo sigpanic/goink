@@ -1260,6 +1260,147 @@ describe("ContentPanel", () => {
     );
   });
 
+  it("opens a newly created outline by its physical path", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 42,
+        reading_number: 7,
+        title: "重逢",
+        file_path: "chapters/id_42.md",
+        outline_file_path: "outlines/id_42.md",
+      },
+    ]);
+    mockTabsState = [
+      {
+        id: "d-new",
+        type: "diff",
+        path: "outlines/new.md",
+        toolId: "tool-new",
+        title: "新建大纲",
+      },
+    ];
+    mockActiveTabIdState = "d-new";
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => {
+      await ref.current?.handleDiffApprove("tool-new", "outlines/id_42.md");
+    });
+    await vi.waitFor(() =>
+      expect(mockOpenTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "chapters/id_42.md",
+          outlinePath: "outlines/id_42.md",
+          viewMode: "outline",
+        }),
+      ),
+    );
+    expect(mockCloseTab).toHaveBeenCalledWith("d-new");
+    expect(mockFetchContent).not.toHaveBeenCalledWith(1, "outlines/new.md");
+  });
+
+  it("opens a newly created chapter by its physical path", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 42,
+        reading_number: 7,
+        title: "重逢",
+        file_path: "chapters/id_42.md",
+        outline_file_path: "outlines/id_42.md",
+      },
+    ]);
+    mockTabsState = [
+      {
+        id: "d-new",
+        type: "diff",
+        path: "chapters/3/new.md",
+        toolId: "tool-new",
+        title: "新建章节",
+      },
+    ];
+    mockActiveTabIdState = "d-new";
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => {
+      await ref.current?.handleDiffApprove("tool-new", "chapters/id_42.md");
+    });
+    await vi.waitFor(() =>
+      expect(mockOpenTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "chapters/id_42.md",
+          viewMode: "content",
+        }),
+      ),
+    );
+    expect(mockFetchContent).not.toHaveBeenCalledWith(1, "chapters/3/new.md");
+  });
+
+  it("uses the latest diff tab when automatic approval finishes before rerender", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 42,
+        reading_number: 7,
+        title: "重逢",
+        file_path: "chapters/id_42.md",
+        outline_file_path: "outlines/id_42.md",
+      },
+    ]);
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+    useEditorTabsStore.getState().openDiffTab(1, {
+      path: "outlines/new.md",
+      toolId: "tool-new",
+      title: "新建大纲",
+      diff: "",
+      original: "",
+      modified: "# 大纲",
+      changeType: "full_replace",
+      reason: "",
+    });
+
+    await act(async () => {
+      await ref.current?.handleDiffApprove("tool-new", "outlines/id_42.md");
+    });
+    expect(mockCloseTab).toHaveBeenCalled();
+    await vi.waitFor(() =>
+      expect(mockOpenTab).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "chapters/id_42.md",
+          outlinePath: "outlines/id_42.md",
+          viewMode: "outline",
+        }),
+      ),
+    );
+  });
+
+  it.each([
+    "outlines/new.md",
+    "outlines/3/new.md",
+    "chapters/new.md",
+    "chapters/3/new.md",
+  ])("closes a rejected new-file diff without opening %s", async (path) => {
+    mockTabsState = [
+      {
+        id: "d-new",
+        type: "diff",
+        path,
+        toolId: "tool-new",
+        title: "新建文件",
+      },
+    ];
+    mockActiveTabIdState = "d-new";
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => {
+      await ref.current?.handleDiffReject("tool-new");
+    });
+    expect(mockCloseTab).toHaveBeenCalledWith("d-new");
+    expect(mockOpenTab).not.toHaveBeenCalled();
+    expect(mockFetchContent).not.toHaveBeenCalledWith(1, path);
+  });
+
   it("renders content editor for file tab in content viewMode", () => {
     mockTabsState = [
       {

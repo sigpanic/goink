@@ -71,7 +71,7 @@ export interface ContentPanelHandle {
     reason: string;
     toolId: string;
   }) => void;
-  handleDiffApprove: (toolId: string) => Promise<void>;
+  handleDiffApprove: (toolId: string, path: string) => Promise<void>;
   handleDiffReject: (toolId: string) => Promise<void>;
 }
 
@@ -820,31 +820,52 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     // ── 审批操作（由 WorkspaceView 通过 ref 调用）───────────
 
     const handleDiffApprove = useCallback(
-      async (toolId: string) => {
-        const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
+      async (toolId: string, path: string) => {
+        const currentTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs ?? tabs;
+        const dt = currentTabs.find(
+          (t) => t.type === "diff" && t.toolId === toolId,
+        );
         if (!dt) return;
 
-        const { filePath, viewMode } = await filePathFromDiff(dt.path);
-        const ft = tabs.find((t) => t.type === "file" && t.path === filePath);
+        const { filePath, viewMode } = await filePathFromDiff(path);
+        const ft = currentTabs.find(
+          (t) => t.type === "file" && t.path === filePath,
+        );
 
-        if (ft) await refreshApprovedFile(ft, dt.path, viewMode, true);
+        if (ft) await refreshApprovedFile(ft, path, viewMode, true);
 
         closeTab(dt.id);
         doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [tabs, closeTab, doOpenFile, filePathFromDiff, refreshApprovedFile],
+      [
+        novelId,
+        tabs,
+        closeTab,
+        doOpenFile,
+        filePathFromDiff,
+        refreshApprovedFile,
+      ],
     );
 
     const handleDiffReject = useCallback(
       async (toolId: string) => {
-        const dt = tabs.find((t) => t.type === "diff" && t.toolId === toolId);
+        const currentTabs =
+          useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs ?? tabs;
+        const dt = currentTabs.find(
+          (t) => t.type === "diff" && t.toolId === toolId,
+        );
         if (!dt) return;
 
+        if (/^(chapters|outlines)\/(?:\d+\/)?new\.md$/.test(dt.path)) {
+          closeTab(dt.id);
+          return;
+        }
         const { filePath, viewMode } = await filePathFromDiff(dt.path);
         closeTab(dt.id);
         doOpenFile(filePath, undefined, undefined, viewMode);
       },
-      [tabs, closeTab, doOpenFile, filePathFromDiff],
+      [novelId, tabs, closeTab, doOpenFile, filePathFromDiff],
     );
 
     // ── 暴露给父组件的方法 ──────────────────────────────────
