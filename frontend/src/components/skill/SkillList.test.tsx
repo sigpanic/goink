@@ -9,16 +9,22 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import SkillList from "./SkillList";
 import { toastError } from "@/utils/toast";
+import { contentKeys } from "@/lib/queryKeys";
+import { getEditorSaveQueue } from "@/components/content/editorSaveQueue";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 
 // 5.4 commit 1: useSkills 引入 useQuery，render 需包 QueryClientProvider。
 // 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
 function render(ui: ReactElement) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return originalRender(ui, {
-    wrapper: ({ children }) => (
-      <QueryClientProvider client={qc}>{children}</QueryClientProvider>
-    ),
-  });
+  return {
+    ...originalRender(ui, {
+      wrapper: ({ children }) => (
+        <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+      ),
+    }),
+    qc,
+  };
 }
 
 // Mock toastError
@@ -67,6 +73,7 @@ describe("SkillList", () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useEditorTabsStore.setState({ byNovel: {}, positions: {} });
     // 默认返回空数组（避免 undefined 报错）
     mockUseSkills.mockReturnValue({
       data: [],
@@ -147,7 +154,103 @@ describe("SkillList", () => {
     });
   });
 
+  it("closes only the deleted novel skill tab and removes its content cache", async () => {
+    const path = "skills/Writer.md";
+    const currentId = useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
+    const otherId = useEditorTabsStore.getState().openTab(2, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
+    mockUseSkills.mockReturnValue({
+      data: [{ name: "Writer", source: "novel", description: "" }],
+      isLoading: false,
+      isError: false,
+    });
+    const { qc } = render(<SkillList {...defaultProps} />);
+    qc.setQueryData(contentKeys.detail(1, path), "current");
+    qc.setQueryData(contentKeys.detail(2, path), "other");
+
+    fireEvent.click(screen.getByTitle("skill.deleteSkill"));
+    fireEvent.click(await screen.findByText("common.delete"));
+
+    await vi.waitFor(() => {
+      expect(
+        useEditorTabsStore
+          .getState()
+          .byNovel["1"]?.tabs.some((tab) => tab.id === currentId),
+      ).toBe(false);
+    });
+    expect(
+      useEditorTabsStore
+        .getState()
+        .byNovel["2"]?.tabs.some((tab) => tab.id === otherId),
+    ).toBe(true);
+    expect(qc.getQueryData(contentKeys.detail(1, path))).toBeUndefined();
+    expect(qc.getQueryData(contentKeys.detail(2, path))).toBe("other");
+  });
+
+  it("closes a deleted user skill tab in every novel", async () => {
+    const path = "~/.goink/skills/Writer.md";
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
+    useEditorTabsStore.getState().openTab(2, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: "skills/Writer.md",
+      title: "Novel Writer",
+    });
+    mockUseSkills.mockReturnValue({
+      data: [{ name: "Writer", source: "user", description: "" }],
+      isLoading: false,
+      isError: false,
+    });
+    const { qc } = render(<SkillList {...defaultProps} />);
+    qc.setQueryData(contentKeys.detail(1, path), "current");
+    qc.setQueryData(contentKeys.detail(2, path), "other");
+
+    fireEvent.click(screen.getByTitle("skill.deleteSkill"));
+    fireEvent.click(await screen.findByText("common.delete"));
+
+    await vi.waitFor(() => {
+      expect(
+        useEditorTabsStore
+          .getState()
+          .byNovel["1"]?.tabs.some((tab) => tab.path === path),
+      ).toBe(false);
+    });
+    expect(
+      useEditorTabsStore
+        .getState()
+        .byNovel["2"]?.tabs.some((tab) => tab.path === path),
+    ).toBe(false);
+    expect(
+      useEditorTabsStore
+        .getState()
+        .byNovel["1"]?.tabs.some((tab) => tab.path === "skills/Writer.md"),
+    ).toBe(true);
+    expect(qc.getQueryData(contentKeys.detail(1, path))).toBeUndefined();
+    expect(qc.getQueryData(contentKeys.detail(2, path))).toBeUndefined();
+  });
+
   it("shows toastError when delete fails", async () => {
+    const path = "skills/Writer.md";
+    const tabId = useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
     mockUseSkills.mockReturnValue({
       data: [{ name: "Writer", source: "novel", description: "" }],
       isLoading: false,
@@ -158,7 +261,8 @@ describe("SkillList", () => {
       isPending: false,
     });
 
-    render(<SkillList {...defaultProps} />);
+    const { qc } = render(<SkillList {...defaultProps} />);
+    qc.setQueryData(contentKeys.detail(1, path), "cached");
     expect(await screen.findByText("Writer")).toBeInTheDocument();
 
     const deleteBtn = screen.getByTitle("skill.deleteSkill");
@@ -172,6 +276,83 @@ describe("SkillList", () => {
         "skill.deleteFailed: permission denied",
       );
     });
+    expect(
+      useEditorTabsStore
+        .getState()
+        .byNovel["1"]?.tabs.some((tab) => tab.id === tabId),
+    ).toBe(true);
+    expect(qc.getQueryData(contentKeys.detail(1, path))).toBe("cached");
+  });
+
+  it("keeps the skill and tab when edits are unsaved", async () => {
+    const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseDeleteSkill.mockReturnValue({
+      mutateAsync: mockMutateAsync,
+      isPending: false,
+    });
+    mockUseSkills.mockReturnValue({
+      data: [{ name: "Writer", source: "novel", description: "" }],
+      isLoading: false,
+      isError: false,
+    });
+    useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path: "skills/Writer.md",
+      title: "Writer",
+      isDirty: true,
+    });
+    render(<SkillList {...defaultProps} />);
+
+    fireEvent.click(screen.getByTitle("skill.deleteSkill"));
+    fireEvent.click(await screen.findByText("common.delete"));
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith("content.saveSkillBeforeClose");
+    expect(useEditorTabsStore.getState().byNovel["1"]?.tabs).toHaveLength(1);
+  });
+
+  it("keeps the skill and tab while a save is pending", async () => {
+    const mockMutateAsync = vi.fn().mockResolvedValue(undefined);
+    mockUseDeleteSkill.mockReturnValue({
+      mutateAsync: mockMutateAsync,
+      isPending: false,
+    });
+    mockUseSkills.mockReturnValue({
+      data: [{ name: "Writer", source: "novel", description: "" }],
+      isLoading: false,
+      isError: false,
+    });
+    const path = "skills/Writer.md";
+    const tabId = useEditorTabsStore.getState().openTab(1, {
+      type: "file",
+      path,
+      title: "Writer",
+    });
+    const { qc } = render(<SkillList {...defaultProps} />);
+    const queue = getEditorSaveQueue(qc);
+    queue.schedule(
+      {
+        novelId: 1,
+        tabId,
+        path,
+        content: "new draft",
+        dirtyKey: "isDirty",
+        expectedContent: "old draft",
+      },
+      vi.fn().mockResolvedValue(undefined),
+      vi.fn(),
+      vi.fn(),
+      vi.fn(),
+    );
+    queue.pause(1, path);
+
+    fireEvent.click(screen.getByTitle("skill.deleteSkill"));
+    fireEvent.click(await screen.findByText("common.delete"));
+
+    expect(mockMutateAsync).not.toHaveBeenCalled();
+    expect(toastError).toHaveBeenCalledWith("skill.saving");
+    expect(useEditorTabsStore.getState().byNovel["1"]?.tabs).toHaveLength(1);
+    queue.discard(1, path);
   });
 
   it("filters skills by search", async () => {

@@ -5,7 +5,9 @@ import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
 import type { skill } from "@/lib/wailsjs/go/models";
-import { skillKeys } from "@/lib/queryKeys";
+import { contentKeys, skillKeys } from "@/lib/queryKeys";
+import { getEditorSaveQueue } from "@/components/content/editorSaveQueue";
+import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
 import { useSkills } from "./useSkills";
@@ -82,11 +84,46 @@ export default function SkillList({
 
   const confirmDelete = async () => {
     if (!deleteTarget) return;
+    const path = skillPath(deleteTarget.name, deleteTarget.source);
+    const affectedNovels = Object.entries(
+      useEditorTabsStore.getState().byNovel,
+    ).filter(
+      ([id]) => deleteTarget.source === "user" || Number(id) === novelId,
+    );
+    const saveQueue = getEditorSaveQueue(qc);
+    if (affectedNovels.some(([id]) => saveQueue.isPending(Number(id), path))) {
+      toastError(t("skill.saving"));
+      return;
+    }
+    if (
+      affectedNovels.some(([, entry]) =>
+        entry.tabs.some(
+          (tab) => tab.type === "file" && tab.path === path && tab.isDirty,
+        ),
+      )
+    ) {
+      toastError(t("content.saveSkillBeforeClose"));
+      return;
+    }
     try {
       await deleteMutation.mutateAsync({
         novel_id: novelId,
         name: deleteTarget.name,
         source: deleteTarget.source,
+      });
+      const tabStore = useEditorTabsStore.getState();
+      for (const [id, entry] of affectedNovels) {
+        for (const tab of entry.tabs) {
+          if (tab.type === "file" && tab.path === path) {
+            tabStore.closeTab(Number(id), tab.id);
+          }
+        }
+      }
+      qc.removeQueries({
+        predicate: ({ queryKey }) =>
+          queryKey[0] === contentKeys.all[0] &&
+          queryKey[2] === path &&
+          (deleteTarget.source === "user" || queryKey[1] === novelId),
       });
       setDeleteTarget(null);
     } catch (err) {
