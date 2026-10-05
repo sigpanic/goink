@@ -73,7 +73,9 @@ export default function SidebarChapterGroup({
 
   return (
     <section aria-label={name} className="border-b border-border/50">
-      <div className="group flex items-center hover:bg-muted/30">
+      <div
+        className={`group flex items-center bg-background transition-colors hover:bg-muted/50 ${expanded ? "border-b border-border/40" : ""}`}
+      >
         <button
           type="button"
           onClick={onToggle}
