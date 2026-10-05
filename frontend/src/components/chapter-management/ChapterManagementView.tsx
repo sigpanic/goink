@@ -278,18 +278,18 @@ export default function ChapterManagementView({ novelId }: Props) {
           {t("chapterManagement.title")}
         </h1>
       </header>
-      <div className="min-h-0 flex-1 overflow-y-auto p-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
           {!novelId ? (
-            <p className="text-sm text-muted-foreground">
+            <p className="pt-6 text-sm text-muted-foreground">
               {t("chapterManagement.selectNovel")}
             </p>
           ) : isLoading ? (
-            <p role="status" className="text-sm text-muted-foreground">
+            <p role="status" className="pt-6 text-sm text-muted-foreground">
               {t("chapterManagement.loading")}
             </p>
           ) : isError ? (
-            <div role="alert" className="flex items-center gap-3">
+            <div role="alert" className="flex items-center gap-3 pt-6">
               <p className="text-sm text-destructive">
                 {t("chapterManagement.loadFailed")}
               </p>

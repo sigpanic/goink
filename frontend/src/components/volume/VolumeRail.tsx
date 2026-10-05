@@ -279,7 +279,7 @@ export default function VolumeRail({
   return (
     <section
       aria-label={t("chapterManagement.volumes")}
-      className="sticky top-0 z-10 rounded-lg bg-background py-2"
+      className="sticky top-0 z-10 bg-background py-2"
     >
       <div className="mb-3 flex items-center justify-between gap-3">
         <h2 className="text-sm font-medium text-muted-foreground">
