@@ -24,6 +24,12 @@ func newCompressTestAgent(t *testing.T, sessionID string) *Agent {
 	if err != nil {
 		t.Fatalf("open database: %v", err)
 	}
+	// 显式关闭连接：Windows 无法删除仍被占用的 db 文件，不关会让 t.TempDir() 清理失败。
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("db.DB(): %v", err)
+	}
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	if err := db.AutoMigrate(&session.Session{}, &session.Message{}); err != nil {
 		t.Fatalf("migrate database: %v", err)
 	}
