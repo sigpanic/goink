@@ -62,6 +62,7 @@ interface Props {
     reason: string;
     toolId: string;
   }) => void;
+  onFileEditFinished?: (toolId: string, path?: string) => void;
   chatPanelWidth: number;
   onChatPanelResize: (w: number) => void;
 }
@@ -83,6 +84,7 @@ export default function ChatPanel({
   onApprove,
   onReject,
   onApprovalFileEdit,
+  onFileEditFinished,
   chatPanelWidth,
   onChatPanelResize,
 }: Props) {
@@ -137,6 +139,10 @@ export default function ChatPanel({
   useEffect(() => {
     onApprovalFileEditRef.current = onApprovalFileEdit;
   }, [onApprovalFileEdit]);
+  const onFileEditFinishedRef = useRef(onFileEditFinished);
+  useEffect(() => {
+    onFileEditFinishedRef.current = onFileEditFinished;
+  }, [onFileEditFinished]);
   const restoredRef = useRef(false);
 
   // 选中态恢复：依赖 useModels + useSettings 两个 query data 都 ready。
@@ -374,6 +380,60 @@ export default function ChatPanel({
 
   const applyAgentEvent = useCallback(
     (turnId: number, event: AgentEvent) => {
+      // 文件编辑审批 → 通知 ContentPanel 打开 diff 标签页
+      if (
+        event.type === AgentEventType.ToolCall &&
+        !event.sub_task_id &&
+        event.phase === "awaiting_approval" &&
+        event.metadata?.approval_type === "file_edit" &&
+        event.metadata.payload
+      ) {
+        const p = event.metadata.payload as Record<string, unknown>;
+        const path = (p.path as string) || "";
+        let title = `diff: ${path}`;
+        const item = qc
+          .getQueryData<chapter.Chapter[]>(chapterKeys.list(novelId))
+          ?.find(
+            (entry) =>
+              entry.file_path === path || entry.outline_file_path === path,
+          );
+        if (item?.file_path === path) {
+          title = `diff: ${t("chat.diffChapter", { n: item.reading_number })}`;
+        } else if (item?.outline_file_path === path) {
+          title = `diff: ${t("chat.diffChapterOutline", { n: item.reading_number })}`;
+        } else if (/^chapters\/(?:\d+\/)?new\.md$/.test(path)) {
+          title = `diff: ${t("chat.diffNewChapter")}`;
+        } else if (/^outlines\/(?:\d+\/)?new\.md$/.test(path)) {
+          title = `diff: ${t("chat.diffNewOutline")}`;
+        } else if (path === "goink.md") {
+          title = `diff: ${t("chat.diffStoryStatus")}`;
+        }
+        onApprovalFileEditRef.current?.({
+          path,
+          title,
+          diff: "",
+          original: (p.original as string) || "",
+          modified: (p.modified as string) || "",
+          changeType: (p.change_type as string) || "",
+          reason: (p.reason as string) || "",
+          toolId: (event.tool_id as string) || "",
+        });
+      }
+      if (
+        event.type === AgentEventType.ToolCall &&
+        !event.sub_task_id &&
+        event.tool_name === "edit" &&
+        event.tool_id &&
+        (event.phase === "completed" || event.phase === "failed")
+      ) {
+        const path = event.metadata?.path;
+        onFileEditFinishedRef.current?.(
+          event.tool_id,
+          event.phase === "completed" && typeof path === "string"
+            ? path
+            : undefined,
+        );
+      }
       // P2: 流恢复事件清空 retrying 状态（agent 重试 LLM 调用成功）
       if (
         event.type === AgentEventType.Thinking ||
@@ -877,41 +937,6 @@ export default function ChatPanel({
                   result:
                     toolStatus === "completed" ? event.metadata : undefined,
                   firstSeq: event.seq ?? 0,
-                });
-              }
-
-              // 文件编辑审批 → 通知 ContentPanel 打开 diff 标签页
-              if (
-                toolStatus === "awaiting_approval" &&
-                approvalType === "file_edit" &&
-                approvalPayload
-              ) {
-                const p = approvalPayload;
-                const path = (p.path as string) || "";
-                let title = `diff: ${path}`;
-                const item = qc
-                  .getQueryData<chapter.Chapter[]>(chapterKeys.list(novelId))
-                  ?.find(
-                    (entry) =>
-                      entry.file_path === path ||
-                      entry.outline_file_path === path,
-                  );
-                if (item?.file_path === path) {
-                  title = `diff: ${t("chat.diffChapter", { n: item.reading_number })}`;
-                } else if (item?.outline_file_path === path) {
-                  title = `diff: ${t("chat.diffChapterOutline", { n: item.reading_number })}`;
-                } else if (path === "goink.md") {
-                  title = `diff: ${t("chat.diffStoryStatus")}`;
-                }
-                onApprovalFileEditRef.current?.({
-                  path,
-                  title,
-                  diff: "",
-                  original: (p.original as string) || "",
-                  modified: (p.modified as string) || "",
-                  changeType: (p.change_type as string) || "",
-                  reason: (p.reason as string) || "",
-                  toolId: (event.tool_id as string) || "",
                 });
               }
 

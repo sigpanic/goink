@@ -214,7 +214,14 @@ export default function WorkspaceView({
       toastError(toErrorMessage(err, t("approval.approveFailed")));
       return;
     }
-    await contentRef.current?.handleDiffApprove(toolId);
+  }
+
+  function handleFileEditFinished(toolId: string, path?: string) {
+    if (path) {
+      void contentRef.current?.handleDiffApprove(toolId, path);
+    } else {
+      void contentRef.current?.handleDiffReject(toolId);
+    }
   }
 
   async function handleReject(toolId: string, feedback: string) {
@@ -508,6 +515,7 @@ export default function WorkspaceView({
               onApprove={handleApprove}
               onReject={handleReject}
               onApprovalFileEdit={handleApprovalFileEdit}
+              onFileEditFinished={handleFileEditFinished}
               chatPanelWidth={chatPanelWidth}
               onChatPanelResize={setChatPanelWidth}
             />

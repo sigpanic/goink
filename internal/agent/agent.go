@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"maps"
 	"strconv"
 	"strings"
 	"sync/atomic"
@@ -334,8 +335,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if metadata == nil {
 							metadata = make(map[string]any)
 						}
-						for k, v := range result.Data {
-							metadata[k] = v
+						maps.Copy(metadata, result.Data)
+					}
+					if name == "edit" && result.Success && result.Data != nil {
+						if path, ok := result.Data["path"].(string); ok {
+							if metadata == nil {
+								metadata = make(map[string]any)
+							}
+							metadata["path"] = path
 						}
 					}
 					emit(AgentEvent{

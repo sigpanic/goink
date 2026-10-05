@@ -337,6 +337,7 @@ vi.mock("@/components/chat/ChatPanel", () => ({
   default: (props: {
     onApprove?: (toolId: string, feedback: string) => void;
     onReject?: (toolId: string, feedback: string) => void;
+    onFileEditFinished?: (toolId: string, path?: string) => void;
   }) => (
     <div data-testid="chat-panel">
       <button onClick={() => props.onApprove?.("tool-1", "looks good")}>
@@ -344,6 +345,13 @@ vi.mock("@/components/chat/ChatPanel", () => ({
       </button>
       <button onClick={() => props.onReject?.("tool-2", "needs rework")}>
         reject-btn
+      </button>
+      <button
+        onClick={() =>
+          props.onFileEditFinished?.("tool-1", "outlines/id_42.md")
+        }
+      >
+        edit-completed-btn
       </button>
     </div>
   ),
@@ -640,7 +648,7 @@ describe("WorkspaceView approval bridge", () => {
     mockApproveTool.mockResolvedValue(undefined);
   });
 
-  it("approve 调 ApproveTool(true) + handleDiffApprove", async () => {
+  it("approve waits for edit completion before opening the physical file", async () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
     fireEvent.click(screen.getByText("approve-btn"));
@@ -651,7 +659,12 @@ describe("WorkspaceView approval bridge", () => {
         "looks good",
       );
     });
-    expect(contentRefSpies.handleDiffApprove).toHaveBeenCalledWith("tool-1");
+    expect(contentRefSpies.handleDiffApprove).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByText("edit-completed-btn"));
+    expect(contentRefSpies.handleDiffApprove).toHaveBeenCalledWith(
+      "tool-1",
+      "outlines/id_42.md",
+    );
   });
 
   it("reject 调 ApproveTool(false) + handleDiffReject", async () => {

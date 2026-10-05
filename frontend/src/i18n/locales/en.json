@@ -267,7 +267,9 @@
     "viewAll": "View all ({{count}})",
     "diffChapter": "Ch.{{n}}",
     "diffStoryStatus": "Story Status",
-    "diffChapterOutline": "Ch.{{n}} Outline"
+    "diffChapterOutline": "Ch.{{n}} Outline",
+    "diffNewChapter": "New chapter",
+    "diffNewOutline": "New outline"
   },
   "approval": {
     "approveFailed": "Approval failed",

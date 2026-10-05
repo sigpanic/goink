@@ -111,7 +111,8 @@ func (a *App) SaveContent(input SaveContentInput) error {
 }
 
 func (a *App) validateChapterContentPath(novelID int64, filePath string) error {
-	clean := strings.ToLower(path.Clean(strings.ReplaceAll(filePath, "\\", "/")))
+	// 剥离前导 /：ResolvePath 的 filepath.Join 会吞掉它，若不剥离则 /chapters/... 会绕过校验
+	clean := strings.TrimPrefix(strings.ToLower(path.Clean(strings.ReplaceAll(filePath, "\\", "/"))), "/")
 	if !strings.HasPrefix(clean, "chapters/") && !strings.HasPrefix(clean, "outlines/") {
 		return nil
 	}
@@ -132,7 +133,8 @@ func (a *App) validateChapterContentPath(novelID int64, filePath string) error {
 
 func (a *App) validateVolumeContentPath(novelID int64, filePath string) error {
 	normalized := strings.ToLower(strings.ReplaceAll(filePath, "\\", "/"))
-	clean := path.Clean(normalized)
+	// 同 validateChapterContentPath：剥离前导 /，避免 /volumes/... 绕过校验
+	clean := strings.TrimPrefix(path.Clean(normalized), "/")
 	if normalized != "volumes" && !strings.HasPrefix(normalized, "volumes/") &&
 		clean != "volumes" && !strings.HasPrefix(clean, "volumes/") {
 		return nil
