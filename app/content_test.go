@@ -54,6 +54,7 @@ func TestVolumeOutlineContentPath(t *testing.T) {
 		"./" + path,
 		strings.Replace(path, "/", "\\", 1),
 		"volumes/../goink.md",
+		fmt.Sprintf("/volumes/id_%d.md", v.ID),
 	}
 	for _, invalidPath := range invalidPaths {
 		t.Run(invalidPath, func(t *testing.T) {
@@ -114,6 +115,7 @@ func TestContentRejectsNonCanonicalChapterPaths(t *testing.T) {
 		fmt.Sprintf("chapters/1/id_%d.md", ch.ID),
 		fmt.Sprintf("outlines/1/id_%d.md", ch.ID),
 		fmt.Sprintf("chapters/id_0%d.md", ch.ID),
+		"/chapters/001.md",
 	}
 	for _, filePath := range paths {
 		t.Run(filePath, func(t *testing.T) {
@@ -131,6 +133,32 @@ func TestContentRejectsNonCanonicalChapterPaths(t *testing.T) {
 			require.ErrorIs(t, err, os.ErrNotExist)
 		})
 	}
+}
+
+// 前导 / 会让 ResolvePath 落到本小说真实章节文件上；修复前 SaveContent 会绕过校验并覆盖它。
+func TestContentRejectsLeadingSlashChapterPath(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	ch := createTestChapter(t, app, novel.ID)
+	require.NoError(t, app.SaveContent(SaveContentInput{
+		NovelID: novel.ID,
+		Path:    ch.FilePath,
+		Content: "original content",
+	}))
+
+	leadingSlash := "/" + ch.FilePath
+	_, err := app.GetContent(novel.ID, leadingSlash)
+	require.Error(t, err)
+	err = app.SaveContent(SaveContentInput{
+		NovelID: novel.ID,
+		Path:    leadingSlash,
+		Content: "should not be written",
+	})
+	require.Error(t, err)
+
+	content, err := app.GetContent(novel.ID, ch.FilePath)
+	require.NoError(t, err)
+	assert.Equal(t, "original content", content)
 }
 
 func TestContentRejectsChapterFromAnotherNovel(t *testing.T) {
