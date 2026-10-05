@@ -178,6 +178,45 @@ describe("ChapterManagementView", () => {
     ).toBeInTheDocument();
   });
 
+  it("章节操作菜单点击空白处或按 Escape 关闭，点击菜单内部保持打开", async () => {
+    mockGetChapters.mockResolvedValue([
+      {
+        id: 1,
+        volume_id: null,
+        reading_number: 1,
+        title: "开篇",
+        word_count: 10,
+      },
+    ]);
+    renderView();
+    await screen.findByText("开篇");
+
+    const trigger = screen.getByRole("button", {
+      name: "chapterManagement.chapterActions 开篇",
+    });
+    const menuItem = () =>
+      screen.queryByRole("button", {
+        name: "chapterManagement.insertBeforeChapter",
+      });
+
+    fireEvent.click(trigger);
+    expect(menuItem()).toBeInTheDocument();
+    fireEvent.pointerDown(menuItem()!);
+    expect(menuItem()).toBeInTheDocument();
+
+    fireEvent.pointerDown(screen.getByRole("heading", { level: 1 }));
+    expect(menuItem()).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    expect(menuItem()).toBeInTheDocument();
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(menuItem()).not.toBeInTheDocument();
+
+    fireEvent.click(trigger);
+    fireEvent.click(trigger);
+    expect(menuItem()).not.toBeInTheDocument();
+  });
+
   it("长卷默认收起，展开后按百章分段，卷轨道可定位展开", async () => {
     mockGetVolumes.mockResolvedValue([
       { id: 1, name: "长卷", sort_order: 1 },

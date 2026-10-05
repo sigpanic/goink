@@ -116,6 +116,7 @@ export default function ChapterGroup({
             onToggleMenu={() =>
               onMenuChange(menuId === item.id ? null : item.id)
             }
+            onCloseMenu={() => onMenuChange(null)}
             onInsertBefore={() => {
               onMenuChange(null);
               onCreate(item.id);

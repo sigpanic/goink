@@ -1,4 +1,4 @@
-import { type DragEvent } from "react";
+import { useEffect, useRef, type DragEvent } from "react";
 import { useTranslation } from "react-i18next";
 import { Check, GripVertical, MoreHorizontal } from "lucide-react";
 import type { chapter } from "@/lib/wailsjs/go/models";
@@ -14,6 +14,7 @@ interface Props {
   dropEdge: ChapterDropEdge | null;
   highlighted: boolean;
   onToggleMenu: () => void;
+  onCloseMenu: () => void;
   onInsertBefore: () => void;
   onInsertAfter: () => void;
   onMove: () => void;
@@ -33,6 +34,7 @@ export default function ChapterRow({
   dropEdge,
   highlighted,
   onToggleMenu,
+  onCloseMenu,
   onInsertBefore,
   onInsertAfter,
   onMove,
@@ -44,6 +46,26 @@ export default function ChapterRow({
   onDrop,
 }: Props) {
   const { t } = useTranslation();
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      if (!menuRef.current?.contains(event.target as Node)) onCloseMenu();
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onCloseMenu();
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [menuOpen, onCloseMenu]);
 
   function handleDragStart(event: DragEvent<HTMLButtonElement>) {
     event.dataTransfer.effectAllowed = "move";
@@ -115,7 +137,7 @@ export default function ChapterRow({
       <span className="shrink-0 text-xs tabular-nums text-muted-foreground">
         {t("sidebar.wordCount", { count: item.word_count })}
       </span>
-      <div className="relative shrink-0">
+      <div ref={menuRef} className="relative shrink-0">
         <button
           type="button"
           aria-label={t("chapterManagement.chapterActions", {
