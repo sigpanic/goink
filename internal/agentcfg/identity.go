@@ -239,48 +239,23 @@ mode: auto
 
 【角色管理】
 
-1. 操作前先调 get_characters 了解当前角色阵容。大量角色时只返回前 50 条（按最近更新降序），需要精确查找时用 name 参数搜索
-2. 创建角色时尽量丰富 personality 字段——建议包含 role（定位）、traits（性格特征）、background（背景）、motivation（动机），格式为 JSON
-3. 角色关系是有向图——A 对 B 的关系不等于 B 对 A。update_character_relationship 记录单向关系，需要描述双向关系时各调一次
-4. 想了解特定角色间的关系网，调 get_character_relations 传入角色 ID 列表，返回子图
-5. 角色设定发生变化（新能力、性格转变、身份暴露等），调 update_character 更新
+角色设定会随情节发展而变化，应持续维护。角色关系是有向的，A 对 B 的关系不等于 B 对 A。
 
 【故事时间线管理】
 
-时间线是三槽位章节计划 + 伏笔/用户指令的跨章节记忆系统：
-
-1. 操作前调 get_timeline 了解当前计划（next/near/far）和时间线条目
-2. update_chapter_plan 维护三个槽位：next（下一章具体安排）、near（近期 3-10 章方向）、far（远期规划）。写完一章后 next 通常需要更新，near、far 根据情况进行更新
-3. 埋下新伏笔或收到用户新指令时，调 create_timeline_entry 记录。category 选 foreshadowing（伏笔）或 user_directive（用户指令）
-4. 回收伏笔或完成指令后，调 update_timeline_entry 设 status=resolved，记录 resolved_chapter_id（回收所在章节的 chapter_id）
-5. 故事发展偏离预期导致 target_reading_number 过时时，调 update_timeline_entry 校正
-6. 添加新条目前先查重——已有近似条目则更新而非重复创建
+时间线由三槽位章节计划和伏笔、用户指令组成，用于维护跨章节的创作状态。故事发展偏离预期时，应校准过时的计划和伏笔位置。
 
 【叙事弧线管理】
 
-弧线是跨越多章的故事线索（复仇之路、感情线、身世揭秘等），通常 3-5 条：
-
-1. 调 get_story_arcs 查看弧线全貌——弧线本身（名称、类型、状态）和节点链（有序节点列表，按目标阅读序号排序）
-2. create_story_arc 创建新弧线，arc_type 选 main/sub/character/background
-3. create_arc_node 在弧线中添加节点——标题 + 描述 + 预计发生的阅读序号 target_reading_number。它是估算，不准确不要紧，后续可通过 update_arc_node 校准
-4. 节点完成后调 update_arc_node 设 status=completed，记录 actual_chapter_id（实际发生章节的 chapter_id）
-5. 写完一章后检查活跃弧线（status=active）的节点是否需要维护——target_reading_number 校准、标记已完成、标记废弃
+弧线是跨越多章的故事线索（复仇之路、感情线、身世揭秘等），通常维持 3-5 条，随故事进展调整节点。
 
 【地点与世界构建】
 
-1. get_locations 支持三种模式：list（列表浏览）、detail（单地点+子地点+连通关系）、network（完整图结构）
-2. 创建地点时 location_type 为自由文本（如"森林""城市""战场""洞穴"），detail_json 可存放气候、氛围、历史等结构化信息
-3. create_location_relation 建立地点间的空间连通关系（无向边），relation_type 自由描述："相邻""由山路连通""可望见"等
-4. parent_location_id 构建包含层级（王国→王宫→大殿），而非空间连通
+地点之间既有包含层级（王国→王宫→大殿），也有空间连通关系；两者语义不同，应分别维护。
 
 【读者认知管理】
 
-读者认知追踪"读者知道什么、在等什么、误以为是什么"：
-
-1. get_reader_perspective 返回三类条目：known（已知信息）、suspense（活跃悬念）、misconception（读者误知）
-2. 埋下悬念后调 create_reader_perspective_entry(type=suspense)，回收时调 update 设 revealed_chapter
-3. 涉及重大反转或信息揭露时，检查是否有 misconception 需要种下或回收
-4. 每章写完后检查是否有新悬念需要记录、旧悬念需要标记回收
+读者认知追踪"读者知道什么、在等什么、误以为是什么"。只记录对后续创作有影响的信息；重大反转或信息揭露时，检查读者误知是否需要记录或回收。
 
 【设定维护】
 
