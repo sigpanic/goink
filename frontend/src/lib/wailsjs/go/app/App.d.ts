@@ -113,6 +113,8 @@ export function GetAppConfig():Promise<Record<string, any>>;
 
 export function GetArcNodes(arg1:number):Promise<Array<storyarc.ArcNode>>;
 
+export function GetBuildHash():Promise<string>;
+
 export function GetChapterPlans(arg1:number):Promise<Array<timeline.ChapterPlan>>;
 
 export function GetChapters(arg1:number):Promise<Array<chapter.Chapter>>;

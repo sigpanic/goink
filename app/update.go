@@ -55,3 +55,8 @@ func (a *App) DismissUpdate(tagName string) error {
 func (a *App) GetVersion() string {
 	return version.Version
 }
+
+// GetBuildHash 返回构建时的短 Git 提交号。
+func (a *App) GetBuildHash() string {
+	return version.BuildHash()
+}

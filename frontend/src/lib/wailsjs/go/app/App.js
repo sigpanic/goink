@@ -178,6 +178,10 @@ export function GetArcNodes(arg1) {
   return window['go']['app']['App']['GetArcNodes'](arg1);
 }
 
+export function GetBuildHash() {
+  return window['go']['app']['App']['GetBuildHash']();
+}
+
 export function GetChapterPlans(arg1) {
   return window['go']['app']['App']['GetChapterPlans'](arg1);
 }
