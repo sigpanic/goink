@@ -95,6 +95,16 @@ Two-tier management: global preferences and per-novel preferences. By chapter th
   <img src="assets/preferences-demo.png" alt="Writing Preferences" />
 </p>
 
+## Volumes & Chapters: Drag to Reorder
+
+Long novels need volumes. Goink treats a volume as a first-class structure — create, rename, delete, and reorder volumes by dragging. Chapters can be dragged across volumes or reordered within one; drop to apply, and chapter numbers are automatically re-numbered in the new reading order — no manual renumbering. Unassigned chapters sit in an "Unassigned" bucket, ready to be dragged into any volume.
+
+Each volume collapses and expands, showing its chapter count and word count in real time; a volume can also carry its own "volume outline", managed separately from the book-wide outline.
+
+<p align="center">
+  <img src="assets/volume-demo.png" alt="Volume & Chapter Management" />
+</p>
+
 ## Skill System: 3 Layers × 3 Modes
 
 > [!TIP]
