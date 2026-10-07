@@ -5,6 +5,7 @@ import type { chapter } from "@/lib/wailsjs/go/models";
 import type { ContentPanelHandle } from "@/components/content/ContentPanel";
 import { useEditorStore } from "@/stores/useEditorStore";
 import type { PanelId } from "@/types/panel";
+import { describeFile } from "@/components/content/fileDescription";
 
 interface Options {
   contentRef: RefObject<ContentPanelHandle | null>;
@@ -20,7 +21,7 @@ export function useContentNavigation({
   const { t } = useTranslation();
 
   function handleSelectChapter(ch: chapter.Chapter) {
-    const chTitle = `${t("sidebar.chapterN", { n: ch.reading_number })} ${ch.title}`;
+    const chTitle = describeFile(ch.file_path, t, [ch]).title;
     // 3.8 后续：tabTarget 迁 useEditorStore，写方调 getState().setTabTarget。
     useEditorStore
       .getState()
@@ -31,13 +32,18 @@ export function useContentNavigation({
   function handleSelectGoink() {
     useEditorStore.getState().setTabTarget({
       path: "goink.md",
-      title: t("workspace.storyStatus"),
+      title: describeFile("goink.md", t).title,
     });
-    contentRef.current?.openFile("goink.md", t("workspace.storyStatus"));
+    contentRef.current?.openFile("goink.md", describeFile("goink.md", t).title);
   }
 
   function handleSelectVolumeOutline(path: string, volumeName: string) {
-    const title = t("sidebar.volumeOutlineTitle", { name: volumeName });
+    const title = describeFile(
+      path,
+      t,
+      [],
+      [{ name: volumeName, outline_file_path: path }],
+    ).title;
     useEditorStore.getState().setTabTarget({ path, title });
     contentRef.current?.openFile(path, title);
   }

@@ -34,7 +34,11 @@ import GitCommitView from "@/components/git/GitCommitView";
 import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import { GetPlatform, ApproveTool, SetActiveNovel } from "@/lib/wailsjs/go/app/App";
+import {
+  GetPlatform,
+  ApproveTool,
+  SetActiveNovel,
+} from "@/lib/wailsjs/go/app/App";
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
 import { WindowToggleMaximise } from "@/lib/wailsjs/runtime/runtime";
 import Logo from "@/components/Logo";
@@ -58,6 +62,7 @@ import { toErrorMessage } from "@/utils/error";
 import { useUpdateCheck } from "@/components/update/useUpdateCheck";
 import { useContentNavigation } from "./workspace/useContentNavigation";
 import { useAIFileCacheInvalidation } from "./workspace/useAIFileCacheInvalidation";
+import { useEditorTabTitles } from "@/components/content/useEditorTabTitles";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -94,6 +99,7 @@ export default function WorkspaceView({
   // 对话框开关 + setter 由 NovelDialogs 订阅（3.6）；唯独 setExportNovelId 留此
   // —— SidePanel 通过 onExportNovel 触发开 dialog，setter 引用稳定不引发重渲染。
   const activeNovelId = useNovelStore((s) => s.activeNovelId);
+  useEditorTabTitles(activeNovelId);
   const setActiveNovelId = useNovelStore((s) => s.setActiveNovelId);
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
   // 3.7: switchNovel action（set activeNovelId + SetActiveNovel 后端）。

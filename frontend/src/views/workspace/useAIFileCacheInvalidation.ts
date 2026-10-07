@@ -12,6 +12,7 @@ import { reportAIFileChange } from "@/components/content/aiFileChanges";
 interface FileChangedEvent {
   novel_id?: number;
   path?: string;
+  metadata_only?: boolean;
 }
 
 export function useAIFileCacheInvalidation() {
@@ -28,6 +29,16 @@ export function useAIFileCacheInvalidation() {
         !filePath
       )
         return;
+
+      if (data.metadata_only === true) {
+        if (
+          filePath.startsWith("chapters/") ||
+          filePath.startsWith("outlines/")
+        ) {
+          void qc.invalidateQueries({ queryKey: chapterKeys.list(novelId) });
+        }
+        return;
+      }
 
       if (filePath.startsWith("~/.goink/skills/")) {
         const filter = {

@@ -16,7 +16,11 @@ import {
 import { useAIFileCacheInvalidation } from "./useAIFileCacheInvalidation";
 import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 
-type FileChangedEvent = { novel_id?: number; path?: string };
+type FileChangedEvent = {
+  novel_id?: number;
+  path?: string;
+  metadata_only?: boolean;
+};
 let onFileChanged: ((event: FileChangedEvent) => void) | undefined;
 const unsubscribe = vi.fn();
 
@@ -48,6 +52,35 @@ beforeEach(() => {
 });
 
 describe("useAIFileCacheInvalidation", () => {
+  it("只改标题时刷新元数据，保留正文缓存和未保存草稿状态", async () => {
+    const { qc } = setup();
+    const path = "outlines/id_3.md";
+    const store = useEditorTabsStore.getState();
+    store.openTab(1, {
+      type: "file",
+      path: "chapters/id_3.md",
+      outlinePath: path,
+      title: "旧标题",
+      content: "正文草稿",
+      isDirty: true,
+      outlineContent: "大纲草稿",
+      outlineIsDirty: true,
+    });
+    const before = useEditorTabsStore.getState().byNovel["1"].tabs[0];
+    qc.setQueryData(contentKeys.detail(1, path), "磁盘大纲");
+    qc.setQueryData(chapterKeys.list(1), []);
+    qc.setQueryData(chapterKeys.list(2), []);
+
+    act(() => onFileChanged?.({ novel_id: 1, path, metadata_only: true }));
+
+    expect(qc.getQueryState(chapterKeys.list(1))?.isInvalidated).toBe(true);
+    expect(qc.getQueryState(chapterKeys.list(2))?.isInvalidated).toBe(false);
+    expect(qc.getQueryState(contentKeys.detail(1, path))?.isInvalidated).toBe(
+      false,
+    );
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toBe(before);
+  });
+
   it("编辑器未挂载时仍标记已打开文件供恢复后刷新", () => {
     useEditorTabsStore.setState({
       byNovel: {

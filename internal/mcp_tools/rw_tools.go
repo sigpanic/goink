@@ -178,6 +178,17 @@ func emitFileChanged(ctx context.Context, novelID int64, path string) {
 	})
 }
 
+func emitFileMetadataChanged(ctx context.Context, novelID int64, path string) {
+	if ctx == nil || ctx.Value("events") == nil {
+		return
+	}
+	wails.EventsEmit(ctx, "file:changed", map[string]any{
+		"novel_id":      novelID,
+		"path":          path,
+		"metadata_only": true,
+	})
+}
+
 // physicalRWPath 章节正文的物理扁平路径（isOutline=false 时为章节，true 时为大纲）。
 func physicalRWPath(isOutline bool, id int64) string {
 	if isOutline {
@@ -322,6 +333,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 				return nil, fmt.Errorf("update chapter title: %w", err)
 			}
 			ch.Title = a.Title
+			emitFileMetadataChanged(ctx, tc.NovelID, physical)
 			return &ToolResult{Success: true, Data: map[string]any{
 				"path":    physical,
 				"title":   a.Title,

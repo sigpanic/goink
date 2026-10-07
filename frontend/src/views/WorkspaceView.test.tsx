@@ -72,6 +72,8 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   // 5.9: WorkspaceView 直接 import GetPlatform/ApproveTool（绕过 useApp），需在 wailsjs mock 覆盖。
   GetPlatform: mockGetPlatform,
   ApproveTool: mockApproveTool,
+  GetChapters: vi.fn().mockResolvedValue([]),
+  GetVolumes: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/stores/useThemeStore", () => ({
@@ -608,7 +610,7 @@ describe("WorkspaceView search navigation", () => {
     fireEvent.click(screen.getByText("nav-goink"));
     expect(contentRefSpies.openFile).toHaveBeenCalledWith(
       "goink.md",
-      "workspace.storyStatus",
+      "content.storyStatus",
     );
     expect(useEditorStore.getState().tabTarget?.path).toBe("goink.md");
 

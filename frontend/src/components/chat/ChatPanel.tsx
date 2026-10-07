@@ -4,13 +4,8 @@ import { MessageSquare, Loader2, History, Plus } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
-import type { chapter } from "@/lib/wailsjs/go/models";
-import {
-  chapterKeys,
-  modelKeys,
-  sessionKeys,
-  slashCommandKeys,
-} from "@/lib/queryKeys";
+import { cachedFileDescription } from "@/components/content/fileDescription";
+import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSessions } from "./useSessions";
@@ -390,24 +385,7 @@ export default function ChatPanel({
       ) {
         const p = event.metadata.payload as Record<string, unknown>;
         const path = (p.path as string) || "";
-        let title = `diff: ${path}`;
-        const item = qc
-          .getQueryData<chapter.Chapter[]>(chapterKeys.list(novelId))
-          ?.find(
-            (entry) =>
-              entry.file_path === path || entry.outline_file_path === path,
-          );
-        if (item?.file_path === path) {
-          title = `diff: ${t("chat.diffChapter", { n: item.reading_number })}`;
-        } else if (item?.outline_file_path === path) {
-          title = `diff: ${t("chat.diffChapterOutline", { n: item.reading_number })}`;
-        } else if (/^chapters\/(?:\d+\/)?new\.md$/.test(path)) {
-          title = `diff: ${t("chat.diffNewChapter")}`;
-        } else if (/^outlines\/(?:\d+\/)?new\.md$/.test(path)) {
-          title = `diff: ${t("chat.diffNewOutline")}`;
-        } else if (path === "goink.md") {
-          title = `diff: ${t("chat.diffStoryStatus")}`;
-        }
+        const title = cachedFileDescription(qc, novelId, path, t).diffTitle;
         onApprovalFileEditRef.current?.({
           path,
           title,
