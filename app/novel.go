@@ -80,7 +80,11 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 // SetActiveNovel 记录当前活跃的小说 ID，下次启动自动恢复。
 func (a *App) SetActiveNovel(input SetActiveNovelInput) error {
 	a.settings.LastNovelID = input.NovelID
-	return config.SaveSettings(a.db, a.settings)
+	if err := config.SaveSettings(a.db, a.settings); err != nil {
+		return err
+	}
+	a.activeNovelID.Store(input.NovelID)
+	return nil
 }
 
 // UpdateNovelInput 采用 PUT 语义：前端全量传，后端全量覆盖。
@@ -181,6 +185,7 @@ func (a *App) DeleteNovel(novelID int64) error {
 		if err := config.SaveSettings(a.db, a.settings); err != nil {
 			return fmt.Errorf("delete novel: clear last novel: %w", err)
 		}
+		a.activeNovelID.Store(0)
 	}
 	return nil
 }

@@ -695,6 +695,14 @@ describe("WorkspaceView switchNovel state reset", () => {
     mockCreateNovel.mockResolvedValue({ id: 5, title: "新小说" });
   });
 
+  it("恢复上次打开的小说时同步后端当前小说", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 1 });
+    });
+  });
+
   it("侧栏选小说调 SetActiveNovel（ContentPanel 保持挂载）", async () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");

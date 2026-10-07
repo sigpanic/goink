@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,6 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/mcpserver"
 )
 
 func TestGetNovels_Empty(t *testing.T) {
@@ -145,6 +147,8 @@ func TestDeleteNovel(t *testing.T) {
 
 func TestSetActiveNovel(t *testing.T) {
 	a := setupTestApp(t)
+	_, err := a.currentNovel(context.Background())
+	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
 
 	created, err := a.CreateNovel(CreateNovelInput{
 		Title: "Active Novel",
@@ -156,9 +160,18 @@ func TestSetActiveNovel(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, created.ID, a.settings.LastNovelID)
+	assert.Equal(t, created.ID, a.activeNovelID.Load())
+	current, err := a.currentNovel(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, current.ID)
+	assert.Equal(t, created.Title, current.Title)
 
 	// Re-load settings from DB to confirm persistence.
 	reloaded, err := config.LoadSettings(a.db)
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, reloaded.LastNovelID)
+
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: 0}))
+	_, err = a.currentNovel(context.Background())
+	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
 }

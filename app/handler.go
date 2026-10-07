@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
@@ -20,6 +21,7 @@ import (
 	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/mcpserver"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/preference"
@@ -68,6 +70,8 @@ type App struct {
 	agent         *agent.Agent
 	cancelMgr     *agent.CancelManager
 	registry      *mcp_tools.Registry
+	mcpServer     *mcpserver.Server
+	activeNovelID atomic.Int64
 	approvals     *approval.Service
 	vectorStore   atomic.Pointer[rag.VectorStore]
 	searchService atomic.Pointer[search.Service]
@@ -178,6 +182,13 @@ func (a *App) OnShutdown(shutdownCtx context.Context) {
 	// 1. 取消根上下文，通知所有运行中的 agent 停止
 	if a.cancel != nil {
 		a.cancel()
+	}
+	if a.mcpServer != nil {
+		stopCtx, cancel := context.WithTimeout(shutdownCtx, 5*time.Second)
+		if err := a.mcpServer.Stop(stopCtx); err != nil {
+			a.logger.Error("停止本地 MCP server 失败", "err", err)
+		}
+		cancel()
 	}
 
 	// 2. 停止 RAG 后台消费者
@@ -342,6 +353,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	// 7. 初始化 MCP 工具注册表
 	a.registry = mcp_tools.NewRegistry(a.logger)
 	mcp_tools.RegisterAllTools(a.registry)
+	a.mcpServer = mcpserver.New(a.registry, db, a.currentNovel, a.logger, []string{"get_chapter_list"})
 
 	// 8. 初始化 LLM 客户端
 	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())

@@ -34,7 +34,7 @@ import GitCommitView from "@/components/git/GitCommitView";
 import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
 import ErrorBoundary from "@/components/shared/ErrorBoundary";
-import { GetPlatform, ApproveTool } from "@/lib/wailsjs/go/app/App";
+import { GetPlatform, ApproveTool, SetActiveNovel } from "@/lib/wailsjs/go/app/App";
 import { Settings, User, HelpCircle, Moon, Sun } from "lucide-react";
 import { WindowToggleMaximise } from "@/lib/wailsjs/runtime/runtime";
 import Logo from "@/components/Logo";
@@ -83,6 +83,7 @@ export default function WorkspaceView({
     dark: t("workspace.lightMode"),
   };
   const contentRef = useRef<ContentPanelHandle>(null);
+  const initialNovelReported = useRef(false);
 
   // novels 走 useNovels query（3.1）：替换原 novels state + loadNovels + useEffect。
   // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
@@ -267,6 +268,16 @@ export default function WorkspaceView({
     // novels 旧列表不含新小说 → find 失败 → 误选 novels[0]（旧小说）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novels]);
+
+  useEffect(() => {
+    if (initialNovelReported.current || novelsLoading) return;
+    initialNovelReported.current = true;
+    if (activeNovelId > 0 && novels.some((n) => n.id === activeNovelId)) {
+      void SetActiveNovel({ novel_id: activeNovelId }).catch((err: unknown) => {
+        toastError(toErrorMessage(err));
+      });
+    }
+  }, [novelsLoading, novels, activeNovelId]);
 
   function handleActivitySelect(id: SidebarPanelId) {
     const currentPanel = sidebarPanel ?? activePanel;
