@@ -50,6 +50,11 @@ func GlobalDBPath() string {
 	return filepath.Join(platform.DataDir(), "novel-agent.db")
 }
 
+func MCPConfigPath() string {
+	dir, _ := configDir()
+	return filepath.Join(dir, "mcp_config.enc")
+}
+
 // NovelDirPath 返回指定小说的 Git 仓库根目录。
 func NovelDirPath(novelID int64) string {
 	return filepath.Join(platform.DataDir(), "novels", fmt.Sprintf("%d", novelID))

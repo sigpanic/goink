@@ -1,9 +1,11 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/sigpanic/goink/internal/testsupport"
+	"github.com/stretchr/testify/require"
 )
 
 func TestExpandTilde_WithHome(t *testing.T) {
@@ -36,4 +38,13 @@ func TestExpandTilde_OnlyTilde(t *testing.T) {
 	if result != home {
 		t.Errorf("expected %s, got %s", home, result)
 	}
+}
+
+func TestMCPConfigPaths(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	testsupport.Isolate(t)
+	require.Equal(t, filepath.Join(home, ".goink", "mcp_config.enc"), MCPConfigPath())
+	require.Equal(t, filepath.Join(home, ".goink", "llm_config.enc"), LLMConfigPath())
 }
