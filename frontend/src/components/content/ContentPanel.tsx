@@ -629,7 +629,6 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         readOnly?: boolean,
         initialViewMode?: string,
       ) => {
-        setIsLoading(true);
         void resolveFileDescription(qc, novelId, path, t)
           .then(async (description) => {
             if (novelIdRef.current !== novelId) return;
@@ -661,6 +660,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
                 .setActiveContent(existing.content ?? "");
               return;
             }
+            setIsLoading(true);
             const skReadOnly = readOnly ?? description.readOnly;
             const initialMode: EditorTab["viewMode"] =
               (initialViewMode as EditorTab["viewMode"]) ||

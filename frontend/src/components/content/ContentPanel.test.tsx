@@ -489,6 +489,102 @@ describe("ContentPanel", () => {
     expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
   });
 
+  it.each(["success", "failure"])(
+    "重新打开已有正文时，元数据加载%s期间保留编辑器实例和草稿",
+    async (outcome) => {
+      let resolveMetadata!: (value: unknown[]) => void;
+      let rejectMetadata!: (error: Error) => void;
+      mockGetChapters.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            resolveMetadata = resolve;
+            rejectMetadata = reject;
+          }),
+      );
+      const tab: EditorTab = {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_42.md",
+        title: "正文",
+        content: "未保存的本地稿件",
+        isDirty: true,
+        viewMode: "content",
+      };
+      mockTabsState = [tab];
+      mockActiveTabIdState = tab.id;
+      useEditorTabsStore.setState({
+        byNovel: { "1": { tabs: [tab], activeTabId: tab.id } },
+      });
+      const ref = { current: null as ContentPanelHandle | null };
+      render(<ContentPanel ref={ref} />);
+      const editor = screen.getByTestId("content-editor");
+
+      act(() => ref.current?.openFile(tab.path, tab.title));
+      await vi.waitFor(() => expect(mockGetChapters).toHaveBeenCalledWith(1));
+      expect(screen.getByTestId("content-editor")).toBe(editor);
+      expect(editor).toHaveTextContent(tab.content!);
+
+      await act(async () => {
+        if (outcome === "success")
+          resolveMetadata([
+            {
+              file_path: tab.path,
+              outline_file_path: "outlines/id_42.md",
+              reading_number: 7,
+              title: "重逢",
+            },
+          ]);
+        else rejectMetadata(new Error("metadata unavailable"));
+      });
+
+      await vi.waitFor(() =>
+        expect(mockSetActiveTabId).toHaveBeenCalledWith(tab.id),
+      );
+      expect(screen.getByTestId("content-editor")).toBe(editor);
+      expect(editor).toHaveTextContent(tab.content!);
+      expect(mockFetchContent).not.toHaveBeenCalled();
+      expect(mockGetContent).not.toHaveBeenCalled();
+      expect(mockOpenTab).not.toHaveBeenCalled();
+      expect(mockSaveContent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("打开新文件时仍在内容读取期间显示加载态", async () => {
+    let resolveRead!: (value: string) => void;
+    mockFetchContent.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_42.md",
+        title: "正文",
+        content: "正文内容",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    mockOpenTab.mockImplementationOnce((tab: EditorTab) => {
+      mockTabsState = [{ ...tab, id: "new-tab" }];
+      mockActiveTabIdState = "new-tab";
+    });
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => ref.current?.openFile("goink.md", "故事状态"));
+
+    expect(mockFetchContent).toHaveBeenCalledWith(1, "goink.md");
+    expect(screen.queryByTestId("content-editor")).not.toBeInTheDocument();
+    await act(async () => resolveRead("新的故事状态"));
+    expect(screen.getByTestId("content-editor")).toHaveTextContent(
+      "新的故事状态",
+    );
+  });
+
   it("打开文件期间收到 AI 事件时采用事件后的磁盘内容", async () => {
     let resolveRead!: (value: string) => void;
     mockFetchContent.mockImplementationOnce(

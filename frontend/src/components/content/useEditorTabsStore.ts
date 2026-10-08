@@ -244,7 +244,7 @@ export const useEditorTabsStore = create<EditorTabsStoreState>((set, get) => ({
         return { tabs: next, activeTabId };
       })(s);
       const positions = { ...s.positions };
-      if (closing) {
+      if (closing?.type === "file") {
         for (const k of positionKeysForTab(novelId, closing)) {
           delete positions[k];
         }
