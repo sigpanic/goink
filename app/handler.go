@@ -188,6 +188,9 @@ func (a *App) OnShutdown(shutdownCtx context.Context) {
 		stopCtx, cancel := context.WithTimeout(shutdownCtx, 5*time.Second)
 		if err := a.mcpServer.Stop(stopCtx); err != nil {
 			a.logger.Error("停止本地 MCP server 失败", "err", err)
+			// 在途调用可能尚未退出，保留它们的依赖，交由进程退出回收。
+			cancel()
+			return
 		}
 		cancel()
 	}

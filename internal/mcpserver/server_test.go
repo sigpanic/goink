@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -15,11 +16,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/mcpclient"
+	"github.com/stretchr/testify/require"
 )
 
 type testNovelTool struct {
 	name    string
 	failure bool
+	execute func(context.Context, mcp_tools.ToolContext) (*mcp_tools.ToolResult, error)
 }
 
 func (t *testNovelTool) Name() string                     { return t.name }
@@ -30,7 +33,10 @@ func (t *testNovelTool) JSONSchema() json.RawMessage {
 }
 func (t *testNovelTool) ExposeToLLM() bool { return true }
 func (t *testNovelTool) NewArgs() any      { return &struct{}{} }
-func (t *testNovelTool) Execute(_ context.Context, _ any, tc mcp_tools.ToolContext) (*mcp_tools.ToolResult, error) {
+func (t *testNovelTool) Execute(ctx context.Context, _ any, tc mcp_tools.ToolContext) (*mcp_tools.ToolResult, error) {
+	if t.execute != nil {
+		return t.execute(ctx, tc)
+	}
 	if t.failure {
 		return &mcp_tools.ToolResult{Success: false, Error: "小说不可读", Data: map[string]any{"reason": "测试原因"}}, nil
 	}
@@ -181,5 +187,112 @@ func assertContentMatchesStructured(t *testing.T, result *mcp.CallToolResult) {
 	}
 	if !reflect.DeepEqual(data, result.StructuredContent) {
 		t.Fatalf("文本和结构化结果不一致: text=%+v structured=%+v", data, result.StructuredContent)
+	}
+}
+
+func TestServerStopWaitsForCanceledCalls(t *testing.T) {
+	for _, name := range []string{"read_novel", "get_current_novel"} {
+		t.Run(name, func(t *testing.T) {
+			logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+			registry := mcp_tools.NewRegistry(logger)
+			started := make(chan struct{})
+			canceled := make(chan struct{})
+			release := make(chan struct{})
+			exited := make(chan struct{})
+			var releaseOnce sync.Once
+			unblock := func() { releaseOnce.Do(func() { close(release) }) }
+			block := func(ctx context.Context) {
+				close(started)
+				<-ctx.Done()
+				close(canceled)
+				<-release
+				close(exited)
+			}
+			current := func(context.Context) (CurrentNovel, error) {
+				return CurrentNovel{ID: 1, Title: "测试小说"}, nil
+			}
+			allowed := []string{"read_novel"}
+			if name == "get_current_novel" {
+				allowed = nil
+				current = func(ctx context.Context) (CurrentNovel, error) {
+					block(ctx)
+					return CurrentNovel{}, ctx.Err()
+				}
+			} else {
+				registry.Register(&testNovelTool{name: name, execute: func(ctx context.Context, _ mcp_tools.ToolContext) (*mcp_tools.ToolResult, error) {
+					block(ctx)
+					return nil, ctx.Err()
+				}})
+			}
+			server := New(registry, nil, current, logger, allowed)
+			endpoint, err := server.Start()
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				unblock()
+				ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+				defer cancel()
+				require.NoError(t, server.Stop(ctx))
+			})
+			callCtx, cancelCall := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelCall()
+			client, err := mcpclient.Connect(callCtx, mcpclient.Config{
+				Transport: mcpclient.TransportStreamableHTTP, Endpoint: endpoint.URL,
+				HTTPClient: &http.Client{Transport: bearerTransport{token: endpoint.Token}},
+			})
+			require.NoError(t, err)
+			defer client.Close()
+			defer unblock()
+			callDone := make(chan struct{})
+			go func() {
+				defer close(callDone)
+				_, _ = client.CallTool(callCtx, name, nil)
+			}()
+			select {
+			case <-started:
+			case <-callCtx.Done():
+				t.Fatal("工具调用未开始")
+			}
+
+			stopCtx, cancelStop := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer cancelStop()
+			require.ErrorIs(t, server.Stop(stopCtx), context.DeadlineExceeded)
+			select {
+			case <-canceled:
+			default:
+				t.Fatal("关停没有取消工具上下文")
+			}
+			select {
+			case <-exited:
+				t.Fatal("测试工具应仍在退出清理阶段")
+			default:
+			}
+			_, err = server.Start()
+			require.Error(t, err, "旧调用未退出时不能重启")
+
+			waitCtx, cancelWait := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancelWait()
+			stopDone := make(chan error, 1)
+			go func() { stopDone <- server.Stop(waitCtx) }()
+			select {
+			case err := <-stopDone:
+				t.Fatalf("工具尚未退出，Stop 提前返回: %v", err)
+			case <-time.After(20 * time.Millisecond):
+			}
+			unblock()
+			select {
+			case err := <-stopDone:
+				require.NoError(t, err)
+			case <-waitCtx.Done():
+				t.Fatal("工具退出后关停仍未完成")
+			}
+			select {
+			case <-callDone:
+			case <-callCtx.Done():
+				t.Fatal("客户端调用未结束")
+			}
+			next, err := server.Start()
+			require.NoError(t, err)
+			require.NotEqual(t, endpoint.Token, next.Token)
+		})
 	}
 }

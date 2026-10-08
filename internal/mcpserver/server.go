@@ -41,8 +41,39 @@ type Endpoint struct {
 }
 
 type runningServer struct {
-	http *http.Server
-	done chan struct{}
+	http     *http.Server
+	done     chan struct{}
+	ctx      context.Context
+	cancel   context.CancelFunc
+	mu       sync.Mutex
+	stopping bool
+	calls    sync.WaitGroup
+	stopOnce sync.Once
+	stopped  chan struct{}
+	stopErr  error
+}
+
+func (instance *runningServer) track(handler mcp.ToolHandler) mcp.ToolHandler {
+	return func(ctx context.Context, request *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		instance.mu.Lock()
+		if instance.stopping {
+			instance.mu.Unlock()
+			return toolError("MCP server 正在停止"), nil
+		}
+		// 与关闭入口共用锁，停止登记后才允许 Wait，避免零计数时 Add/Wait 竞态。
+		instance.calls.Add(1)
+		instance.mu.Unlock()
+		defer instance.calls.Done()
+
+		callCtx, cancel := context.WithCancel(ctx)
+		stopCancel := context.AfterFunc(instance.ctx, cancel)
+		defer stopCancel()
+		defer cancel()
+		if instance.ctx.Err() != nil {
+			cancel()
+		}
+		return handler(callCtx, request)
+	}
 }
 
 // Server 将明确选中的 Goink 工具提供为本地 MCP 协议端点。
@@ -96,15 +127,20 @@ func (s *Server) Start() (Endpoint, error) {
 	}
 	token := hex.EncodeToString(secret)
 
+	serverCtx, cancel := context.WithCancel(context.Background())
+	instance := &runningServer{
+		done: make(chan struct{}), ctx: serverCtx, cancel: cancel,
+		stopped: make(chan struct{}),
+	}
 	protocolServer := mcp.NewServer(&mcp.Implementation{Name: "goink", Version: version.Version}, nil)
-	s.addTools(protocolServer)
+	s.addTools(protocolServer, instance)
 	mcpHandler := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server {
 		return protocolServer
 	}, &mcp.StreamableHTTPOptions{Stateless: true, JSONResponse: true})
 	mux := http.NewServeMux()
 	mux.Handle("/mcp", s.authorize(token, mcpHandler))
 	httpServer := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second}
-	instance := &runningServer{http: httpServer, done: make(chan struct{})}
+	instance.http = httpServer
 	s.running = instance
 	go func() {
 		defer close(instance.done)
@@ -123,17 +159,35 @@ func (s *Server) Stop(ctx context.Context) error {
 	if instance == nil {
 		return nil
 	}
-	err := instance.http.Shutdown(ctx)
-	if err != nil {
+	instance.stopOnce.Do(func() {
+		instance.mu.Lock()
+		instance.stopping = true
+		instance.cancel()
+		instance.mu.Unlock()
+		// 调用方超时只结束本次等待；后台继续排空，完成前不能重启同一个服务。
+		go s.finishStop(ctx, instance)
+	})
+	select {
+	case <-instance.stopped:
+		return instance.stopErr
+	case <-ctx.Done():
 		_ = instance.http.Close()
+		return ctx.Err()
 	}
+}
+
+func (s *Server) finishStop(ctx context.Context, instance *runningServer) {
+	if err := instance.http.Shutdown(ctx); err != nil {
+		instance.stopErr = instance.http.Close()
+	}
+	instance.calls.Wait()
 	<-instance.done
 	s.mu.Lock()
 	if s.running == instance {
 		s.running = nil
 	}
 	s.mu.Unlock()
-	return err
+	close(instance.stopped)
 }
 
 func (s *Server) authorize(token string, next http.Handler) http.Handler {
@@ -167,22 +221,22 @@ func allowedOrigin(origin string) bool {
 	return ip != nil && ip.IsLoopback()
 }
 
-func (s *Server) addTools(protocolServer *mcp.Server) {
+func (s *Server) addTools(protocolServer *mcp.Server, instance *runningServer) {
 	protocolServer.AddTool(&mcp.Tool{
 		Name:        "get_current_novel",
 		Description: "获取 Goink 界面当前打开的小说 ID 和书名。",
 		InputSchema: map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false},
-	}, func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	}, instance.track(func(ctx context.Context, _ *mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		novel, err := s.current(ctx)
 		if err != nil {
 			return s.currentNovelError(err), nil
 		}
 		return encodeResult(map[string]any{"novel_id": novel.ID, "title": novel.Title}, false)
-	})
+	}))
 
 	for name := range s.allowed {
 		tool, _ := s.registry.Get(name)
-		protocolServer.AddTool(&mcp.Tool{Name: name, Description: tool.Description(), InputSchema: tool.JSONSchema()}, s.toolHandler(name))
+		protocolServer.AddTool(&mcp.Tool{Name: name, Description: tool.Description(), InputSchema: tool.JSONSchema()}, instance.track(s.toolHandler(name)))
 	}
 }
 
