@@ -141,6 +141,7 @@ export default function ModelPicker({
                     key={m.Key}
                     onClick={() => {
                       onSelectModel(m.Key);
+                      setOpen(false);
                     }}
                     className={`w-full text-left pl-8 pr-2.5 py-1.5 text-xs hover:bg-muted transition-colors ${
                       m.Key === selectedKey
