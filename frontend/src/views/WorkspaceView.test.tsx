@@ -3,6 +3,7 @@ import {
   render as originalRender,
   screen,
   fireEvent,
+  act,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
@@ -11,11 +12,14 @@ import WorkspaceView from "./WorkspaceView";
 import { useFocusStore } from "@/stores/useFocusStore";
 import { useEditorStore } from "@/stores/useEditorStore";
 import { useNovelStore } from "@/components/novel/useNovelStore";
+import { novelKeys } from "@/lib/queryKeys";
 
 // 3.1 useNovels 引入 useQuery，render 需包 QueryClientProvider。
 // 每个测试用独立 QueryClient（retry:false 避免重试），无状态残留。
-function render(ui: ReactElement) {
-  const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function render(
+  ui: ReactElement,
+  qc = new QueryClient({ defaultOptions: { queries: { retry: false } } }),
+) {
   return originalRender(ui, {
     wrapper: ({ children }) => (
       <QueryClientProvider client={qc}>{children}</QueryClientProvider>
@@ -48,6 +52,7 @@ const {
   mockSetActiveNovel,
   mockGetPlatform,
   mockApproveTool,
+  mockToastError,
 } = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
@@ -57,7 +62,10 @@ const {
   mockSetActiveNovel: vi.fn(),
   mockGetPlatform: vi.fn(),
   mockApproveTool: vi.fn(),
+  mockToastError: vi.fn(),
 }));
+
+vi.mock("@/utils/toast", () => ({ toastError: mockToastError }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   CheckUpdate: vi.fn().mockResolvedValue(null),
@@ -703,6 +711,113 @@ describe("WorkspaceView switchNovel state reset", () => {
     await vi.waitFor(() => {
       expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 1 });
     });
+  });
+
+  it("恢复小说等待后端确认后才显示小说内容", async () => {
+    let confirm!: () => void;
+    mockSetActiveNovel.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        confirm = resolve;
+      }),
+    );
+    render(<WorkspaceView initialNovelId={2} />);
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 2 });
+    });
+    expect(useNovelStore.getState().activeNovelId).toBe(0);
+    expect(screen.queryByTestId("content-panel")).not.toBeInTheDocument();
+
+    await act(async () => {
+      confirm();
+    });
+    expect(await screen.findByTestId("content-panel")).toBeInTheDocument();
+    expect(useNovelStore.getState().activeNovelId).toBe(2);
+  });
+
+  it("恢复失败保持未选书状态并显示错误", async () => {
+    mockSetActiveNovel.mockRejectedValueOnce(new Error("保存失败"));
+    render(<WorkspaceView initialNovelId={1} />);
+
+    await vi.waitFor(() => {
+      expect(mockToastError).toHaveBeenCalledWith("保存失败");
+    });
+    expect(useNovelStore.getState().activeNovelId).toBe(0);
+    expect(screen.queryByTestId("content-panel")).not.toBeInTheDocument();
+  });
+
+  it("缓存列表恢复指定小说，确认期间刷新列表不会覆盖选择", async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+    });
+    qc.setQueryData(novelKeys.all, [
+      { id: 1, title: "小说1" },
+      { id: 2, title: "小说2" },
+    ]);
+    let confirm!: () => void;
+    mockSetActiveNovel.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        confirm = resolve;
+      }),
+    );
+    render(<WorkspaceView initialNovelId={2} />, qc);
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 2 });
+    });
+    mockGetNovels.mockResolvedValue([
+      { id: 1, title: "改名后的小说1" },
+      { id: 2, title: "小说2" },
+    ]);
+    await act(async () => {
+      await qc.invalidateQueries({ queryKey: novelKeys.all });
+    });
+    expect(mockSetActiveNovel).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      confirm();
+    });
+    await screen.findByTestId("content-panel");
+    expect(useNovelStore.getState().activeNovelId).toBe(2);
+  });
+
+  it("自动选择小说也等待后端确认", async () => {
+    let confirm!: () => void;
+    mockSetActiveNovel.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        confirm = resolve;
+      }),
+    );
+    render(<WorkspaceView initialNovelId={99} />);
+    await vi.waitFor(() => {
+      expect(mockSetActiveNovel).toHaveBeenCalledWith({ novel_id: 1 });
+    });
+    expect(useNovelStore.getState().activeNovelId).toBe(0);
+
+    await act(async () => {
+      confirm();
+    });
+    await screen.findByTestId("content-panel");
+    expect(useNovelStore.getState().activeNovelId).toBe(1);
+  });
+
+  it("切书失败保留旧小说和编辑状态并显示错误", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    useEditorStore.setState({ activeContent: "未保存正文", isDirty: true });
+    mockSetActiveNovel.mockRejectedValueOnce(new Error("切书失败"));
+    const errorSpy = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    try {
+      fireEvent.click(screen.getByText("nav-select-novel"));
+      await vi.waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith("切书失败");
+      });
+      expect(useNovelStore.getState().activeNovelId).toBe(1);
+      expect(useEditorStore.getState().activeContent).toBe("未保存正文");
+      expect(useEditorStore.getState().isDirty).toBe(true);
+    } finally {
+      errorSpy.mockRestore();
+    }
   });
 
   it("侧栏选小说调 SetActiveNovel（ContentPanel 保持挂载）", async () => {

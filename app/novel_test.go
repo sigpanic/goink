@@ -175,3 +175,41 @@ func TestSetActiveNovel(t *testing.T) {
 	_, err = a.currentNovel(context.Background())
 	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
 }
+
+func TestSetActiveNovelSaveFailurePreservesSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first, err := a.CreateNovel(CreateNovelInput{Title: "旧小说"})
+	require.NoError(t, err)
+	second, err := a.CreateNovel(CreateNovelInput{Title: "新小说"})
+	require.NoError(t, err)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+	require.NoError(t, a.db.Exec(`CREATE TRIGGER reject_novel_selection
+		BEFORE UPDATE OF last_novel_id ON app_config
+		BEGIN SELECT RAISE(FAIL, 'selection save failed'); END`).Error)
+
+	err = a.SetActiveNovel(SetActiveNovelInput{NovelID: second.ID})
+	require.ErrorContains(t, err, "selection save failed")
+	assert.Equal(t, first.ID, a.settings.LastNovelID)
+	current, err := a.currentNovel(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, current.ID)
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, persisted.LastNovelID)
+}
+
+func TestSetActiveNovelRejectsInvalidSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first, err := a.CreateNovel(CreateNovelInput{Title: "当前小说"})
+	require.NoError(t, err)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+
+	for _, id := range []int64{-1, first.ID + 1} {
+		require.Error(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: id}))
+		assert.Equal(t, first.ID, a.settings.LastNovelID)
+		assert.Equal(t, first.ID, a.activeNovelID.Load())
+	}
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, persisted.LastNovelID)
+}

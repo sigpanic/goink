@@ -71,6 +71,7 @@ type App struct {
 	cancelMgr     *agent.CancelManager
 	registry      *mcp_tools.Registry
 	mcpServer     *mcpserver.Server
+	activeNovelMu sync.Mutex
 	activeNovelID atomic.Int64
 	approvals     *approval.Service
 	vectorStore   atomic.Pointer[rag.VectorStore]

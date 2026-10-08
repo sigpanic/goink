@@ -79,10 +79,26 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 
 // SetActiveNovel 记录当前活跃的小说 ID，下次启动自动恢复。
 func (a *App) SetActiveNovel(input SetActiveNovelInput) error {
-	a.settings.LastNovelID = input.NovelID
-	if err := config.SaveSettings(a.db, a.settings); err != nil {
-		return err
+	a.activeNovelMu.Lock()
+	defer a.activeNovelMu.Unlock()
+	if input.NovelID < 0 {
+		return fmt.Errorf("小说 ID 不能为负数")
 	}
+	if input.NovelID > 0 {
+		var item novel.Novel
+		if err := a.novel.DB.WithContext(a.ctx).First(&item, input.NovelID).Error; err != nil {
+			return fmt.Errorf("读取待切换小说: %w", err)
+		}
+	}
+	result := a.db.WithContext(a.ctx).Model(&config.AppSettings{}).
+		Where("id = ?", 1).Update("last_novel_id", input.NovelID)
+	if result.Error != nil {
+		return fmt.Errorf("保存当前小说失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("保存当前小说失败: 应用配置不存在")
+	}
+	a.settings.LastNovelID = input.NovelID
 	a.activeNovelID.Store(input.NovelID)
 	return nil
 }
