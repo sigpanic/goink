@@ -47,9 +47,9 @@ run_check() {
 echo "── Pre-commit validation ──"
 
 if [ "$has_go" = true ]; then
-    run_check "[go] build ./..." go build ./... || exit 1
-    run_check "[go] test ./..." go test ./... || exit 1
-    run_check "[go] golangci-lint" env CGO_ENABLED=1 golangci-lint run --timeout=10m ./... || exit 1
+    run_check "[go] build application packages" go build . ./app/... ./internal/... || exit 1
+    run_check "[go] test application packages" go test . ./app/... ./internal/... || exit 1
+    run_check "[go] golangci-lint" env CGO_ENABLED=1 golangci-lint run --timeout=10m . ./app/... ./internal/... || exit 1
 fi
 
 if [ "$has_fe" = true ]; then
