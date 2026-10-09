@@ -418,7 +418,11 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	}()
 
 	a.cfg = cfg
-	a.logger.Info("应用初始化完成", "data_dir", config.DataDirPath())
+	a.logger.Info("应用初始化完成",
+		"data_dir", config.DataDirPath(),
+		"version", a.GetVersion(),
+		"commit_hash", a.GetBuildHash(),
+	)
 	initSucceeded = true
 	return nil
 }
