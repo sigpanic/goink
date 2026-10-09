@@ -27,6 +27,9 @@ export const contentKeys = {
 
 export const characterKeys = {
   list: (novelId: number) => ["characters", novelId] as const,
+  groups: (novelId: number) => ["characters", novelId, "groups"] as const,
+  memberships: (novelId: number) =>
+    ["characters", novelId, "memberships"] as const,
   detail: (id: number) => ["character", id] as const,
   relations: (novelId: number) => ["character-relations", novelId] as const,
 };
