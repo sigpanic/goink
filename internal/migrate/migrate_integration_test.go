@@ -27,6 +27,7 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 	if !db.Migrator().HasTable("chapters") {
 		t.Fatal("新库应创建当前 chapters schema")
 	}
+	assertActivitySchema(t, db)
 	for _, migration := range []struct {
 		name string
 		want int64
@@ -128,6 +129,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	if err := migrate.Run(db, slog.Default()); err != nil {
 		t.Fatalf("migrate.Run: %v", err)
 	}
+
+	assertActivitySchema(t, db)
 
 	count := func(query string) int {
 		t.Helper()

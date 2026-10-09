@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/config"
@@ -96,6 +97,8 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&rollback.TurnCommit{},
 		&style.Sample{},
 		&writing.WritingLog{},
+		&activity.DailyActivity{},
+		&activity.DailyLLMUsage{},
 		&volume.Volume{},
 		&engine.MigrateState{},
 	}

@@ -11,6 +11,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
@@ -67,6 +68,9 @@ func setupTestApp(t *testing.T) *App {
 
 	// Run auto-migration (pure GORM, no CGO).
 	require.NoError(t, migrate.Run(db, logger), "run migrations")
+
+	activityStore := activity.NewStore(db, logger)
+	activityStore.InitTracking(context.Background())
 
 	// Load settings (creates default row).
 	settings, err := config.LoadSettings(db)
@@ -142,6 +146,7 @@ func setupTestApp(t *testing.T) *App {
 		turnCommit: turnCommitStore,
 		writing:    writingStore,
 		volume:     volumeStore,
+		activity:   activityStore,
 	}
 	chapterDeletionGuard := deletion.NewGuard(
 		deletion.For(deletion.EntityChapter, timelineStore.ChapterDeletionBlockers),

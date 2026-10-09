@@ -12,6 +12,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
@@ -95,6 +96,7 @@ type App struct {
 	turnCommit *rollback.Store
 	writing    *writing.Store
 	volume     *volume.Store
+	activity   *activity.Store
 }
 
 // New 创建 App 实例。初始化在 OnStartup 中完成。
@@ -296,6 +298,9 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 		a.logger.Error("数据库迁移失败", "err", err)
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
+
+	a.activity = activity.NewStore(db, a.logger)
+	a.activity.InitTracking(a.ctx)
 
 	// 4. 加载运行时配置
 	settings, err := config.LoadSettings(db)
