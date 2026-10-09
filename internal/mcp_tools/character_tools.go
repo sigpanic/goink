@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -260,6 +261,8 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 			Error:   fmt.Sprintf("创建角色 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{CharactersCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

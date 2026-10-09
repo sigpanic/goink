@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 )
 
@@ -61,12 +62,20 @@ func (a *App) UpdateChapterTitle(novelID, chapterID int64, title string) error {
 // CreateChapter 创建新章节。同时创建空正文文件。
 // 新章节默认追加到最后一卷；尚未建卷时追加到未分卷组。
 func (a *App) CreateChapter(input CreateChapterInput) (*chapter.Chapter, error) {
-	return a.chapterService.CreateDefault(a.ctx, input.NovelID, input.Title)
+	ch, err := a.chapterService.CreateDefault(a.ctx, input.NovelID, input.Title)
+	if err == nil && a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{ChaptersCreated: 1})
+	}
+	return ch, err
 }
 
 // PlaceChapter 新建或移动章节，并将其置于目标章节组的指定位置。
 func (a *App) PlaceChapter(input PlaceChapterInput) (*chapter.Chapter, error) {
-	return a.chapterService.Place(a.ctx, input)
+	ch, err := a.chapterService.Place(a.ctx, input)
+	if err == nil && input.SourceChapterID == nil && a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{ChaptersCreated: 1})
+	}
+	return ch, err
 }
 
 // DeleteChapter 删除没有交叉引用的章节及其正文、大纲与派生索引。

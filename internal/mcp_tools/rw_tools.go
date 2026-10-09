@@ -12,6 +12,7 @@ import (
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/rag"
@@ -427,6 +428,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		"approved":    true,
 	}
 	if ref.IsNew {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{ChaptersCreated: 1})
 		data["chapter_id"] = ch.ID
 		if ch.VolumeID != nil {
 			data["volume_id"] = *ch.VolumeID

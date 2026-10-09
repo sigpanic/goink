@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -50,6 +51,9 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 	}
 	if err := a.character.DB.WithContext(a.ctx).Create(&char).Error; err != nil {
 		return nil, fmt.Errorf("create character: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{CharactersCreated: 1})
 	}
 	return &char, nil
 }

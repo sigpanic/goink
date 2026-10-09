@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/config"
@@ -74,6 +75,9 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 	}
 
 	a.logger.Info("小说创建成功", "novelID", n.ID, "title", n.Title)
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{NovelsCreated: 1})
+	}
 	return &n, nil
 }
 

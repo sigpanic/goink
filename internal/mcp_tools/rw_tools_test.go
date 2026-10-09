@@ -16,6 +16,7 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
@@ -48,7 +49,7 @@ func setupRWEnv(t *testing.T) (*gorm.DB, mcp_tools.ToolContext, context.Context)
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&chapter.Chapter{}, &volume.Volume{}, &writing.WritingLog{}); err != nil {
+	if err := db.AutoMigrate(&chapter.Chapter{}, &volume.Volume{}, &writing.WritingLog{}, &activity.DailyActivity{}); err != nil {
 		t.Fatal(err)
 	}
 
