@@ -27,6 +27,7 @@ func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
 // ListByNovelOptions 是 ListByNovel 的可选参数。
 type ListByNovelOptions struct {
 	PageParams storage.PageParams
+	GroupID    *int64 // nil=全部，0=未分组，正整数=指定分组
 	Search     string // 空字符串=不过滤，按 name LIKE 模糊匹配
 	Order      string // 空字符串=默认 "updated_at DESC"；否则直接作为 ORDER BY 子句（如 "name ASC"）
 }
@@ -37,6 +38,18 @@ func (s *Store) ListByNovel(ctx context.Context, novelID int64, opts ListByNovel
 	pp.Normalize()
 
 	q := s.DB.WithContext(ctx).Model(&Character{}).Where("novel_id = ?", novelID)
+	if opts.GroupID != nil {
+		if *opts.GroupID < 0 {
+			return nil, fmt.Errorf("分组 ID 不能为负数")
+		}
+		members := s.DB.WithContext(ctx).Model(&GroupMember{}).
+			Select("character_id").Where("novel_id = ?", novelID)
+		if *opts.GroupID == 0 {
+			q = q.Where("id NOT IN (?)", members)
+		} else {
+			q = q.Where("id IN (?)", members.Where("group_id = ?", *opts.GroupID))
+		}
+	}
 
 	if opts.Search != "" {
 		q = q.Where("name LIKE ?", "%"+opts.Search+"%")

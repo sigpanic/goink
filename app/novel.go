@@ -153,6 +153,12 @@ func (a *App) DeleteNovel(novelID int64) error {
 			label string
 			fn    func(*gorm.DB) error
 		}{
+			{"character_group_members", func(tx *gorm.DB) error {
+				return tx.Where("novel_id = ?", novelID).Delete(&character.GroupMember{}).Error
+			}},
+			{"character_groups", func(tx *gorm.DB) error {
+				return tx.Where("novel_id = ?", novelID).Delete(&character.Group{}).Error
+			}},
 			{"characters", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&character.Character{}).Error }},
 			{"character_relations", func(tx *gorm.DB) error {
 				return tx.Where("novel_id = ?", novelID).Delete(&character.CharacterRelation{}).Error

@@ -82,6 +82,8 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		&chapter.Chapter{},
 		&character.Character{},
 		&character.CharacterRelation{},
+		&character.Group{},
+		&character.GroupMember{},
 		&timeline.TimelineEntry{},
 		&storyarc.StoryArc{},
 		&storyarc.ArcNode{},

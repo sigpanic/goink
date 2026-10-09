@@ -14,10 +14,10 @@ import {reader} from '../models';
 import {timeline} from '../models';
 import {llm} from '../models';
 import {pattern} from '../models';
+import {storage} from '../models';
 import {git} from '../models';
 import {apperr} from '../models';
 import {session} from '../models';
-import {storage} from '../models';
 import {config} from '../models';
 import {volume} from '../models';
 import {writing} from '../models';
@@ -51,6 +51,8 @@ export function CreateChapter(arg1:app.CreateChapterInput):Promise<chapter.Chapt
 
 export function CreateCharacter(arg1:number,arg2:app.CreateCharacterInput):Promise<character.Character>;
 
+export function CreateCharacterGroup(arg1:number,arg2:app.CharacterGroupInput):Promise<character.Group>;
+
 export function CreateLocation(arg1:number,arg2:app.CreateLocationInput):Promise<location.Location>;
 
 export function CreateNovel(arg1:app.CreateNovelInput):Promise<novel.Novel>;
@@ -72,6 +74,8 @@ export function DeleteArcNode(arg1:number,arg2:number):Promise<void>;
 export function DeleteChapter(arg1:number,arg2:number):Promise<chapter.DeleteResult>;
 
 export function DeleteCharacter(arg1:number,arg2:number):Promise<void>;
+
+export function DeleteCharacterGroup(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteCover(arg1:number):Promise<void>;
 
@@ -118,6 +122,10 @@ export function GetBuildHash():Promise<string>;
 export function GetChapterPlans(arg1:number):Promise<Array<timeline.ChapterPlan>>;
 
 export function GetChapters(arg1:number):Promise<Array<chapter.Chapter>>;
+
+export function GetCharacterGroupMembers(arg1:app.GetCharacterGroupMembersInput):Promise<storage.PageResult_github_com_sigpanic_goink_internal_character_GroupMember_>;
+
+export function GetCharacterGroups(arg1:app.GetCharacterGroupsInput):Promise<storage.PageResult_github_com_sigpanic_goink_internal_character_GroupView_>;
 
 export function GetCharacterRelations(arg1:number):Promise<Array<character.CharacterRelation>>;
 
@@ -240,6 +248,10 @@ export function UpdateChapterPlan(arg1:number,arg2:app.UpdateChapterPlanInput):P
 export function UpdateChapterTitle(arg1:number,arg2:number,arg3:string):Promise<void>;
 
 export function UpdateCharacter(arg1:number,arg2:number,arg3:app.UpdateCharacterInput):Promise<void>;
+
+export function UpdateCharacterGroup(arg1:number,arg2:number,arg3:app.CharacterGroupInput):Promise<void>;
+
+export function UpdateCharacterGroupMemberships(arg1:number,arg2:app.CharacterGroupMembershipInput):Promise<void>;
 
 export function UpdateDataDir(arg1:string):Promise<void>;
 

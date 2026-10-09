@@ -155,7 +155,7 @@ func (t *DeleteRecordTool) deleteCharacter(ctx context.Context, a *DeleteRecordA
 		return result, err
 	}
 
-	if err := tc.DB.WithContext(ctx).Delete(&rec).Error; err != nil {
+	if err := character.NewStore(tc.DB, tc.LoggerOrDefault()).DeleteCharacter(ctx, tc.NovelID, rec.ID); err != nil {
 		return nil, fmt.Errorf("delete character: %w", err)
 	}
 
