@@ -98,6 +98,31 @@ func (s *Store) ListGroupMembers(ctx context.Context, novelID int64, opts ListGr
 	return storage.NewPageResult(members, total, pp.Page, pp.Size), nil
 }
 
+// GetGroupsByCharacterIDs 批量获取指定角色所属分组，供分页角色结果附带归属信息。
+func (s *Store) GetGroupsByCharacterIDs(ctx context.Context, novelID int64, characterIDs []int64) (map[int64][]Group, error) {
+	groups := make(map[int64][]Group)
+	if len(characterIDs) == 0 {
+		return groups, nil
+	}
+	var rows []struct {
+		Group
+		CharacterID int64 `gorm:"column:character_id"`
+	}
+	if err := s.DB.WithContext(ctx).Model(&Group{}).
+		Select("character_groups.*, m.character_id").
+		Joins("JOIN character_group_members m ON m.group_id = character_groups.id AND m.novel_id = character_groups.novel_id").
+		Joins("JOIN characters c ON c.id = m.character_id AND c.novel_id = m.novel_id").
+		Where("character_groups.novel_id = ? AND m.character_id IN ?", novelID, characterIDs).
+		Order("character_groups.name ASC, character_groups.id ASC").
+		Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("character groups: get by character ids: %w", err)
+	}
+	for _, row := range rows {
+		groups[row.CharacterID] = append(groups[row.CharacterID], row.Group)
+	}
+	return groups, nil
+}
+
 func validateGroupName(tx *gorm.DB, novelID, groupID int64, name string) error {
 	if name == "" {
 		return errors.New("分组名称不能为空")

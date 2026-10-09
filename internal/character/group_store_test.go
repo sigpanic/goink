@@ -36,6 +36,40 @@ func groupStoreFixture(t *testing.T) (*Store, Character, Character, *Group, *Gro
 	return s, c1, c2, g1, g2
 }
 
+func TestGetGroupsByCharacterIDs(t *testing.T) {
+	s, c1, c2, g1, g2 := groupStoreFixture(t)
+	ctx := context.Background()
+	require.NoError(t, s.UpdateGroupMemberships(ctx, 1, []int64{c1.ID, c2.ID}, []int64{g1.ID}, nil))
+	require.NoError(t, s.UpdateGroupMemberships(ctx, 1, []int64{c1.ID}, []int64{g2.ID}, nil))
+	foreign := Character{NovelID: 2, Name: "其他小说角色"}
+	require.NoError(t, s.DB.Create(&foreign).Error)
+	foreignGroup, err := s.CreateGroup(ctx, 2, "其他组", "")
+	require.NoError(t, err)
+	require.NoError(t, s.UpdateGroupMemberships(ctx, 2, []int64{foreign.ID}, []int64{foreignGroup.ID}, nil))
+
+	groups, err := s.GetGroupsByCharacterIDs(ctx, 1, []int64{c1.ID, foreign.ID, 999})
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[c1.ID], 2)
+	require.Equal(t, g1.ID, groups[c1.ID][0].ID)
+	require.Equal(t, g1.Name, groups[c1.ID][0].Name)
+	require.Equal(t, g2.ID, groups[c1.ID][1].ID)
+	require.Equal(t, g2.Name, groups[c1.ID][1].Name)
+	groups, err = s.GetGroupsByCharacterIDs(ctx, 1, []int64{c1.ID, c2.ID})
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	require.Len(t, groups[c2.ID], 1)
+	require.Equal(t, groups[c1.ID][0], groups[c2.ID][0])
+	groups, err = s.GetGroupsByCharacterIDs(ctx, 2, []int64{c1.ID, foreign.ID})
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Len(t, groups[foreign.ID], 1)
+	require.Equal(t, foreignGroup.ID, groups[foreign.ID][0].ID)
+	groups, err = s.GetGroupsByCharacterIDs(ctx, 1, nil)
+	require.NoError(t, err)
+	require.Empty(t, groups)
+}
+
 func TestGroupsMetadataAndNovelIsolation(t *testing.T) {
 	s, _, _, g1, _ := groupStoreFixture(t)
 	ctx := context.Background()
