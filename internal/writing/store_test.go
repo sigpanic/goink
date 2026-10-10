@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -83,8 +84,8 @@ func TestGetDailyActivity_Basic(t *testing.T) {
 	if len(result) != 1 {
 		t.Fatalf("expected 1 day, got %d", len(result))
 	}
-	if result[0].Words != 500 {
-		t.Errorf("expected 500 words, got %d", result[0].Words)
+	if result[0].WordsNet != 500 {
+		t.Errorf("expected 500 words, got %d", result[0].WordsNet)
 	}
 }
 
@@ -105,9 +106,11 @@ func TestGetDailyActivity_FiltersNegative(t *testing.T) {
 		// 负值被 WHERE word_delta > 0 过滤，正数仍计入
 		t.Fatalf("expected 1 day (only positive), got %d", len(result))
 	}
-	if result[0].Words != 200 {
-		t.Errorf("expected 200 words (only positive), got %d", result[0].Words)
+	if result[0].WordsAdded != 200 {
+		t.Errorf("expected 200 words (only positive), got %d", result[0].WordsAdded)
 	}
+	require.Equal(t, 100, result[0].WordsDeleted)
+	require.Equal(t, 100, result[0].WordsNet)
 }
 
 func TestGetDailyActivity_MultipleDays(t *testing.T) {
@@ -227,4 +230,81 @@ func TestGetWritingStats_EmptyData(t *testing.T) {
 	if stats.CurrentStreak != 0 || stats.LongestStreak != 0 {
 		t.Errorf("empty data should have zero streaks")
 	}
+}
+
+func TestLogChangesAndLegacyAggregation(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(db, testLogger())
+	ctx := context.Background()
+	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	require.NoError(t, db.Create(&WritingLog{Date: yesterday, WordDelta: 100}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: yesterday, WordDelta: -50}).Error)
+	s.LogChanges(ctx, 1, 10, 250, 200)
+	s.LogChanges(ctx, 1, 10, 200, 200)
+	s.LogChanges(ctx, 1, 10, 100, 150)
+	s.LogChanges(ctx, 1, 10, 0, 80)
+	s.LogChanges(ctx, 1, 10, 0, 0)
+
+	var logs []WritingLog
+	require.NoError(t, db.Order("id").Find(&logs).Error)
+	require.Len(t, logs, 6)
+	require.Nil(t, logs[0].WordsAdded)
+	require.Nil(t, logs[0].WordsDeleted)
+	for i, expected := range []struct{ added, deleted int }{{250, 200}, {200, 200}, {100, 150}, {0, 80}} {
+		record := logs[i+2]
+		require.Equal(t, int64(10), *record.ChapterID)
+		require.NotNil(t, record.WordsAdded)
+		require.NotNil(t, record.WordsDeleted)
+		require.Equal(t, expected.added, *record.WordsAdded)
+		require.Equal(t, expected.deleted, *record.WordsDeleted)
+		require.Equal(t, expected.added-expected.deleted, record.WordDelta)
+	}
+	require.NoError(t, db.Model(&WritingLog{}).Where("id = ?", logs[2].ID).Update("date", yesterday).Error)
+	daily, err := s.GetDailyActivity(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, daily, 2)
+	require.Equal(t, 350, daily[0].WordsAdded)
+	require.Equal(t, 250, daily[0].WordsDeleted)
+	require.Equal(t, 100, daily[0].WordsNet)
+	require.Equal(t, 300, daily[1].WordsAdded)
+	require.Equal(t, 430, daily[1].WordsDeleted)
+	require.Equal(t, -130, daily[1].WordsNet)
+	stats, err := s.GetWritingStats(ctx, 1, 1)
+	require.NoError(t, err)
+	require.Equal(t, 650, stats.TotalWords)
+	require.Equal(t, 2, stats.TotalDaysActive)
+	require.Equal(t, 2, stats.CurrentStreak)
+	require.Equal(t, 2, stats.LongestStreak)
+}
+
+func TestEditingActivityIncludesDeletionAndEqualLengthRewrite(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(db, testLogger())
+	ctx := context.Background()
+	for i, changes := range []struct{ added, deleted int }{{0, 80}, {120, 120}, {200, 300}} {
+		date := time.Now().AddDate(0, 0, i-2).Format("2006-01-02")
+		require.NoError(t, db.Create(&WritingLog{
+			Date: date, WordDelta: changes.added - changes.deleted,
+			WordsAdded: &changes.added, WordsDeleted: &changes.deleted,
+		}).Error)
+	}
+	require.NoError(t, db.Create(&WritingLog{Date: time.Now().AddDate(0, 0, -3).Format("2006-01-02")}).Error)
+	daily, err := s.GetDailyActivity(ctx, 1)
+	require.NoError(t, err)
+	require.Len(t, daily, 3)
+	require.Equal(t, 0, daily[0].WordsAdded)
+	require.Equal(t, 80, daily[0].WordsDeleted)
+	require.Equal(t, -80, daily[0].WordsNet)
+	require.Equal(t, 120, daily[1].WordsAdded)
+	require.Equal(t, 120, daily[1].WordsDeleted)
+	require.Zero(t, daily[1].WordsNet)
+	require.Equal(t, 200, daily[2].WordsAdded)
+	require.Equal(t, 300, daily[2].WordsDeleted)
+	require.Equal(t, -100, daily[2].WordsNet)
+	stats, err := s.GetWritingStats(ctx, 1, 1)
+	require.NoError(t, err)
+	require.Equal(t, 320, stats.TotalWords)
+	require.Equal(t, 3, stats.TotalDaysActive)
+	require.Equal(t, 3, stats.CurrentStreak)
+	require.Equal(t, 3, stats.LongestStreak)
 }

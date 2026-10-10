@@ -35,6 +35,30 @@ func (s *Store) LogDelta(ctx context.Context, novelID, chapterID int64, delta in
 	}
 }
 
+// LogChanges 记录成功保存的增删量；等长替换也保留，统计失败只告警。
+func (s *Store) LogChanges(ctx context.Context, novelID, chapterID int64, added, deleted int) {
+	if added == 0 && deleted == 0 {
+		return
+	}
+	record := WritingLog{
+		Date:         time.Now().Format("2006-01-02"),
+		NovelID:      novelID,
+		ChapterID:    &chapterID,
+		WordDelta:    added - deleted,
+		WordsAdded:   &added,
+		WordsDeleted: &deleted,
+	}
+	if err := s.DB.WithContext(ctx).Create(&record).Error; err != nil {
+		s.logger.Warn("记录写作日志失败", "novel_id", novelID, "chapter_id", chapterID, "added", added, "deleted", deleted, "err", err)
+	}
+}
+
+// 历史记录保留正向净变化口径；新记录使用 diff 新增量。
+const addedWordsExpr = "COALESCE(words_added, CASE WHEN word_delta > 0 THEN word_delta ELSE 0 END)"
+
+const deletedWordsExpr = "COALESCE(words_deleted, CASE WHEN word_delta < 0 THEN -word_delta ELSE 0 END)"
+const editedWordsExpr = "(" + addedWordsExpr + " + " + deletedWordsExpr + ")"
+
 // GetDailyActivity 返回最近 months 个月的每日字数汇总。
 func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivity, error) {
 	if months <= 0 {
@@ -45,8 +69,8 @@ func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivi
 	var results []DailyActivity
 	err := s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
-		Select("date, SUM(word_delta) as words").
-		Where("date >= ? AND word_delta > 0", cutoff).
+		Select("date, SUM(word_delta) as words_net, SUM("+addedWordsExpr+") as words_added, SUM("+deletedWordsExpr+") as words_deleted").
+		Where("date >= ? AND "+editedWordsExpr+" > 0", cutoff).
 		Group("date").
 		Order("date ASC").
 		Scan(&results).Error
@@ -59,11 +83,12 @@ func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivi
 // GetWritingStats 返回全局写作统计。
 func (s *Store) GetWritingStats(ctx context.Context, novelCount, chapterCount int64) (*WritingStats, error) {
 	// 总字数：正数 delta 之和
+	// 新记录使用新增量，正数 delta 仅作为历史记录的回退口径。
 	var totalWords int64
 	s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
-		Select("COALESCE(SUM(word_delta), 0)").
-		Where("word_delta > 0").
+		Select("COALESCE(SUM(" + addedWordsExpr + "), 0)").
+		Where(addedWordsExpr + " > 0").
 		Scan(&totalWords)
 
 	// 活跃天数
@@ -71,7 +96,7 @@ func (s *Store) GetWritingStats(ctx context.Context, novelCount, chapterCount in
 	s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
 		Select("COUNT(DISTINCT date)").
-		Where("word_delta > 0").
+		Where(editedWordsExpr + " > 0").
 		Scan(&totalDays)
 
 	currentStreak, longestStreak := s.computeStreaks(ctx)
@@ -92,7 +117,7 @@ func (s *Store) computeStreaks(ctx context.Context) (current, longest int) {
 	s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
 		Select("DISTINCT date").
-		Where("word_delta > 0").
+		Where(editedWordsExpr+" > 0").
 		Order("date ASC").
 		Pluck("date", &dates)
 

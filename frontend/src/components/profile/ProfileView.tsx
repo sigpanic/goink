@@ -4,6 +4,7 @@ import ContributionGrid from "./ContributionGrid";
 import { PenLine, CalendarDays, Flame, User, Camera } from "lucide-react";
 import { toErrorMessage } from "@/utils/error";
 import { useWritingActivity } from "./useWritingActivity";
+import type { WritingActivity } from "./useWritingActivity";
 import { useWritingStats } from "./useWritingStats";
 import { useProfileSettings } from "./useProfileSettings";
 import { useSaveAvatar } from "./useSaveAvatar";
@@ -30,9 +31,9 @@ export default function ProfileView() {
 
   // activity 数组转 dict（绿格子按 date 取 words）
   const activity = useMemo(() => {
-    const dict: Record<string, number> = {};
+    const dict: Record<string, WritingActivity> = {};
     for (const d of activityQuery.data ?? []) {
-      dict[d.date] = d.words;
+      dict[d.date] = d;
     }
     return dict;
   }, [activityQuery.data]);

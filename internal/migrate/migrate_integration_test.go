@@ -153,6 +153,7 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		{"reader IDs and orphan", `SELECT COUNT(*) FROM reader_perspectives WHERE id = 2 AND planted_chapter_id IS NULL AND revealed_chapter_id = 4`},
 		{"writing log ID", `SELECT COUNT(*) FROM writing_log WHERE id = 1 AND chapter_id = 2`},
 		{"writing log zero", `SELECT COUNT(*) FROM writing_log WHERE id = 2 AND chapter_id IS NULL`},
+		{"writing log legacy counts", `SELECT COUNT(*) FROM writing_log WHERE id = 1 AND word_delta = 100 AND words_added IS NULL AND words_deleted IS NULL`},
 		{"character relation ID", `SELECT COUNT(*) FROM character_relations WHERE id = 1 AND chapter_id = 3`},
 		{"character relation zero", `SELECT COUNT(*) FROM character_relations WHERE id = 2 AND chapter_id IS NULL`},
 	} {

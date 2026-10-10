@@ -3064,7 +3064,9 @@ export namespace writing {
 	
 	export class DailyActivity {
 	    date: string;
-	    words: number;
+	    words_net: number;
+	    words_added: number;
+	    words_deleted: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DailyActivity(source);
@@ -3073,7 +3075,9 @@ export namespace writing {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.date = source["date"];
-	        this.words = source["words"];
+	        this.words_net = source["words_net"];
+	        this.words_added = source["words_added"];
+	        this.words_deleted = source["words_deleted"];
 	    }
 	}
 	export class WritingStats {
