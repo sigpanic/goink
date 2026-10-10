@@ -58,6 +58,7 @@ import { toErrorMessage } from "@/utils/error";
 import { useUpdateCheck } from "@/components/update/useUpdateCheck";
 import { useContentNavigation } from "./workspace/useContentNavigation";
 import { useAIFileCacheInvalidation } from "./workspace/useAIFileCacheInvalidation";
+import { useCreativeActivity } from "./workspace/useCreativeActivity";
 import { useEditorTabTitles } from "@/components/content/useEditorTabTitles";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
@@ -78,6 +79,7 @@ export default function WorkspaceView({
   initialNovelId,
   initialShowHelp,
 }: Props) {
+  useCreativeActivity();
   const { t } = useTranslation();
   const THEME_LABEL: Record<Theme, string> = {
     light: t("workspace.darkMode"),

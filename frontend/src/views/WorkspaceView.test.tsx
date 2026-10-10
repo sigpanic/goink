@@ -69,6 +69,7 @@ vi.mock("@/utils/toast", () => ({ toastError: mockToastError }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   CheckUpdate: vi.fn().mockResolvedValue(null),
+  RecordCreativeActivity: vi.fn().mockResolvedValue(undefined),
   GetNovels: mockGetNovels,
   CreateNovel: mockCreateNovel,
   UpdateNovel: mockUpdateNovel,
