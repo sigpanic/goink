@@ -2,7 +2,6 @@ package mcpserver
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
@@ -25,6 +24,8 @@ import (
 // ErrNoCurrentNovel 表示 Goink 界面当前没有打开的小说。
 var ErrNoCurrentNovel = errors.New("当前没有打开的小说")
 
+const DefaultPort = 17890
+
 // CurrentNovel 是每次 MCP 调用看到的当前小说快照。
 type CurrentNovel struct {
 	ID    int64
@@ -41,6 +42,7 @@ type Endpoint struct {
 }
 
 type runningServer struct {
+	url      string
 	http     *http.Server
 	done     chan struct{}
 	ctx      context.Context
@@ -83,6 +85,7 @@ type Server struct {
 	current  CurrentNovelFunc
 	logger   *slog.Logger
 	allowed  map[string]bool
+	port     int
 
 	mu      sync.Mutex
 	running *runningServer
@@ -94,11 +97,29 @@ func New(registry *mcp_tools.Registry, db *gorm.DB, current CurrentNovelFunc, lo
 	for _, name := range allowed {
 		allowSet[name] = true
 	}
-	return &Server{registry: registry, db: db, current: current, logger: logger, allowed: allowSet}
+	return &Server{registry: registry, db: db, current: current, logger: logger, allowed: allowSet, port: DefaultPort}
 }
 
-// Start 显式启动回环地址上的 Streamable HTTP 服务，并生成本次运行的令牌。
-func (s *Server) Start() (Endpoint, error) {
+// SetPort 在服务停止时设置端口；0 供测试显式申请临时端口。
+func (s *Server) SetPort(port int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running != nil {
+		return fmt.Errorf("请先停止 MCP server")
+	}
+	if port < 0 || port > 65535 {
+		return fmt.Errorf("MCP 端口必须在 0 到 65535 之间")
+	}
+	s.port = port
+	return nil
+}
+
+// Start 使用调用方提供的令牌启动本地服务；令牌的生成和持久化由管理层负责。
+func (s *Server) Start(token string) (Endpoint, error) {
+	secret, err := hex.DecodeString(token)
+	if err != nil || len(secret) != 32 {
+		return Endpoint{}, fmt.Errorf("MCP 访问令牌无效")
+	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.running != nil {
@@ -116,19 +137,13 @@ func (s *Server) Start() (Endpoint, error) {
 		}
 	}
 
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", s.port))
 	if err != nil {
 		return Endpoint{}, fmt.Errorf("监听本地 MCP 端点: %w", err)
 	}
-	secret := make([]byte, 32)
-	if _, err := rand.Read(secret); err != nil {
-		_ = listener.Close()
-		return Endpoint{}, fmt.Errorf("生成 MCP 访问令牌: %w", err)
-	}
-	token := hex.EncodeToString(secret)
-
 	serverCtx, cancel := context.WithCancel(context.Background())
 	instance := &runningServer{
+		url:  "http://" + listener.Addr().String() + "/mcp",
 		done: make(chan struct{}), ctx: serverCtx, cancel: cancel,
 		stopped: make(chan struct{}),
 	}
@@ -148,7 +163,42 @@ func (s *Server) Start() (Endpoint, error) {
 			s.logger.Error("本地 MCP server 停止", "err", err)
 		}
 	}()
-	return Endpoint{URL: "http://" + listener.Addr().String() + "/mcp", Token: token}, nil
+	return Endpoint{URL: instance.url, Token: token}, nil
+}
+
+type Status struct {
+	Running  bool   `json:"running"`
+	Stopping bool   `json:"stopping"`
+	URL      string `json:"url"`
+}
+
+func (s *Server) Status() Status {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running == nil {
+		return Status{}
+	}
+	s.running.mu.Lock()
+	defer s.running.mu.Unlock()
+	return Status{Running: !s.running.stopping, Stopping: s.running.stopping, URL: s.running.url}
+}
+
+// SetAllowedTools 只在旧请求排空后替换策略，运行中的请求始终使用原来的不可变白名单。
+func (s *Server) SetAllowedTools(names []string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.running != nil {
+		return fmt.Errorf("请先停止 MCP server")
+	}
+	allowed := make(map[string]bool, len(names))
+	for _, name := range names {
+		if _, ok := s.registry.Get(name); !ok || name == "get_current_novel" {
+			return fmt.Errorf("MCP server 工具不可用")
+		}
+		allowed[name] = true
+	}
+	s.allowed = allowed
+	return nil
 }
 
 // Stop 停止接收新请求，等待在途调用结束；超时后强制关闭连接。

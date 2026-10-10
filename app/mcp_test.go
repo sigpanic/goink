@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"net/http"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -27,7 +28,8 @@ func TestMCPServerUsesCurrentNovelWithRegisteredTool(t *testing.T) {
 	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: created.ID}))
 
 	server := mcpserver.New(a.registry, a.db, a.currentNovel, a.logger, []string{"get_chapter_list"})
-	endpoint, err := server.Start()
+	require.NoError(t, server.SetPort(0))
+	endpoint, err := server.Start(strings.Repeat("a", 64))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -70,7 +72,8 @@ func TestShutdownTimeoutPreservesMCPDependencies(t *testing.T) {
 		<-release
 		return mcpserver.CurrentNovel{}, ctx.Err()
 	}, a.logger, nil)
-	endpoint, err := a.mcpServer.Start()
+	require.NoError(t, a.mcpServer.SetPort(0))
+	endpoint, err := a.mcpServer.Start(strings.Repeat("a", 64))
 	require.NoError(t, err)
 	t.Cleanup(func() {
 		unblock()

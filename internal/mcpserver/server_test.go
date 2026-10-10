@@ -72,7 +72,9 @@ func TestServerProtocolAndCurrentNovel(t *testing.T) {
 		}
 		return CurrentNovel{ID: id, Title: "测试小说"}, nil
 	}, logger, []string{"read_novel", "failed_novel"})
-	endpoint, err := server.Start()
+	require.NoError(t, server.SetPort(0))
+	token := strings.Repeat("a", 64)
+	endpoint, err := server.Start(token)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +88,8 @@ func TestServerProtocolAndCurrentNovel(t *testing.T) {
 	if !strings.HasPrefix(endpoint.URL, "http://127.0.0.1:") || endpoint.Token == "" {
 		t.Fatalf("本地端点不符合预期: %+v", endpoint)
 	}
-	if _, err := server.Start(); err == nil {
+	require.Equal(t, token, endpoint.Token)
+	if _, err := server.Start(token); err == nil {
 		t.Fatal("重复启动 MCP server 应被拒绝")
 	}
 
@@ -225,7 +228,8 @@ func TestServerStopWaitsForCanceledCalls(t *testing.T) {
 				}})
 			}
 			server := New(registry, nil, current, logger, allowed)
-			endpoint, err := server.Start()
+			require.NoError(t, server.SetPort(0))
+			endpoint, err := server.Start(strings.Repeat("a", 64))
 			require.NoError(t, err)
 			t.Cleanup(func() {
 				unblock()
@@ -266,7 +270,7 @@ func TestServerStopWaitsForCanceledCalls(t *testing.T) {
 				t.Fatal("测试工具应仍在退出清理阶段")
 			default:
 			}
-			_, err = server.Start()
+			_, err = server.Start(endpoint.Token)
 			require.Error(t, err, "旧调用未退出时不能重启")
 
 			waitCtx, cancelWait := context.WithTimeout(context.Background(), 5*time.Second)
@@ -290,7 +294,7 @@ func TestServerStopWaitsForCanceledCalls(t *testing.T) {
 			case <-callCtx.Done():
 				t.Fatal("客户端调用未结束")
 			}
-			next, err := server.Start()
+			next, err := server.Start(strings.Repeat("b", 64))
 			require.NoError(t, err)
 			require.NotEqual(t, endpoint.Token, next.Token)
 		})
