@@ -33,13 +33,13 @@ const (
 )
 
 // SearchWeb 通过 DeepSeek Anthropic 端点执行一次带搜索的对话。
-// apiKey 是 DeepSeek 的 API key，model 如 "deepseek-v4-flash"，query 是搜索词。
+// apiKey 是 DeepSeek 的 API key，model 如 "deepseek-flash"，query 是搜索词。
 func SearchWeb(ctx context.Context, apiKey, model, query string) (*WebSearchResult, error) {
 	if apiKey == "" {
 		return nil, fmt.Errorf("DeepSeek API key 未配置")
 	}
 	if model == "" {
-		model = "deepseek-v4-flash"
+		model = "deepseek-flash"
 	}
 
 	reqBody := map[string]any{
