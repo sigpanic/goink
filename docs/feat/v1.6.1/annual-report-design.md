@@ -1,6 +1,6 @@
 # 年度创作报告与统计数据积累方案
 
-状态：每日统计存储基础（`1d253df`）和创建计数（`0637944`）已提交；对话轮数、工具执行次数已实现，待 review；Token、时长采集及正式报告页面尚未实现。
+状态：每日统计存储基础（`1d253df`）、创建计数（`0637944`）和对话/工具计数（`117196f`）已提交；Token 采集已实现，待 review；时长采集及正式报告页面尚未实现。
 
 日期：2026-10-09。
 
@@ -160,6 +160,8 @@ Goink 已有 writing_log 和写作活动统计，但目前不能完整回答以�
 - 记录 provider、实际请求模型和用途，避免用户修改模型配置后历史被重新归属。
 - 首版优先覆盖主对话；模式、风格提取等辅助调用能通过小改动接入时补充。不能为了取得这些用量重写调用生命周期。本地 ONNX 推理不计 API Token，远程 embedding 留待后续。
 
+已在 `agent.updateUsage` 的起点调用 `recordTokenUsage`，复用现有 SSE 最终 usage 事件。记录 `prompt_tokens`、`completion_tokens`、`total_tokens`，以及 `prompt_cache_hit_tokens` / `prompt_cache_miss_tokens` 明细；缓存命中字段未返回时读取 `prompt_tokens_details.cached_tokens`，推理明细读取 `completion_tokens_details.reasoning_tokens`。至少取得一个已知用量字段才记录，全零但明确返回的用量也计入 usage_count。主 Agent 用途为 `chat`，共用此路径的子 Agent 按其 AgentType（如 `review`、`memory`）保存用途；自动标题、压缩、模式/风格提取等辅助路径尚未接入。转换使用现有 JSON 解码的数值类型，不修改原始 usage，也不读取会话累计值；数据库失败仍只告警。
+
 ## 5. 建议的数据设计
 
 以下表名与字段为设计建议，实际实现前需结合现有迁移和调用边界确认。
@@ -215,7 +217,7 @@ Goink 已有 writing_log 和写作活动统计，但目前不能完整回答以�
 ### 6.2 对话、工具与时长
 
 - 对话：在后端接受用户请求、开始处理的入口累计一次。
-- 工具：在 Agent 开始实际执行工具的位置累计一次，避免开始和完成事件各计一次。
+- 工具：在 Registry 通过校验、开始实际执行工具的位置累计一次，内部 Agent 和外部 MCP 统一计入，避免开始和完成事件各计一次。
 - 时长：前端根层活动 hook 每分钟向轻量 App API 提供本次秒数，后端限定单次不超过 60 秒并归入当天。失败跳过，不补发或重试。
 - 活动 hook 清理监听和定时器，避免组件重复挂载导致持续重复累计。
 

@@ -8,6 +8,7 @@ import (
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/llm"
 )
 
@@ -30,6 +31,7 @@ func (a *Agent) InitRunningTokens(messages []map[string]any) map[string]int {
 // updateUsage 计算 usage_ratio + 分角色 detail → 持久化到 session + 推送前端。
 // 缓存命中 token 做 session 级累计，每次请求累加到历史值上。
 func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runningTokens map[string]int, opts RunOptions) {
+	a.recordTokenUsage(ctx, apiUsage, opts)
 	localTotal := runningTokens["system"] + runningTokens["user"] + runningTokens["assistant"] + runningTokens["tool"]
 	apiTotal, _ := apiUsage["total_tokens"].(float64)
 
@@ -89,5 +91,41 @@ func (a *Agent) updateUsage(ctx context.Context, apiUsage map[string]any, runnin
 		Type:      EventUsage,
 		Usage:     usage,
 		Timestamp: time.Now(),
+	})
+}
+
+// recordTokenUsage 仅累计原始单次 usage，缓存和推理明细不再加进总量。
+func (a *Agent) recordTokenUsage(ctx context.Context, apiUsage map[string]any, opts RunOptions) {
+	if opts.Model == nil {
+		return
+	}
+	input, hasInput := apiUsage["prompt_tokens"].(float64)
+	output, hasOutput := apiUsage["completion_tokens"].(float64)
+	total, hasTotal := apiUsage["total_tokens"].(float64)
+	hit, hasHit := apiUsage["prompt_cache_hit_tokens"].(float64)
+	miss, hasMiss := apiUsage["prompt_cache_miss_tokens"].(float64)
+	if !hasHit {
+		details, _ := apiUsage["prompt_tokens_details"].(map[string]any)
+		hit, hasHit = details["cached_tokens"].(float64)
+	}
+	details, _ := apiUsage["completion_tokens_details"].(map[string]any)
+	reasoning, hasReasoning := details["reasoning_tokens"].(float64)
+	if !hasInput && !hasOutput && !hasTotal && !hasHit && !hasMiss && !hasReasoning {
+		return
+	}
+	if !hasTotal && hasInput && hasOutput {
+		total = input + output
+	}
+	purpose := "chat"
+	if opts.AgentType != "" && opts.AgentType != "main" {
+		purpose = opts.AgentType
+	}
+	activity.NewStore(a.db, a.logger).AddLLMUsage(ctx, opts.ProviderName, opts.Model.ID, purpose, activity.TokenUsage{
+		InputTokens:     int64(input),
+		OutputTokens:    int64(output),
+		TotalTokens:     int64(total),
+		CacheHitTokens:  int64(hit),
+		CacheMissTokens: int64(miss),
+		ReasoningTokens: int64(reasoning),
 	})
 }
