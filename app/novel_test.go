@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/mcpserver"
@@ -174,6 +176,53 @@ func TestSetActiveNovel(t *testing.T) {
 	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: 0}))
 	_, err = a.currentNovel(context.Background())
 	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
+}
+
+func TestSetActiveNovelConcurrentSessionSavePreservesSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first := createTestNovel(t, a)
+	second := createTestNovel(t, a)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+
+	const sessionID = "session-during-novel-switch"
+	sessionDone := make(chan struct{})
+	var sessionErr error
+	// 在切书的 DB 事务提交后、内存选择更新前，发起另一项设置保存。
+	require.NoError(t, a.db.Callback().Update().After("gorm:commit_or_rollback_transaction").
+		Register("test:save_session_during_novel_switch", func(tx *gorm.DB) {
+			updates, ok := tx.Statement.Dest.(map[string]interface{})
+			if tx.Error != nil || tx.Statement.Table != "app_config" || !ok || updates["last_novel_id"] != second.ID {
+				return
+			}
+			go func() {
+				sessionErr = a.SetLastSession(sessionID)
+				close(sessionDone)
+			}()
+			select {
+			case <-sessionDone:
+				t.Error("会话保存不应在切书的内存选择更新前完成")
+			case <-time.After(100 * time.Millisecond):
+			}
+		}))
+
+	switchErr := a.SetActiveNovel(SetActiveNovelInput{NovelID: second.ID})
+	select {
+	case <-sessionDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("会话保存未完成")
+	}
+	require.NoError(t, switchErr)
+	require.NoError(t, sessionErr)
+
+	settings, err := a.GetSettings()
+	require.NoError(t, err)
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, second.ID, settings.LastNovelID)
+	assert.Equal(t, second.ID, a.activeNovelID.Load())
+	assert.Equal(t, second.ID, persisted.LastNovelID)
+	assert.Equal(t, sessionID, settings.LastSessionID)
+	assert.Equal(t, sessionID, persisted.LastSessionID)
 }
 
 func TestSetActiveNovelSaveFailurePreservesSelection(t *testing.T) {

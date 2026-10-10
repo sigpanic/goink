@@ -62,7 +62,8 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 		return nil, fmt.Errorf("failed to create novel: %w", err)
 	}
 
-	if _, err := git.New(n.ID, a.settings.GitName, a.settings.GitEmail, a.logger); err != nil {
+	st := a.settingsSnapshot()
+	if _, err := git.New(n.ID, st.GitName, st.GitEmail, a.logger); err != nil {
 		a.logger.Error("创建小说失败: git 初始化失败", "novelID", n.ID, "title", n.Title, "error", err)
 		a.novel.DB.WithContext(a.ctx).Delete(&n) // 回滚孤儿 DB 记录
 		return nil, fmt.Errorf("failed to init novel repo: %w", err)
@@ -94,6 +95,8 @@ func (a *App) SetActiveNovel(input SetActiveNovelInput) error {
 			return fmt.Errorf("读取待切换小说: %w", err)
 		}
 	}
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
 	result := a.db.WithContext(a.ctx).Model(&config.AppSettings{}).
 		Where("id = ?", 1).Update("last_novel_id", input.NovelID)
 	if result.Error != nil {
@@ -206,9 +209,10 @@ func (a *App) DeleteNovel(novelID int64) error {
 	}
 
 	// 如果删除的是当前活跃书籍，清除记录
-	if a.settings.LastNovelID == novelID {
-		a.settings.LastNovelID = 0
-		if err := config.SaveSettings(a.db, a.settings); err != nil {
+	if a.settingsSnapshot().LastNovelID == novelID {
+		if err := a.updateSettings(func(s *config.AppSettings) {
+			s.LastNovelID = 0
+		}); err != nil {
 			return fmt.Errorf("delete novel: clear last novel: %w", err)
 		}
 		a.activeNovelID.Store(0)
@@ -220,7 +224,8 @@ func (a *App) DeleteNovel(novelID int64) error {
 
 // SaveCover 保存小说封面并提交到 Git 仓库。
 func (a *App) SaveCover(novelID int64, data []byte) error {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return fmt.Errorf("save cover: %w", err)
 	}
@@ -293,7 +298,7 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
 	}
 
-	data, _, err := export.ExportNovel(&n, cc, format, a.settings.UserName)
+	data, _, err := export.ExportNovel(&n, cc, format, a.settingsSnapshot().UserName)
 	if err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}
@@ -306,7 +311,8 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 
 // DeleteCover 删除小说封面并提交到 Git 仓库。
 func (a *App) DeleteCover(novelID int64) error {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return fmt.Errorf("delete cover: %w", err)
 	}

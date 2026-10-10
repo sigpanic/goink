@@ -63,9 +63,10 @@ type App struct {
 	quitConfirmPending bool
 	quitConfirmed      bool
 
-	cfg      *config.AppConfig
-	settings *config.AppSettings
-	db       *gorm.DB
+	cfg        *config.AppConfig
+	settings   *config.AppSettings
+	settingsMu sync.Mutex // 串行化 settings 的并发读写，见 config.go 的 updateSettings / settingsSnapshot
+	db         *gorm.DB
 
 	llmClient     *llm.Client
 	agent         *agent.Agent

@@ -33,6 +33,38 @@ func TestSetSelectedModel(t *testing.T) {
 	assert.Equal(t, "high", settings.ReasoningEffort)
 }
 
+func TestSetSelectedModelSaveFailurePreservesSettings(t *testing.T) {
+	app := setupTestApp(t)
+	require.NoError(t, app.SetSelectedModel("original-model", "low"))
+	before, err := app.GetSettings()
+	require.NoError(t, err)
+
+	require.NoError(t, app.db.Exec(`CREATE TRIGGER reject_model_settings
+		BEFORE UPDATE ON app_config
+		WHEN NEW.selected_model_key = 'rejected-model'
+		BEGIN SELECT RAISE(FAIL, 'settings save failed'); END`).Error)
+
+	err = app.SetSelectedModel("rejected-model", "high")
+	require.ErrorContains(t, err, "settings save failed")
+	settings, err := app.GetSettings()
+	require.NoError(t, err)
+	persisted, err := config.LoadSettings(app.db)
+	require.NoError(t, err)
+	assert.Equal(t, before, settings)
+	assert.Equal(t, before, persisted)
+
+	require.NoError(t, app.db.Exec("DROP TRIGGER reject_model_settings").Error)
+	require.NoError(t, app.SetLastSession("session-after-failed-save"))
+	settings, err = app.GetSettings()
+	require.NoError(t, err)
+	persisted, err = config.LoadSettings(app.db)
+	require.NoError(t, err)
+	expected := *before
+	expected.LastSessionID = "session-after-failed-save"
+	assert.Equal(t, &expected, settings)
+	assert.Equal(t, &expected, persisted)
+}
+
 func TestSetReasoningEffort(t *testing.T) {
 	app := setupTestApp(t)
 
