@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"os"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,10 @@ func openTestDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&WritingLog{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
 	return db
 }
 
@@ -28,30 +33,28 @@ func testLogger() *slog.Logger {
 	return slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
 }
 
-func int64Ptr(v int64) *int64 { return &v }
-
-func TestLogDelta_Insert(t *testing.T) {
+func TestLogDelta_Accumulates(t *testing.T) {
 	db := openTestDB(t)
 	s := NewStore(db, testLogger())
 	ctx := context.Background()
 
 	s.LogDelta(ctx, 1, 10, 500)
 	s.LogDelta(ctx, 1, 10, 300)
+	s.LogDelta(ctx, 1, 11, -100)
 
 	var count int64
 	db.Model(&WritingLog{}).Count(&count)
-	if count != 2 {
-		t.Errorf("expected 2 records, got %d", count)
+	if count != 1 {
+		t.Errorf("expected 1 record, got %d", count)
 	}
 	var records []WritingLog
 	if err := db.Order("id ASC").Find(&records).Error; err != nil {
 		t.Fatal(err)
 	}
-	for _, record := range records {
-		if record.ChapterID == nil || *record.ChapterID != 10 {
-			t.Errorf("chapter_id = %v, want 10", record.ChapterID)
-		}
-	}
+	require.Len(t, records, 1)
+	require.Equal(t, 800, records[0].WordsAdded)
+	require.Equal(t, 100, records[0].WordsDeleted)
+	require.Equal(t, 700, records[0].WordDelta)
 }
 
 func TestLogDelta_SkipsZero(t *testing.T) {
@@ -73,9 +76,13 @@ func TestGetDailyActivity_Basic(t *testing.T) {
 	s := NewStore(db, testLogger())
 	ctx := context.Background()
 
-	today := time.Now().Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 200})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(2), WordDelta: 300})
+	s.LogChanges(ctx, 1, 1, 200, 0)
+	s.LogChanges(ctx, 2, 2, 300, 0)
+	var records []WritingLog
+	require.NoError(t, db.Order("novel_id").Find(&records).Error)
+	require.Len(t, records, 2)
+	require.Equal(t, 200, records[0].WordsAdded)
+	require.Equal(t, 300, records[1].WordsAdded)
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
@@ -89,22 +96,20 @@ func TestGetDailyActivity_Basic(t *testing.T) {
 	}
 }
 
-func TestGetDailyActivity_FiltersNegative(t *testing.T) {
+func TestGetDailyActivity_IncludesDeletions(t *testing.T) {
 	db := openTestDB(t)
 	s := NewStore(db, testLogger())
 	ctx := context.Background()
 
-	today := time.Now().Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: -100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(2), WordDelta: 200})
+	s.LogDelta(ctx, 1, 1, -100)
+	s.LogDelta(ctx, 1, 2, 200)
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
 		t.Fatalf("GetDailyActivity: %v", err)
 	}
 	if len(result) != 1 {
-		// 负值被 WHERE word_delta > 0 过滤，正数仍计入
-		t.Fatalf("expected 1 day (only positive), got %d", len(result))
+		t.Fatalf("expected 1 day, got %d", len(result))
 	}
 	if result[0].WordsAdded != 200 {
 		t.Errorf("expected 200 words (only positive), got %d", result[0].WordsAdded)
@@ -120,8 +125,8 @@ func TestGetDailyActivity_MultipleDays(t *testing.T) {
 
 	d1 := time.Now().AddDate(0, 0, -3).Format("2006-01-02")
 	d2 := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	db.Create(&WritingLog{Date: d1, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
-	db.Create(&WritingLog{Date: d2, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 250})
+	require.NoError(t, db.Create(&WritingLog{Date: d1, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: d2, NovelID: 1, WordDelta: 250, WordsAdded: 250}).Error)
 
 	result, err := s.GetDailyActivity(ctx, 1)
 	if err != nil {
@@ -145,8 +150,8 @@ func TestGetWritingStats_Basic(t *testing.T) {
 
 	today := time.Now().Format("2006-01-02")
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 500})
-	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterID: int64Ptr(2), WordDelta: 300})
+	require.NoError(t, db.Create(&WritingLog{Date: today, NovelID: 1, WordDelta: 500, WordsAdded: 500}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: yesterday, NovelID: 1, WordDelta: 300, WordsAdded: 300}).Error)
 
 	stats, err := s.GetWritingStats(ctx, 2, 5)
 	if err != nil {
@@ -175,9 +180,9 @@ func TestGetWritingStats_CurrentStreak(t *testing.T) {
 	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
 	dayBefore := time.Now().AddDate(0, 0, -2).Format("2006-01-02")
 
-	db.Create(&WritingLog{Date: dayBefore, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
-	db.Create(&WritingLog{Date: yesterday, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
+	require.NoError(t, db.Create(&WritingLog{Date: dayBefore, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: yesterday, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: today, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
 
 	stats, err := s.GetWritingStats(ctx, 1, 1)
 	if err != nil {
@@ -200,8 +205,8 @@ func TestGetWritingStats_BrokenStreak(t *testing.T) {
 	today := time.Now().Format("2006-01-02")
 	gapDay := time.Now().AddDate(0, 0, -3).Format("2006-01-02") // 断了
 
-	db.Create(&WritingLog{Date: gapDay, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
-	db.Create(&WritingLog{Date: today, NovelID: 1, ChapterID: int64Ptr(1), WordDelta: 100})
+	require.NoError(t, db.Create(&WritingLog{Date: gapDay, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
+	require.NoError(t, db.Create(&WritingLog{Date: today, NovelID: 1, WordDelta: 100, WordsAdded: 100}).Error)
 
 	stats, err := s.GetWritingStats(ctx, 1, 1)
 	if err != nil {
@@ -232,34 +237,28 @@ func TestGetWritingStats_EmptyData(t *testing.T) {
 	}
 }
 
-func TestLogChangesAndLegacyAggregation(t *testing.T) {
+func TestLogChangesDailyAggregation(t *testing.T) {
 	db := openTestDB(t)
 	s := NewStore(db, testLogger())
 	ctx := context.Background()
-	yesterday := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
-	require.NoError(t, db.Create(&WritingLog{Date: yesterday, WordDelta: 100}).Error)
-	require.NoError(t, db.Create(&WritingLog{Date: yesterday, WordDelta: -50}).Error)
+	now := time.Now()
+	yesterday := now.AddDate(0, 0, -1).Format("2006-01-02")
+	s.now = func() time.Time { return now.AddDate(0, 0, -1) }
+	require.NoError(t, db.Create(&WritingLog{Date: yesterday, NovelID: 1, WordDelta: 50, WordsAdded: 100, WordsDeleted: 50}).Error)
 	s.LogChanges(ctx, 1, 10, 250, 200)
+	s.now = func() time.Time { return now }
 	s.LogChanges(ctx, 1, 10, 200, 200)
-	s.LogChanges(ctx, 1, 10, 100, 150)
+	s.LogChanges(ctx, 1, 11, 100, 150)
 	s.LogChanges(ctx, 1, 10, 0, 80)
 	s.LogChanges(ctx, 1, 10, 0, 0)
 
 	var logs []WritingLog
 	require.NoError(t, db.Order("id").Find(&logs).Error)
-	require.Len(t, logs, 6)
-	require.Nil(t, logs[0].WordsAdded)
-	require.Nil(t, logs[0].WordsDeleted)
-	for i, expected := range []struct{ added, deleted int }{{250, 200}, {200, 200}, {100, 150}, {0, 80}} {
-		record := logs[i+2]
-		require.Equal(t, int64(10), *record.ChapterID)
-		require.NotNil(t, record.WordsAdded)
-		require.NotNil(t, record.WordsDeleted)
-		require.Equal(t, expected.added, *record.WordsAdded)
-		require.Equal(t, expected.deleted, *record.WordsDeleted)
-		require.Equal(t, expected.added-expected.deleted, record.WordDelta)
-	}
-	require.NoError(t, db.Model(&WritingLog{}).Where("id = ?", logs[2].ID).Update("date", yesterday).Error)
+	require.Len(t, logs, 2)
+	require.Equal(t, 350, logs[0].WordsAdded)
+	require.Equal(t, 250, logs[0].WordsDeleted)
+	require.Equal(t, 300, logs[1].WordsAdded)
+	require.Equal(t, 430, logs[1].WordsDeleted)
 	daily, err := s.GetDailyActivity(ctx, 1)
 	require.NoError(t, err)
 	require.Len(t, daily, 2)
@@ -285,7 +284,7 @@ func TestEditingActivityIncludesDeletionAndEqualLengthRewrite(t *testing.T) {
 		date := time.Now().AddDate(0, 0, i-2).Format("2006-01-02")
 		require.NoError(t, db.Create(&WritingLog{
 			Date: date, WordDelta: changes.added - changes.deleted,
-			WordsAdded: &changes.added, WordsDeleted: &changes.deleted,
+			WordsAdded: changes.added, WordsDeleted: changes.deleted,
 		}).Error)
 	}
 	require.NoError(t, db.Create(&WritingLog{Date: time.Now().AddDate(0, 0, -3).Format("2006-01-02")}).Error)
@@ -307,4 +306,20 @@ func TestEditingActivityIncludesDeletionAndEqualLengthRewrite(t *testing.T) {
 	require.Equal(t, 3, stats.TotalDaysActive)
 	require.Equal(t, 3, stats.CurrentStreak)
 	require.Equal(t, 3, stats.LongestStreak)
+}
+
+func TestLogChangesAccumulatesConcurrently(t *testing.T) {
+	db := openTestDB(t)
+	s := NewStore(db, testLogger())
+	var wg sync.WaitGroup
+	for range 40 {
+		wg.Go(func() { s.LogChanges(context.Background(), 1, 10, 20, 5) })
+	}
+	wg.Wait()
+	var records []WritingLog
+	require.NoError(t, db.Find(&records).Error)
+	require.Len(t, records, 1)
+	require.Equal(t, 800, records[0].WordsAdded)
+	require.Equal(t, 200, records[0].WordsDeleted)
+	require.Equal(t, 600, records[0].WordDelta)
 }

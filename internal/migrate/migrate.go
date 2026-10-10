@@ -15,6 +15,7 @@ import (
 	"github.com/sigpanic/goink/internal/migrate/engine"
 	_ "github.com/sigpanic/goink/internal/migrate/v120" // blank：触发 v120.init 注册，Run 无需感知具体迁移
 	_ "github.com/sigpanic/goink/internal/migrate/v160" // blank：触发 v160.init 注册，Run 无需感知具体迁移
+	_ "github.com/sigpanic/goink/internal/migrate/v161" // blank：注册写作日志按日汇总迁移
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"

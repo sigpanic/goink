@@ -6,17 +6,19 @@ import (
 	"time"
 
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Store 管理 writing_log 持久化。
 type Store struct {
 	DB     *gorm.DB
 	logger *slog.Logger
+	now    func() time.Time
 }
 
 // NewStore 创建写作日志存储。
 func NewStore(db *gorm.DB, logger *slog.Logger) *Store {
-	return &Store{DB: db, logger: logger}
+	return &Store{DB: db, logger: logger, now: time.Now}
 }
 
 // LogDelta 记录一次字数变化。delta 为 0 时跳过。
@@ -24,13 +26,7 @@ func (s *Store) LogDelta(ctx context.Context, novelID, chapterID int64, delta in
 	if delta == 0 {
 		return
 	}
-	record := WritingLog{
-		Date:      time.Now().Format("2006-01-02"),
-		NovelID:   novelID,
-		ChapterID: &chapterID,
-		WordDelta: delta,
-	}
-	if err := s.DB.WithContext(ctx).Create(&record).Error; err != nil {
+	if err := s.addChanges(ctx, novelID, max(delta, 0), max(-delta, 0)); err != nil {
 		s.logger.Warn("记录写作日志失败", "novel_id", novelID, "chapter_id", chapterID, "delta", delta, "err", err)
 	}
 }
@@ -40,24 +36,27 @@ func (s *Store) LogChanges(ctx context.Context, novelID, chapterID int64, added,
 	if added == 0 && deleted == 0 {
 		return
 	}
-	record := WritingLog{
-		Date:         time.Now().Format("2006-01-02"),
-		NovelID:      novelID,
-		ChapterID:    &chapterID,
-		WordDelta:    added - deleted,
-		WordsAdded:   &added,
-		WordsDeleted: &deleted,
-	}
-	if err := s.DB.WithContext(ctx).Create(&record).Error; err != nil {
+	if err := s.addChanges(ctx, novelID, added, deleted); err != nil {
 		s.logger.Warn("记录写作日志失败", "novel_id", novelID, "chapter_id", chapterID, "added", added, "deleted", deleted, "err", err)
 	}
 }
 
-// 历史记录保留正向净变化口径；新记录使用 diff 新增量。
-const addedWordsExpr = "COALESCE(words_added, CASE WHEN word_delta > 0 THEN word_delta ELSE 0 END)"
+func (s *Store) addChanges(ctx context.Context, novelID int64, added, deleted int) error {
+	record := WritingLog{
+		Date: s.now().Format("2006-01-02"), NovelID: novelID,
+		WordDelta: added - deleted, WordsAdded: added, WordsDeleted: deleted,
+	}
+	return s.DB.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "date"}, {Name: "novel_id"}},
+		DoUpdates: clause.Assignments(map[string]any{
+			"word_delta":    gorm.Expr("word_delta + excluded.word_delta"),
+			"words_added":   gorm.Expr("words_added + excluded.words_added"),
+			"words_deleted": gorm.Expr("words_deleted + excluded.words_deleted"),
+		}),
+	}).Create(&record).Error
+}
 
-const deletedWordsExpr = "COALESCE(words_deleted, CASE WHEN word_delta < 0 THEN -word_delta ELSE 0 END)"
-const editedWordsExpr = "(" + addedWordsExpr + " + " + deletedWordsExpr + ")"
+const editedWordsExpr = "(words_added + words_deleted)"
 
 // GetDailyActivity 返回最近 months 个月的每日字数汇总。
 func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivity, error) {
@@ -69,7 +68,7 @@ func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivi
 	var results []DailyActivity
 	err := s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
-		Select("date, SUM(word_delta) as words_net, SUM("+addedWordsExpr+") as words_added, SUM("+deletedWordsExpr+") as words_deleted").
+		Select("date, SUM(word_delta) as words_net, SUM(words_added) as words_added, SUM(words_deleted) as words_deleted").
 		Where("date >= ? AND "+editedWordsExpr+" > 0", cutoff).
 		Group("date").
 		Order("date ASC").
@@ -82,13 +81,12 @@ func (s *Store) GetDailyActivity(ctx context.Context, months int) ([]DailyActivi
 
 // GetWritingStats 返回全局写作统计。
 func (s *Store) GetWritingStats(ctx context.Context, novelCount, chapterCount int64) (*WritingStats, error) {
-	// 总字数：正数 delta 之和
-	// 新记录使用新增量，正数 delta 仅作为历史记录的回退口径。
+	// 累计新增字数；历史净变化已在迁移时按正负分别估算增删量。
 	var totalWords int64
 	s.DB.WithContext(ctx).
 		Model(&WritingLog{}).
-		Select("COALESCE(SUM(" + addedWordsExpr + "), 0)").
-		Where(addedWordsExpr + " > 0").
+		Select("COALESCE(SUM(words_added), 0)").
+		Where("words_added > 0").
 		Scan(&totalWords)
 
 	// 活跃天数

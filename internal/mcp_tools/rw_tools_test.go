@@ -102,15 +102,11 @@ func TestEditRecordsTextChanges(t *testing.T) {
 	require.False(t, result.Success)
 	var logs []writing.WritingLog
 	require.NoError(t, db.Order("id").Find(&logs).Error)
-	require.Len(t, logs, 3)
-	for i, expected := range []struct{ added, deleted int }{{6, 0}, {2, 2}, {0, 2}} {
-		require.Equal(t, id, *logs[i].ChapterID)
-		require.NotNil(t, logs[i].WordsAdded)
-		require.NotNil(t, logs[i].WordsDeleted)
-		require.Equal(t, expected.added, *logs[i].WordsAdded)
-		require.Equal(t, expected.deleted, *logs[i].WordsDeleted)
-		require.Equal(t, expected.added-expected.deleted, logs[i].WordDelta)
-	}
+	require.Len(t, logs, 1)
+	require.Equal(t, tc.NovelID, logs[0].NovelID)
+	require.Equal(t, 8, logs[0].WordsAdded)
+	require.Equal(t, 4, logs[0].WordsDeleted)
+	require.Equal(t, 4, logs[0].WordDelta)
 	require.Equal(t, 4, fetchChapter(t, db, id).WordCount)
 }
 

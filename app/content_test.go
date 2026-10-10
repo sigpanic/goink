@@ -313,17 +313,14 @@ func TestSaveContentRecordsTextChanges(t *testing.T) {
 			require.NoError(t, app.writing.DB.Order("id").Find(&logs).Error)
 			expectedCount := 0
 			if withExpected {
-				expectedCount = 3
+				expectedCount = 1
 			}
 			require.Len(t, logs, expectedCount)
-			expectedChanges := []struct{ added, deleted int }{{6, 0}, {2, 2}, {0, 2}}
-			for i := range logs {
-				expected := expectedChanges[i]
-				require.NotNil(t, logs[i].WordsAdded)
-				require.NotNil(t, logs[i].WordsDeleted)
-				assert.Equal(t, expected.added, *logs[i].WordsAdded)
-				assert.Equal(t, expected.deleted, *logs[i].WordsDeleted)
-				assert.Equal(t, expected.added-expected.deleted, logs[i].WordDelta)
+			if withExpected {
+				assert.Equal(t, novel.ID, logs[0].NovelID)
+				assert.Equal(t, 8, logs[0].WordsAdded)
+				assert.Equal(t, 4, logs[0].WordsDeleted)
+				assert.Equal(t, 4, logs[0].WordDelta)
 			}
 			chapters, err := app.GetChapters(novel.ID)
 			require.NoError(t, err)
