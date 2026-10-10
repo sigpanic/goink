@@ -58,7 +58,12 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
       for (let i = 0; i < 7; i++) {
         const ds = cur.toISOString().slice(0, 10);
         week.push(
-          data[ds] ?? { date: ds, words_net: 0, words_added: 0, words_deleted: 0 },
+          data[ds] ?? {
+            date: ds,
+            words_net: 0,
+            words_added: 0,
+            words_deleted: 0,
+          },
         );
         cur.setDate(cur.getDate() + 1);
       }
