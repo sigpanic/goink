@@ -3,11 +3,14 @@
 APP_NAME  := goink
 VERSION   ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR := build
-LDFLAGS   := -X github.com/sigpanic/goink/internal/version.Version=$(VERSION)
+# 立即求值，在 deps、frontend 和 Windows 版本资源改写之前捕获源码状态。
+BUILD_HASH := $(shell bash scripts/build-hash.sh)
+LDFLAGS   := -X github.com/sigpanic/goink/internal/version.Version=$(VERSION) -X github.com/sigpanic/goink/internal/version.CommitHash=$(BUILD_HASH)
 
 # 启动 Wails 开发模式（Go 后端 + Vite HMR 前端）
 dev:
-	wails dev -tags webkit2_41
+	@test -n "$(BUILD_HASH)" || { echo "无法读取构建 commit hash" >&2; exit 1; }
+	wails dev -tags webkit2_41 -ldflags "-X github.com/sigpanic/goink/internal/version.CommitHash=$(BUILD_HASH)"
 
 # 下载运行时依赖（Git + ONNX Runtime），已有则跳过
 deps:
@@ -30,6 +33,7 @@ frontend:
 # 动态注入版本号到 build/windows/info.json 的 fixed.file_version 和 fixed.product_version
 # （Wails v2 读这个文件用 winres 生成 .syso 嵌入 goink.exe PE 版本资源），构建后恢复原文件
 build: deps frontend
+	@test -n "$(BUILD_HASH)" || { echo "无法读取构建 commit hash" >&2; exit 1; }
 	@cp build/windows/info.json build/windows/info.json.bak && \
 	trap 'mv build/windows/info.json.bak build/windows/info.json' EXIT && \
 	VERSION_NUM=$$(V=$$(echo "$(VERSION)" | sed 's/^v//' | sed 's/-.*//'); if echo "$$V" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$$'; then echo "$$V.0"; else echo "0.0.0.0"; fi) && \

@@ -14,6 +14,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Capture build hash
+        shell: bash
+        run: |
+          BUILD_HASH=$(bash scripts/build-hash.sh)
+          echo "BUILD_HASH=$BUILD_HASH" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
@@ -60,7 +66,7 @@ jobs:
           fi
           # 注入 build/windows/info.json（goink.exe PE 版本资源，Wails 用 winres 读它生成 .syso）
           jq --arg v "$VERSION_INFO" '.fixed.file_version = $v | .fixed.product_version = $v | .info."0000".FileVersion = $v | .info."0000".ProductVersion = $v' build/windows/info.json > build/windows/info.json.tmp && mv build/windows/info.json.tmp build/windows/info.json
-          wails build -tags webkit2_41 -o goink.exe -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink.exe -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION -X github.com/sigpanic/goink/internal/version.CommitHash=$BUILD_HASH"
 
       - name: Install Inno Setup
         run: choco install innosetup -y --limit-output
@@ -119,6 +125,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Capture build hash
+        shell: bash
+        run: |
+          BUILD_HASH=$(bash scripts/build-hash.sh)
+          echo "BUILD_HASH=$BUILD_HASH" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
@@ -149,7 +161,7 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION -X github.com/sigpanic/goink/internal/version.CommitHash=$BUILD_HASH"
 
       - name: Package (AppImage)
         run: |
@@ -190,6 +202,12 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
+      - name: Capture build hash
+        shell: bash
+        run: |
+          BUILD_HASH=$(bash scripts/build-hash.sh)
+          echo "BUILD_HASH=$BUILD_HASH" >> "$GITHUB_ENV"
+
       - uses: actions/setup-go@v6
         with: { go-version: '1.25' }
 
@@ -217,7 +235,7 @@ jobs:
           cd frontend && npm ci && npm run build && cd ..
           VERSION="${GITHUB_REF_NAME#v}"
           if [[ ! "$GITHUB_REF_NAME" =~ ^v[0-9] ]]; then VERSION="$(git describe --tags --always --dirty 2>/dev/null || echo dev)"; fi
-          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION"
+          wails build -tags webkit2_41 -o goink -ldflags "-X github.com/sigpanic/goink/internal/version.Version=$VERSION -X github.com/sigpanic/goink/internal/version.CommitHash=$BUILD_HASH"
 
       - name: Package (DMG)
         run: |
