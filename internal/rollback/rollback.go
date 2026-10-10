@@ -6,6 +6,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -52,6 +53,13 @@ func RollbackBeforeTurn(ctx context.Context, db *gorm.DB, sessionID string, targ
 	if err := db.Transaction(func(tx *gorm.DB) error {
 		if err := storage.RollbackInTx(context.Background(), tx, sessionID, targetTurn, lastTurn); err != nil {
 			return err
+		}
+		var rollbackSession struct{ NovelID int64 }
+		if err := tx.Table("sessions").Select("novel_id").Where("session_id = ?", sessionID).Take(&rollbackSession).Error; err != nil {
+			return fmt.Errorf("rollback: get novel for membership cleanup: %w", err)
+		}
+		if err := character.CleanupOrphanGroupMembers(tx, rollbackSession.NovelID); err != nil {
+			return fmt.Errorf("rollback: clean character group memberships: %w", err)
 		}
 		return cleanupTurnCommits(tx, sessionID, targetTurn, lastTurn)
 	}); err != nil {

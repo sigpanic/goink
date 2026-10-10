@@ -55,7 +55,7 @@ func TestFullLegacyMigration(t *testing.T) {
 	exec(`INSERT INTO reader_perspectives (id, novel_id, type, content, planted_chapter, revealed_chapter) VALUES
 		(1,1,'known','p1',1,0),
 		(2,2,'suspense','p2',99,1)`)
-	// writing_log：旧 chapter_id 实际存章节号；行2 num=0（未定义）保持 NULL。
+	// writing_log：旧 chapter_id 实际存章节号；最终按日期和小说合并。
 	exec(`INSERT INTO writing_log (id, date, novel_id, chapter_id, word_delta) VALUES
 		(1,'2026-01-01',1,2,100),
 		(2,'2026-01-01',1,0,-50)`)
@@ -118,11 +118,8 @@ func TestFullLegacyMigration(t *testing.T) {
 		t.Fatalf("reader_perspectives 行2（孤儿/跨 novel）错误: n=%d", n)
 	}
 	// writing_log
-	if n := count(`SELECT COUNT(*) FROM writing_log WHERE id=1 AND chapter_id=2`); n != 1 {
-		t.Fatalf("writing_log 行1 错误: n=%d", n)
-	}
-	if n := count(`SELECT COUNT(*) FROM writing_log WHERE id=2 AND chapter_id IS NULL`); n != 1 {
-		t.Fatalf("writing_log 行2（num=0）错误: n=%d", n)
+	if n := count(`SELECT COUNT(*) FROM writing_log WHERE date='2026-01-01' AND novel_id=1 AND words_added=100 AND words_deleted=50 AND word_delta=50`); n != 1 {
+		t.Fatalf("writing_log 日汇总错误: n=%d", n)
 	}
 	// character_relations
 	if n := count(`SELECT COUNT(*) FROM character_relations WHERE id=1 AND chapter_id=3`); n != 1 {
@@ -156,8 +153,8 @@ func TestFullLegacyMigration(t *testing.T) {
 			t.Fatalf("旧索引仍存在: %s.%s", index.table, index.name)
 		}
 	}
-	if !db.Migrator().HasIndex("writing_log", "idx_writing_log_chapter_id") {
-		t.Fatal("writing_log.chapter_id 的当前索引应在迁移后存在")
+	if !db.Migrator().HasIndex("writing_log", "uk_writing_date_novel") {
+		t.Fatal("writing_log 应存在日期和小说的唯一索引")
 	}
 
 	// 幂等重跑：已填充的不重复改，结果不变
@@ -180,7 +177,7 @@ func TestFullLegacyMigration(t *testing.T) {
 	}
 	if !db.Migrator().HasColumn("time_entries", "source_chapter_id") ||
 		db.Migrator().HasColumn("time_entries", "source_chapter") ||
-		!db.Migrator().HasColumn("writing_log", "chapter_id") ||
+		db.Migrator().HasColumn("writing_log", "chapter_id") ||
 		db.Migrator().HasColumn("writing_log", "chapter_number") {
 		t.Fatal("状态丢失后最终 id 列不应被改回旧 num 列")
 	}

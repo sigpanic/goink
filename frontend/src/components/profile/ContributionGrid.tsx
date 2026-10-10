@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import type { WritingActivity } from "./useWritingActivity";
 
 interface Props {
-  data: Record<string, number>; // "YYYY-MM-DD" -> 字数
+  data: Record<string, WritingActivity>; // "YYYY-MM-DD" -> 字数
   months?: number;
 }
 
@@ -33,8 +34,7 @@ function formatDate(dateStr: string, locale: string): string {
 export default function ContributionGrid({ data, months = 12 }: Props) {
   const { t, i18n } = useTranslation();
   const [tooltip, setTooltip] = useState<{
-    date: string;
-    words: number;
+    day: WritingActivity;
     x: number;
     y: number;
   } | null>(null);
@@ -51,13 +51,20 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
     // 对齐到周日
     start.setDate(start.getDate() - start.getDay());
 
-    const result: { date: string; words: number }[][] = [];
+    const result: WritingActivity[][] = [];
     const cur = new Date(start);
     while (cur <= end) {
-      const week: { date: string; words: number }[] = [];
+      const week: WritingActivity[] = [];
       for (let i = 0; i < 7; i++) {
         const ds = cur.toISOString().slice(0, 10);
-        week.push({ date: ds, words: data[ds] ?? 0 });
+        week.push(
+          data[ds] ?? {
+            date: ds,
+            words_net: 0,
+            words_added: 0,
+            words_deleted: 0,
+          },
+        );
         cur.setDate(cur.getDate() + 1);
       }
       result.push(week);
@@ -93,11 +100,10 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
     });
   }, [weeks, i18n.language]);
 
-  const showTooltip = (e: React.MouseEvent, date: string, words: number) => {
+  const showTooltip = (e: React.MouseEvent, day: WritingActivity) => {
     const rect = (e.target as HTMLElement).getBoundingClientRect();
     setTooltip({
-      date,
-      words,
+      day,
       x: rect.left + rect.width / 2,
       y: rect.top - 32,
     });
@@ -139,8 +145,9 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
               {week.map((day, di) => (
                 <div
                   key={di}
-                  className={`w-[13px] h-[13px] rounded-[2px] ${levelClass(day.words)} cursor-pointer select-none`}
-                  onMouseEnter={(e) => showTooltip(e, day.date, day.words)}
+                  aria-label={day.date}
+                  className={`w-[13px] h-[13px] rounded-[2px] ${levelClass(day.words_added + day.words_deleted)} cursor-pointer select-none`}
+                  onMouseEnter={(e) => showTooltip(e, day)}
                   onMouseLeave={() => setTooltip(null)}
                 />
               ))}
@@ -151,6 +158,7 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
 
       {/* 图例 */}
       <div className="flex items-center gap-1 mt-2 justify-end text-[10px] text-muted-foreground">
+        <span className="mr-2">{t("profile.editVolume")}</span>
         <span>{t("profile.less")}</span>
         {LEVELS.map((l, i) => (
           <div key={i} className={`w-[10px] h-[10px] rounded-[2px] ${l.cls}`} />
@@ -161,13 +169,20 @@ export default function ContributionGrid({ data, months = 12 }: Props) {
       {/* Tooltip */}
       {tooltip && (
         <div
+          role="tooltip"
           className="fixed z-50 px-2 py-1 rounded text-xs bg-foreground text-background whitespace-nowrap pointer-events-none -translate-x-1/2"
           style={{ left: tooltip.x, top: tooltip.y }}
         >
-          {tooltip.words > 0
-            ? `${tooltip.words.toLocaleString()} ${t("profile.charUnit")}`
+          {tooltip.day.words_added + tooltip.day.words_deleted > 0
+            ? t("profile.dailyChanges", {
+                added: tooltip.day.words_added.toLocaleString(),
+                deleted: tooltip.day.words_deleted.toLocaleString(),
+                net:
+                  (tooltip.day.words_net > 0 ? "+" : "") +
+                  tooltip.day.words_net.toLocaleString(),
+              })
             : t("profile.noWriting")}{" "}
-          · {formatDate(tooltip.date, i18n.language)}
+          · {formatDate(tooltip.day.date, i18n.language)}
         </div>
       )}
     </div>

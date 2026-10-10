@@ -12,6 +12,7 @@ import (
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/rag"
@@ -178,6 +179,17 @@ func emitFileChanged(ctx context.Context, novelID int64, path string) {
 	})
 }
 
+func emitFileMetadataChanged(ctx context.Context, novelID int64, path string) {
+	if ctx == nil || ctx.Value("events") == nil {
+		return
+	}
+	wails.EventsEmit(ctx, "file:changed", map[string]any{
+		"novel_id":      novelID,
+		"path":          path,
+		"metadata_only": true,
+	})
+}
+
 // physicalRWPath 章节正文的物理扁平路径（isOutline=false 时为章节，true 时为大纲）。
 func physicalRWPath(isOutline bool, id int64) string {
 	if isOutline {
@@ -322,6 +334,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 				return nil, fmt.Errorf("update chapter title: %w", err)
 			}
 			ch.Title = a.Title
+			emitFileMetadataChanged(ctx, tc.NovelID, physical)
 			return &ToolResult{Success: true, Data: map[string]any{
 				"path":    physical,
 				"title":   a.Title,
@@ -405,7 +418,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 
 	// 正文（非大纲）落盘后的维护链路：向量/搜索缓存/字数/写作日志
 	if !ref.IsOutline {
-		maintainChapterAfterEdit(ctx, tc, ch, proposed)
+		maintainChapterAfterEdit(ctx, tc, ch, current, proposed)
 	}
 	emitFileChanged(ctx, tc.NovelID, physical)
 
@@ -415,6 +428,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		"approved":    true,
 	}
 	if ref.IsNew {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{ChaptersCreated: 1})
 		data["chapter_id"] = ch.ID
 		if ch.VolumeID != nil {
 			data["volume_id"] = *ch.VolumeID
@@ -756,7 +770,7 @@ func getChapterRecord(ctx context.Context, db *gorm.DB, novelID, id int64) (*cha
 
 // maintainChapterAfterEdit 章节正文落盘后的维护链路：向量刷新、搜索缓存、字数统计。
 // 向量与搜索按 chapter_id 键控；写作日志将在其所属领域迁移时切换。
-func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.Chapter, content string) {
+func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.Chapter, previous, content string) {
 	rag.SubmitRefresh(tc.NovelID, ch.ID, content)
 	if tc.SearchService != nil {
 		tc.SearchService.UpdateCachedChapter(tc.NovelID, ch.ID, content)
@@ -764,14 +778,8 @@ func maintainChapterAfterEdit(ctx context.Context, tc ToolContext, ch *chapter.C
 
 	stats := text.ComputeStats(content)
 
-	var oldWC int
-	tc.DB.WithContext(ctx).Model(&chapter.Chapter{}).
-		Select("COALESCE(word_count, 0)").
-		Where("id = ?", ch.ID).
-		Scan(&oldWC)
-	if delta := stats.WordCount - oldWC; delta != 0 {
-		writing.NewStore(tc.DB, tc.LoggerOrDefault()).LogDelta(ctx, tc.NovelID, ch.ID, delta)
-	}
+	changes := text.ComputeWordChanges(previous, content)
+	writing.NewStore(tc.DB, tc.LoggerOrDefault()).LogChanges(ctx, tc.NovelID, ch.ID, changes.Added, changes.Deleted)
 
 	tc.DB.WithContext(ctx).Model(&chapter.Chapter{}).
 		Where("id = ?", ch.ID).

@@ -13,9 +13,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
@@ -48,7 +50,7 @@ func setupRWEnv(t *testing.T) (*gorm.DB, mcp_tools.ToolContext, context.Context)
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = sqlDB.Close() })
-	if err := db.AutoMigrate(&chapter.Chapter{}, &volume.Volume{}, &writing.WritingLog{}); err != nil {
+	if err := db.AutoMigrate(&chapter.Chapter{}, &volume.Volume{}, &writing.WritingLog{}, &activity.DailyActivity{}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -76,6 +78,36 @@ func execEdit(t *testing.T, ctx context.Context, tc mcp_tools.ToolContext, args 
 func execRead(t *testing.T, ctx context.Context, tc mcp_tools.ToolContext, path string) *mcp_tools.ToolResult {
 	t.Helper()
 	return execRW(t, ctx, tc, "read", map[string]any{"path": path})
+}
+
+func TestEditRecordsTextChanges(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	result := execEdit(t, ctx, tc, editArgs("chapters/new.md", "full_replace", "主角走进房间"))
+	require.True(t, result.Success, result.Error)
+	id := result.Data["chapter_id"].(int64)
+	path := git.ChapterPath(id)
+	args := editArgs(path, "search_replace", "冲出")
+	args["search_text"] = "走进"
+	result = execEdit(t, ctx, tc, args)
+	require.True(t, result.Success, result.Error)
+	result = execEdit(t, ctx, tc, editArgs(path, "full_replace", "主角房间"))
+	require.True(t, result.Success, result.Error)
+	result = execEdit(t, ctx, tc, editArgs(path, "full_replace", "主角房间"))
+	require.True(t, result.Success, result.Error)
+	result = execEdit(t, ctx, tc, editArgs(git.OutlinePath(id), "full_replace", "大纲内容"))
+	require.True(t, result.Success, result.Error)
+	args = editArgs(path, "search_replace", "失败内容")
+	args["search_text"] = "不存在"
+	result = execEdit(t, ctx, tc, args)
+	require.False(t, result.Success)
+	var logs []writing.WritingLog
+	require.NoError(t, db.Order("id").Find(&logs).Error)
+	require.Len(t, logs, 1)
+	require.Equal(t, tc.NovelID, logs[0].NovelID)
+	require.Equal(t, 8, logs[0].WordsAdded)
+	require.Equal(t, 4, logs[0].WordsDeleted)
+	require.Equal(t, 4, logs[0].WordDelta)
+	require.Equal(t, 4, fetchChapter(t, db, id).WordCount)
 }
 
 func seedVolume(t *testing.T, db *gorm.DB, novelID int64, name string, sort int) int64 {

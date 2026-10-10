@@ -1,14 +1,18 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/mcpserver"
 )
 
 func TestGetNovels_Empty(t *testing.T) {
@@ -145,6 +149,8 @@ func TestDeleteNovel(t *testing.T) {
 
 func TestSetActiveNovel(t *testing.T) {
 	a := setupTestApp(t)
+	_, err := a.currentNovel(context.Background())
+	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
 
 	created, err := a.CreateNovel(CreateNovelInput{
 		Title: "Active Novel",
@@ -156,9 +162,103 @@ func TestSetActiveNovel(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, created.ID, a.settings.LastNovelID)
+	assert.Equal(t, created.ID, a.activeNovelID.Load())
+	current, err := a.currentNovel(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, current.ID)
+	assert.Equal(t, created.Title, current.Title)
 
 	// Re-load settings from DB to confirm persistence.
 	reloaded, err := config.LoadSettings(a.db)
 	require.NoError(t, err)
 	assert.Equal(t, created.ID, reloaded.LastNovelID)
+
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: 0}))
+	_, err = a.currentNovel(context.Background())
+	require.ErrorIs(t, err, mcpserver.ErrNoCurrentNovel)
+}
+
+func TestSetActiveNovelConcurrentSessionSavePreservesSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first := createTestNovel(t, a)
+	second := createTestNovel(t, a)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+
+	const sessionID = "session-during-novel-switch"
+	sessionDone := make(chan struct{})
+	var sessionErr error
+	// 在切书的 DB 事务提交后、内存选择更新前，发起另一项设置保存。
+	require.NoError(t, a.db.Callback().Update().After("gorm:commit_or_rollback_transaction").
+		Register("test:save_session_during_novel_switch", func(tx *gorm.DB) {
+			updates, ok := tx.Statement.Dest.(map[string]interface{})
+			if tx.Error != nil || tx.Statement.Table != "app_config" || !ok || updates["last_novel_id"] != second.ID {
+				return
+			}
+			go func() {
+				sessionErr = a.SetLastSession(sessionID)
+				close(sessionDone)
+			}()
+			select {
+			case <-sessionDone:
+				t.Error("会话保存不应在切书的内存选择更新前完成")
+			case <-time.After(100 * time.Millisecond):
+			}
+		}))
+
+	switchErr := a.SetActiveNovel(SetActiveNovelInput{NovelID: second.ID})
+	select {
+	case <-sessionDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("会话保存未完成")
+	}
+	require.NoError(t, switchErr)
+	require.NoError(t, sessionErr)
+
+	settings, err := a.GetSettings()
+	require.NoError(t, err)
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, second.ID, settings.LastNovelID)
+	assert.Equal(t, second.ID, a.activeNovelID.Load())
+	assert.Equal(t, second.ID, persisted.LastNovelID)
+	assert.Equal(t, sessionID, settings.LastSessionID)
+	assert.Equal(t, sessionID, persisted.LastSessionID)
+}
+
+func TestSetActiveNovelSaveFailurePreservesSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first, err := a.CreateNovel(CreateNovelInput{Title: "旧小说"})
+	require.NoError(t, err)
+	second, err := a.CreateNovel(CreateNovelInput{Title: "新小说"})
+	require.NoError(t, err)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+	require.NoError(t, a.db.Exec(`CREATE TRIGGER reject_novel_selection
+		BEFORE UPDATE OF last_novel_id ON app_config
+		BEGIN SELECT RAISE(FAIL, 'selection save failed'); END`).Error)
+
+	err = a.SetActiveNovel(SetActiveNovelInput{NovelID: second.ID})
+	require.ErrorContains(t, err, "selection save failed")
+	assert.Equal(t, first.ID, a.settings.LastNovelID)
+	current, err := a.currentNovel(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, current.ID)
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, persisted.LastNovelID)
+}
+
+func TestSetActiveNovelRejectsInvalidSelection(t *testing.T) {
+	a := setupTestApp(t)
+	first, err := a.CreateNovel(CreateNovelInput{Title: "当前小说"})
+	require.NoError(t, err)
+	require.NoError(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: first.ID}))
+
+	for _, id := range []int64{-1, first.ID + 1} {
+		require.Error(t, a.SetActiveNovel(SetActiveNovelInput{NovelID: id}))
+		assert.Equal(t, first.ID, a.settings.LastNovelID)
+		assert.Equal(t, first.ID, a.activeNovelID.Load())
+	}
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	assert.Equal(t, first.ID, persisted.LastNovelID)
 }

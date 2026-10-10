@@ -1,5 +1,35 @@
 export namespace app {
 	
+	export class CharacterGroupInput {
+	    name: string;
+	    description: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new CharacterGroupInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	    }
+	}
+	export class CharacterGroupMembershipInput {
+	    character_ids: number[];
+	    add_group_ids: number[];
+	    remove_group_ids: number[];
+	
+	    static createFrom(source: any = {}) {
+	        return new CharacterGroupMembershipInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.character_ids = source["character_ids"];
+	        this.add_group_ids = source["add_group_ids"];
+	        this.remove_group_ids = source["remove_group_ids"];
+	    }
+	}
 	export class ChatInput {
 	    session_id: string;
 	    novel_id: number;
@@ -358,6 +388,46 @@ export namespace app {
 	        this.provider_name = source["provider_name"];
 	        this.model_id = source["model_id"];
 	        this.reasoning_effort = source["reasoning_effort"];
+	    }
+	}
+	export class GetCharacterGroupMembersInput {
+	    novel_id: number;
+	    page: number;
+	    size: number;
+	    search: string;
+	    group_id: number;
+	    character_id: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetCharacterGroupMembersInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.novel_id = source["novel_id"];
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.search = source["search"];
+	        this.group_id = source["group_id"];
+	        this.character_id = source["character_id"];
+	    }
+	}
+	export class GetCharacterGroupsInput {
+	    novel_id: number;
+	    page: number;
+	    size: number;
+	    search: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetCharacterGroupsInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.novel_id = source["novel_id"];
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.search = source["search"];
 	    }
 	}
 	export class GetSessionsInput {
@@ -1169,6 +1239,131 @@ export namespace character {
 	        this.chapter_id = source["chapter_id"];
 	        this.is_current = source["is_current"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Group {
+	    id: number;
+	    novel_id: number;
+	    name: string;
+	    description: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new Group(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.novel_id = source["novel_id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GroupMember {
+	    id: number;
+	    novel_id: number;
+	    group_id: number;
+	    character_id: number;
+	    // Go type: time
+	    created_at: any;
+	
+	    static createFrom(source: any = {}) {
+	        return new GroupMember(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.novel_id = source["novel_id"];
+	        this.group_id = source["group_id"];
+	        this.character_id = source["character_id"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class GroupView {
+	    id: number;
+	    novel_id: number;
+	    name: string;
+	    description: string;
+	    // Go type: time
+	    created_at: any;
+	    // Go type: time
+	    updated_at: any;
+	    member_count: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GroupView(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.novel_id = source["novel_id"];
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.created_at = this.convertValues(source["created_at"], null);
+	        this.updated_at = this.convertValues(source["updated_at"], null);
+	        this.member_count = source["member_count"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2287,6 +2482,82 @@ export namespace storage {
 		    return a;
 		}
 	}
+	export class PageResult_github_com_sigpanic_goink_internal_character_GroupMember_ {
+	    items: character.GroupMember[];
+	    total: number;
+	    page: number;
+	    size: number;
+	    total_pages: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PageResult_github_com_sigpanic_goink_internal_character_GroupMember_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], character.GroupMember);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.total_pages = source["total_pages"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class PageResult_github_com_sigpanic_goink_internal_character_GroupView_ {
+	    items: character.GroupView[];
+	    total: number;
+	    page: number;
+	    size: number;
+	    total_pages: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new PageResult_github_com_sigpanic_goink_internal_character_GroupView_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], character.GroupView);
+	        this.total = source["total"];
+	        this.page = source["page"];
+	        this.size = source["size"];
+	        this.total_pages = source["total_pages"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class PageResult_github_com_sigpanic_goink_internal_skill_remote_RemoteSkillMeta_ {
 	    items: remote.RemoteSkillMeta[];
 	    total: number;
@@ -2793,7 +3064,9 @@ export namespace writing {
 	
 	export class DailyActivity {
 	    date: string;
-	    words: number;
+	    words_net: number;
+	    words_added: number;
+	    words_deleted: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new DailyActivity(source);
@@ -2802,7 +3075,9 @@ export namespace writing {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.date = source["date"];
-	        this.words = source["words"];
+	        this.words_net = source["words_net"];
+	        this.words_added = source["words_added"];
+	        this.words_deleted = source["words_deleted"];
 	    }
 	}
 	export class WritingStats {

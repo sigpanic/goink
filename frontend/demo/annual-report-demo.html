@@ -1,0 +1,589 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Goink · 年度创作回顾 Demo</title>
+    <style>
+      :root {
+        --background: hsl(42 27% 96%);
+        --card: hsl(42 35% 99%);
+        --foreground: hsl(165 20% 15%);
+        --muted: hsl(145 7% 48%);
+        --border: hsl(42 15% 87%);
+        --primary: hsl(162 42% 31%);
+        --primary-soft: hsl(154 30% 92%);
+        --accent: hsl(35 50% 58%);
+        --hero: hsl(156 24% 92%);
+        --poster: hsl(164 31% 18%);
+        --poster-text: hsl(43 30% 94%);
+        --poster-muted: hsl(155 18% 69%);
+        --lavender: hsl(260 25% 55%);
+        --sky: hsl(203 35% 52%);
+        --heat-empty: hsl(45 12% 91%);
+        color-scheme: light;
+      }
+      [data-theme="dark"] {
+        --background: hsl(164 13% 10%);
+        --card: hsl(164 12% 14%);
+        --foreground: hsl(42 15% 91%);
+        --muted: hsl(155 8% 61%);
+        --border: hsl(164 10% 23%);
+        --primary: hsl(156 31% 65%);
+        --primary-soft: hsl(160 22% 21%);
+        --accent: hsl(35 44% 64%);
+        --hero: hsl(162 19% 17%);
+        --poster: hsl(164 31% 18%);
+        --poster-text: hsl(43 30% 94%);
+        --poster-muted: hsl(155 18% 69%);
+        --lavender: hsl(260 30% 70%);
+        --sky: hsl(203 40% 67%);
+        --heat-empty: hsl(164 9% 22%);
+        color-scheme: dark;
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--background); color: var(--foreground); font: 14px/1.65 system-ui, -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; }
+      button, select { font: inherit; }
+      button, a, select { -webkit-tap-highlight-color: transparent; }
+      button { cursor: pointer; }
+      button:focus-visible, a:focus-visible, select:focus-visible { outline: 2px solid var(--primary); outline-offset: 4px; }
+      a { color: inherit; text-decoration: none; }
+      svg { display: block; }
+      button svg { width: 16px; height: 16px; }
+      .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.65; stroke-linecap: round; stroke-linejoin: round; }
+      .shell { max-width: 1140px; margin: auto; padding: 0 36px; }
+      .topbar { height: 84px; display: flex; align-items: center; justify-content: space-between; gap: 20px; border-bottom: 1px solid var(--border); }
+      .brand { display: flex; align-items: center; gap: 10px; font-size: 22px; font-weight: 740; letter-spacing: -1px; }
+      .brand-mark { width: 31px; height: 31px; border-radius: 10px 10px 10px 3px; background: var(--primary); color: var(--background); display: grid; place-items: center; }
+      .brand-mark .icon { width: 18px; height: 18px; }
+      .demo-tag { color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 2px 7px; font-size: 10px; letter-spacing: .07em; font-weight: 500; margin-left: 9px; }
+      .actions { display: flex; align-items: center; gap: 10px; }
+      .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid var(--border); border-radius: 8px; padding: 9px 14px; background: var(--card); color: var(--foreground); transition: transform .2s, background .2s; }
+      .button:hover { background: var(--primary-soft); }
+      .button:active { transform: translateY(1px); }
+      .button-primary { background: var(--primary); color: var(--background); border-color: var(--primary); }
+      .button-primary:hover { background: color-mix(in srgb, var(--primary) 90%, var(--foreground)); }
+      .icon-button { width: 38px; height: 38px; padding: 0; }
+      .intro { display: flex; justify-content: space-between; align-items: center; padding: 32px 0 22px; gap: 18px; }
+      .eyebrow { color: var(--muted); font-size: 10px; letter-spacing: .19em; font-weight: 600; }
+      .intro-title { font-size: 17px; font-weight: 650; margin-top: 5px; }
+      .year-select { border: 1px solid var(--border); padding: 8px 13px; border-radius: 8px; background: var(--card); color: var(--foreground); }
+      .hero { min-height: 365px; padding: 38px 42px; border-radius: 16px; background: var(--hero); position: relative; overflow: hidden; display: grid; grid-template-columns: 1fr 1fr; }
+      .hero-copy { position: relative; z-index: 1; }
+      .hero-year { color: var(--primary); font-size: 11px; letter-spacing: .12em; display: flex; align-items: center; gap: 8px; }
+      .dot { width: 5px; height: 5px; border-radius: 50%; background: currentColor; display: inline-block; }
+      h1 { font: 500 clamp(30px, 3.7vw, 43px)/1.55 "Songti SC", "Noto Serif CJK SC", "SimSun", serif; letter-spacing: .04em; margin: 18px 0 15px; }
+      h1 em { font-style: normal; color: var(--primary); }
+      .hero-description { color: var(--muted); font-size: 12px; line-height: 1.9; }
+      .hero-signature { display: flex; gap: 10px; align-items: center; margin-top: 25px; font-size: 12px; }
+      .avatar { width: 30px; height: 30px; border-radius: 50%; background: var(--primary); color: var(--background); display: grid; place-items: center; font-size: 12px; }
+      .hero-art { position: absolute; width: 49%; height: 100%; right: 2%; top: 0; color: var(--primary); opacity: .86; }
+      .hero-number { position: absolute; right: 31px; top: 8px; font-size: 120px; letter-spacing: -.06em; font-weight: 200; opacity: .07; }
+      .hero-foot { position: absolute; bottom: 22px; right: 32px; font-size: 9px; letter-spacing: .22em; color: var(--primary); }
+      .lead-stats { display: grid; grid-template-columns: repeat(4, 1fr); padding: 29px 0 31px; border-bottom: 1px solid var(--border); }
+      .lead-stat { padding-left: 27px; border-right: 1px solid var(--border); }
+      .lead-stat:first-child { padding-left: 4px; }
+      .lead-stat:last-child { border: 0; }
+      .stat-label { color: var(--muted); font-size: 11px; }
+      .stat-value { font-size: 31px; font-weight: 600; line-height: 1.7; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+      .stat-unit { margin-left: 5px; font-size: 11px; font-weight: 400; letter-spacing: 0; color: var(--muted); }
+      .stat-note { font-size: 10px; color: var(--muted); }
+      .section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 15px; margin: 31px 0 17px; }
+      h2 { font-size: 16px; font-weight: 650; margin: 0; letter-spacing: .02em; }
+      .section-heading p { margin: 0; color: var(--muted); font-size: 11px; }
+      .world-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 13px; }
+      .world-card { padding: 20px 22px; border: 1px solid var(--border); background: var(--card); border-radius: 11px; }
+      .world-top { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 11px; }
+      .world-icon { color: var(--primary); padding: 8px; border-radius: 9px; background: var(--primary-soft); }
+      .world-card:nth-child(2) .world-icon { color: var(--accent); }
+      .world-card:nth-child(3) .world-icon { color: var(--lavender); }
+      .world-card:nth-child(4) .world-icon { color: var(--sky); }
+      .world-value { font-size: 34px; line-height: 1.3; font-weight: 550; margin: 11px 0 5px; letter-spacing: -.04em; }
+      .world-caption { font-size: 10px; color: var(--muted); }
+      .panel { padding: 24px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
+      .panel-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 22px; }
+      .panel-heading h3 { font-size: 13px; margin: 0; font-weight: 600; }
+      .panel-note { color: var(--muted); font-size: 10px; }
+      .heat-scroll { overflow-x: auto; padding-bottom: 8px; }
+      .heat-content { min-width: 650px; }
+      .heat-months { display: grid; grid-template-columns: repeat(12, 1fr); margin: 0 0 8px 29px; font-size: 9px; color: var(--muted); }
+      .heat-body { display: flex; gap: 10px; }
+      .heat-days { width: 19px; display: grid; grid-template-rows: repeat(7, 11px); gap: 4px; color: var(--muted); font-size: 8px; line-height: 11px; }
+      .heatmap { flex: 1; display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); grid-auto-columns: minmax(9px, 1fr); gap: 4px; }
+      .heat-cell { border-radius: 2px; background: var(--heat-empty); transition: transform .15s; }
+      .heat-cell:hover { transform: scale(1.3); outline: 1px solid var(--primary); }
+      .heat-cell[data-level="1"] { background: color-mix(in srgb, var(--primary) 23%, var(--heat-empty)); }
+      .heat-cell[data-level="2"] { background: color-mix(in srgb, var(--primary) 45%, var(--heat-empty)); }
+      .heat-cell[data-level="3"] { background: color-mix(in srgb, var(--primary) 70%, var(--heat-empty)); }
+      .heat-cell[data-level="4"] { background: var(--primary); }
+      .heat-cell.blank { visibility: hidden; }
+      .heat-footer { display: flex; justify-content: space-between; gap: 15px; margin-top: 14px; font-size: 10px; color: var(--muted); }
+      .legend { display: flex; gap: 4px; align-items: center; }
+      .legend i { width: 10px; height: 10px; border-radius: 2px; }
+      .two-columns { display: grid; grid-template-columns: 1.05fr 1fr; gap: 16px; margin-top: 16px; }
+      .segmented { display: flex; padding: 3px; border-radius: 6px; background: var(--background); }
+      .segmented button { color: var(--muted); background: transparent; border: 0; font-size: 10px; padding: 4px 10px; border-radius: 4px; }
+      .segmented button[aria-pressed="true"] { background: var(--card); color: var(--foreground); box-shadow: 0 1px 4px color-mix(in srgb, var(--foreground) 8%, transparent); }
+      .chart { height: 150px; display: flex; gap: 10px; align-items: flex-end; border-bottom: 1px solid var(--border); }
+      .chart-column { height: 100%; flex: 1; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 7px; }
+      .bar { width: 100%; min-width: 12px; max-width: 26px; border: 0; border-radius: 4px 4px 0 0; background: var(--primary-soft); transition: height .4s, background .2s; position: relative; }
+      .bar:hover, .bar[aria-pressed="true"] { background: var(--primary); }
+      .bar-label { font-size: 9px; color: var(--muted); }
+      .chart-insight { display: flex; align-items: center; gap: 7px; padding-top: 17px; font-size: 11px; color: var(--muted); min-height: 48px; }
+      .chart-insight strong { color: var(--primary); font-weight: 550; }
+      .book { display: flex; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+      .book:first-child { padding-top: 0; }
+      .book:last-child { border: 0; padding-bottom: 0; }
+      .book-cover { width: 39px; height: 53px; flex: none; background: var(--primary-soft); color: var(--primary); border-radius: 3px 6px 6px 3px; border-left: 3px solid color-mix(in srgb, currentColor 25%, transparent); display: grid; place-items: center; font: 11px "Songti SC", "SimSun", serif; writing-mode: vertical-rl; letter-spacing: 2px; }
+      .book:nth-child(2) .book-cover { color: var(--lavender); background: color-mix(in srgb, var(--lavender) 10%, var(--card)); }
+      .book:nth-child(3) .book-cover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, var(--card)); }
+      .book-main { flex: 1; min-width: 0; }
+      .book-title { font-size: 12px; font-weight: 550; }
+      .book-meta { font-size: 9px; color: var(--muted); margin: 3px 0 6px; }
+      .book-track { height: 3px; background: var(--heat-empty); border-radius: 3px; overflow: hidden; }
+      .book-track span { height: 100%; display: block; background: var(--primary); border-radius: inherit; }
+      .book-value { font-size: 11px; color: var(--muted); white-space: nowrap; }
+      .ai-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+      .ai-card { padding: 21px 24px; border: 1px solid var(--border); border-radius: 11px; background: var(--card); }
+      .ai-value { font-size: 27px; letter-spacing: -.04em; margin: 7px 0 10px; font-weight: 550; }
+      .ai-caption { font-size: 10px; color: var(--muted); }
+      .token-split { height: 5px; display: flex; border-radius: 6px; overflow: hidden; margin: 8px 0 11px; }
+      .token-input { width: 87.6%; background: var(--primary); }
+      .token-output { flex: 1; background: var(--accent); }
+      .token-labels { display: flex; justify-content: space-between; color: var(--muted); font-size: 9px; }
+      .model-line { display: flex; align-items: center; justify-content: space-between; padding-top: 12px; margin-top: 16px; border-top: 1px solid var(--border); font-size: 11px; }
+      .model-label { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+      .closing { margin: 32px 0 20px; padding: 26px 30px; display: flex; align-items: center; justify-content: space-between; gap: 18px; background: var(--hero); border-radius: 12px; }
+      .closing-title { font: 19px "Songti SC", "SimSun", serif; margin-bottom: 7px; }
+      .closing-note { color: var(--muted); font-size: 11px; }
+      footer { padding: 15px 0 30px; display: flex; justify-content: space-between; gap: 16px; color: var(--muted); font-size: 9px; }
+      dialog { border: 1px solid var(--border); border-radius: 16px; padding: 22px; background: var(--background); color: var(--foreground); width: min(440px, calc(100% - 24px)); max-height: 95dvh; overflow: auto; }
+      dialog::backdrop { background: color-mix(in srgb, var(--foreground) 50%, transparent); backdrop-filter: blur(5px); }
+      .dialog-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+      .dialog-top h2 { font-size: 14px; }
+      .share-poster { position: relative; background: var(--poster); color: var(--poster-text); padding: 28px; border-radius: 8px; overflow: hidden; aspect-ratio: 3 / 4; }
+      .poster-brand { font-size: 13px; letter-spacing: .04em; }
+      .poster-year { color: var(--poster-muted); font-size: 9px; letter-spacing: .16em; margin-top: 6px; }
+      .poster-title { font: 26px/1.6 "Songti SC", "SimSun", serif; margin: 20px 0 12px; position: relative; z-index: 1; }
+      .poster-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; position: relative; z-index: 1; margin-top: 20px; }
+      .poster-stat strong { font-size: 20px; font-weight: 500; display: block; }
+      .poster-stat small { color: var(--poster-muted); font-size: 8px; }
+      .poster-art { position: absolute; width: 90%; left: 20%; bottom: -3%; color: var(--poster-muted); opacity: .55; }
+      .poster-footer { position: absolute; left: 28px; right: 28px; bottom: 22px; display: flex; justify-content: space-between; font-size: 8px; color: var(--poster-muted); }
+      .dialog-actions { display: flex; gap: 9px; margin-top: 16px; }
+      .dialog-actions .button { flex: 1; }
+      .dialog-note { text-align: center; color: var(--muted); font-size: 10px; margin: 12px 0 0; }
+      .toast { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); padding: 10px 18px; background: var(--foreground); color: var(--background); border-radius: 9px; font-size: 12px; z-index: 5; box-shadow: 0 4px 24px color-mix(in srgb, var(--foreground) 15%, transparent); }
+      [hidden] { display: none !important; }
+      @media (min-width: 800px) { .hero-copy, .world-grid, .lead-stats { animation: appear .6s ease both; } .world-grid { animation-delay: .12s; } }
+      @keyframes appear { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+      @media (max-width: 760px) {
+        .shell { padding: 0 20px; }
+        .topbar { height: 70px; }
+        .hero { padding: 30px; min-height: 350px; }
+        .hero-art { width: 65%; right: -18%; opacity: .28; }
+        .hero-copy { grid-column: 1 / -1; }
+        .hero-number { font-size: 95px; }
+        .hero-foot { display: none; }
+        .lead-stat { padding-left: 14px; }
+        .stat-value { font-size: 25px; }
+        .world-grid { grid-template-columns: repeat(2, 1fr); }
+        .two-columns { grid-template-columns: 1fr; }
+        .ai-grid { grid-template-columns: 1fr; }
+        .section-heading { flex-wrap: wrap; gap: 5px; }
+        .closing { padding: 23px; }
+        .closing-title { font-size: 17px; }
+      }
+      @media (max-width: 420px) {
+        .shell { padding: 0 14px; }
+        .brand { font-size: 20px; }
+        .topbar .button-primary { padding: 8px 10px; font-size: 11px; }
+        .demo-tag { margin-left: 2px; }
+        .lead-stats { grid-template-columns: repeat(2, 1fr); row-gap: 22px; }
+        .lead-stat:nth-child(2) { border: 0; }
+        .lead-stat:nth-child(3) { padding-left: 4px; }
+        .hero { padding: 27px; }
+        .world-card { padding: 17px; }
+        .panel { padding: 19px; }
+        .closing { align-items: flex-start; flex-direction: column; }
+        footer { flex-direction: column; gap: 4px; }
+      }
+      @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+    </style>
+  </head>
+  <body>
+    <svg aria-hidden="true" width="0" height="0" style="position:absolute">
+      <defs>
+        <symbol id="pen" viewBox="0 0 24 24"><path d="m16 3 5 5-12 12-6 1 1-6Z"/><path d="m14 5 5 5M3 21l5-5"/></symbol>
+        <symbol id="book" viewBox="0 0 24 24"><path d="M5 3h14v18H5a2 2 0 0 1 0-4h14M5 3a2 2 0 0 0-2 2v14M8 7h7M8 10h5"/></symbol>
+        <symbol id="pages" viewBox="0 0 24 24"><path d="M8 3h8l4 4v14H8ZM16 3v5h4M4 7v14M11 12h6M11 16h6"/></symbol>
+        <symbol id="people" viewBox="0 0 24 24"><circle cx="10" cy="8" r="3"/><path d="M4 20v-2a6 6 0 0 1 12 0v2M17 5a3 3 0 0 1 0 6M20 20v-2a6 6 0 0 0-3-5"/></symbol>
+        <symbol id="pin" viewBox="0 0 24 24"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 0 1 14 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+        <symbol id="spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></symbol>
+        <symbol id="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/></symbol>
+        <symbol id="moon" viewBox="0 0 24 24"><path d="M20 14A8.5 8.5 0 0 1 10 4a8.5 8.5 0 1 0 10 10Z"/></symbol>
+        <symbol id="share" viewBox="0 0 24 24"><path d="M12 15V3m-4 4 4-4 4 4M5 12v8h14v-8"/></symbol>
+        <symbol id="close" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+        <symbol id="world" viewBox="0 0 480 380">
+          <g fill="none" stroke="currentColor" stroke-width="1">
+            <ellipse cx="258" cy="255" rx="161" ry="64" opacity=".2"/>
+            <ellipse cx="258" cy="255" rx="130" ry="48" opacity=".18"/>
+            <ellipse cx="258" cy="255" rx="101" ry="34" opacity=".16"/>
+            <circle cx="258" cy="174" r="127" stroke-dasharray="2 7" opacity=".22"/>
+            <path d="m113 245 60-84 37 44 59-107 42 75 21-26 70 107" stroke-width="1.5" opacity=".65"/>
+            <path d="m174 161 17 63 19-19 28 53 31-160-8 96 33 55 17-76 21 77" opacity=".35"/>
+            <path d="M113 245q75 42 145 27t144-18l-71 48-82 27-80-27Z" fill="currentColor" fill-opacity=".06" stroke-opacity=".45"/>
+            <path d="m195 250 45 15 26-8 38 14-32 18 18 15-41 25" opacity=".65"/>
+            <path d="m145 128 83-30 41-38 72 32 32 60" stroke-dasharray="3 5" opacity=".45"/>
+            <path d="M153 239v-23l12-7 12 7v23m-27-20h30m-19 20v-10h8v10M323 249v-22l11-6 11 6v22m-26-20h30m-18 20v-10h6v10" opacity=".7"/>
+            <path d="M210 255v-17m-8 4 8-13 8 13m-15 5 7-13 7 13M362 254v-21m-9 4 9-15 9 15m-17 6 8-14 8 14" opacity=".6"/>
+            <circle cx="269" cy="60" r="4"/><circle cx="145" cy="128" r="3"/><circle cx="228" cy="98" r="3"/><circle cx="341" cy="92" r="3"/><circle cx="373" cy="152" r="3"/>
+            <path d="M93 143h10m-5-5v10M388 84h12m-6-6v12M323 39h8m-4-4v8M118 204h8m-4-4v8" opacity=".7"/>
+            <path d="M91 280h-9m-8 0h-4M401 286h9m8 0h4" opacity=".3"/>
+          </g>
+          <g fill="currentColor" opacity=".5"><circle cx="200" cy="49" r="1.5"/><circle cx="119" cy="91" r="1.5"/><circle cx="387" cy="198" r="1.5"/><circle cx="421" cy="131" r="1.5"/><circle cx="308" cy="72" r="1"/></g>
+        </symbol>
+      </defs>
+    </svg>
+    <div class="shell">
+      <header class="topbar">
+        <a class="brand" href="#top" aria-label="Goink 年度报告"><span class="brand-mark"><svg class="icon"><use href="#pen"/></svg></span>Goink<span class="demo-tag">DEMO</span></a>
+        <div class="actions">
+          <button class="button icon-button" id="theme-toggle" aria-label="切换为深色主题"><svg class="icon"><use id="theme-icon" href="#moon"/></svg></button>
+          <button class="button button-primary" data-open-share><svg class="icon"><use href="#share"/></svg>分享我的年度</button>
+        </div>
+      </header>
+      <main id="top">
+        <div class="intro">
+          <div><div class="eyebrow">YOUR YEAR IN STORIES</div><div class="intro-title">林川的年度创作回顾</div></div>
+          <label><span class="stat-label">查看年份&nbsp; </span><select class="year-select" id="year-select" aria-label="选择报告年份"><option value="2026">2026 年</option><option value="2025">2025 年</option></select></label>
+        </div>
+        <section class="hero" aria-labelledby="hero-title">
+          <div class="hero-copy">
+            <div class="hero-year"><span class="dot"></span><span data-year>2026</span> · 我的创作年鉴</div>
+            <h1 id="hero-title">这一年，<br>你创造了<em>一个世界。</em></h1>
+            <div class="hero-description">从第一个念头，到一个个鲜活的名字。<br>那些认真写下的文字，都在这里留下了回声。</div>
+            <div class="hero-signature"><span class="avatar">林</span><span>林川 <span class="stat-label">／ 每一个故事，都值得被写下</span></span></div>
+          </div>
+          <div class="hero-number" aria-hidden="true" data-year>2026</div>
+          <svg class="hero-art" viewBox="0 0 480 380" aria-hidden="true"><use href="#world"/></svg>
+          <div class="hero-foot">A WORLD ONLY YOU COULD CREATE</div>
+        </section>
+        <section class="lead-stats" aria-label="年度创作概览">
+          <div class="lead-stat"><div class="stat-label">累计新增文字</div><div class="stat-value"><span id="words">28.6</span><span class="stat-unit">万字</span></div><div class="stat-note">每一次落笔，都让故事更完整</div></div>
+          <div class="lead-stat"><div class="stat-label">投入创作时间</div><div class="stat-value"><span id="hours">260</span><span class="stat-unit">小时</span></div><div class="stat-note">近似前台活跃时间</div></div>
+          <div class="lead-stat"><div class="stat-label">留下文字的日子</div><div class="stat-value"><span id="active-days">127</span><span class="stat-unit">天</span></div><div class="stat-note">平凡日子里的不平凡想象</div></div>
+          <div class="lead-stat"><div class="stat-label">最长连续创作</div><div class="stat-value"><span id="streak">18</span><span class="stat-unit">天</span></div><div class="stat-note">灵感之外，还有你的坚持</div></div>
+        </section>
+        <div class="section-heading"><h2>你笔下的世界</h2><p>这里的每一个数字，都曾经只是一个念头。</p></div>
+        <section class="world-grid" aria-label="创作成果">
+          <article class="world-card"><div class="world-top">开启的故事<span class="world-icon"><svg class="icon"><use href="#book"/></svg></span></div><div class="world-value" id="novels">3</div><div class="world-caption">本小说，各自拥有一个宇宙</div></article>
+          <article class="world-card"><div class="world-top">写下的篇章<span class="world-icon"><svg class="icon"><use href="#pages"/></svg></span></div><div class="world-value" id="chapters">120</div><div class="world-caption">个章节，让故事一步步向前</div></article>
+          <article class="world-card"><div class="world-top">创造的人物<span class="world-icon"><svg class="icon"><use href="#people"/></svg></span></div><div class="world-value" id="characters">86</div><div class="world-caption">位人物，拥有不同的命运</div></article>
+          <article class="world-card"><div class="world-top">想象的远方<span class="world-icon"><svg class="icon"><use href="#pin"/></svg></span></div><div class="world-value" id="locations">24</div><div class="world-caption">个地点，承载相遇与离别</div></article>
+        </section>
+        <div class="section-heading"><h2>故事生长的日子</h2><p>有些日子灵感汹涌，有些日子只写一点。都很好。</p></div>
+        <section class="panel" aria-label="每日写作活动">
+          <div class="panel-heading"><h3>每一格，都是你与故事的一次见面</h3><span class="panel-note" id="heat-range">2026.01 — 2026.12</span></div>
+          <div class="heat-scroll"><div class="heat-content">
+            <div class="heat-months" id="heat-months"></div>
+            <div class="heat-body"><div class="heat-days" aria-hidden="true"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div><div class="heatmap" id="heatmap" role="img" aria-label="年度写作热力图"></div></div>
+          </div></div>
+          <div class="heat-footer"><span id="heat-summary"></span><span class="legend">少 <i class="heat-cell" data-level="0"></i><i class="heat-cell" data-level="1"></i><i class="heat-cell" data-level="2"></i><i class="heat-cell" data-level="3"></i><i class="heat-cell" data-level="4"></i> 多</span></div>
+        </section>
+        <div class="two-columns">
+          <section class="panel" aria-label="月度创作趋势">
+            <div class="panel-heading"><h3>灵感的四季</h3><div class="segmented" aria-label="趋势指标"><button id="metric-words" aria-pressed="true">新增字数</button><button id="metric-hours" aria-pressed="false">创作时长</button></div></div>
+            <div class="chart" id="month-chart"></div><div class="chart-insight" id="chart-insight" aria-live="polite"></div>
+          </section>
+          <section class="panel" aria-label="作品投入排名">
+            <div class="panel-heading"><h3>你最常奔赴的世界</h3><span class="panel-note">按累计新增字数</span></div><div id="books"></div>
+          </section>
+        </div>
+        <div class="section-heading"><h2>你的灵感搭档</h2><p>一起推敲一个名字，也一起探索下一种可能。</p></div>
+        <section aria-label="AI 使用统计">
+          <div class="ai-grid">
+            <article class="ai-card"><div class="stat-label">与 AI 的对话</div><div class="ai-value"><span id="turns">860</span><span class="stat-unit">轮</span></div><div class="ai-caption">从「有个想法」到「再试一种写法」</div></article>
+            <article class="ai-card"><div class="stat-label">工具协助执行</div><div class="ai-value"><span id="tools">3,200</span><span class="stat-unit">次</span></div><div class="ai-caption">查找、整理、修改，让想象继续向前</div></article>
+            <article class="ai-card"><div class="stat-label">已记录 Token 用量</div><div class="ai-value"><span id="tokens">21.0</span><span class="stat-unit">M tokens</span></div><div class="token-split" aria-hidden="true"><span class="token-input" id="token-input"></span><span class="token-output"></span></div><div class="token-labels"><span id="input-label">输入 18.4M</span><span id="output-label">输出 2.6M</span></div></article>
+          </div>
+          <div class="model-line"><span class="model-label"><svg class="icon"><use href="#spark"/></svg>最常使用的模型 <strong id="favorite-model">DeepSeek</strong></span><span class="panel-note">用量仅作创作回顾参考</span></div>
+        </section>
+        <section class="closing"><div><div class="closing-title">故事还没结束，下一页仍然属于你。</div><div class="closing-note">把这一年的想象，留成一张小小的纪念。</div></div><button class="button" data-open-share><svg class="icon"><use href="#share"/></svg>生成年度卡片</button></section>
+      </main>
+      <footer><span>Goink · 让每一个想象，都有地方生长。</span><span>模拟数据 · 全年效果示意 · 数据为近似统计</span></footer>
+    </div>
+    <dialog id="share-dialog" aria-labelledby="share-title">
+      <div class="dialog-top"><h2 id="share-title">你的年度创作卡片</h2><button class="button icon-button" id="close-share" aria-label="关闭分享预览"><svg class="icon"><use href="#close"/></svg></button></div>
+      <div class="share-poster">
+        <div class="poster-brand">Goink</div><div class="poster-year"><span data-year>2026</span> · 林川的创作年鉴</div>
+        <div class="poster-title">这一年，<br>我创造了一个世界。</div>
+        <div class="poster-stats">
+          <div class="poster-stat"><strong id="poster-words">28.6万</strong><small>累计新增字数</small></div>
+          <div class="poster-stat"><strong id="poster-characters">86</strong><small>创造的人物</small></div>
+          <div class="poster-stat"><strong id="poster-hours">260h</strong><small>近似创作时长</small></div>
+        </div>
+        <svg class="poster-art" viewBox="0 0 480 380" aria-hidden="true"><use href="#world"/></svg>
+        <div class="poster-footer"><span>每一个故事，都值得被写下。</span><span>DEMO · 模拟数据</span></div>
+      </div>
+      <div class="dialog-actions"><button class="button" id="copy-summary">复制回顾文案</button><button class="button button-primary" id="download-card">保存图片</button></div>
+      <p class="dialog-note">仅下载到本机，不会发布或上传。</p>
+    </dialog>
+    <div class="toast" id="toast" role="status" hidden></div>
+    <script>
+      const samples = {
+        2026: { words: 286400, hours: 260, days: 127, novels: 3, chapters: 120, characters: 86, locations: 24, turns: 860, tools: 3200, input: 18.4, output: 2.6, model: 'DeepSeek', bookWords: [165200, 87800, 33400], bookChapters: [70, 34, 16] },
+        2025: { words: 184900, hours: 168, days: 94, novels: 2, chapters: 74, characters: 51, locations: 16, turns: 502, tools: 1816, input: 11.5, output: 1.5, model: 'Qwen', bookWords: [128300, 56600], bookChapters: [49, 25] }
+      };
+      const bookNames = ['长夜行舟', '雾海来信', '第七座城'];
+      const bookGenres = ['东方幻想', '悬疑幻想', '科幻'];
+      const number = new Intl.NumberFormat('zh-CN');
+      const byId = (id) => document.getElementById(id);
+      let year = 2026;
+      let metric = 'words';
+      let selectedMonth = null;
+      let daily = [];
+      let monthly = [];
+      let toastTimer;
+      function setText(id, text) { byId(id).textContent = text; }
+      function seeded(seed) {
+        let value = seed >>> 0;
+        return () => { value = (value * 1664525 + 1013904223) >>> 0; return value / 4294967296; };
+      }
+      function makeDaily(sample, selectedYear) {
+        const random = seeded(selectedYear);
+        const active = new Set(Array.from({ length: 18 }, (_, index) => 180 + index));
+        const candidates = Array.from({ length: 365 }, (_, index) => ({ index, score: random() }))
+          .filter((item) => !active.has(item.index) && item.index !== 179 && item.index !== 198)
+          .sort((a, b) => a.score - b.score);
+        candidates.slice(0, sample.days - active.size).forEach((item) => active.add(item.index));
+        const weights = Array.from({ length: 365 }, (_, index) => active.has(index) ? 400 + Math.floor(random() * 3000) : 0);
+        const total = weights.reduce((sum, value) => sum + value, 0);
+        const values = weights.map((weight) => Math.floor(weight / total * sample.words));
+        const remainder = sample.words - values.reduce((sum, value) => sum + value, 0);
+        values[Array.from(active)[0]] += remainder;
+        return values.map((words, index) => {
+          const date = new Date(Date.UTC(selectedYear, 0, index + 1));
+          return { date: date.toISOString().slice(0, 10), month: date.getUTCMonth(), words };
+        });
+      }
+      function longestStreak(days) {
+        let current = 0;
+        let longest = 0;
+        days.forEach((day) => { current = day.words > 0 ? current + 1 : 0; longest = Math.max(current, longest); });
+        return longest;
+      }
+      function renderHeatmap() {
+        byId('heatmap').replaceChildren();
+        byId('heat-months').replaceChildren();
+        for (let month = 1; month <= 12; month++) {
+          const label = document.createElement('span');
+          label.textContent = month + '月';
+          byId('heat-months').append(label);
+        }
+        const offset = new Date(Date.UTC(year, 0, 1)).getUTCDay();
+        const count = Math.ceil((offset + daily.length) / 7) * 7;
+        for (let index = 0; index < count; index++) {
+          const cell = document.createElement('div');
+          const day = daily[index - offset];
+          cell.className = 'heat-cell' + (day ? '' : ' blank');
+          if (day) {
+            cell.dataset.level = day.words === 0 ? '0' : day.words < 1000 ? '1' : day.words < 2000 ? '2' : day.words < 3000 ? '3' : '4';
+            cell.title = day.date + ' · 新增 ' + number.format(day.words) + ' 字';
+          }
+          byId('heatmap').append(cell);
+        }
+        setText('heat-range', year + '.01 — ' + year + '.12');
+        const peak = daily.reduce((best, day) => day.words > best.words ? day : best, daily[0]);
+        setText('heat-summary', '单日最高新增 ' + number.format(peak.words) + ' 字 · ' + peak.date.slice(5).replace('-', '月') + '日');
+      }
+      function renderChart() {
+        const values = monthly.map((month) => month[metric]);
+        const max = Math.max(...values);
+        const peakMonth = values.indexOf(max);
+        const highlight = selectedMonth ?? peakMonth;
+        byId('month-chart').replaceChildren();
+        values.forEach((value, index) => {
+          const column = document.createElement('div');
+          column.className = 'chart-column';
+          const button = document.createElement('button');
+          button.className = 'bar';
+          button.style.height = Math.max(8, value / max * 115) + 'px';
+          button.setAttribute('aria-pressed', String(index === highlight));
+          const detail = metric === 'words' ? number.format(value) + ' 字' : value.toFixed(1) + ' 小时';
+          button.title = (index + 1) + '月 · ' + detail;
+          button.setAttribute('aria-label', button.title);
+          button.addEventListener('click', () => { selectedMonth = index; renderChart(); });
+          const label = document.createElement('span');
+          label.className = 'bar-label';
+          label.textContent = index + 1;
+          column.append(button, label);
+          byId('month-chart').append(column);
+        });
+        const prefix = highlight === peakMonth ? '灵感最盛的 ' : '回看 ';
+        const valueText = metric === 'words' ? number.format(values[highlight]) + ' 字' : values[highlight].toFixed(1) + ' 小时';
+        byId('chart-insight').replaceChildren();
+        const star = document.createElement('span');
+        star.textContent = '✧';
+        const detail = document.createElement('span');
+        detail.append(prefix);
+        const strong = document.createElement('strong');
+        strong.textContent = (highlight + 1) + ' 月';
+        detail.append(strong, metric === 'words' ? '，留下了 ' : '，投入了约 ', valueText);
+        byId('chart-insight').append(star, detail);
+        byId('metric-words').setAttribute('aria-pressed', String(metric === 'words'));
+        byId('metric-hours').setAttribute('aria-pressed', String(metric === 'hours'));
+      }
+      function renderBooks(sample) {
+        byId('books').replaceChildren();
+        sample.bookWords.forEach((words, index) => {
+          const book = document.createElement('div');
+          book.className = 'book';
+          const cover = document.createElement('div');
+          cover.className = 'book-cover';
+          cover.textContent = bookNames[index].slice(0, 2);
+          const main = document.createElement('div');
+          main.className = 'book-main';
+          const title = document.createElement('div');
+          title.className = 'book-title';
+          title.textContent = bookNames[index];
+          const meta = document.createElement('div');
+          meta.className = 'book-meta';
+          meta.textContent = bookGenres[index] + ' · ' + sample.bookChapters[index] + ' 个章节';
+          const track = document.createElement('div');
+          track.className = 'book-track';
+          const fill = document.createElement('span');
+          fill.style.width = words / sample.words * 100 + '%';
+          track.append(fill);
+          main.append(title, meta, track);
+          const value = document.createElement('div');
+          value.className = 'book-value';
+          value.textContent = (words / 10000).toFixed(1) + ' 万字';
+          book.append(cover, main, value);
+          byId('books').append(book);
+        });
+      }
+      function render() {
+        const sample = samples[year];
+        daily = makeDaily(sample, year);
+        monthly = Array.from({ length: 12 }, () => ({ words: 0, hours: 0 }));
+        daily.forEach((day) => { monthly[day.month].words += day.words; });
+        monthly.forEach((month) => { month.hours = month.words / sample.words * sample.hours; });
+        document.querySelectorAll('[data-year]').forEach((element) => { element.textContent = year; });
+        setText('words', (sample.words / 10000).toFixed(1));
+        ['hours', 'novels', 'chapters', 'characters', 'locations', 'turns', 'tools'].forEach((key) => setText(key, number.format(sample[key])));
+        setText('active-days', daily.filter((day) => day.words > 0).length);
+        setText('streak', longestStreak(daily));
+        setText('tokens', (sample.input + sample.output).toFixed(1));
+        setText('input-label', '输入 ' + sample.input.toFixed(1) + 'M');
+        setText('output-label', '输出 ' + sample.output.toFixed(1) + 'M');
+        byId('token-input').style.width = sample.input / (sample.input + sample.output) * 100 + '%';
+        setText('favorite-model', sample.model);
+        setText('poster-words', (sample.words / 10000).toFixed(1) + '万');
+        setText('poster-characters', sample.characters);
+        setText('poster-hours', sample.hours + 'h');
+        renderHeatmap();
+        renderChart();
+        renderBooks(sample);
+      }
+      function showToast(message) {
+        clearTimeout(toastTimer);
+        setText('toast', message);
+        byId('toast').hidden = false;
+        toastTimer = setTimeout(() => { byId('toast').hidden = true; }, 3000);
+      }
+      function summary() {
+        const sample = samples[year];
+        return year + '，我创造了一个世界。\n开启了 ' + sample.novels + ' 个故事，创建了 ' + sample.chapters + ' 个章节、' + sample.characters + ' 位人物和 ' + sample.locations + ' 个地点。\n累计新增 ' + (sample.words / 10000).toFixed(1) + ' 万字，大约投入 ' + sample.hours + ' 小时创作。\nGoink 年度创作回顾 · Demo 模拟数据';
+      }
+      async function copySummary() {
+        try {
+          if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(summary());
+          } else {
+            const field = document.createElement('textarea');
+            field.value = summary();
+            field.style.position = 'fixed';
+            field.style.opacity = '0';
+            byId('share-dialog').append(field);
+            field.select();
+            const copied = document.execCommand('copy');
+            field.remove();
+            if (!copied) throw new Error('Clipboard unavailable');
+          }
+          showToast('年度回顾文案已复制');
+        } catch {
+          showToast('浏览器未允许复制，请使用本地预览地址打开');
+        }
+      }
+      async function downloadCard() {
+        const button = byId('download-card');
+        button.disabled = true;
+        button.textContent = '正在生成…';
+        let objectUrl;
+        try {
+          const sample = samples[year];
+          const palette = getComputedStyle(document.documentElement);
+          const background = palette.getPropertyValue('--poster').trim();
+          const foreground = palette.getPropertyValue('--poster-text').trim();
+          const muted = palette.getPropertyValue('--poster-muted').trim();
+          const world = byId('world').innerHTML;
+          const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="1080" height="1440" viewBox="0 0 1080 1440">' +
+            '<rect width="1080" height="1440" fill="' + background + '"/>' +
+            '<g fill="' + foreground + '" font-family="system-ui, Microsoft YaHei, sans-serif">' +
+            '<text x="88" y="126" font-size="40" font-weight="600">Goink</text>' +
+            '<text x="88" y="182" fill="' + muted + '" font-size="24">' + year + ' · 林川的创作年鉴</text>' +
+            '<g font-family="Songti SC, SimSun, serif" font-size="76"><text x="88" y="340">这一年，</text><text x="88" y="450">我创造了一个世界。</text></g>' +
+            '<g font-size="56"><text x="88" y="610">' + (sample.words / 10000).toFixed(1) + '万</text><text x="425" y="610">' + sample.characters + '</text><text x="745" y="610">' + sample.hours + 'h</text></g>' +
+            '<g fill="' + muted + '" font-size="24"><text x="88" y="662">累计新增字数</text><text x="425" y="662">创造的人物</text><text x="745" y="662">近似创作时长</text></g>' +
+            '<svg x="245" y="730" width="900" height="620" viewBox="0 0 480 380" color="' + muted + '" opacity=".6">' + world + '</svg>' +
+            '<text x="88" y="1365" fill="' + muted + '" font-size="23">每一个故事，都值得被写下。</text><text x="990" y="1365" text-anchor="end" fill="' + muted + '" font-size="20">DEMO · 模拟数据</text></g></svg>';
+          objectUrl = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml;charset=utf-8' }));
+          const image = new Image();
+          await new Promise((resolve, reject) => { image.onload = resolve; image.onerror = reject; image.src = objectUrl; });
+          const canvas = document.createElement('canvas');
+          canvas.width = 1080;
+          canvas.height = 1440;
+          const context = canvas.getContext('2d');
+          if (!context) throw new Error('Canvas unavailable');
+          context.drawImage(image, 0, 0);
+          const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
+          if (!blob) throw new Error('Image unavailable');
+          const downloadUrl = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.download = 'Goink-' + year + '-年度回顾-demo.png';
+          document.body.append(link);
+          link.click();
+          link.remove();
+          setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+          showToast('年度卡片已生成，查看浏览器下载');
+        } catch {
+          showToast('图片生成失败，可先截图保存预览卡片');
+        } finally {
+          if (objectUrl) URL.revokeObjectURL(objectUrl);
+          button.disabled = false;
+          button.textContent = '保存图片';
+        }
+      }
+      byId('year-select').addEventListener('change', (event) => { year = Number(event.target.value); selectedMonth = null; render(); });
+      ['words', 'hours'].forEach((value) => byId('metric-' + value).addEventListener('click', () => { metric = value; selectedMonth = null; renderChart(); }));
+      byId('theme-toggle').addEventListener('click', () => {
+        const themes = { light: 'dark', dark: 'light' };
+        const labels = { light: '切换为深色主题', dark: '切换为浅色主题' };
+        const icons = { light: '#moon', dark: '#sun' };
+        const theme = themes[document.documentElement.dataset.theme];
+        document.documentElement.dataset.theme = theme;
+        byId('theme-toggle').setAttribute('aria-label', labels[theme]);
+        byId('theme-icon').setAttribute('href', icons[theme]);
+      });
+      document.querySelectorAll('[data-open-share]').forEach((button) => button.addEventListener('click', () => byId('share-dialog').showModal()));
+      byId('close-share').addEventListener('click', () => byId('share-dialog').close());
+      byId('share-dialog').addEventListener('click', (event) => { if (event.target === byId('share-dialog')) { const rect = event.target.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) event.target.close(); } });
+      byId('copy-summary').addEventListener('click', copySummary);
+      byId('download-card').addEventListener('click', downloadCard);
+      render();
+    </script>
+  </body>
+</html>

@@ -22,6 +22,9 @@ type AppSettings struct {
 	GitEmail          string    `gorm:"column:git_email;default:'goink@local'"  json:"git_email"`
 	DismissedVersion  string    `gorm:"column:dismissed_version;default:''"     json:"dismissed_version"`     // 用户已忽略的更新版本号
 	LastUpdateCheckAt time.Time `gorm:"column:last_update_check_at"              json:"last_update_check_at"` // 上次自动更新检查时间，用于 12h 节流；零值表示从未检查
+
+	TrackingStartedAt *time.Time `gorm:"column:tracking_started_at" json:"-"`
+	TrackingStartDate string     `gorm:"column:tracking_start_date;not null;default:''" json:"-"`
 }
 
 func (AppSettings) TableName() string { return "app_config" }

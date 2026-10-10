@@ -54,6 +54,10 @@ export function CreateCharacter(arg1, arg2) {
   return window['go']['app']['App']['CreateCharacter'](arg1, arg2);
 }
 
+export function CreateCharacterGroup(arg1, arg2) {
+  return window['go']['app']['App']['CreateCharacterGroup'](arg1, arg2);
+}
+
 export function CreateLocation(arg1, arg2) {
   return window['go']['app']['App']['CreateLocation'](arg1, arg2);
 }
@@ -96,6 +100,10 @@ export function DeleteChapter(arg1, arg2) {
 
 export function DeleteCharacter(arg1, arg2) {
   return window['go']['app']['App']['DeleteCharacter'](arg1, arg2);
+}
+
+export function DeleteCharacterGroup(arg1, arg2) {
+  return window['go']['app']['App']['DeleteCharacterGroup'](arg1, arg2);
 }
 
 export function DeleteCover(arg1) {
@@ -178,12 +186,24 @@ export function GetArcNodes(arg1) {
   return window['go']['app']['App']['GetArcNodes'](arg1);
 }
 
+export function GetBuildHash() {
+  return window['go']['app']['App']['GetBuildHash']();
+}
+
 export function GetChapterPlans(arg1) {
   return window['go']['app']['App']['GetChapterPlans'](arg1);
 }
 
 export function GetChapters(arg1) {
   return window['go']['app']['App']['GetChapters'](arg1);
+}
+
+export function GetCharacterGroupMembers(arg1) {
+  return window['go']['app']['App']['GetCharacterGroupMembers'](arg1);
+}
+
+export function GetCharacterGroups(arg1) {
+  return window['go']['app']['App']['GetCharacterGroups'](arg1);
 }
 
 export function GetCharacterRelations(arg1) {
@@ -354,6 +374,10 @@ export function RebuildNovelIndex(arg1) {
   return window['go']['app']['App']['RebuildNovelIndex'](arg1);
 }
 
+export function RecordCreativeActivity(arg1) {
+  return window['go']['app']['App']['RecordCreativeActivity'](arg1);
+}
+
 export function RetryStartup() {
   return window['go']['app']['App']['RetryStartup']();
 }
@@ -428,6 +452,14 @@ export function UpdateChapterTitle(arg1, arg2, arg3) {
 
 export function UpdateCharacter(arg1, arg2, arg3) {
   return window['go']['app']['App']['UpdateCharacter'](arg1, arg2, arg3);
+}
+
+export function UpdateCharacterGroup(arg1, arg2, arg3) {
+  return window['go']['app']['App']['UpdateCharacterGroup'](arg1, arg2, arg3);
+}
+
+export function UpdateCharacterGroupMemberships(arg1, arg2) {
+  return window['go']['app']['App']['UpdateCharacterGroupMemberships'](arg1, arg2);
 }
 
 export function UpdateDataDir(arg1) {

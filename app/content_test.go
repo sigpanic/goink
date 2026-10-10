@@ -9,6 +9,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/writing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -286,4 +287,61 @@ func TestSaveContent_ChapterPath(t *testing.T) {
 	outline, err := app.GetContent(novelID, ch.OutlineFilePath)
 	require.NoError(t, err)
 	assert.Equal(t, "Chapter outline", outline)
+}
+
+func TestSaveContentRecordsTextChanges(t *testing.T) {
+	for _, withExpected := range []bool{true, false} {
+		t.Run(fmt.Sprintf("expected=%t", withExpected), func(t *testing.T) {
+			app := setupTestApp(t)
+			novel := createTestNovel(t, app)
+			ch := createTestChapter(t, app, novel.ID)
+			previous := ""
+			for _, content := range []string{"主角走进房间", "主角冲出房间", "主角房间", "主角房间"} {
+				input := SaveContentInput{NovelID: novel.ID, Path: ch.FilePath, Content: content}
+				if withExpected {
+					input.ExpectedContent = &previous
+				}
+				require.NoError(t, app.SaveContent(input))
+				previous = content
+			}
+			stale := "主角走进房间"
+			require.ErrorContains(t, app.SaveContent(SaveContentInput{
+				NovelID: novel.ID, Path: ch.FilePath, Content: "冲突内容", ExpectedContent: &stale,
+			}), "CONTENT_CONFLICT")
+			require.NoError(t, app.SaveContent(SaveContentInput{NovelID: novel.ID, Path: ch.OutlineFilePath, Content: "大纲"}))
+			var logs []writing.WritingLog
+			require.NoError(t, app.writing.DB.Order("id").Find(&logs).Error)
+			expectedCount := 0
+			if withExpected {
+				expectedCount = 1
+			}
+			require.Len(t, logs, expectedCount)
+			if withExpected {
+				assert.Equal(t, novel.ID, logs[0].NovelID)
+				assert.Equal(t, 8, logs[0].WordsAdded)
+				assert.Equal(t, 4, logs[0].WordsDeleted)
+				assert.Equal(t, 4, logs[0].WordDelta)
+			}
+			chapters, err := app.GetChapters(novel.ID)
+			require.NoError(t, err)
+			require.Len(t, chapters, 1)
+			assert.Equal(t, 4, chapters[0].WordCount)
+		})
+	}
+}
+
+func TestSaveContentWritingLogFailureDoesNotBlockSave(t *testing.T) {
+	app := setupTestApp(t)
+	novel := createTestNovel(t, app)
+	ch := createTestChapter(t, app, novel.ID)
+	require.NoError(t, app.writing.DB.Migrator().DropTable(&writing.WritingLog{}))
+	previous := ""
+	require.NoError(t, app.SaveContent(SaveContentInput{NovelID: novel.ID, Path: ch.FilePath, Content: "保存正文", ExpectedContent: &previous}))
+	content, err := app.GetContent(novel.ID, ch.FilePath)
+	require.NoError(t, err)
+	assert.Equal(t, "保存正文", content)
+	chapters, err := app.GetChapters(novel.ID)
+	require.NoError(t, err)
+	require.Len(t, chapters, 1)
+	assert.Equal(t, 4, chapters[0].WordCount)
 }

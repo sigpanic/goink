@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Pencil, Plus, Trash2, UsersRound, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,6 +16,17 @@ import { useCreateCharacter } from "./useCreateCharacter";
 import { useUpdateCharacter } from "./useUpdateCharacter";
 import { useDeleteCharacter } from "./useDeleteCharacter";
 import { useCharacterStore } from "./useCharacterStore";
+import {
+  useCharacterGroups,
+  useCharacterGroupMembers,
+} from "./useCharacterGroups";
+import { useCharacterGroupStore } from "./useCharacterGroupStore";
+import {
+  indexCharacterMemberships,
+  filterCharactersByGroup,
+} from "./characterGrouping";
+import CharacterGroupToolbar from "./CharacterGroupToolbar";
+import CharacterMembershipEditor from "./CharacterMembershipEditor";
 
 interface Props {
   novelId: number;
@@ -43,6 +54,10 @@ function safeJson<T>(json: string, fallback: T): T {
 }
 
 export default function CharacterListView({ novelId }: Props) {
+  return <CharacterListViewContent key={novelId} novelId={novelId} />;
+}
+
+function CharacterListViewContent({ novelId }: Props) {
   const focus = useFocusWithNonce("characters");
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -52,11 +67,45 @@ export default function CharacterListView({ novelId }: Props) {
   // 4a: query 错误 toast 由全局中间件接管（queryErrorToast.ts），此处不再挂 useEffect。
   // 中间件在 QueryCache 层 fire 一次，避免多组件订阅同 queryKey 时重复 toast。
   const charsQuery = useCharacters(novelId);
-  const characters = charsQuery.data ?? [];
-  const loading = charsQuery.isLoading;
-  const loadFailed = charsQuery.isError;
+  const characters = useMemo(() => charsQuery.data ?? [], [charsQuery.data]);
+  const groupsQuery = useCharacterGroups(novelId);
+  const membersQuery = useCharacterGroupMembers(novelId);
+  const groups = groupsQuery.data ?? [];
+  const loading =
+    charsQuery.isLoading || groupsQuery.isLoading || membersQuery.isLoading;
+  const loadFailed =
+    charsQuery.isError || groupsQuery.isError || membersQuery.isError;
+  const requestedGroup = useCharacterGroupStore(
+    (s) => s.selectedGroups[novelId] ?? null,
+  );
+  const selectedGroup =
+    requestedGroup === 0 || groups.some((g) => g.id === requestedGroup)
+      ? requestedGroup
+      : null;
+  const selectGroup = useCharacterGroupStore((s) => s.selectGroup);
+  const viewTab = useCharacterGroupStore((s) => s.viewTabs[novelId] ?? "list");
+  const setGroupViewTab = useCharacterGroupStore((s) => s.setViewTab);
+  const setViewTab = (tab: ViewTab) => setGroupViewTab(novelId, tab);
+  const memberships = useMemo(
+    () => indexCharacterMemberships(membersQuery.data ?? []),
+    [membersQuery.data],
+  );
+  const visibleCharacters = useMemo(
+    () => filterCharactersByGroup(characters, memberships, selectedGroup),
+    [characters, memberships, selectedGroup],
+  );
+  const [selectedCharacters, setSelectedCharacters] = useState<number[]>([]);
+  const selectedIds = selectedCharacters.filter((id) =>
+    visibleCharacters.some((c) => c.id === id),
+  );
+  const [membershipTargets, setMembershipTargets] = useState<number[]>([]);
+  const targetIds = membershipTargets.filter((id) =>
+    characters.some((c) => c.id === id),
+  );
+  const handledFocus = useRef<{ id: number; nonce: number } | undefined>(
+    undefined,
+  );
 
-  const [viewTab, setViewTab] = useState<ViewTab>("list");
   const [editMode, setEditMode] = useState<EditMode>(null);
   const [form, setForm] = useState<CharForm>(EMPTY_FORM);
   // 4b: 高亮声明式——focus 触发后由 state 驱动 className，render 阶段应用，
@@ -111,6 +160,7 @@ export default function CharacterListView({ novelId }: Props) {
     // 4.1.2: create 走 mutation，onSuccess 失效 list；setEditMode + 错误 toast 留 handler。
     try {
       await createMutation.mutateAsync(buildPayload());
+      selectGroup(novelId, null);
       setEditMode(null);
     } catch (err) {
       toastError(t("character.createFailed") + ": " + toErrorMessage(err));
@@ -152,6 +202,33 @@ export default function CharacterListView({ novelId }: Props) {
     }
   }
 
+  useEffect(() => {
+    if (
+      !focus ||
+      loading ||
+      loadFailed ||
+      (handledFocus.current?.id === focus.id &&
+        handledFocus.current?.nonce === focus.nonce) ||
+      !characters.some((c) => c.id === focus.id)
+    )
+      return;
+    handledFocus.current = { id: focus.id, nonce: focus.nonce };
+    if (
+      !visibleCharacters.some((c) => c.id === focus.id) &&
+      characters.some((c) => c.id === focus.id)
+    ) {
+      selectGroup(novelId, null);
+    }
+  }, [
+    focus,
+    loading,
+    loadFailed,
+    visibleCharacters,
+    characters,
+    selectGroup,
+    novelId,
+  ]);
+
   // 4b: list 模式 focusId 定位——搜索点击后 scrollIntoView + 临时高亮。
   // graph 模式定位由 CharacterGraph 内部 useEffect 处理（setSelectedCharacter）。
   useEffect(() => {
@@ -164,7 +241,7 @@ export default function CharacterListView({ novelId }: Props) {
     if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
     const timer = setTimeout(() => setHighlightedId(null), 2000);
     return () => clearTimeout(timer);
-  }, [focus?.id, focus?.nonce, characters]);
+  }, [focus, characters, visibleCharacters]);
 
   // ── Render helpers ────────────────────────────────────
 
@@ -271,6 +348,8 @@ export default function CharacterListView({ novelId }: Props) {
         </button>
       </div>
 
+      {viewTab === "list" && <CharacterGroupToolbar novelId={novelId} />}
+
       {viewTab === "graph" ? (
         <CharacterGraph novelId={novelId} focus={focus} />
       ) : loading ? (
@@ -287,7 +366,7 @@ export default function CharacterListView({ novelId }: Props) {
                 <h2 className="text-sm font-semibold text-foreground">
                   {t("character.character")}
                   <span className="ml-2 text-xs font-normal text-muted-foreground">
-                    {characters.length} {t("character.person")}
+                    {visibleCharacters.length} {t("character.person")}
                   </span>
                 </h2>
               </div>
@@ -311,6 +390,42 @@ export default function CharacterListView({ novelId }: Props) {
                 </button>
               </div>
             </div>
+
+            {groups.length > 0 &&
+              !loadFailed &&
+              visibleCharacters.length > 0 && (
+                <div className="flex flex-wrap items-center gap-3 text-xs">
+                  <label className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.length === visibleCharacters.length}
+                      aria-label={t("characterGroup.selectAll")}
+                      onChange={(event) =>
+                        setSelectedCharacters(
+                          event.target.checked
+                            ? visibleCharacters.map((c) => c.id)
+                            : [],
+                        )
+                      }
+                      className="accent-primary"
+                    />
+                    {t("characterGroup.selectAll")}
+                  </label>
+                  <span className="text-muted-foreground">
+                    {t("characterGroup.selectedCount", {
+                      count: selectedIds.length,
+                    })}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={selectedIds.length === 0}
+                    onClick={() => setMembershipTargets(selectedIds)}
+                    className="rounded border px-2.5 py-1 hover:bg-muted disabled:opacity-50"
+                  >
+                    {t("characterGroup.batchMemberships")}
+                  </button>
+                </div>
+              )}
 
             {/* Create form */}
             {editMode?.type === "create" && (
@@ -336,13 +451,17 @@ export default function CharacterListView({ novelId }: Props) {
               <p className="text-xs text-destructive py-4">
                 {t("character.loadFailed")}
               </p>
-            ) : characters.length === 0 ? (
+            ) : visibleCharacters.length === 0 ? (
               <div className="text-center py-12">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-tag-blue">
                   <UsersRound className="h-5 w-5 text-tag-blue-foreground" />
                 </div>
                 <p className="mt-2 text-sm text-muted-foreground">
-                  {t("character.noCharacters")}
+                  {t(
+                    selectedGroup === null
+                      ? "character.noCharacters"
+                      : "characterGroup.empty",
+                  )}
                 </p>
                 <button
                   onClick={openCreate}
@@ -353,7 +472,7 @@ export default function CharacterListView({ novelId }: Props) {
               </div>
             ) : (
               <div className="space-y-2">
-                {characters.map((c) => {
+                {visibleCharacters.map((c) => {
                   const isEditing =
                     editMode?.type === "edit" && editMode.item.id === c.id;
                   const abilities: string[] = safeJson<string[]>(
@@ -381,6 +500,15 @@ export default function CharacterListView({ novelId }: Props) {
                           </button>
                         </div>
                         {renderForm()}
+                        {groups.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => setMembershipTargets([c.id])}
+                            className="mt-3 rounded border px-2.5 py-1 text-xs hover:bg-muted"
+                          >
+                            {t("characterGroup.adjustMemberships")}
+                          </button>
+                        )}
                         {renderFormButtons(handleUpdate, () =>
                           handleDelete(c.id),
                         )}
@@ -397,6 +525,23 @@ export default function CharacterListView({ novelId }: Props) {
                       className={`rounded-lg border border-border bg-card hover:border-border hover:shadow-sm transition-shadow group ${highlightedId === c.id ? "ring-2 ring-primary" : ""}`}
                     >
                       <div className="flex items-start gap-3 px-4 py-3">
+                        {groups.length > 0 && (
+                          <input
+                            type="checkbox"
+                            aria-label={t("characterGroup.selectCharacter", {
+                              name: c.name,
+                            })}
+                            checked={selectedIds.includes(c.id)}
+                            onChange={(event) =>
+                              setSelectedCharacters((prev) =>
+                                event.target.checked
+                                  ? [...prev, c.id]
+                                  : prev.filter((id) => id !== c.id),
+                              )
+                            }
+                            className="mt-2 accent-primary"
+                          />
+                        )}
                         <span className="shrink-0 w-8 h-8 rounded-full bg-tag-blue text-tag-blue-foreground text-xs font-medium flex items-center justify-center">
                           {(c.name ?? "").charAt(0) || "?"}
                         </span>
@@ -412,6 +557,18 @@ export default function CharacterListView({ novelId }: Props) {
                             </p>
                           )}
                           <div className="flex flex-wrap items-center gap-1 mt-1.5">
+                            {groups
+                              .filter((g) => memberships.get(c.id)?.has(g.id))
+                              .map((g) => (
+                                <button
+                                  key={g.id}
+                                  type="button"
+                                  onClick={() => selectGroup(novelId, g.id)}
+                                  className="rounded bg-tag-blue px-1.5 py-0.5 text-xs font-medium text-tag-blue-foreground hover:opacity-80"
+                                >
+                                  {g.name}
+                                </button>
+                              ))}
                             {abilities.map((a: string, i: number) => (
                               <span
                                 key={i}
@@ -423,7 +580,20 @@ export default function CharacterListView({ novelId }: Props) {
                           </div>
                         </div>
                         {/* Hover actions */}
-                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity shrink-0">
+                          {groups.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => setMembershipTargets([c.id])}
+                              title={t("characterGroup.adjustMemberships")}
+                              aria-label={t("characterGroup.adjustCharacter", {
+                                name: c.name,
+                              })}
+                              className="rounded p-1 text-muted-foreground hover:bg-secondary hover:text-foreground focus-visible:opacity-100"
+                            >
+                              <UsersRound className="h-3.5 w-3.5" />
+                            </button>
+                          )}
                           <button
                             onClick={() => openEdit(c)}
                             className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
@@ -447,6 +617,20 @@ export default function CharacterListView({ novelId }: Props) {
             )}
           </div>
         </div>
+      )}
+
+      {targetIds.length > 0 && (
+        <CharacterMembershipEditor
+          key={targetIds.join(",")}
+          novelId={novelId}
+          characterIds={targetIds}
+          groups={groups}
+          memberships={memberships}
+          onClose={() => {
+            setMembershipTargets([]);
+            setSelectedCharacters([]);
+          }}
+        />
       )}
 
       <ConfirmDialog

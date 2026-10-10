@@ -2,23 +2,26 @@ package writing
 
 import "time"
 
-// WritingLog 记录每次保存的字数变化。正数表示新增，负数表示删除。
-// 多行同一天的不同保存各自独立，查询时按 date GROUP BY SUM(word_delta)。
+// WritingLog 按本地日期和小说累计保存版本间的增删量，WordDelta 为当天净增。
 type WritingLog struct {
-	ID        int64     `gorm:"column:id;primaryKey;autoIncrement"`
-	Date      string    `gorm:"column:date;not null;index:idx_writing_date;size:10"` // "2006-01-02"
-	NovelID   int64     `gorm:"column:novel_id;not null;default:0;index"`
-	ChapterID *int64    `gorm:"column:chapter_id;index"` // chapters.id；nullable 兼容迁移反查失败的历史记录，删章节后允许孤儿
-	WordDelta int       `gorm:"column:word_delta;not null"`
-	CreatedAt time.Time `gorm:"column:created_at;autoCreateTime"`
+	ID           int64     `gorm:"column:id;primaryKey;autoIncrement"`
+	Date         string    `gorm:"column:date;not null;uniqueIndex:uk_writing_date_novel;size:10"` // "2006-01-02"
+	NovelID      int64     `gorm:"column:novel_id;not null;default:0;uniqueIndex:uk_writing_date_novel;index"`
+	WordDelta    int       `gorm:"column:word_delta;not null"`
+	WordsAdded   int       `gorm:"column:words_added;not null;default:0"`
+	WordsDeleted int       `gorm:"column:words_deleted;not null;default:0"`
+	CreatedAt    time.Time `gorm:"column:created_at;autoCreateTime"`
 }
 
 func (WritingLog) TableName() string { return "writing_log" }
 
 // DailyActivity 单天汇总字数。
+// 同时返回新增、删除和可为负数的净增。
 type DailyActivity struct {
-	Date  string `json:"date"`  // "2006-01-02"
-	Words int    `json:"words"` // 当天 SUM(word_delta)
+	Date         string `json:"date"`      // "2006-01-02"
+	WordsNet     int    `json:"words_net"` // 当天 SUM(word_delta)
+	WordsAdded   int    `json:"words_added"`
+	WordsDeleted int    `json:"words_deleted"`
 }
 
 // WritingStats 全局写作统计。

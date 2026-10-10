@@ -12,13 +12,16 @@ import { useEditorTabsStore } from "./useEditorTabsStore";
 import type { EditorTab } from "./types";
 import { toastError } from "@/utils/toast";
 import { reportAIFileChange } from "./aiFileChanges";
+import { volumeKeys } from "@/lib/queryKeys";
 
-const { mockGetChapters, mockGetContent } = vi.hoisted(() => ({
+const { mockGetChapters, mockGetVolumes, mockGetContent } = vi.hoisted(() => ({
   mockGetChapters: vi.fn(),
+  mockGetVolumes: vi.fn(),
   mockGetContent: vi.fn(),
 }));
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   GetChapters: mockGetChapters,
+  GetVolumes: mockGetVolumes,
   GetContent: mockGetContent,
 }));
 
@@ -204,6 +207,7 @@ describe("ContentPanel", () => {
     mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
     mockGetChapters.mockResolvedValue([]);
+    mockGetVolumes.mockResolvedValue([]);
     mockGetContent.mockResolvedValue("file content");
     useEditorTabsStore.setState({ byNovel: {}, positions: {} });
   });
@@ -485,6 +489,102 @@ describe("ContentPanel", () => {
     expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
   });
 
+  it.each(["success", "failure"])(
+    "重新打开已有正文时，元数据加载%s期间保留编辑器实例和草稿",
+    async (outcome) => {
+      let resolveMetadata!: (value: unknown[]) => void;
+      let rejectMetadata!: (error: Error) => void;
+      mockGetChapters.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            resolveMetadata = resolve;
+            rejectMetadata = reject;
+          }),
+      );
+      const tab: EditorTab = {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_42.md",
+        title: "正文",
+        content: "未保存的本地稿件",
+        isDirty: true,
+        viewMode: "content",
+      };
+      mockTabsState = [tab];
+      mockActiveTabIdState = tab.id;
+      useEditorTabsStore.setState({
+        byNovel: { "1": { tabs: [tab], activeTabId: tab.id } },
+      });
+      const ref = { current: null as ContentPanelHandle | null };
+      render(<ContentPanel ref={ref} />);
+      const editor = screen.getByTestId("content-editor");
+
+      act(() => ref.current?.openFile(tab.path, tab.title));
+      await vi.waitFor(() => expect(mockGetChapters).toHaveBeenCalledWith(1));
+      expect(screen.getByTestId("content-editor")).toBe(editor);
+      expect(editor).toHaveTextContent(tab.content!);
+
+      await act(async () => {
+        if (outcome === "success")
+          resolveMetadata([
+            {
+              file_path: tab.path,
+              outline_file_path: "outlines/id_42.md",
+              reading_number: 7,
+              title: "重逢",
+            },
+          ]);
+        else rejectMetadata(new Error("metadata unavailable"));
+      });
+
+      await vi.waitFor(() =>
+        expect(mockSetActiveTabId).toHaveBeenCalledWith(tab.id),
+      );
+      expect(screen.getByTestId("content-editor")).toBe(editor);
+      expect(editor).toHaveTextContent(tab.content!);
+      expect(mockFetchContent).not.toHaveBeenCalled();
+      expect(mockGetContent).not.toHaveBeenCalled();
+      expect(mockOpenTab).not.toHaveBeenCalled();
+      expect(mockSaveContent).not.toHaveBeenCalled();
+    },
+  );
+
+  it("打开新文件时仍在内容读取期间显示加载态", async () => {
+    let resolveRead!: (value: string) => void;
+    mockFetchContent.mockImplementationOnce(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveRead = resolve;
+        }),
+    );
+    mockTabsState = [
+      {
+        id: "chapter-tab",
+        type: "file",
+        path: "chapters/id_42.md",
+        title: "正文",
+        content: "正文内容",
+        viewMode: "content",
+      },
+    ];
+    mockActiveTabIdState = "chapter-tab";
+    mockOpenTab.mockImplementationOnce((tab: EditorTab) => {
+      mockTabsState = [{ ...tab, id: "new-tab" }];
+      mockActiveTabIdState = "new-tab";
+    });
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+
+    await act(async () => ref.current?.openFile("goink.md", "故事状态"));
+
+    expect(mockFetchContent).toHaveBeenCalledWith(1, "goink.md");
+    expect(screen.queryByTestId("content-editor")).not.toBeInTheDocument();
+    await act(async () => resolveRead("新的故事状态"));
+    expect(screen.getByTestId("content-editor")).toHaveTextContent(
+      "新的故事状态",
+    );
+  });
+
   it("打开文件期间收到 AI 事件时采用事件后的磁盘内容", async () => {
     let resolveRead!: (value: string) => void;
     mockFetchContent.mockImplementationOnce(
@@ -497,7 +597,7 @@ describe("ContentPanel", () => {
     const ref = { current: null as ContentPanelHandle | null };
     render(<ContentPanel ref={ref} />);
 
-    act(() => ref.current?.openFile("goink.md", "故事状态"));
+    await act(async () => ref.current?.openFile("goink.md", "故事状态"));
     act(() => reportAIFileChange({ novelId: 1, path: "goink.md" }));
     await act(async () => resolveRead("旧版"));
 
@@ -643,6 +743,104 @@ describe("ContentPanel", () => {
     view.rerender(<ContentPanel ref={ref} />);
     expect(screen.getByTestId("markdown")).toHaveTextContent("edited outline");
   });
+
+  it.each(["approve", "reject"])(
+    "%s 卷纲审批后，从元数据取得卷名而不使用路径标题",
+    async (action) => {
+      const path = "volumes/id_10.md";
+      mockGetVolumes.mockResolvedValue([
+        { outline_file_path: path, name: "第一卷" },
+      ]);
+      mockTabsState = [
+        {
+          id: "volume-diff",
+          type: "diff",
+          path,
+          toolId: "tool-volume",
+          title: `diff: ${path}`,
+        },
+      ];
+      const ref = { current: null as ContentPanelHandle | null };
+      render(<ContentPanel ref={ref} />);
+      await act(async () => {
+        if (action === "approve")
+          await ref.current?.handleDiffApprove("tool-volume", path);
+        else await ref.current?.handleDiffReject("tool-volume");
+      });
+      await vi.waitFor(() =>
+        expect(mockOpenTab).toHaveBeenCalledWith(
+          expect.objectContaining({
+            path,
+            title: "sidebar.volumeOutlineTitle",
+            viewMode: "content",
+          }),
+        ),
+      );
+      expect(mockGetVolumes).toHaveBeenCalledWith(1);
+      expect(mockGetChapters).not.toHaveBeenCalled();
+      expect(mockCloseTab).toHaveBeenCalledWith("volume-diff");
+    },
+  );
+
+  it.each([false, true])(
+    "卷纲审批先打开再补齐缺失缓存，关闭状态=%s",
+    async (closeBeforeLoaded) => {
+      let resolveMetadata!: (value: unknown[]) => void;
+      mockGetVolumes.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveMetadata = resolve;
+          }),
+      );
+      const qc = new QueryClient({
+        defaultOptions: { queries: { retry: false, staleTime: 30_000 } },
+      });
+      qc.setQueryData(volumeKeys.list(1), []);
+      mockOpenDiffTab.mockImplementationOnce((data) =>
+        useEditorTabsStore.getState().openDiffTab(1, data),
+      );
+      const ref = { current: null as ContentPanelHandle | null };
+      render(<ContentPanel ref={ref} />, qc);
+      act(() =>
+        ref.current?.openDiffTab({
+          path: "volumes/id_10.md",
+          title: "路径标题",
+          toolId: "volume-tool",
+          diff: "",
+          original: "旧卷纲",
+          modified: "新卷纲",
+          changeType: "full_replace",
+          reason: "",
+        }),
+      );
+      const store = useEditorTabsStore.getState();
+      const id = store.byNovel["1"].activeTabId!;
+      expect(store.byNovel["1"].tabs[0]).toMatchObject({
+        id,
+        original: "旧卷纲",
+        modified: "新卷纲",
+      });
+      await vi.waitFor(() => expect(resolveMetadata).toBeTypeOf("function"));
+      if (closeBeforeLoaded) act(() => store.closeTab(1, id));
+      await act(async () =>
+        resolveMetadata([
+          { outline_file_path: "volumes/id_10.md", name: "第一卷" },
+        ]),
+      );
+      if (closeBeforeLoaded) {
+        expect(useEditorTabsStore.getState().byNovel["1"].tabs).toEqual([]);
+        expect(mockUpdateTab).not.toHaveBeenCalledWith(
+          id,
+          expect.objectContaining({ title: expect.any(String) }),
+        );
+      } else {
+        expect(mockUpdateTab).toHaveBeenCalledWith(id, {
+          title: "diff: sidebar.volumeOutlineTitle",
+        });
+      }
+      expect(mockOpenDiffTab).toHaveBeenCalledOnce();
+    },
+  );
 
   it("keeps a queued chapter save when its tab closes", async () => {
     mockTabsState = [

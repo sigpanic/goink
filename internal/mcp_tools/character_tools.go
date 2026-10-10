@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -16,7 +17,9 @@ import (
 
 // GetCharactersArgs 是 get_characters 的参数。
 type GetCharactersArgs struct {
-	Search   string `json:"search" jsonschema:"description=角色名模糊搜索"`
+	Mode     string `json:"mode" jsonschema:"description=characters（默认）查询角色及所属分组；groups 查询分组名称、描述和成员数,enum=characters,enum=groups" validate:"omitempty,oneof=characters groups"`
+	GroupID  *int64 `json:"group_id,omitempty" jsonschema:"description=仅 characters 模式：省略查全部，0查未分组，正整数查指定分组,minimum=0" validate:"omitempty,min=0"`
+	Search   string `json:"search" jsonschema:"description=角色模式按角色名搜索；分组模式按组名或描述搜索"`
 	PageArgs        // 嵌入分页参数
 }
 
@@ -27,6 +30,8 @@ func (t *GetCharactersTool) Name() string { return "get_characters" }
 func (t *GetCharactersTool) Description() string {
 	return "获取当前小说的角色列表。按最近更新降序排列，截断 50 条——完整了解角色阵容后再创作。" +
 		"冷门角色（长时间未更新）可能不在列表中，用 search 按名搜索。" +
+		"角色结果包含所属分组；可用 group_id 筛选，0 表示未分组。" +
+		"mode=groups 时分页查询分组名称、用途描述、成员数和 group_id（含空组），此时不要传 group_id。" +
 		"需要了解角色之间的关系时，用 get_character_relations 传入角色 ID 获取子图。"
 }
 func (t *GetCharactersTool) Category() ToolCategory { return CategoryNovelManagement }
@@ -37,11 +42,18 @@ func (t *GetCharactersTool) NewArgs() any                { return &GetCharacters
 
 func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContext) (*ToolResult, error) {
 	a := args.(*GetCharactersArgs)
+	if a.Mode == "groups" && a.GroupID != nil {
+		return &ToolResult{Success: false, Error: "mode=groups 时不能传入 group_id；查询组内角色请使用 mode=characters"}, nil
+	}
 	a.NormalizePage()
 
 	store := character.NewStore(tc.DB, tc.LoggerOrDefault())
+	if a.Mode == "groups" {
+		return t.getGroups(ctx, a, tc, store)
+	}
 	result, err := store.ListByNovel(ctx, tc.NovelID, character.ListByNovelOptions{
 		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
+		GroupID:    a.GroupID,
 		Search:     a.Search,
 		Order:      "updated_at DESC", // MCP 按最近编辑排序，截断时保留活跃角色
 	})
@@ -49,20 +61,60 @@ func (t *GetCharactersTool) Execute(ctx context.Context, args any, tc ToolContex
 		return nil, fmt.Errorf("list characters: %w", err)
 	}
 
+	characterIDs := make([]int64, len(result.Items))
+	for i, ch := range result.Items {
+		characterIDs[i] = ch.ID
+	}
+	groups, err := store.GetGroupsByCharacterIDs(ctx, tc.NovelID, characterIDs)
+	if err != nil {
+		return nil, fmt.Errorf("get character groups: %w", err)
+	}
+
 	items := make([]map[string]any, len(result.Items))
 	for i, ch := range result.Items {
+		memberships := make([]string, 0, len(groups[ch.ID]))
+		for _, group := range groups[ch.ID] {
+			memberships = append(memberships, fmt.Sprintf("%s [group_id:%d]", group.Name, group.ID))
+		}
 		items[i] = map[string]any{
 			"id":          ch.ID,
 			"name":        ch.Name,
 			"description": ch.Description,
 			"personality": parseJSONField(ch.Personality),
 			"abilities":   parseJSONField(ch.Abilities),
+			"groups":      memberships,
 		}
 	}
 
 	data := PageMeta(result)
 	data["characters"] = items
 
+	return &ToolResult{Success: true, Data: data}, nil
+}
+
+func (t *GetCharactersTool) getGroups(ctx context.Context, a *GetCharactersArgs, tc ToolContext, store *character.Store) (*ToolResult, error) {
+	result, err := store.ListGroups(ctx, tc.NovelID, character.ListGroupsOptions{
+		PageParams: storage.PageParams{Page: a.Page, Size: a.Size},
+		Search:     a.Search,
+		Order:      "name ASC, id ASC",
+	})
+	if err != nil {
+		return nil, fmt.Errorf("list character groups: %w", err)
+	}
+	lines := make([]string, 0, len(result.Items))
+	for _, group := range result.Items {
+		line := fmt.Sprintf("- %s [group_id:%d]（%d 名角色）", group.Name, group.ID, group.MemberCount)
+		if group.Description != "" {
+			line += "：" + group.Description
+		}
+		lines = append(lines, line)
+	}
+	content := strings.Join(lines, "\n")
+	if len(lines) == 0 {
+		content = "本页无匹配的角色分组。"
+	}
+	data := PageMeta(result)
+	data["content"] = content
 	return &ToolResult{Success: true, Data: data}, nil
 }
 
@@ -209,6 +261,8 @@ func (t *CreateCharacterTool) Execute(ctx context.Context, args any, tc ToolCont
 			Error:   fmt.Sprintf("创建角色 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{CharactersCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

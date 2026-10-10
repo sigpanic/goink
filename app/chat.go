@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/agentcfg"
 	"github.com/sigpanic/goink/internal/config"
@@ -74,7 +75,8 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	}
 
 	// 5. 打开 git 仓库，提交用户在对话间隙的手动编辑
-	repo, repoErr := git.New(input.NovelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	s := a.settingsSnapshot()
+	repo, repoErr := git.New(input.NovelID, s.GitName, s.GitEmail, a.logger)
 	if repoErr != nil {
 		a.logger.Warn("auto-commit: 打开 git 仓库失败，跳过本轮自动提交", "err", repoErr)
 	} else {
@@ -139,6 +141,9 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		return tx.Create(userMsg).Error
 	}); err != nil {
 		return nil, fmt.Errorf("持久化消息失败: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(ctx, activity.ActivityDelta{ConversationTurns: 1})
 	}
 
 	if injectName != "" {
@@ -372,8 +377,9 @@ func (a *App) ApproveTool(toolID string, approved bool, feedback string) error {
 // SetApprovalMode 前端调用，切换审批模式并持久化。"auto" 自动批准，"manual" 等待用户操作。
 func (a *App) SetApprovalMode(mode string) error {
 	a.approvals.SetMode(mode)
-	a.settings.ApprovalMode = mode
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.ApprovalMode = mode
+	})
 }
 
 // CancelChat 前端调用，取消一个正在进行的对话。

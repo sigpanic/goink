@@ -28,7 +28,8 @@ type ImportNovelInput struct {
 
 // ImportNovel 从文件导入一部小说：解析文件 → 创建 Novel → 写入章节文件 → Git 提交。
 func (a *App) ImportNovel(input ImportNovelInput) (*ImportNovelResult, error) {
-	return imp.Import(a.ctx, a.logger, a.novel.DB, input.FilePath, a.settings.GitName, a.settings.GitEmail, a.emitImportProgress)
+	st := a.settingsSnapshot()
+	return imp.Import(a.ctx, a.logger, a.novel.DB, input.FilePath, st.GitName, st.GitEmail, a.emitImportProgress)
 }
 
 func (a *App) emitImportProgress(stage, message string, current, total, percent int, novelID int64) {
@@ -81,5 +82,6 @@ func (a *App) ImportWithLLM(input ImportWithLLMInput) (*ImportNovelResult, error
 	}
 
 	// 2. 直接导入
-	return imp.ImportWithResult(a.ctx, a.logger, a.novel.DB, result, input.FilePath, a.settings.GitName, a.settings.GitEmail, a.emitImportProgress)
+	st := a.settingsSnapshot()
+	return imp.ImportWithResult(a.ctx, a.logger, a.novel.DB, result, input.FilePath, st.GitName, st.GitEmail, a.emitImportProgress)
 }

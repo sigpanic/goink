@@ -7,10 +7,12 @@ import (
 	"log/slog"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
@@ -20,6 +22,7 @@ import (
 	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/mcp_tools"
+	"github.com/sigpanic/goink/internal/mcpserver"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/preference"
@@ -60,14 +63,18 @@ type App struct {
 	quitConfirmPending bool
 	quitConfirmed      bool
 
-	cfg      *config.AppConfig
-	settings *config.AppSettings
-	db       *gorm.DB
+	cfg        *config.AppConfig
+	settings   *config.AppSettings
+	settingsMu sync.Mutex // 串行化 settings 的并发读写，见 config.go 的 updateSettings / settingsSnapshot
+	db         *gorm.DB
 
 	llmClient     *llm.Client
 	agent         *agent.Agent
 	cancelMgr     *agent.CancelManager
 	registry      *mcp_tools.Registry
+	mcpServer     *mcpserver.Server
+	activeNovelMu sync.Mutex
+	activeNovelID atomic.Int64
 	approvals     *approval.Service
 	vectorStore   atomic.Pointer[rag.VectorStore]
 	searchService atomic.Pointer[search.Service]
@@ -90,6 +97,7 @@ type App struct {
 	turnCommit *rollback.Store
 	writing    *writing.Store
 	volume     *volume.Store
+	activity   *activity.Store
 }
 
 // New 创建 App 实例。初始化在 OnStartup 中完成。
@@ -178,6 +186,16 @@ func (a *App) OnShutdown(shutdownCtx context.Context) {
 	// 1. 取消根上下文，通知所有运行中的 agent 停止
 	if a.cancel != nil {
 		a.cancel()
+	}
+	if a.mcpServer != nil {
+		stopCtx, cancel := context.WithTimeout(shutdownCtx, 5*time.Second)
+		if err := a.mcpServer.Stop(stopCtx); err != nil {
+			a.logger.Error("停止本地 MCP server 失败", "err", err)
+			// 在途调用可能尚未退出，保留它们的依赖，交由进程退出回收。
+			cancel()
+			return
+		}
+		cancel()
 	}
 
 	// 2. 停止 RAG 后台消费者
@@ -282,6 +300,9 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 		return fmt.Errorf("数据库迁移失败: %w", err)
 	}
 
+	a.activity = activity.NewStore(db, a.logger)
+	a.activity.InitTracking(a.ctx)
+
 	// 4. 加载运行时配置
 	settings, err := config.LoadSettings(db)
 	if err != nil {
@@ -342,6 +363,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	// 7. 初始化 MCP 工具注册表
 	a.registry = mcp_tools.NewRegistry(a.logger)
 	mcp_tools.RegisterAllTools(a.registry)
+	a.mcpServer = mcpserver.New(a.registry, db, a.currentNovel, a.logger, []string{"get_chapter_list"})
 
 	// 8. 初始化 LLM 客户端
 	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())
@@ -402,7 +424,11 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	}()
 
 	a.cfg = cfg
-	a.logger.Info("应用初始化完成", "data_dir", config.DataDirPath())
+	a.logger.Info("应用初始化完成",
+		"data_dir", config.DataDirPath(),
+		"version", a.GetVersion(),
+		"commit_hash", a.GetBuildHash(),
+	)
 	initSucceeded = true
 	return nil
 }

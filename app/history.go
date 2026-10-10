@@ -11,7 +11,8 @@ type CommitFileListResult struct {
 // GetCommitLog 获取指定小说的 Git 提交历史。
 // afterHash 非空时返回该 commit 之后的更早提交（游标翻页）。
 func (a *App) GetCommitLog(novelID int64, n int, afterHash string) ([]git.CommitInfo, error) {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -20,7 +21,8 @@ func (a *App) GetCommitLog(novelID int64, n int, afterHash string) ([]git.Commit
 
 // GetCommitFileList 获取指定 commit 的详细信息和变更文件列表（不含文件内容）。
 func (a *App) GetCommitFileList(novelID int64, hash string) (*CommitFileListResult, error) {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return nil, err
 	}
@@ -33,7 +35,8 @@ func (a *App) GetCommitFileList(novelID int64, hash string) (*CommitFileListResu
 
 // GetFileDiff 获取指定 commit 中某个文件的前后内容。
 func (a *App) GetFileDiff(novelID int64, hash string, filePath string) (*git.FileDiff, error) {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return nil, err
 	}

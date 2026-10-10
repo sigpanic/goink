@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -287,6 +288,8 @@ func (t *CreateLocationTool) Execute(ctx context.Context, args any, tc ToolConte
 			Error:   fmt.Sprintf("创建地点 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{LocationsCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

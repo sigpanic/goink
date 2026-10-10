@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -56,6 +57,9 @@ func (a *App) CreateLocation(novelID int64, input CreateLocationInput) (*locatio
 	}
 	if err := a.location.DB.WithContext(a.ctx).Create(&loc).Error; err != nil {
 		return nil, fmt.Errorf("create location: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{LocationsCreated: 1})
 	}
 	return &loc, nil
 }

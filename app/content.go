@@ -89,14 +89,9 @@ func (a *App) SaveContent(input SaveContentInput) error {
 		stats := text.ComputeStats(input.Content)
 
 		// 记录字数变化
-		var oldWC int
-		a.chapter.DB.WithContext(a.ctx).
-			Model(&chapter.Chapter{}).
-			Select("COALESCE(word_count, 0)").
-			Where("novel_id = ? AND id = ?", input.NovelID, chapterID).
-			Scan(&oldWC)
-		if delta := stats.WordCount - oldWC; delta != 0 && a.writing != nil {
-			a.writing.LogDelta(a.ctx, input.NovelID, chapterID, delta)
+		if a.writing != nil && input.ExpectedContent != nil {
+			changes := text.ComputeWordChanges(*input.ExpectedContent, input.Content)
+			a.writing.LogChanges(a.ctx, input.NovelID, chapterID, changes.Added, changes.Deleted)
 		}
 
 		if err := a.chapter.DB.WithContext(a.ctx).

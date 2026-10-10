@@ -22,46 +22,72 @@ type SaveSettingsInput struct {
 
 // ── 设置 ──────────────────────────────────────────────────
 
-// GetSettings 返回运行时配置。
+// GetSettings 返回运行时配置。返回结构体副本，避免调用方序列化时与并发写入竞争。
 func (a *App) GetSettings() (*config.AppSettings, error) {
-	return a.settings, nil
+	s := a.settingsSnapshot()
+	return &s, nil
 }
 
 // SaveSettings 保存运行时配置。
 func (a *App) SaveSettings(input SaveSettingsInput) error {
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(*config.AppSettings) {})
+}
+
+// settingsSnapshot 在锁内复制 settings，供只读访问，避免与并发写入竞争。
+func (a *App) settingsSnapshot() config.AppSettings {
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
+	return *a.settings
+}
+
+// updateSettings 在锁内修改 settings 并整体落库，串行化所有写入。
+func (a *App) updateSettings(fn func(s *config.AppSettings)) error {
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
+	next := *a.settings
+	fn(&next)
+	if err := config.SaveSettings(a.db, &next); err != nil {
+		return err
+	}
+	*a.settings = next
+	return nil
 }
 
 // SetSelectedModel 保存选中的模型 key 和推理程度，持久化到 DB。
 func (a *App) SetSelectedModel(key, effort string) error {
-	a.settings.SelectedModelKey = key
-	a.settings.ReasoningEffort = effort
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.SelectedModelKey = key
+		s.ReasoningEffort = effort
+	})
 }
 
 // SetReasoningEffort 单独保存推理程度。
 func (a *App) SetReasoningEffort(effort string) error {
-	a.settings.ReasoningEffort = effort
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.ReasoningEffort = effort
+	})
 }
 
 // SetLastSession 保存上次活跃的会话 ID。
 func (a *App) SetLastSession(sessionID string) error {
-	a.settings.LastSessionID = sessionID
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.LastSessionID = sessionID
+	})
 }
 
 // SaveUserName 保存用户名称。
 func (a *App) SaveUserName(name string) error {
-	a.settings.UserName = name
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.UserName = name
+	})
 }
 
 // SaveGitConfig 保存 Git user.name 和 user.email，并同步到所有已有仓库。
 func (a *App) SaveGitConfig(name, email string) error {
-	a.settings.GitName = name
-	a.settings.GitEmail = email
-	if err := config.SaveSettings(a.db, a.settings); err != nil {
+	if err := a.updateSettings(func(s *config.AppSettings) {
+		s.GitName = name
+		s.GitEmail = email
+	}); err != nil {
 		return err
 	}
 	result, err := a.novel.List(a.ctx, novel.ListNovelsOptions{PageParams: storage.PageParams{Size: -1}})

@@ -27,12 +27,14 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 	if !db.Migrator().HasTable("chapters") {
 		t.Fatal("新库应创建当前 chapters schema")
 	}
+	assertActivitySchema(t, db)
 	for _, migration := range []struct {
 		name string
 		want int64
 	}{
 		{"v1.2.0-chapter-number-column-names", 2},
 		{"v1.6.0-chapter-id-refactor", 5},
+		{"v1.6.1-writing-daily", 1},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -68,6 +70,7 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 	}{
 		{"v1.2.0-chapter-number-column-names", 2},
 		{"v1.6.0-chapter-id-refactor", 5},
+		{"v1.6.1-writing-daily", 1},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -129,6 +132,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		t.Fatalf("migrate.Run: %v", err)
 	}
 
+	assertActivitySchema(t, db)
+
 	count := func(query string) int {
 		t.Helper()
 		var n int
@@ -148,8 +153,7 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		{"arc node IDs and reading target", `SELECT COUNT(*) FROM arc_nodes WHERE id = 2 AND target_reading_number = 99 AND actual_chapter_id = 1`},
 		{"reader planted ID", `SELECT COUNT(*) FROM reader_perspectives WHERE id = 1 AND planted_chapter_id = 1 AND revealed_chapter_id IS NULL`},
 		{"reader IDs and orphan", `SELECT COUNT(*) FROM reader_perspectives WHERE id = 2 AND planted_chapter_id IS NULL AND revealed_chapter_id = 4`},
-		{"writing log ID", `SELECT COUNT(*) FROM writing_log WHERE id = 1 AND chapter_id = 2`},
-		{"writing log zero", `SELECT COUNT(*) FROM writing_log WHERE id = 2 AND chapter_id IS NULL`},
+		{"writing daily legacy counts", `SELECT COUNT(*) FROM writing_log WHERE date = '2026-01-01' AND novel_id = 1 AND word_delta = 50 AND words_added = 100 AND words_deleted = 50`},
 		{"character relation ID", `SELECT COUNT(*) FROM character_relations WHERE id = 1 AND chapter_id = 3`},
 		{"character relation zero", `SELECT COUNT(*) FROM character_relations WHERE id = 2 AND chapter_id IS NULL`},
 	} {
@@ -183,7 +187,7 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		{"time_entries", "target_chapter"}, {"time_entries", "source_chapter"}, {"time_entries", "resolved_chapter"},
 		{"arc_nodes", "target_chapter"}, {"arc_nodes", "actual_chapter"},
 		{"reader_perspectives", "planted_chapter"}, {"reader_perspectives", "revealed_chapter"},
-		{"writing_log", "chapter_number"}, {"character_relations", "chapter_number"},
+		{"writing_log", "chapter_number"}, {"writing_log", "chapter_id"}, {"character_relations", "chapter_number"},
 	} {
 		if db.Migrator().HasColumn(legacy.table, legacy.column) {
 			t.Fatalf("旧列仍存在: %s.%s", legacy.table, legacy.column)
@@ -192,8 +196,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	if db.Migrator().HasIndex("chapters", "uk_novel_chapter") {
 		t.Fatal("uk_novel_chapter 应随旧列删除")
 	}
-	if !db.Migrator().HasIndex("writing_log", "idx_writing_log_chapter_id") {
-		t.Fatal("当前 writing_log.chapter_id 索引应在迁移后存在")
+	if !db.Migrator().HasIndex("writing_log", "uk_writing_date_novel") {
+		t.Fatal("写作日志应按日期和小说唯一")
 	}
 	for _, table := range []string{"volumes", "migrate_state"} {
 		if !db.Migrator().HasTable(table) {
@@ -218,12 +222,15 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	}
 	if !db.Migrator().HasColumn("time_entries", "source_chapter_id") ||
 		db.Migrator().HasColumn("time_entries", "source_chapter") ||
-		!db.Migrator().HasColumn("writing_log", "chapter_id") ||
+		db.Migrator().HasColumn("writing_log", "chapter_id") ||
 		db.Migrator().HasColumn("writing_log", "chapter_number") {
 		t.Fatal("状态丢失重跑不应回退最终的 id schema")
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 7 {
-		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 7", n)
+	if n := count(`SELECT COUNT(*) FROM writing_log`); n != 1 {
+		t.Fatalf("重复迁移后应只有一条写作日汇总: got %d", n)
+	}
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 8 {
+		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 8", n)
 	}
 }
 

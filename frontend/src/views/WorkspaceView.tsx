@@ -58,6 +58,8 @@ import { toErrorMessage } from "@/utils/error";
 import { useUpdateCheck } from "@/components/update/useUpdateCheck";
 import { useContentNavigation } from "./workspace/useContentNavigation";
 import { useAIFileCacheInvalidation } from "./workspace/useAIFileCacheInvalidation";
+import { useCreativeActivity } from "./workspace/useCreativeActivity";
+import { useEditorTabTitles } from "@/components/content/useEditorTabTitles";
 
 const THEME_ICON: Record<Theme, React.ReactNode> = {
   light: <Moon className="w-5 h-5" />,
@@ -77,22 +79,30 @@ export default function WorkspaceView({
   initialNovelId,
   initialShowHelp,
 }: Props) {
+  useCreativeActivity();
   const { t } = useTranslation();
   const THEME_LABEL: Record<Theme, string> = {
     light: t("workspace.darkMode"),
     dark: t("workspace.lightMode"),
   };
   const contentRef = useRef<ContentPanelHandle>(null);
+  const initialNovelReported = useRef(false);
+  const automaticNovelSwitchPending = useRef(false);
 
   // novels 走 useNovels query（3.1）：替换原 novels state + loadNovels + useEffect。
   // 30s staleTime 内切面板不重复 fetch；novelsLoading 守卫「自动选小说」effect（替代 loadedRef）。
-  const { data: novels = [], isLoading: novelsLoading } = useNovels();
+  const {
+    data: novels = [],
+    isLoading: novelsLoading,
+    isSuccess: novelsLoaded,
+  } = useNovels();
   const queryClient = useQueryClient();
   useAIFileCacheInvalidation();
   // 小说领域 UI 状态：activeNovelId 留 WorkspaceView（路由用）；
   // 对话框开关 + setter 由 NovelDialogs 订阅（3.6）；唯独 setExportNovelId 留此
   // —— SidePanel 通过 onExportNovel 触发开 dialog，setter 引用稳定不引发重渲染。
   const activeNovelId = useNovelStore((s) => s.activeNovelId);
+  useEditorTabTitles(activeNovelId);
   const setActiveNovelId = useNovelStore((s) => s.setActiveNovelId);
   const setExportNovelId = useNovelStore((s) => s.setExportNovelId);
   // 3.7: switchNovel action（set activeNovelId + SetActiveNovel 后端）。
@@ -139,9 +149,10 @@ export default function WorkspaceView({
   // 首次 mount 同步初始化 activeNovelId + activePanel（store 默认 0/"novels"，用 initialNovelId 覆盖）。
   // useLayoutEffect 在 paint 前跑，避免首屏用默认值再切换的闪烁。
   // 注：原 useState(initialNovelId) 同步初值，改 store 后 store 默认 0，必须在这里同步覆盖。
+  // 恢复 ID 现在只作为候选，后端确认成功前保持未选书状态。
   useLayoutEffect(() => {
-    setActiveNovelId(initialNovelId);
-    setActivePanel(initialNovelId ? "chapters" : "novels");
+    setActiveNovelId(0);
+    setActivePanel("novels");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -250,23 +261,37 @@ export default function WorkspaceView({
   // ── 自动选择小说 ────────────────────────────────────────
 
   useEffect(() => {
-    if (novelsLoading) return;
-    const exists = novels.find((n) => n.id === activeNovelId);
-    if (!exists && novels.length > 0) {
-      const first = novels[0];
-      setActiveNovelId(first.id);
-      setActivePanel("chapters");
+    if (novelsLoading || !novelsLoaded || automaticNovelSwitchPending.current)
+      return;
+    const restoring = !initialNovelReported.current;
+    initialNovelReported.current = true;
+    const currentID = useNovelStore.getState().activeNovelId;
+    const candidateID = restoring ? initialNovelId : currentID;
+    const exists = novels.find((n) => n.id === candidateID);
+    if (restoring || !exists) {
+      const first = exists ?? novels[0];
+      const nextID = first?.id ?? 0;
+      automaticNovelSwitchPending.current = true;
       // 5.9: 改用 switchNovel（已封装 setActiveNovelId + SetActiveNovel 后端），替代 app.SetActiveNovel。
       // effect 内不 await（void 标记故意不等待），避免 effect 变 async。
-      void switchNovel(first.id);
-    } else if (novels.length === 0) {
-      setActivePanel("novels");
+      void switchNovel(nextID)
+        .then(() => {
+          if (useNovelStore.getState().activeNovelId === nextID) {
+            setActivePanel(nextID ? "chapters" : "novels");
+          }
+        })
+        .catch((err: unknown) => {
+          toastError(toErrorMessage(err));
+        })
+        .finally(() => {
+          automaticNovelSwitchPending.current = false;
+        });
     }
     // 3.9 fix: 只在 novels 变化时触发（不加 activeNovelId）。
     // 否则新建小说时 switchToNovel 设 activeNovelId=新小说，但 useNovels refetch 未完，
     // novels 旧列表不含新小说 → find 失败 → 误选 novels[0]（旧小说）。
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [novels]);
+  }, [novels, novelsLoading, novelsLoaded]);
 
   function handleActivitySelect(id: SidebarPanelId) {
     const currentPanel = sidebarPanel ?? activePanel;
@@ -302,6 +327,7 @@ export default function WorkspaceView({
       setActivePanel("chapters");
     } catch (err) {
       console.error(err);
+      toastError(toErrorMessage(err));
     }
   }
 
@@ -321,6 +347,7 @@ export default function WorkspaceView({
       setActivePanel("chapters");
     } catch (err) {
       console.error(err);
+      toastError(toErrorMessage(err));
     }
   }
 

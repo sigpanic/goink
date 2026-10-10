@@ -9,6 +9,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/config"
@@ -61,7 +62,8 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 		return nil, fmt.Errorf("failed to create novel: %w", err)
 	}
 
-	if _, err := git.New(n.ID, a.settings.GitName, a.settings.GitEmail, a.logger); err != nil {
+	st := a.settingsSnapshot()
+	if _, err := git.New(n.ID, st.GitName, st.GitEmail, a.logger); err != nil {
 		a.logger.Error("创建小说失败: git 初始化失败", "novelID", n.ID, "title", n.Title, "error", err)
 		a.novel.DB.WithContext(a.ctx).Delete(&n) // 回滚孤儿 DB 记录
 		return nil, fmt.Errorf("failed to init novel repo: %w", err)
@@ -74,13 +76,38 @@ func (a *App) CreateNovel(input CreateNovelInput) (*novel.Novel, error) {
 	}
 
 	a.logger.Info("小说创建成功", "novelID", n.ID, "title", n.Title)
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{NovelsCreated: 1})
+	}
 	return &n, nil
 }
 
 // SetActiveNovel 记录当前活跃的小说 ID，下次启动自动恢复。
 func (a *App) SetActiveNovel(input SetActiveNovelInput) error {
+	a.activeNovelMu.Lock()
+	defer a.activeNovelMu.Unlock()
+	if input.NovelID < 0 {
+		return fmt.Errorf("小说 ID 不能为负数")
+	}
+	if input.NovelID > 0 {
+		var item novel.Novel
+		if err := a.novel.DB.WithContext(a.ctx).First(&item, input.NovelID).Error; err != nil {
+			return fmt.Errorf("读取待切换小说: %w", err)
+		}
+	}
+	a.settingsMu.Lock()
+	defer a.settingsMu.Unlock()
+	result := a.db.WithContext(a.ctx).Model(&config.AppSettings{}).
+		Where("id = ?", 1).Update("last_novel_id", input.NovelID)
+	if result.Error != nil {
+		return fmt.Errorf("保存当前小说失败: %w", result.Error)
+	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("保存当前小说失败: 应用配置不存在")
+	}
 	a.settings.LastNovelID = input.NovelID
-	return config.SaveSettings(a.db, a.settings)
+	a.activeNovelID.Store(input.NovelID)
+	return nil
 }
 
 // UpdateNovelInput 采用 PUT 语义：前端全量传，后端全量覆盖。
@@ -133,6 +160,12 @@ func (a *App) DeleteNovel(novelID int64) error {
 			label string
 			fn    func(*gorm.DB) error
 		}{
+			{"character_group_members", func(tx *gorm.DB) error {
+				return tx.Where("novel_id = ?", novelID).Delete(&character.GroupMember{}).Error
+			}},
+			{"character_groups", func(tx *gorm.DB) error {
+				return tx.Where("novel_id = ?", novelID).Delete(&character.Group{}).Error
+			}},
 			{"characters", func(tx *gorm.DB) error { return tx.Where("novel_id = ?", novelID).Delete(&character.Character{}).Error }},
 			{"character_relations", func(tx *gorm.DB) error {
 				return tx.Where("novel_id = ?", novelID).Delete(&character.CharacterRelation{}).Error
@@ -176,11 +209,13 @@ func (a *App) DeleteNovel(novelID int64) error {
 	}
 
 	// 如果删除的是当前活跃书籍，清除记录
-	if a.settings.LastNovelID == novelID {
-		a.settings.LastNovelID = 0
-		if err := config.SaveSettings(a.db, a.settings); err != nil {
+	if a.settingsSnapshot().LastNovelID == novelID {
+		if err := a.updateSettings(func(s *config.AppSettings) {
+			s.LastNovelID = 0
+		}); err != nil {
 			return fmt.Errorf("delete novel: clear last novel: %w", err)
 		}
+		a.activeNovelID.Store(0)
 	}
 	return nil
 }
@@ -189,7 +224,8 @@ func (a *App) DeleteNovel(novelID int64) error {
 
 // SaveCover 保存小说封面并提交到 Git 仓库。
 func (a *App) SaveCover(novelID int64, data []byte) error {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return fmt.Errorf("save cover: %w", err)
 	}
@@ -262,7 +298,7 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 		cc = append(cc, export.ChapterWithContent{Chapter: ch, Content: content})
 	}
 
-	data, _, err := export.ExportNovel(&n, cc, format, a.settings.UserName)
+	data, _, err := export.ExportNovel(&n, cc, format, a.settingsSnapshot().UserName)
 	if err != nil {
 		return fmt.Errorf("export novel: %w", err)
 	}
@@ -275,7 +311,8 @@ func (a *App) ExportNovel(novelID int64, format string) error {
 
 // DeleteCover 删除小说封面并提交到 Git 仓库。
 func (a *App) DeleteCover(novelID int64) error {
-	repo, err := git.New(novelID, a.settings.GitName, a.settings.GitEmail, a.logger)
+	st := a.settingsSnapshot()
+	repo, err := git.New(novelID, st.GitName, st.GitEmail, a.logger)
 	if err != nil {
 		return fmt.Errorf("delete cover: %w", err)
 	}

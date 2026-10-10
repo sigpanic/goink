@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Star, Heart, ExternalLink, Info, Package } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
-import { GetVersion } from "@/lib/wailsjs/go/app/App";
+import { GetBuildHash, GetVersion } from "@/lib/wailsjs/go/app/App";
 import GitHubIcon from "@/components/ui/GitHubIcon";
 import Logo from "@/components/Logo";
 
@@ -14,11 +14,15 @@ const ISSUES_URL = "https://github.com/sigpanic/goink/issues";
 export default function AboutTab() {
   const { t } = useTranslation();
   const [appVersion, setAppVersion] = useState("dev");
+  const [buildHash, setBuildHash] = useState("");
 
   // GetVersion: 与 GeneralConfigTab 一致，低频 GET，保留命令式。
   useEffect(() => {
     GetVersion()
       .then((v) => setAppVersion(v || "dev"))
+      .catch(() => {});
+    GetBuildHash()
+      .then((hash) => setBuildHash(hash || ""))
       .catch(() => {});
   }, []);
 
@@ -77,6 +81,7 @@ export default function AboutTab() {
           <div className="text-base font-semibold">Goink</div>
           <div className="text-xs text-muted-foreground">
             {t("update.currentVersion")} v{appVersion}
+            {buildHash && <> · {buildHash}</>}
           </div>
         </div>
       </div>

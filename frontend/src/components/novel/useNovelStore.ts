@@ -26,19 +26,26 @@ interface NovelUIState {
   switchNovel: (id: number) => Promise<void>;
 }
 
-export const useNovelStore = create<NovelUIState>((set) => ({
-  activeNovelId: 0,
-  editingNovel: null,
-  deletingNovel: null,
-  showCreateDialog: false,
-  exportNovelId: null,
-  setActiveNovelId: (id) => set({ activeNovelId: id }),
-  setEditingNovel: (n) => set({ editingNovel: n }),
-  setDeletingNovel: (n) => set({ deletingNovel: n }),
-  setShowCreateDialog: (b) => set({ showCreateDialog: b }),
-  setExportNovelId: (id) => set({ exportNovelId: id }),
-  switchNovel: async (id) => {
-    set({ activeNovelId: id });
-    await SetActiveNovel({ novel_id: id });
-  },
-}));
+export const useNovelStore = create<NovelUIState>((set) => {
+  let switchQueue: Promise<void> = Promise.resolve();
+  return {
+    activeNovelId: 0,
+    editingNovel: null,
+    deletingNovel: null,
+    showCreateDialog: false,
+    exportNovelId: null,
+    setActiveNovelId: (id) => set({ activeNovelId: id }),
+    setEditingNovel: (n) => set({ editingNovel: n }),
+    setDeletingNovel: (n) => set({ deletingNovel: n }),
+    setShowCreateDialog: (b) => set({ showCreateDialog: b }),
+    setExportNovelId: (id) => set({ exportNovelId: id }),
+    switchNovel: (id) => {
+      const switching = switchQueue.then(async () => {
+        await SetActiveNovel({ novel_id: id });
+        set({ activeNovelId: id });
+      });
+      switchQueue = switching.catch(() => undefined);
+      return switching;
+    },
+  };
+});

@@ -18,8 +18,11 @@ const updateCheckInterval = 12 * time.Hour
 // 自动检查场景下，若距上次检查不足 12h，或用户已忽略过该版本且没有更新的版本，返回 nil。
 func (a *App) CheckUpdate(skipDismiss bool) (*update.CheckResult, error) {
 	// 自动检查：12h 节流，避免每次启动/重启都打 GitHub。零值表示从未检查过，放行。
-	if !skipDismiss && !a.settings.LastUpdateCheckAt.IsZero() && time.Since(a.settings.LastUpdateCheckAt) < updateCheckInterval {
-		return nil, nil
+	if !skipDismiss {
+		lastCheck := a.settingsSnapshot().LastUpdateCheckAt
+		if !lastCheck.IsZero() && time.Since(lastCheck) < updateCheckInterval {
+			return nil, nil
+		}
 	}
 
 	result, err := update.CheckLatest(a.logger)
@@ -32,13 +35,14 @@ func (a *App) CheckUpdate(skipDismiss bool) (*update.CheckResult, error) {
 
 	// 请求成功（拿到结果）：更新上次检查时间戳。
 	// 手动检查也更新，避免手动查完紧接着启动又查一次（节流目的是减少 GitHub 请求，手动查也算一次）。
-	a.settings.LastUpdateCheckAt = time.Now()
-	if saveErr := config.SaveSettings(a.db, a.settings); saveErr != nil {
+	if saveErr := a.updateSettings(func(s *config.AppSettings) {
+		s.LastUpdateCheckAt = time.Now()
+	}); saveErr != nil {
 		a.logger.Warn("update: 保存上次检查时间失败", "err", saveErr)
 	}
 
 	// 自动检查场景下，检查用户是否已忽略过该版本
-	if !skipDismiss && result.HasUpdate && a.settings.DismissedVersion == result.Latest.TagName {
+	if !skipDismiss && result.HasUpdate && a.settingsSnapshot().DismissedVersion == result.Latest.TagName {
 		return nil, nil
 	}
 
@@ -47,11 +51,17 @@ func (a *App) CheckUpdate(skipDismiss bool) (*update.CheckResult, error) {
 
 // DismissUpdate 记录用户已忽略的更新版本号，同一版本不再提示。
 func (a *App) DismissUpdate(tagName string) error {
-	a.settings.DismissedVersion = tagName
-	return config.SaveSettings(a.db, a.settings)
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.DismissedVersion = tagName
+	})
 }
 
 // GetVersion 返回当前应用版本号。
 func (a *App) GetVersion() string {
 	return version.Version
+}
+
+// GetBuildHash 返回构建时的短 Git 提交号。
+func (a *App) GetBuildHash() string {
+	return version.BuildHash()
 }

@@ -3,8 +3,7 @@ package app
 import (
 	"fmt"
 
-	"gorm.io/gorm"
-
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -53,6 +52,9 @@ func (a *App) CreateCharacter(novelID int64, input CreateCharacterInput) (*chara
 	if err := a.character.DB.WithContext(a.ctx).Create(&char).Error; err != nil {
 		return nil, fmt.Errorf("create character: %w", err)
 	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{CharactersCreated: 1})
+	}
 	return &char, nil
 }
 
@@ -85,15 +87,5 @@ func (a *App) UpdateCharacter(novelID int64, charID int64, input UpdateCharacter
 
 // DeleteCharacter 删除角色（级联删除关联的关系记录）。
 func (a *App) DeleteCharacter(novelID int64, charID int64) error {
-	return a.character.DB.WithContext(a.ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("(source_character_id = ? OR target_character_id = ?) AND novel_id = ?", charID, charID, novelID).
-			Delete(&character.CharacterRelation{}).Error; err != nil {
-			return fmt.Errorf("delete character relations: %w", err)
-		}
-		if err := tx.Where("id = ? AND novel_id = ?", charID, novelID).
-			Delete(&character.Character{}).Error; err != nil {
-			return fmt.Errorf("delete character: %w", err)
-		}
-		return nil
-	})
+	return a.character.DeleteCharacter(a.ctx, novelID, charID)
 }
