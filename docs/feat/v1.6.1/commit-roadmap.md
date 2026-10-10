@@ -5,7 +5,7 @@
 ## 前置状态
 
 - writing_log 已记录手动保存和 AI 写入的字数变化，本次复用。
-- 每日统计存储基础已提交；创建计数已实现，待 review；对话、工具、Token、时长采集、年度查询和正式报告页面尚未实现。
+- 每日统计存储基础和创建计数已提交；对话轮数、工具执行次数已实现，待 review；Token、时长采集、年度查询和正式报告页面尚未实现。
 - [annual-report-demo.html](../../../frontend/demo/annual-report-demo.html) 是使用模拟数据的独立视觉参考，不代表正式功能已完成；启动前端开发服务后，可通过 /demo/annual-report-demo.html 预览，也可直接用浏览器打开该文件。
 - 已确认统计用于创作回顾与宣传，允许偏差；保持按天累计、失败不影响主流程的简单方案。
 
@@ -18,7 +18,7 @@
 | 1 | `docs(v1.6.1): define annual report metrics and commit roadmap` | 固化两张每日累计表、创建数、近似时长、对话轮数、工具次数、Token 口径，以及本路线。 | 文档 review、链接和格式检查 |
 | 2 | `feat(activity): add daily statistics storage` | 新增轻量统计 Store、activity_daily 和 llm_usage_daily 模型及迁移；持久化一次性统计起点，提供原子增量累加；完成初始化注入和 operation_log 排除，统计写入失败只告警。 | Go build/test/lint；新旧数据库初始化、重复初始化保留起点、并发累加、失败隔离、操作日志排除测试 |
 | 3 | `feat(activity): track novel chapter character and location creation` | 在常用手动及 AI 创建入口的成功返回位置累计小说、章节、人物和地点数量；普通更新和恢复路径不接入，删除与回退不扣减历史计数。 | Go build/test/lint；代表性的手动与 AI 创建、失败不主动计数、删除后保留累计数验证 |
-| 4 | `feat(activity): count conversation turns and tool executions` | 接入用户对话请求被接受时的轮数计数，以及 Agent 实际开始执行工具时的次数计数；内部模型循环不增加轮数，工具成功或失败均计入。 | Go build/test/lint；一轮多工具、未执行工具、失败执行与统计失败隔离验证 |
+| 4 | `feat(activity): count conversation turns and tool executions` | 接入用户对话请求被接受时的轮数计数，以及 Registry 实际开始执行工具时的次数计数；内部 Agent 和外部 MCP 工具统一计入，内部模型循环不增加轮数，工具成功或失败均计入。 | Go build/test/lint；外部 MCP 协议调用、未执行工具、失败执行与统计失败隔离验证 |
 | 5 | `feat(activity): accumulate daily model token usage` | 从主对话原始单次 usage 累计输入、输出、总 Token 和可取得的缓存、推理明细；按服务商、模型、用途区分，缺失用量跳过，不增加请求审计。 | Go build/test/lint；多次 usage 累加、模型维度、会话累计字段不重复计入、缺失字段验证 |
 | 6 | `feat(app): accept approximate creative activity time` | 增加轻量时长记录 API，将前端提供的活跃秒数归入当天；单次最多计 60 秒，统计失败不影响前端操作；补 API 测试并重新生成 Wails 绑定。 | Go build/test/lint；无效值、单次上限、失败隔离测试；绑定生成检查 |
 | 7 | `feat(frontend): estimate active creative time` | 在创作工作区根层挂载一个活动 hook；可见、有焦点且近期有交互时每分钟累计时间，闲置约 5 分钟暂停；清理监听与定时器，不补记暂停时间或退出尾段。 | 前端 build/lint/test；活跃、闲置、失焦、暂停恢复和重复挂载验证 |
@@ -67,5 +67,6 @@
 |---|---|---|
 | 1. 设计文档与路线，附临时 demo | 已提交：`c78b974` | 文档检查与前端 build/lint/test 通过 |
 | 2. 每日统计存储 | 已提交：`1d253df` | Go build/test/lint 通过；两张统计表、app_config 起点、原子累加、初始化与操作日志排除已接入 |
-| 3. 创建计数 | 实现完成，待 review，未提交 | Go build/test/lint 通过；手动及 AI 创建入口已接入，覆盖移动/更新不增加、删除/回退保留累计、创建失败不计数和统计写入失败隔离 |
-| 4～10、A～C | 未实现 | 对话、工具、Token 和时长采集将在后续接入 |
+| 3. 创建计数 | 已提交：`0637944` | Go build/test/lint 通过；手动及 AI 创建入口已接入，覆盖移动/更新不增加、删除/回退保留累计、创建失败不计数和统计写入失败隔离 |
+| 4. 对话轮数与工具次数 | 实现完成，待 review，未提交 | Go build/test/lint 通过；Registry 直接计数，外部 MCP 协议测试确认调用计入；覆盖接受后失败与重新提交、接受前拒绝、工具执行失败/取消、校验拦截、待执行工具跳过和统计失败隔离；不依赖真实模型或 Wails 运行时 |
+| 5～10、A～C | 未实现 | Token 和时长采集将在后续接入 |

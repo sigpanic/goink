@@ -11,6 +11,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/agentcfg"
 	"github.com/sigpanic/goink/internal/config"
@@ -139,6 +140,9 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		return tx.Create(userMsg).Error
 	}); err != nil {
 		return nil, fmt.Errorf("持久化消息失败: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(ctx, activity.ActivityDelta{ConversationTurns: 1})
 	}
 
 	if injectName != "" {

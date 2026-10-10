@@ -6,6 +6,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"sync"
@@ -14,9 +15,12 @@ import (
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/mcpclient"
 	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
 )
 
 type testNovelTool struct {
@@ -59,13 +63,19 @@ func (t bearerTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func TestServerProtocolAndCurrentNovel(t *testing.T) {
 	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "activity.db")), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	require.NoError(t, db.AutoMigrate(&activity.DailyActivity{}))
 	registry := mcp_tools.NewRegistry(logger)
 	registry.Register(&testNovelTool{name: "read_novel"})
 	registry.Register(&testNovelTool{name: "failed_novel", failure: true})
 	registry.Register(&testNovelTool{name: "blocked_tool"})
 	var activeID atomic.Int64
 	activeID.Store(1)
-	server := New(registry, nil, func(context.Context) (CurrentNovel, error) {
+	server := New(registry, db, func(context.Context) (CurrentNovel, error) {
 		id := activeID.Load()
 		if id == 0 {
 			return CurrentNovel{}, ErrNoCurrentNovel
@@ -170,6 +180,14 @@ func TestServerProtocolAndCurrentNovel(t *testing.T) {
 	} else {
 		assertContentMatchesStructured(t, result)
 	}
+	var rows []activity.DailyActivity
+	require.NoError(t, db.Find(&rows).Error)
+	var calls int64
+	for _, row := range rows {
+		calls += row.ToolCalls
+		require.Zero(t, row.ConversationTurns)
+	}
+	require.Equal(t, int64(3), calls)
 }
 
 func assertContentMatchesStructured(t *testing.T, result *mcp.CallToolResult) {

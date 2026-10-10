@@ -15,6 +15,7 @@ import (
 	"github.com/invopop/jsonschema"
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/search"
@@ -297,6 +298,9 @@ func (r *Registry) Execute(ctx context.Context, name string, rawArgs json.RawMes
 	}
 
 	tc.RawArgs = rawArgs
+	if tc.DB != nil {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{ToolCalls: 1})
+	}
 
 	t0 := time.Now()
 	var result *ToolResult
