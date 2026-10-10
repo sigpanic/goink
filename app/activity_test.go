@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -113,4 +114,38 @@ func TestCreationSucceedsWhenActivityWriteFails(t *testing.T) {
 	_, err = a.CreateLocation(n.ID, CreateLocationInput{Name: "城池"})
 	require.NoError(t, err)
 	requireCreationActivity(t, a, activity.ActivityDelta{})
+}
+
+func TestRecordCreativeActivity(t *testing.T) {
+	a := setupTestApp(t)
+	var expected int64
+	for _, tc := range []struct {
+		seconds int64
+		added   int64
+	}{
+		{0, 0}, {-1, 0}, {math.MinInt64, 0},
+		{1, 1}, {30, 30}, {60, 60}, {61, 60}, {math.MaxInt64, 60},
+	} {
+		a.RecordCreativeActivity(tc.seconds)
+		expected += tc.added
+		var rows []activity.DailyActivity
+		require.NoError(t, a.db.Find(&rows).Error)
+		if expected == 0 {
+			require.Empty(t, rows)
+			continue
+		}
+		require.Len(t, rows, 1)
+		require.Equal(t, activity.ActivityDelta{CreativeSeconds: expected}, rows[0].ActivityDelta)
+	}
+}
+
+func TestRecordCreativeActivitySkipsUnavailableStorage(t *testing.T) {
+	require.NotPanics(t, func() { (&App{}).RecordCreativeActivity(60) })
+	a := setupTestApp(t)
+	require.NoError(t, a.db.Exec(`CREATE TRIGGER reject_activity BEFORE INSERT ON activity_daily
+		BEGIN SELECT RAISE(ABORT, 'statistics unavailable'); END`).Error)
+	require.NotPanics(t, func() { a.RecordCreativeActivity(60) })
+	var count int64
+	require.NoError(t, a.db.Model(&activity.DailyActivity{}).Count(&count).Error)
+	require.Zero(t, count)
 }

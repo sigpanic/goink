@@ -374,6 +374,10 @@ export function RebuildNovelIndex(arg1) {
   return window['go']['app']['App']['RebuildNovelIndex'](arg1);
 }
 
+export function RecordCreativeActivity(arg1) {
+  return window['go']['app']['App']['RecordCreativeActivity'](arg1);
+}
+
 export function RetryStartup() {
   return window['go']['app']['App']['RetryStartup']();
 }

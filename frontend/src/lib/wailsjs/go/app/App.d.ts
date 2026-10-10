@@ -211,6 +211,8 @@ export function PlaceVolume(arg1:volume.PlaceInput):Promise<volume.Volume>;
 
 export function RebuildNovelIndex(arg1:number):Promise<void>;
 
+export function RecordCreativeActivity(arg1:number):Promise<void>;
+
 export function RetryStartup():Promise<void>;
 
 export function SaveAvatar(arg1:Array<number>):Promise<void>;
