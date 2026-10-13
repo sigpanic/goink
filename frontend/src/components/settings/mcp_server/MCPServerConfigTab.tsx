@@ -24,6 +24,7 @@ export default function MCPServerConfigTab() {
   const [portDraft, setPortDraft] = useState<string | null>(null);
   const [toolsDraft, setToolsDraft] = useState<string[] | null>(null);
   const [actionError, setActionError] = useState("");
+  const [applying, setApplying] = useState(false);
   const [saved, setSaved] = useState(false);
   const [credentialNotice, setCredentialNotice] = useState("");
   const [confirmAction, setConfirmAction] = useState<
@@ -67,6 +68,7 @@ export default function MCPServerConfigTab() {
   const portValue = portDraft ?? String(config.port);
   const allowedTools = toolsDraft ?? view.config.allowed_tools ?? [];
   const busy =
+    applying ||
     save.isPending ||
     credentials.rotate.isPending ||
     credentials.revoke.isPending;
@@ -91,6 +93,7 @@ export default function MCPServerConfigTab() {
     : actionError || view.last_error;
 
   async function apply(input: servercfg.Local, clearDraft: boolean) {
+    setApplying(true);
     setActionError("");
     setSaved(false);
     setCredentialNotice("");
@@ -102,7 +105,21 @@ export default function MCPServerConfigTab() {
         setSaved(true);
       }
     } catch (err) {
-      setActionError(toErrorMessage(err, t("settings.mcpServer.saveFailed")));
+      const message = toErrorMessage(err, t("settings.mcpServer.saveFailed"));
+      setActionError(message);
+      if (!clearDraft && input.enabled) {
+        try {
+          await save.mutateAsync(
+            new servercfg.Local({ ...input, enabled: false }),
+          );
+        } catch (restoreError) {
+          setActionError(
+            `${message}\n${toErrorMessage(restoreError, t("settings.mcpServer.saveFailed"))}`,
+          );
+        }
+      }
+    } finally {
+      setApplying(false);
     }
   }
 

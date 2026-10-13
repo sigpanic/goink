@@ -369,9 +369,17 @@ describe("local MCP server settings", () => {
     ).toBeEnabled();
   });
 
-  it("reloads persisted settings after a start failure and allows retrying the same settings", async () => {
+  it("restores the switch after a start failure and allows enabling again without losing drafts", async () => {
+    stored = makeView({ allowed_tools: ["read"] });
     const { qc, user } = setup();
     await loaded();
+    const port = screen.getByRole("spinbutton", {
+      name: "settings.mcpServer.port",
+    });
+    fireEvent.change(port, { target: { value: "5308" } });
+    await user.click(
+      screen.getByRole("checkbox", { name: "tools.names.get_chapter_list" }),
+    );
     api.SaveMCPServerSettings.mockImplementationOnce(
       (input: servercfg.Local) => {
         stored = makeView(input, {}, "port occupied");
@@ -384,21 +392,138 @@ describe("local MCP server settings", () => {
     await waitFor(() =>
       expect(screen.getByRole("alert")).toHaveTextContent("port occupied"),
     );
-    expect(
-      screen.getByRole("switch", { name: "settings.mcpServer.enabled" }),
-    ).toBeChecked();
+    const enabled = screen.getByRole("switch", {
+      name: "settings.mcpServer.enabled",
+    });
+    await waitFor(() => {
+      expect(enabled).not.toBeChecked();
+      expect(enabled).toBeEnabled();
+    });
+    expect(api.SaveMCPServerSettings).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        enabled: false,
+        port: 5108,
+        allowed_tools: ["read"],
+      }),
+    );
+    expect(api.SaveMCPServerSettings).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole("alert")).toHaveTextContent("port occupied");
     expect(screen.getByText("settings.mcpServer.stopped")).toBeInTheDocument();
     expect(
-      screen.getByText("settings.mcpServer.enabledNotRunning"),
-    ).toBeInTheDocument();
+      screen.queryByText("settings.mcpServer.enabledNotRunning"),
+    ).not.toBeInTheDocument();
     expect(
       qc.getQueryData<mcpserver.LocalView>(mcpServerKeys.all)?.config.enabled,
-    ).toBe(true);
-    expect(api.GetMCPServerSettings).toHaveBeenCalledTimes(2);
-    await user.click(saveButton());
-    await screen.findByText("settings.mcpServer.saved");
+    ).toBe(false);
+    expect(port).toHaveValue(5308);
+    expect(
+      screen.getByRole("checkbox", { name: "tools.names.get_chapter_list" }),
+    ).toBeChecked();
+    expect(
+      screen.queryByText("settings.mcpServer.saved"),
+    ).not.toBeInTheDocument();
+    await user.click(enabled);
+    await waitFor(() => expect(enabled).toBeChecked());
+    expect(api.SaveMCPServerSettings).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        enabled: true,
+        port: 5108,
+        allowed_tools: ["read"],
+      }),
+    );
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByText("settings.mcpServer.running")).toBeInTheDocument();
+  });
+
+  it("keeps controls disabled until restoring the switch finishes", async () => {
+    api.SaveMCPServerSettings.mockImplementationOnce(
+      (input: servercfg.Local) => {
+        stored = makeView(input, {}, "port occupied");
+        return Promise.reject("port occupied");
+      },
+    );
+    let complete!: (view: mcpserver.LocalView) => void;
+    api.SaveMCPServerSettings.mockImplementationOnce(
+      () =>
+        new Promise<mcpserver.LocalView>((resolve) => {
+          complete = resolve;
+        }),
+    );
+    const { user } = setup();
+    await loaded();
+    const enabled = screen.getByRole("switch", {
+      name: "settings.mcpServer.enabled",
+    });
+    await user.click(enabled);
+    await waitFor(() =>
+      expect(api.SaveMCPServerSettings).toHaveBeenCalledTimes(2),
+    );
+    expect(enabled).toBeDisabled();
+    expect(
+      screen.getByRole("spinbutton", { name: "settings.mcpServer.port" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "settings.mcpServer.refresh" }),
+    ).toBeDisabled();
+    await user.click(enabled);
+    expect(api.SaveMCPServerSettings).toHaveBeenCalledTimes(2);
+    stored = makeView();
+    complete(stored);
+    await waitFor(() => {
+      expect(enabled).not.toBeChecked();
+      expect(enabled).toBeEnabled();
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("port occupied");
+  });
+
+  it.each([false, true])(
+    "reports restore failures and shows the persisted enabled state (%s)",
+    async (persistedEnabled) => {
+      api.SaveMCPServerSettings.mockImplementationOnce(
+        (input: servercfg.Local) => {
+          stored = makeView(input, {}, "port occupied");
+          return Promise.reject("port occupied");
+        },
+      );
+      api.SaveMCPServerSettings.mockImplementationOnce(() => {
+        stored = makeView({ enabled: persistedEnabled }, {}, "restore failed");
+        return Promise.reject("restore failed");
+      });
+      const { qc, user } = setup();
+      await loaded();
+      const enabled = screen.getByRole("switch", {
+        name: "settings.mcpServer.enabled",
+      });
+      await user.click(enabled);
+      await waitFor(() => {
+        expect(screen.getByRole("alert")).toHaveTextContent("port occupied");
+        expect(screen.getByRole("alert")).toHaveTextContent("restore failed");
+        expect(enabled).toBeEnabled();
+      });
+      expect(enabled).toHaveProperty("checked", persistedEnabled);
+      expect(
+        qc.getQueryData<mcpserver.LocalView>(mcpServerKeys.all)?.config.enabled,
+      ).toBe(persistedEnabled);
+      expect(api.SaveMCPServerSettings).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it("does not retry a failed stop automatically", async () => {
+    stored = makeView({ enabled: true }, { running: true });
+    api.SaveMCPServerSettings.mockRejectedValueOnce("stop failed");
+    const { user } = setup();
+    await loaded();
+    const enabled = screen.getByRole("switch", {
+      name: "settings.mcpServer.enabled",
+    });
+    await user.click(enabled);
+    await waitFor(() => {
+      expect(screen.getByRole("alert")).toHaveTextContent("stop failed");
+      expect(enabled).toBeEnabled();
+    });
+    expect(enabled).toBeChecked();
+    expect(api.SaveMCPServerSettings).toHaveBeenCalledTimes(1);
   });
 
   it("keeps unsaved fields when the runtime status is refreshed", async () => {
