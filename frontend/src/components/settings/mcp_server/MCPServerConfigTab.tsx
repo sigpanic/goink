@@ -92,14 +92,17 @@ export default function MCPServerConfigTab() {
     ? toErrorMessage(query.error, t("settings.mcpServer.loadFailed"))
     : actionError || view.last_error;
 
-  async function apply(input: servercfg.Local, clearDraft: boolean) {
+  async function apply(
+    input: servercfg.Local,
+    action: "save" | "enable" | "disable",
+  ) {
     setApplying(true);
     setActionError("");
     setSaved(false);
     setCredentialNotice("");
     try {
       await save.mutateAsync(input);
-      if (clearDraft) {
+      if (action !== "disable") {
         setPortDraft(null);
         setToolsDraft(null);
         setSaved(true);
@@ -107,7 +110,7 @@ export default function MCPServerConfigTab() {
     } catch (err) {
       const message = toErrorMessage(err, t("settings.mcpServer.saveFailed"));
       setActionError(message);
-      if (!clearDraft && input.enabled) {
+      if (action === "enable") {
         try {
           await save.mutateAsync(
             new servercfg.Local({ ...input, enabled: false }),
@@ -150,7 +153,7 @@ export default function MCPServerConfigTab() {
     }
   }
 
-  function saveConfig() {
+  function saveConfig(start = false) {
     const port = Number(portValue);
     if (
       !/^\d+$/.test(portValue) ||
@@ -164,11 +167,11 @@ export default function MCPServerConfigTab() {
     }
     void apply(
       new servercfg.Local({
-        enabled: config.enabled,
+        enabled: start || config.enabled,
         port,
         allowed_tools: allowedTools,
       }),
-      true,
+      start ? "enable" : "save",
     );
   }
 
@@ -274,9 +277,14 @@ export default function MCPServerConfigTab() {
             stopping={view.status.stopping}
             port={portValue}
             disabled={disabled}
-            onEnabledChange={(enabled) =>
-              void apply(new servercfg.Local({ ...config, enabled }), false)
-            }
+            onEnabledChange={(enabled) => {
+              if (enabled) saveConfig(true);
+              else
+                void apply(
+                  new servercfg.Local({ ...config, enabled: false }),
+                  "disable",
+                );
+            }}
             onPortChange={(port) => {
               setPortDraft(port);
               setSaved(false);
@@ -366,7 +374,7 @@ export default function MCPServerConfigTab() {
           )}
           <Button
             size="sm"
-            onClick={saveConfig}
+            onClick={() => saveConfig()}
             disabled={
               disabled || (!dirty && !view.last_error && !view.status.stopping)
             }
