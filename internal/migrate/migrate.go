@@ -30,7 +30,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		return fmt.Errorf("migrate: 检查数据库是否为新库: %w", err)
 	}
 
-	// 0. 先建 migrate_state 表：backup 的"本迁移组 done 判断"依赖它存在；
+	// 0. 先建 migrate_state 表：迁移完成判断和备份预检依赖它存在；
 	//    只建这一张表，不触发业务表 schema 变化，保证后续计划仍面对原始 schema。
 	if err := db.AutoMigrate(&engine.MigrateState{}); err != nil {
 		return fmt.Errorf("migrate: migrate_state 表: %w", err)
@@ -40,20 +40,9 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		return fmt.Errorf("migrate: 初始化逐组迁移: %w", err)
 	}
 
-	// 先按原始 schema 为已知的破坏性迁移备份，保持备份中的业务数据和文件为升级前版本。
-	plans, err := engine.BuildPlans(db, log, isNewDatabase, engine.Registry)
-	if err != nil {
-		return fmt.Errorf("migrate: 生成迁移计划: %w", err)
-	}
-	backedUp := make(map[string]bool)
-	for _, plan := range plans {
-		if plan.Action != engine.PlanRun || !plan.Migration.Destructive {
-			continue
-		}
-		if err := backupBeforeMigrate(db, log, plan.Migration.Name); err != nil {
-			return fmt.Errorf("migrate: 破坏性迁移前备份失败，迁移未执行 (%s): %w", plan.Migration.Name, err)
-		}
-		backedUp[plan.Migration.Name] = true
+	// 本轮若可能执行破坏性迁移，在任何业务变化前准备唯一的起始快照。
+	if err := prepareUpgradeBackup(db, log, isNewDatabase, engine.Registry); err != nil {
+		return fmt.Errorf("migrate: 升级前备份准备失败，迁移未执行: %w", err)
 	}
 	for _, migration := range engine.Registry {
 		// 前一组可能创建后续迁移的旧表；计划必须在本组执行前重新判断。
@@ -70,12 +59,6 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 				return err
 			}
 		case engine.PlanRun:
-			// 前序组改变 schema 后才需要执行的破坏性迁移，在此补做本组备份。
-			if migration.Destructive && !backedUp[migration.Name] {
-				if err := backupBeforeMigrate(db, log, migration.Name); err != nil {
-					return fmt.Errorf("migrate: 破坏性迁移前备份失败，迁移未执行 (%s): %w", migration.Name, err)
-				}
-			}
 			log.Info("执行迁移", "migration", migration.Name, "description", migration.Description)
 			if err := engine.RunSteps(db, log, migration.Name, migration.AllSteps()); err != nil {
 				return err

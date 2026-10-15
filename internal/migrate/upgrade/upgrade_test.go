@@ -429,8 +429,8 @@ func assertBackups(t *testing.T, dir string, sample fixture.Fixture, original ma
 		}
 		complete++
 	}
-	if required && complete == 0 {
-		t.Fatal("destructive migration has no complete backup")
+	if required && complete != 1 {
+		t.Fatalf("upgrade requires exactly one complete backup, got %d", complete)
 	}
 }
 
