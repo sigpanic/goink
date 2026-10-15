@@ -1,14 +1,14 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 
 	"gorm.io/gorm"
 )
 
-// Migration 描述一次迁移。PreSchemaSteps 必须在当前 model 的 AutoMigrate 前运行；
-// PostSchemaSteps 则在其后运行。两类步骤均按 Registry 注册顺序执行。
+// Migration 描述一次迁移，按 pre → 本组冻结 schema → post 执行。
 type Migration struct {
 	Name        string // 迁移标识，如 "v1.6.0-chapter-id-refactor"，写入 migrate_state.migration
 	Description string // 迁移目的简述（本次迁移为了什么、主要做什么），打印进日志便于排查
@@ -17,14 +17,18 @@ type Migration struct {
 	// NeedsMigration 仅在既有数据库缺少本 migration 的 migrate_state 时调用，识别
 	// 是否仍处于该 migration 的旧 schema。应返回 error 拒绝无法安全识别的混合 schema。
 	NeedsMigration  func(db *gorm.DB) (bool, error)
-	PreSchemaSteps  []Step // 当前 model AutoMigrate 前执行，例如历史字段改名
-	PostSchemaSteps []Step // 当前 model AutoMigrate 后执行，例如数据重写、文件迁移、删旧列
+	PreSchemaSteps  []Step // 本组 schema 对齐前执行，例如历史字段改名
+	SchemaStep      Step   // 使用冻结模型对齐 schema，与其他步骤共用状态记录
+	PostSchemaSteps []Step // 本组 schema 对齐后执行，例如数据重写、文件迁移、删旧列
 }
 
 // AllSteps 按迁移的完整执行顺序返回所有步骤。
 func (m Migration) AllSteps() []Step {
-	steps := make([]Step, 0, len(m.PreSchemaSteps)+len(m.PostSchemaSteps))
+	steps := make([]Step, 0, len(m.PreSchemaSteps)+1+len(m.PostSchemaSteps))
 	steps = append(steps, m.PreSchemaSteps...)
+	if m.SchemaStep != nil {
+		steps = append(steps, m.SchemaStep)
+	}
 	steps = append(steps, m.PostSchemaSteps...)
 	return steps
 }
@@ -38,13 +42,14 @@ const (
 	PlanMarkDone                   // 当前 schema 无需迁移，仅登记步骤完成
 )
 
-// Plan 是根据启动前 schema 和 migrate_state 得出的单次迁移计划。
+// Plan 是根据执行前 schema 和 migrate_state 得出的单次迁移计划。
 type Plan struct {
 	Migration Migration
 	Action    PlanAction
 }
 
-// BuildPlans 在任何业务 model AutoMigrate 前为全部注册迁移生成计划。
+// BuildPlans 根据当前 schema 生成计划。逐组执行时必须在前一组完成后重新判断后一组，
+// 因为前一组的冻结模型可能创建后一组需要处理的旧表或旧列。
 // 对于已有状态的迁移，migrate_state 是唯一真相；只有完全没有状态记录的既有库才
 // 使用 Migration.NeedsMigration 识别历史 schema。
 func BuildPlans(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []Migration) ([]Plan, error) {
@@ -72,7 +77,6 @@ func BuildPlans(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []Mi
 			}
 			continue
 		}
-
 		if isNewDatabase {
 			plans = append(plans, Plan{Migration: migration, Action: PlanMarkDone})
 			continue
@@ -91,6 +95,61 @@ func BuildPlans(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []Mi
 		}
 	}
 	return plans, nil
+}
+
+const (
+	schedulerMigration = "_engine"
+	sequentialStep     = "sequential-schema"
+)
+
+// ErrLegacyMigrationIncomplete 表示旧全局流程尚未完成，须由旧版本先行恢复。
+var ErrLegacyMigrationIncomplete = errors.New("检测到旧版未完成的迁移，请先使用原版本启动并完成迁移，再升级")
+
+// PrepareSequential 在业务 schema 变化前原子接纳已完成的旧记录，并登记调度方式。
+// 旧组只补记 schema 步骤，不重放冻结模型；任一旧组未完成时整笔登记回滚。
+// 标记必须先于任何 pre 落盘，否则只有 pre 的新组中断后会与旧完成记录无法区分。
+// 本入口不接管旧流程中断；未来若增加支持，应在这里处理，普通步骤不承担兼容逻辑。
+func PrepareSequential(db *gorm.DB, log *slog.Logger, registry []Migration) error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		status, err := stepStatus(tx, schedulerMigration, sequentialStep)
+		if err != nil {
+			return err
+		}
+		if status == "done" {
+			return nil
+		}
+		if status != "" {
+			return fmt.Errorf("invalid migration scheduler state: %q", status)
+		}
+		for _, migration := range registry {
+			if err := validateSteps(migration.Name, migration.AllSteps()); err != nil {
+				return err
+			}
+			var states []MigrateState
+			if err := tx.Where("migration = ?", migration.Name).Find(&states).Error; err != nil {
+				return fmt.Errorf("read migration state %s: %w", migration.Name, err)
+			}
+			if len(states) == 0 {
+				continue
+			}
+			legacySteps := append(append([]Step{}, migration.PreSchemaSteps...), migration.PostSchemaSteps...)
+			if done, _ := allStepsDone(states, legacySteps); !done {
+				return fmt.Errorf("%w (%s)", ErrLegacyMigrationIncomplete, migration.Name)
+			}
+			if migration.SchemaStep != nil {
+				// 若已有 auto 记录却没有调度标记，不能把未完成的 auto 当作旧版成功记录。
+				for _, state := range states {
+					if state.Step == migration.SchemaStep.Key() && state.Status != "done" {
+						return fmt.Errorf("incomplete schema state without scheduler marker: %s", migration.Name)
+					}
+				}
+				if err := markStep(tx, log, migration.Name, migration.SchemaStep.Key(), "done", nil); err != nil {
+					return err
+				}
+			}
+		}
+		return markStep(tx, log, schedulerMigration, sequentialStep, "done", nil)
+	})
 }
 
 func validateSteps(migration string, steps []Step) error {
@@ -130,11 +189,10 @@ func allStepsDone(states []MigrateState, steps []Step) (bool, []string) {
 }
 
 // Registry 聚合所有已注册迁移，注册顺序 = 执行顺序。
-// 具体迁移包（如 internal/migrate/v160）在 init() 里调用 Register 自注册；
-// migrate.Run 遍历本注册表执行，对具体迁移无感知。
+// migrate 包按版本顺序显式调用各包的 Register，避免 Go 包依赖改变 init 顺序。
 var Registry []Migration
 
-// Register 注册一次迁移，供具体迁移包的 init() 调用。
+// Register 注册一次迁移，供具体迁移包的 Register 调用。
 func Register(m Migration) {
 	Registry = append(Registry, m)
 }

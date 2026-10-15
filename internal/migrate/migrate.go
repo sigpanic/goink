@@ -7,28 +7,18 @@ import (
 
 	"gorm.io/gorm"
 
-	"github.com/sigpanic/goink/internal/activity"
-	"github.com/sigpanic/goink/internal/chapter"
-	"github.com/sigpanic/goink/internal/character"
-	"github.com/sigpanic/goink/internal/config"
-	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/migrate/engine"
-	_ "github.com/sigpanic/goink/internal/migrate/v120" // blank：触发 v120.init 注册，Run 无需感知具体迁移
-	_ "github.com/sigpanic/goink/internal/migrate/v160" // blank：触发 v160.init 注册，Run 无需感知具体迁移
-	_ "github.com/sigpanic/goink/internal/migrate/v161" // blank：注册写作日志按日汇总迁移
-	"github.com/sigpanic/goink/internal/novel"
-	"github.com/sigpanic/goink/internal/preference"
-	"github.com/sigpanic/goink/internal/reader"
-	"github.com/sigpanic/goink/internal/rollback"
-	"github.com/sigpanic/goink/internal/session"
-	"github.com/sigpanic/goink/internal/setting"
-	"github.com/sigpanic/goink/internal/storage"
-	"github.com/sigpanic/goink/internal/storyarc"
-	"github.com/sigpanic/goink/internal/style"
-	"github.com/sigpanic/goink/internal/timeline"
-	"github.com/sigpanic/goink/internal/volume"
-	"github.com/sigpanic/goink/internal/writing"
+	"github.com/sigpanic/goink/internal/migrate/v120"
+	"github.com/sigpanic/goink/internal/migrate/v160"
+	"github.com/sigpanic/goink/internal/migrate/v161"
 )
+
+// 必须显式固定版本顺序；包的 init 顺序会受依赖关系影响，不能用来决定迁移顺序。
+func init() {
+	v120.Register()
+	v160.Register()
+	v161.Register()
+}
 
 // Run 自动创建/更新全部数据表，幂等安全。作为外部入口，遍历 engine.Registry
 // 执行所有已注册迁移（备份 + 步骤），不感知具体迁移。
@@ -45,20 +35,17 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	if err := db.AutoMigrate(&engine.MigrateState{}); err != nil {
 		return fmt.Errorf("migrate: migrate_state 表: %w", err)
 	}
+	// 在任何业务 schema 或文件变化前检查全部旧记录；不接管旧全局流程的中断。
+	if err := engine.PrepareSequential(db, log, engine.Registry); err != nil {
+		return fmt.Errorf("migrate: 初始化逐组迁移: %w", err)
+	}
 
+	// 先按原始 schema 为已知的破坏性迁移备份，保持备份中的业务数据和文件为升级前版本。
 	plans, err := engine.BuildPlans(db, log, isNewDatabase, engine.Registry)
 	if err != nil {
 		return fmt.Errorf("migrate: 生成迁移计划: %w", err)
 	}
-	// 对无需执行的迁移，计划一经原始 schema 判定便立即登记 done。后续的
-	// AutoMigrate 可能暂时制造新旧列共存；必须在此之前持久化判定结果，才能让
-	// 中断后的重启依赖 migrate_state 而非面对中间 schema 重新探测。
-	if err := markPlannedDone(db, log, plans); err != nil {
-		return err
-	}
-
-	// 备份和前置步骤均只能针对计划执行的迁移。由 plan 决定是否执行，避免
-	// 新库、最终 schema 或状态丢失的库误触历史 DDL。
+	backedUp := make(map[string]bool)
 	for _, plan := range plans {
 		if plan.Action != engine.PlanRun || !plan.Migration.Destructive {
 			continue
@@ -66,60 +53,36 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		if err := backupBeforeMigrate(db, log, plan.Migration.Name); err != nil {
 			return fmt.Errorf("migrate: 破坏性迁移前备份失败，迁移未执行 (%s): %w", plan.Migration.Name, err)
 		}
+		backedUp[plan.Migration.Name] = true
 	}
-	for _, plan := range plans {
-		if plan.Action != engine.PlanRun {
+	for _, migration := range engine.Registry {
+		// 前一组可能创建后续迁移的旧表；计划必须在本组执行前重新判断。
+		plans, err := engine.BuildPlans(db, log, isNewDatabase, []engine.Migration{migration})
+		if err != nil {
+			return fmt.Errorf("migrate: 生成迁移计划: %w", err)
+		}
+		switch plans[0].Action {
+		case engine.PlanSkip:
 			continue
-		}
-		if err := engine.RunSteps(db, log, plan.Migration.Name, plan.Migration.PreSchemaSteps); err != nil {
-			return err
-		}
-	}
-
-	models := []any{
-		&config.AppSettings{},
-		&novel.Novel{},
-		&preference.PreferenceItem{},
-		&setting.SettingItem{},
-		&chapter.Chapter{},
-		&character.Character{},
-		&character.CharacterRelation{},
-		&character.Group{},
-		&character.GroupMember{},
-		&timeline.TimelineEntry{},
-		&storyarc.StoryArc{},
-		&storyarc.ArcNode{},
-		&location.Location{},
-		&location.LocationRelation{},
-		&reader.ReaderPerspective{},
-		&session.Session{},
-		&session.Message{},
-		&storage.OperationLogRecord{},
-		&rollback.TurnCommit{},
-		&style.Sample{},
-		&writing.WritingLog{},
-		&activity.DailyActivity{},
-		&activity.DailyLLMUsage{},
-		&volume.Volume{},
-		&engine.MigrateState{},
-	}
-
-	for _, m := range models {
-		if err := db.AutoMigrate(m); err != nil {
-			return fmt.Errorf("migrate: %T: %w", m, err)
-		}
-	}
-
-	// 后置步骤依赖当前 model 已补齐的列。无需执行的 migration 已在任何 schema
-	// 变化前登记完成，避免中断后把当前 migration 的中间 schema 误判为历史 schema。
-	for _, plan := range plans {
-		if plan.Action == engine.PlanRun {
-			log.Info("执行迁移", "migration", plan.Migration.Name, "description", plan.Migration.Description)
-			if err := engine.RunSteps(db, log, plan.Migration.Name, plan.Migration.PostSchemaSteps); err != nil {
+		case engine.PlanMarkDone:
+			// 先持久化无需迁移的判定，后续组的 AutoMigrate 才不会让重启误判。
+			if err := engine.MarkStepsDone(db, log, migration.Name, migration.AllSteps()); err != nil {
+				return err
+			}
+		case engine.PlanRun:
+			// 前序组改变 schema 后才需要执行的破坏性迁移，在此补做本组备份。
+			if migration.Destructive && !backedUp[migration.Name] {
+				if err := backupBeforeMigrate(db, log, migration.Name); err != nil {
+					return fmt.Errorf("migrate: 破坏性迁移前备份失败，迁移未执行 (%s): %w", migration.Name, err)
+				}
+			}
+			log.Info("执行迁移", "migration", migration.Name, "description", migration.Description)
+			if err := engine.RunSteps(db, log, migration.Name, migration.AllSteps()); err != nil {
 				return err
 			}
 		}
 	}
+	models := Models()
 
 	// SQLite 的 RENAME COLUMN 会保留旧索引名。例如历史 writing_log.chapter_id
 	// 改为 chapter_number 后，旧索引仍叫 idx_writing_log_chapter_id；首次 AutoMigrate
@@ -130,20 +93,6 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
-	return nil
-}
-
-// markPlannedDone 将原始 schema 判定为无需执行的迁移立即落盘。每个 migration
-// 由 MarkStepsDone 在单独事务中写入全部 step，避免留下半组状态。
-func markPlannedDone(db *gorm.DB, log *slog.Logger, plans []engine.Plan) error {
-	for _, plan := range plans {
-		if plan.Action != engine.PlanMarkDone {
-			continue
-		}
-		if err := engine.MarkStepsDone(db, log, plan.Migration.Name, plan.Migration.AllSteps()); err != nil {
-			return fmt.Errorf("migrate: 登记无需执行的迁移 %s: %w", plan.Migration.Name, err)
-		}
-	}
 	return nil
 }
 

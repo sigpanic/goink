@@ -21,12 +21,20 @@ type step struct {
 func (s step) Key() string                             { return s.key }
 func (s step) Run(db *gorm.DB, log *slog.Logger) error { return s.run(db, log) }
 
-func init() {
+// Register 注册章节号字段迁移，由 migrate 包按版本顺序调用。
+func Register() {
 	engine.Register(engine.Migration{
 		Name:           migration,
 		Description:    "v1.2.0 章节号字段语义化命名：修正历史 *_id 误名并清理 novels.dir_path",
 		Destructive:    true,
 		NeedsMigration: needsMigration,
+		SchemaStep: step{key: "auto", run: func(db *gorm.DB, log *slog.Logger) error {
+			// 仅清理现代库残留的 dir_path 时，不能重新添加旧章节号 schema。
+			if !db.Migrator().HasColumn("chapters", "chapter_number") {
+				return nil
+			}
+			return (engine.AutoMigrateStep{Models: FrozenModels}).Run(db, log)
+		}},
 		PreSchemaSteps: []engine.Step{
 			step{key: "1-rename-chapter-number-columns", run: migrateRenameChapterNumberColumns},
 		},

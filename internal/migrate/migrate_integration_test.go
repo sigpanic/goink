@@ -32,9 +32,9 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 		name string
 		want int64
 	}{
-		{"v1.2.0-chapter-number-column-names", 2},
-		{"v1.6.0-chapter-id-refactor", 5},
-		{"v1.6.1-writing-daily", 1},
+		{"v1.2.0-chapter-number-column-names", 3},
+		{"v1.6.0-chapter-id-refactor", 6},
+		{"v1.6.1-writing-daily", 2},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -68,9 +68,9 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 		name string
 		want int64
 	}{
-		{"v1.2.0-chapter-number-column-names", 2},
-		{"v1.6.0-chapter-id-refactor", 5},
-		{"v1.6.1-writing-daily", 1},
+		{"v1.2.0-chapter-number-column-names", 3},
+		{"v1.6.0-chapter-id-refactor", 6},
+		{"v1.6.1-writing-daily", 2},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -204,11 +204,11 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 			t.Fatalf("迁移后表不存在: %s", table)
 		}
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND status = 'done'`); n != 5 {
-		t.Fatalf("v160 迁移步骤完成数 = %d, want 5", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.6.0-chapter-id-refactor' AND status = 'done'`); n != 6 {
+		t.Fatalf("v160 迁移步骤完成数 = %d, want 6", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.2.0-chapter-number-column-names' AND status = 'done'`); n != 2 {
-		t.Fatalf("v120 迁移步骤完成数 = %d, want 2", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE migration = 'v1.2.0-chapter-number-column-names' AND status = 'done'`); n != 3 {
+		t.Fatalf("v120 迁移步骤完成数 = %d, want 3", n)
 	}
 
 	if err := migrate.Run(db, slog.Default()); err != nil {
@@ -229,8 +229,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM writing_log`); n != 1 {
 		t.Fatalf("重复迁移后应只有一条写作日汇总: got %d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 8 {
-		t.Fatalf("状态丢失后应重建全部迁移状态: got %d, want 8", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 12 {
+		t.Fatalf("状态丢失后应重建全部迁移状态和调度标记: got %d, want 12", n)
 	}
 }
 

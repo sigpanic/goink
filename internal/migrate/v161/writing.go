@@ -63,7 +63,8 @@ func (writingDailyStep) Run(db *gorm.DB, _ *slog.Logger) error {
 	})
 }
 
-func init() {
+// Register 注册写作日汇总迁移，由 migrate 包按版本顺序调用。
+func Register() {
 	engine.Register(engine.Migration{
 		Name:        "v1.6.1-writing-daily",
 		Description: "写作增删量按日期和小说汇总，移除逐次保存与章节明细",
@@ -71,5 +72,6 @@ func init() {
 		Destructive:    false,
 		NeedsMigration: needsWritingMigration,
 		PreSchemaSteps: []engine.Step{writingDailyStep{}},
+		SchemaStep:     engine.AutoMigrateStep{Models: FrozenModels},
 	})
 }
