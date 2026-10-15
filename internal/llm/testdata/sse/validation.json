@@ -1,0 +1,90 @@
+{
+  "sse_files": [
+    {
+      "file": "anthropic/anthropic-fallback-end-01.sse",
+      "frames": 7,
+      "sha256": "7e79436abdb4ff03cc9b51e27c461bd067395a39b7b4d20fb5adba48681a1bf1",
+      "json_valid": true
+    },
+    {
+      "file": "anthropic/anthropic-fallback-tooluse-01.sse",
+      "frames": 6,
+      "sha256": "44bd0aa6cb27503f0a41cf6402998e4d5cc372642a82120b121968f14e7c0c39",
+      "json_valid": true
+    },
+    {
+      "file": "anthropic/anthropic-refusal-01.sse",
+      "frames": 11,
+      "sha256": "033b5288a50e744c1534186fc7147e9b097fb85ab12c3f293142163089a585bb",
+      "json_valid": true
+    },
+    {
+      "file": "anthropic/anthropic-tool_runner_next_streaming-01.sse",
+      "frames": 25,
+      "sha256": "732f4b46189b61ee2b432abdd29852b31ac7be408739b7dd9c936f395e01e459",
+      "json_valid": true
+    },
+    {
+      "file": "anthropic/anthropic-tool_runner_streaming_all-01.sse",
+      "frames": 24,
+      "sha256": "9e75e3423449cfda1266e73327f43949fa0318b68a1d17293d4d06fe7ecbd783",
+      "json_valid": true
+    },
+    {
+      "file": "anthropic/anthropic-tool_runner_streaming_all-02.sse",
+      "frames": 11,
+      "sha256": "85270c48213e3496525f928fbacae9eeb8128270aca9f2596dc18d07f4b8a3af",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-chat-config-01.sse",
+      "frames": 3,
+      "sha256": "d7ab18fed0c98dd80c4fd75eaa6575aa4625429f1c0dfd8b083c6bf3213a8ed1",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-generation-config-01.sse",
+      "frames": 3,
+      "sha256": "eff0c77d514d31b5336f5914c8c07cd59c759c200689629dad39a6b237203600",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-text-01.sse",
+      "frames": 11,
+      "sha256": "dc5ac61a0c41490e44818ebe64f0f37cbe38b4c668f26833240da283b3903955",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-tool-loop-01.sse",
+      "frames": 1,
+      "sha256": "02eee3a0e2c099c3e871f53d185d24427328053dd7eb0b8287492c77c0517831",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-tool-loop-02.sse",
+      "frames": 4,
+      "sha256": "8ac28c09bd13d4c5c79bfbcf773e2c6cd55aadc9c775bb40b6b5ed00e25db0cd",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-tools-01.sse",
+      "frames": 1,
+      "sha256": "d5b51ae746b35dc1ee156c7b3e319579511847a9284a23f4670f90238289a4d0",
+      "json_valid": true
+    },
+    {
+      "file": "google/gemini-tools-02.sse",
+      "frames": 1,
+      "sha256": "66430f6ebcf93f903d0d926824cc38b487f8ab0e17f0d090e9e89ff2656f1e41",
+      "json_valid": true
+    }
+  ],
+  "http_errors": [
+    {
+      "file": "google/gemini-error-01.json",
+      "status": 404
+    }
+  ],
+  "errors": [],
+  "result": "PASS"
+}
