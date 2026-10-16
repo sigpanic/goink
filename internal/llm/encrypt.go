@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/utils"
 )
 
 // LoadUserConfig 从加密文件读取并解密用户 LLM 配置。
@@ -44,5 +45,5 @@ func SaveUserConfig(path string, cfg *UserLLMConfig) error {
 		return err
 	}
 
-	return os.WriteFile(path, enc, 0600)
+	return utils.AtomicWrite(path, enc)
 }

@@ -61,6 +61,25 @@ func TestUserConfigEncryptionCompatibility(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSaveUserConfigFailedAtomicReplacePreservesDestination(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "llm_config.enc")
+	require.NoError(t, os.Mkdir(path, 0700))
+	marker := filepath.Join(path, "existing")
+	require.NoError(t, os.WriteFile(marker, []byte("preserve"), 0600))
+	state := &UserLLMConfig{Providers: []Provider{{Name: "test", APIKey: "private-test-key"}}}
+
+	err := SaveUserConfig(path, state)
+	var renameErr *os.LinkError
+	require.ErrorAs(t, err, &renameErr)
+	data, err := os.ReadFile(marker)
+	require.NoError(t, err)
+	require.Equal(t, "preserve", string(data))
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "替换失败也要清理临时文件")
+}
+
 func TestLoadUserConfigPreservesJSONError(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "llm_config.enc")
 	data, err := config.Encrypt([]byte("{"))
