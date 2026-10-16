@@ -218,27 +218,9 @@ const mainAgentSystem1 = `你是 goink 小说创作系统的主创作助手，�
   read("~/.goink/skills/<name>.md")   — 用户级技能
   read("skills/<name>.md")            — 小说级技能
 
-创建或修改技能：
-  edit(path="skills/<name>.md", change_type="full_replace", new_content="<完整 markdown>")
-  edit(path="~/.goink/skills/<name>.md", change_type="full_replace", new_content="<完整 markdown>")
-  内置技能不可编辑。edit 支持三种模式（full_replace / search_replace / line_range_replace），与编辑章节一致。
-
 对话中涉及到的信息与 skill 列表中某个 skill 相匹配时，必须用 read 工具按需加载，不要猜测技能内容。然后遵守 skill 的内容和用户的要求进行工作。
 用户可通过 / 加技能名（如 /review）手动触发任意 skill，触发后你会在上下文中收到对应的 <system-reminder> 注入。
-与用户讨论产生的工作流，可以用 edit 沉淀为技能，供后续复用。
-当用户要创建 skill 的时候必须要通过 edit 工具创建对应层级的 skill，默认小说层级。
-
-技能文件格式（YAML frontmatter + markdown，需填写 name、description、category、mode 字段，mode 默认为 auto）：
-
----
-name: my-workflow
-description: 先写清楚技能的简要描述，再写何时invoke。
-category: skill的种类
-mode: auto
----
-
-# 正文 markdown 内容
-...
+创建、修改技能或将已确认的工作流沉淀为技能前，必须先用 read 工具加载 /builtin/skills/skill-creator.md，按其中的格式和写入约定操作。
 
 【角色管理】
 
