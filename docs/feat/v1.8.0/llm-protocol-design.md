@@ -1,12 +1,12 @@
 # v1.8.0 — 协议适配器、Claude / Gemini 接入与同会话切换
 
-> 2026-10-16 修订。已确认采用协议适配器、官方 SDK 和同会话模型切换；不兼容的推理状态允许在出站时丢弃。实现顺序：先收拢现有 OpenAI Chat 调用链，再实现 Claude Messages，最后实现 Gemini GenerateContent。配套 [commit-roadmap.md](./commit-roadmap.md)。
+> 2026-10-16 修订。已确认采用协议适配器、官方 SDK 和同会话模型切换；不兼容的推理状态允许在出站时丢弃。实现顺序：先完成公共 adapter 基建，再迁移 OpenAI Chat，之后实现 Claude Messages、Gemini GenerateContent。当前只验收公共适配层，已改动的 OpenAI 草稿保持原状。配套 [commit-roadmap.md](./commit-roadmap.md)。
 
 ## 1. 目标与范围
 
 使用 Anthropic、Google 官方 Go SDK 接入 Claude Messages 和 Gemini GenerateContent。SDK 负责原生请求和响应解析，Goink 适配器负责出站转换、`StreamEvent` 映射及原生响应状态的保存与回放。工具执行、审批、重试策略和会话管理继续由 Goink 负责。
 
-本版本交付主 Agent / 子 Agent 对话、工具调用、标题生成、摘要压缩、连接测试、模型发现、重启续聊和同会话模型切换。现有 OpenAI 兼容供应商的 HTTP、SSE 和 hooks 收拢到第一个 `OpenAIChatAdapter`，与后续两个原生适配器实现相同的调用契约；本次保留其现有传输实现。
+本版本最终交付主 Agent / 子 Agent 对话、工具调用、标题生成、摘要压缩、连接测试、模型发现、重启续聊和同会话模型切换。当前阶段只明确公共 adapter 契约及职责，不迁移 OpenAI、不接入原生 SDK、不改造上层调用。后续 OpenAI 作为第一个具体适配器，收拢现有 providers、HTTP、SSE 和 hooks，再接两个原生适配器。
 
 同一 session 可以切换 provider、model 和已支持的协议，保留用户输入、正文、工具调用与结果。切换在当前请求和工具组收尾后的空闲边界生效；进行中的主 / 子 Agent 使用已捕获的配置快照。不兼容的 thinking、signature 等推理状态可以从目标请求中移除，数据库原始记录和前端历史继续保留；切回原模型也不承诺恢复旧推理链。不同模型、账户或中转站的兼容性须分别验证，不承诺跨模型推理状态无损。
 
@@ -14,12 +14,12 @@ Google Interactions、Bedrock / Vertex 等部署和厂商托管 Agent 留到后�
 
 Google 已推荐新项目使用 Interactions，同时仍完整支持 GenerateContent；Interactions 也支持 `store=false`，并非必须采用服务端会话。本次先使用 GenerateContent，是为了控制接入范围并覆盖已有原生端点；未来将 Interactions 作为独立协议适配器评估，不复用 GenerateContent 的 wire 格式。[官方说明](https://ai.google.dev/gemini-api/docs/interactions-overview)。
 
-## 2. 当前调用链与旧调查的继承
+## 2. 改造前调用链与旧调查的继承
 
 | 位置 | 当前行为 | 本次需要补齐 |
 |---|---|---|
 | `internal/llm/types.go` | Provider 提供请求、请求头、错误 hook；`StreamEvent` 没有最终原生状态 | 明确协议、运行时适配入口和响应状态事件 |
-| `internal/llm/stream.go` | 按 Provider.ChatURL 发请求；payload / SSE 按 OpenAI 格式处理 | 先封装 OpenAI 适配器，再增加原生适配器 |
+| `internal/llm/stream.go` | 按 Provider.ChatURL 发请求；payload / SSE 按 OpenAI 格式处理 | 公共基建验收后，接通 adapter → providerName → model 路由并迁移 OpenAI |
 | `internal/llm/generate.go` | 非流式调用只读 `choices[].message.content` | 标题和压缩摘要也经过协议适配器 |
 | `internal/session/types.go` | `ToAPIFormat` 导出 OpenAI 形状的 map | 携带内部响应状态，但不生成厂商原生格式 |
 | `internal/agent/agent.go` | 流结束后根据工具执行结果重建 assistant 消息 | 保存完整响应状态，保证原生工具声明不被重建丢失 |
@@ -53,52 +53,86 @@ Google 已推荐新项目使用 Interactions，同时仍完整支持 GenerateCon
 
 已在 `go.mod` / `go.sum` 锁定 Anthropic SDK `v1.81.0`、Google SDK `v1.75.0`，均要求 Go 1.24，项目继续使用 Go 1.25.0。当前依赖差异为 `go.mod` 增加 24 行、`go.sum` 增加 127 行；SDK 及生产包已构建通过。SDK 尚未被业务代码导入，依赖暂显示为 indirect；实现前不通过 tidy 移除它们。后续升级以确切版本和实际构建结果为依据。
 
-SDK client 在 provider 配置组装时创建并随配置快照使用。热重载构建新快照，进行中的请求继续使用旧配置；不在每个流片段创建 client，不让热重载修改请求正在读取的数据。显式传入用户配置的密钥、端点及后端，防止环境变量悄悄改变 provider 选择。
+各具体适配器在组装其 providers 时，为需要的 provider 创建 SDK client 并随配置快照使用。热重载由具体适配器构建新的 providers 快照并原子替换，请求先按 providerName 捕获所需配置与 SDK client，进行中的请求继续使用旧快照；不在每个流片段创建 client，不让热重载修改请求正在读取的数据。显式传入用户配置的密钥、端点及后端，防止环境变量悄悄改变 provider 选择。
 
 向 SDK 注入现有 HTTP client / transport，保留代理、TCP 连接超时、首字节超时和 context 取消。长流不设置短的整体 `http.Client.Timeout`。SDK 特有超时设置也必须检查，避免覆盖现有长推理行为。
 
 业务调用的重试归 Goink 管理。Anthropic 设置 `WithMaxRetries(0)`；Google 的单次请求次数根据锁定版本的重试配置明确关闭并测试，不混用不同 API 的重试选项。不使用 SDK 的 Tool Runner / 自动工具执行、托管 Agent 或自动会话循环。[Anthropic 重试和超时配置](https://platform.claude.com/docs/en/cli-sdks-libraries/sdks/go#retries)。
 
-### 3.2 调用接口与运行时组装
+### 3.2 顶层适配器与三级选择
+
+**适配器管理一种协议下的 providers。调用顺序固定为 adapter → providerName → model。** adapter 名称使用协议标识，不再增加与协议并列的选择维度。一个具体适配器实例持有自己的 providers 集合，内部再按 providerName 选择地址、密钥、模型能力、厂商规则及 SDK client。
 
 ```text
-Agent / 标题 / 摘要：Goink messages + tools + CallOptions
-                          │
-                  internal/llm.Client
-                          │ 使用 provider 配置快照中的 adapter
-          ┌───────────────┼───────────────────┐
-          │               │                   │
-  OpenAIChatAdapter  AnthropicMessagesAdapter  GeminiGenerateContentAdapter
-  HTTP / SSE / hooks  Anthropic SDK            Google SDK
-          │               │                   │
-          └───────────────┼───────────────────┘
-                          │ StreamEvent + 完整响应状态
-                      Agent / Session
-                  工具执行、审批、重试、存储
+调用方：adapterName + providerName + model + Goink messages / tools / options
+                                │
+                        internal/llm.Client
+                                │ adapters[adapterName]，按协议选择
+          ┌─────────────────────┼────────────────────────┐
+          │                     │                        │
+  OpenAIChatAdapter   AnthropicMessagesAdapter   GeminiGenerateContentAdapter
+  providers           providers                  providers
+  ├─ deepseek         ├─ anthropic               ├─ gemini
+  ├─ gemini           └─ relay-b                 └─ relay-c
+  └─ relay-a
+          │                     │                        │
+          └─────────────────────┼────────────────────────┘
+                                │ Goink StreamEvent / Response
+                            Agent / Session
+                        工具执行、审批、重试、存储
 ```
 
-`ProtocolAdapter` 是运行时调用边界，定义于 `internal/llm/adapter`；OpenAI Chat、Claude Messages 和 Gemini GenerateContent 分别放在独立子包。Provider 继续负责持久化配置，运行时对象组合配置快照、适配器及厂商规则；SDK client 和函数 hooks 不参与配置 JSON 序列化。
+图中的 provider 名称用于说明作用域，不代表某个端点已经验证可用。同一逻辑服务商可出现在多个适配器下，例如 `openai_chat / gemini` 与 `gemini_generate_content / gemini`；两者分别配置该协议的端点、鉴权、模型及规则。适配器之间不互相查找或共享可变的运行配置。
 
-Client 在组装或热重载 provider 时，通过集中创建入口按 `protocol` 选择适配器。业务入口统一调用接口，Agent / Session 不按协议分支。新增服务商主要增加配置模板和厂商规则；新增协议增加适配器、创建入口、配置选项和契约测试。新协议引入现有事件无法表达的能力时，再扩展公共模型。
+顶层注册表的目标形状为 `map[adapter.Protocol]adapter.ProtocolAdapter`，映射项是协议名到协议级适配器。各实现内部持有以 `providerName` 索引的 providers 集合；provider 名称保持 `providerName`，不改称 providerKey。providerName 在所属 adapter 内唯一，完整调用目标由 adapterName、providerName、model 共同确定。
 
-核心接口统一提供流式和非流式生成。以下为接口草案，公共类型均不依赖 SDK：
+以下为公共调用契约，Request / Response 均为 Goink 类型，SDK 类型留在具体子包：
 
 ```go
 type ProtocolAdapter interface {
+    Providers() map[string]Provider
     Stream(ctx context.Context, req Request) <-chan StreamEvent
     Generate(ctx context.Context, req Request) (Response, error)
+    DiscoverModels(ctx context.Context, providerName string) ([]ModelInfo, error)
+    TestConnection(ctx context.Context, providerName, model string) (TestConnectionResult, error)
+}
+
+type Request struct {
+    ProviderName string
+    Model        string
+    Messages     []map[string]any
+    Tools        []map[string]any
+    Options      *CallOptions
 }
 ```
 
-`Request` 包含目标模型、Goink messages、工具定义和调用选项；适配器实例已绑定 provider 配置快照及 HTTP client，请求不再接收用于路由的 provider 名称。`Response` 表达完整的一次模型响应，包含正文、显示用思考、工具调用、可选 usage、停止原因和来源 / 原生状态，不只返回字符串。公共字段只定义一次；流式事件与完整结果复用相应的工具、用量和状态类型，SDK 请求 / 响应类型只出现在对应适配器中，不传到 Agent、Session 或 Wails DTO。
+公共 `Provider` 只定义共用配置，不包含 SDK client 或协议 hooks。具体子包的运行时 Provider 匿名嵌入 `adapter.Provider`，再增加本协议需要的字段；具体 Adapter 自己持有 `providers map[string]本包Provider`。同名 providerName 可分别存在于不同协议适配器中。
 
-`Stream` 输出现有 Goink 事件及完整响应状态，初始请求失败和流中失败统一通过 `EventError` 表达，生产方负责关闭 channel。调用方提前结束消费时必须取消本次调用的 context 或排空流，`CallTool` 找到目标参数后返回的路径也需遵守。取消必须中止底层请求，发送事件时同时响应 context，避免 goroutine 阻塞；取消后的结束以 context 为准，不依赖一定能再发送一个错误事件。完整工具组校验和最终状态的顺序见第 5 节。
+不提供公共 Base：匿名嵌入用于组合公共字段，不会使具体 Provider 与 `adapter.Provider` 成为同一个类型，二者的 map 也不能直接互换。各具体适配器自行实现 Providers / Stream / Generate / DiscoverModels / TestConnection；Providers 只提取公共配置并返回独立副本，不暴露运行时 hooks 或 SDK client。构造和查询时的可变配置隔离由具体实现负责，包含模型数组、推理等级和温度指针；热重载创建新实例，让进行中的请求继续使用旧快照。
 
-`Generate` 使用该协议的非流式调用并返回完整结果；流式与非流式共用历史投影、参数映射、鉴权及错误归一化规则，不强制通过消费 `Stream` 模拟非流式。两种调用方式的工具定义和响应状态遵循相同契约。连接测试复用真实调用能力；模型发现使用独立的小能力接口，不支持发现的端点允许手动填模型。各入口共用同一个配置解析和适配器创建结果。
+上层入口的目标签名示意如下，具体接线在公共基建验收后进行：
 
-`ChatStream`、`GenerateText`、`CallTool` 的上层语义继续保留：Client 的 `ChatStream` 选择配置快照后委派给 `Stream`；`GenerateText` 调用 `Generate` 后提取正文，供标题和压缩摘要使用；`CallTool` 继续作为共用包装层消费流事件、选择目标工具参数并处理自身的重试，不要求每个适配器重复实现。Agent 通过 Client 调用，负责对话循环、工具执行、审批和 Agent 级重试；适配器只完成一次模型调用，不执行工具。
+```go
+func (c *Client) ChatStream(
+    ctx context.Context,
+    adapterName adapter.Protocol,
+    providerName, model string,
+    messages, tools []map[string]any,
+    opts *CallOptions,
+) <-chan StreamEvent
+```
 
-先将现有请求构造、HTTP、SSE、错误解析和辅助调用的协议部分收进 `OpenAIChatAdapter`，保留现有厂商 hooks 的行为。第一步封装以现有行为回归为准；将非流式结果补齐为公共 `Response` 时单独验证，不能因为签名相同就声称已支持完整状态。原生适配器使用各自的参数映射与鉴权配置，SDK 请求不经过 OpenAI payload hooks。
+Client 按 adapterName 查找具体适配器，再组装带 ProviderName 和 Model 的 Request 交给它；适配器按 ProviderName 查找自身的 provider，再解析 Model。Request 中不必重复携带已由顶层选定的 adapterName。协议、provider 或模型选择失败均须明确报错，不从模型名推测协议，不跨适配器回退查找同名 provider。适配器按已声明的模型配置处理能力，未知能力与未知模型的策略在模型配置阶段明确。
+
+`Request` 承载调用上下文，实际 HTTP / SDK 请求由适配器内部构造。`Response` 是统一的完整结果，包含正文、显示用思考、工具调用、可选 usage 和停止原因；来源及不透明的原生回放状态在后续状态持久化单元补齐。显示用思考不替代原生状态。
+
+`Stream` 输出 Goink 事件，初始请求失败和流中失败统一通过 EventError 表达，生产方负责关闭 channel。提前结束消费时调用方取消 context 或排空流；发送事件也需响应取消，避免阻塞。完整工具组校验和最终状态顺序见第 5 节。`Generate` 调用对应协议的非流式 API，并将结果转换为 Goink Response，不强制通过消费 Stream 模拟非流式。两个方法共用该适配器的 provider 解析、历史投影、参数、鉴权与错误规则。
+
+`DiscoverModels(ctx, providerName)` 和 `TestConnection(ctx, providerName, model)` 直接属于 ProtocolAdapter，不再拆成 ModelDiscoverer / ConnectionTester 两个能力接口；调用方均先选择 adapter，具体实现使用自己持有的 provider 配置与鉴权。发现不受支持时明确返回错误，允许手动配置模型；连接探测按对应协议的最小合法请求实现。Providers 返回各适配器的配置副本，根层据此汇总展示；公共层不提供配置存取 CRUD 或 SDK 私有接口。
+
+`ChatStream`、`GenerateText`、`CallTool` 的业务用途保留，其调用签名后续统一显式指定 adapterName、providerName、model。GenerateText 从 Generate 的完整结果提取正文；CallTool 共用流式包装；Agent 负责对话循环、工具执行、审批和业务重试。允许分阶段改底层签名、后续再接上层，阶段间编译失败如实报告，不为维持旧签名改变已确定的架构。
+
+本阶段的边界：仅公共 adapter 标识、Request / Response / 事件、Provider 及统一接口；实际持有 providers 的结构体在各具体协议子包中实现。不注册真实协议适配器，不迁移 OpenAI 模板或旧 llm.Provider，不改 OpenAI 实现和 Client。已存在的 OpenAI 迁移草稿保留在工作区，不纳入本次提交或验收。
 
 ### 3.3 继续使用当前 messages
 
@@ -114,31 +148,37 @@ type ProtocolAdapter interface {
 
 存储结构复用不代表读写代码无需改动：Agent 保存完整响应状态，Session 导出 / 还原内部状态槽，压缩副本携带来源并处理状态失效，前端查询移除内部状态。各协议的工具结果仍存为统一 tool 消息，出站时再转换成对应 wire 结构。OpenAI 适配器无需为了接口统一额外复制一份完整响应 JSON。
 
-### 3.5 子包组织与依赖方向
+### 3.5 子包内聚与依赖方向
 
-计划目录如下，具体文件按实现需要拆分，不预先创建空文件：
+目标目录按适配器组织。具体协议的 providers.go、厂商规则和运行时 provider 组装均归其子包；根目录 config.go 只负责用户配置存取与汇总，不保留集中承载全部服务商规则的 providers.go。
 
 ```text
 internal/llm/
-├── client.go / factory.go       # 统一入口、配置快照及适配器创建
-├── config.go / providers.go     # 配置读写、内置模板与 provider_type 组装
-├── generate.go / calltool.go    # GenerateText、CallTool 共用包装
-├── types.go                    # 对公共类型保留必要的兼容别名
+├── stream.go / factory.go       # 以后接线：按 adapterName 路由和创建协议级实例
+├── config.go                   # 用户配置存取与适配器配置汇总
+├── generate.go / calltool.go    # 共用业务包装，以后接入三级目标
+├── types.go                    # 上层类型过渡，绑定兼容在接线时处理
 ├── adapter/
-│   ├── adapter.go / types.go    # 接口、Request / Response、事件、错误及状态类型
-│   ├── openaichat/              # 现有 HTTP / SSE、请求转换、厂商 hooks 及测试
-│   ├── anthropic/               # Messages SDK、请求 / 事件 / 状态转换及测试
-│   └── gemini/                  # GenerateContent SDK、请求 / 事件 / 状态转换及测试
-└── testdata/sse/                # 保留已提交的回放资料位置
+│   ├── adapter.go / types.go    # 当前范围：协议标识、公共接口与输入输出
+│   ├── provider.go              # 当前范围：可由具体 Provider 嵌入的公共配置
+│   ├── openaichat/              # 后续迁移
+│   │   ├── adapter.go          # 持有本协议的 providers 集合
+│   │   ├── providers.go        # 服务商模板及本协议下的 provider 组装
+│   │   └── hooks_* / stream / generate / discover / test_connection
+│   ├── anthropic/              # providers、SDK clients、请求 / 事件 / 状态转换
+│   └── gemini/                 # providers、SDK clients、请求 / 事件 / 状态转换
+└── testdata/sse/                # 保留已提交资料的位置
 ```
 
-Go 导入方向固定为 `llm → 具体适配器子包 → adapter`，同时 `llm` 直接依赖公共 `adapter` 契约。`adapter` 不导入其实现子包；各实现不反向导入 `llm`，也不导入其他适配器、Agent、Session 或 app。创建入口留在 `llm`，避免 `llm → 子包 → llm` 的循环依赖。新增协议时新增实现子包，并在集中创建入口和配置选项中接入。
+Go 导入方向为 `llm → 具体适配器子包 → adapter`，llm 同时直接依赖公共契约。公共 adapter 包不导入具体实现；各实现不反向导入 llm、Agent、Session 或 app，也不相互导入。根层创建入口按协议组装适配器，不遍历每个 provider 创建一个顶层适配器。
 
-`StreamEvent`、`CallOptions`、`APIError` 等跨包使用的类型移到公共契约包，`llm` 可通过 Go 类型别名维持现有调用位置；关联方法随类型定义迁移，不再声明一套相同 DTO。适配器接收公共运行配置；配置与运行时语义一致的字段通过组合复用，持久化 Provider 和设置 DTO 继续由上层管理，SDK client 与协议私有选项留在实现包。
+providers 的公共配置字段按语义复用，SDK client、协议专用选项及函数 hooks 留在具体子包，不参与用户配置 JSON 序列化。根层将用户配置按协议交给各适配器；内置模板匹配、provider_type 规则选择、配置合并和 provider 查找在对应子包内完成。根层不根据 providerName 匹配 OpenAI hooks，也不接触 Claude / Gemini 的私有参数。
 
-内置模板和配置实例的解析留在 `llm`；OpenAI 的 hooks 实现及按 `provider_type` 选择 hooks 的逻辑归入 `openaichat`，创建入口传入已解析的类型及配置，子包不读取上层 Provider 定义。Claude / Gemini 的厂商参数、历史投影和签名规则分别封装在对应子包；仅将确有复用的来源识别、工具组检查等逻辑放入公共包。各适配器实现相同契约，不要求共用 OpenAI payload 或手写 SSE 解析器。
+新增同协议服务商只扩展该子包的 providers / 厂商规则；新增协议增加实现子包，再接入顶层注册入口。通用来源识别、工具组检查等仅在确有复用时加入公共包。模型发现、连接测试与实际生成均从同一适配器中按 providerName 获取同一份配置规则。
 
-协议单元测试和 SDK 假服务回放测试与实现同包；Client 的路由、热重载和包装层测试留在 `llm`，跨协议生命周期测试放在现有 Agent / Session 测试中。拆包时检查导入图、类型别名兼容和旧服务商行为；既有 SSE 资料不随源码拆包迁移。
+公共类型保持 SDK 无关，字段一致时复用，不按层复制相同 DTO。原有 StreamEvent、CallOptions 等上层过渡方式在接线时决定；Wails 导出的 ModelInfo、TestConnectionResult 应保持原绑定类型身份，必要时复用公共字段并在边界转换。这些兼容工作不扩展当前公共基建阶段的范围。
+
+测试按职责归属：公共包检查契约与类型可编译；协议子包测试自己的 providers、hooks、转换及 SDK 回放；根层接线时验证按 adapterName 路由，同名 providerName 在不同适配器中可分别选择。Agent / Session 的生命周期测试在后续状态单元完成。
 
 ## 4. Provider 配置、模型切换与容量预检
 
@@ -152,9 +192,9 @@ Go 导入方向固定为 `llm → 具体适配器子包 → adapter`，同时 `l
 | `anthropic_messages` | Anthropic Messages SDK |
 | `gemini_generate_content` | Google GenerateContent SDK |
 
-区分配置实例 key / 展示名、服务商类型 `provider_type` 和协议 `protocol`。设置界面先选择服务商类型或通用协议模板，再填写名称、地址、密钥和模型；服务商类型提供默认协议、hooks / 参数规则和模型默认值。同一类型允许创建多个实例；自定义实例与内置实例经过同一组装流程，不能依赖用户填写的名称重新匹配 hooks。声明了固定协议的类型须校验两字段一致。
+调用目标按 adapterName → providerName → model 组织，adapterName 使用上表的协议标识。providerName 是所属适配器内的 provider 配置名称，另有展示名和服务商类型 `provider_type`；同一类型允许配置多个不同 providerName，同名 providerName 可存在于不同适配器。设置流程先明确协议，再在该适配器中选择服务商模板或通用模板，填写名称、地址、密钥和模型。模板、配置合并和 hooks / 参数规则由对应子包处理，自定义与内置走相同链路，不依赖用户填写的名称猜测服务商类型。
 
-协议不根据模型名字猜测。旧配置缺字段时默认为 `openai_chat`；旧内置服务商按现有明确匹配关系保留 hooks，未知自定义实例使用通用 OpenAI 配置。`Merge`、配置视图、保存转换、热重载、连接测试和模型发现共用同一解析结果。原生协议模板在该协议阶段完整验收后开放。
+协议不根据模型名字猜测。配置接线阶段处理旧配置缺字段的迁移，将其归入 `openai_chat`；旧内置服务商按现有明确匹配关系保留 hooks，未知自定义实例使用通用 OpenAI 配置。配置视图、保存转换、热重载、连接测试和模型发现共用具体适配器的解析结果；业务调用显式传入协议，缺失或不支持的协议不静默回退。原生协议模板在该协议阶段完整验收后开放。
 
 复用现有 `chat_url` 配置入口，按协议解释和校验：OpenAI 保留现有完整聊天端点语义；原生协议接受 SDK 可使用的 API 根地址，并支持把明确的完整端点规范化为该根地址。保留中转路径前缀、版本及查询约束，不靠截到 host 的方式修正 URL。模型发现、连接测试和实际调用必须使用相同规范化结果；Google 的模型与调用方法路径由 SDK 构造。SDK 无法表达的任意自定义完整路由直接提示不支持，不增加一套隐藏的手写原生传输。
 
@@ -164,13 +204,13 @@ Claude 需要预留可选 workspace ID。官方当前同时支持 Bearer 和旧 
 
 ### 4.2 同会话切换的边界
 
-会话使用最近一次接受的 provider / protocol / model 作为当前选择，允许下一轮更换。`Session.Model` 继续用于展示；当前完整选择可存入 `Session.ExtraMetadata.llm_selection` 供重启和 UI 恢复，不构成固定绑定。字段更新保留 ExtraMetadata 的其他键；旧会话没有该字段仍可选择任意已实现协议。
+会话使用最近一次接受的 adapterName / providerName / model 作为当前选择，允许下一轮更换。`Session.Model` 继续用于展示；当前完整选择可存入 `Session.ExtraMetadata.llm_selection` 供重启和 UI 恢复，不构成固定绑定。字段更新保留 ExtraMetadata 的其他键；旧会话没有该字段仍可选择任意已实现协议。
 
 1. 仅在请求与工具组完成收尾后接受切换。流式生成、工具执行、审批等待和压缩期间保持当前快照；后端也检查并发执行状态，不能只靠禁用 UI 保证。
 2. 接受目标前检查配置、模型能力、工具配对、目标历史投影和输入预算。普通拒绝发生在分配新 turn / 写用户消息之前；用户确认执行的压缩单独按第 7 节事务提交，后续失败不伪装成未压缩。
 3. Chat 和手动 CompressContext 共用检查与投影能力，App 只接线；切换不要求创建新 session。UI 预检用于解释是否需要压缩，实际请求仍由后端重新检查。
 4. 主 Agent 切换不改写已有子 Agent 的历史。运行中的子 Agent 保持自己的快照与推理状态，新启动的子 Agent 继承当前运行选择。
-5. provider 地址、密钥或 workspace 改变也进入兼容性检查；相同配置 key 不代表仍是相同账户或后端。
+5. provider 地址、密钥或 workspace 改变也进入兼容性检查；相同 adapterName / providerName 不代表仍是相同账户或后端。
 
 ### 4.3 目标历史投影与推理状态丢弃
 
@@ -241,9 +281,9 @@ HTTP 200 内的协议 error、异常 EOF、输出截断、拒绝和零产出要�
 
 ## 6. 按实现顺序接入三个适配器
 
-### 6.1 OpenAI Chat：先封装现有调用链
+### 6.1 OpenAI Chat：公共基建验收后迁移
 
-收拢 `stream.go` / `generate.go` 的请求与响应处理、连接测试、模型发现，以及现有 providers / hooks 的运行时组装。服务商模板和配置可以继续独立存放，所有入口通过 OpenAI 适配器使用同一厂商规则。先验证请求、鉴权、错误、流事件和辅助调用保持可用，再引入公共来源状态、切换投影和容量检查。
+公共基建验收后，再收拢 `stream.go` / `generate.go` 的请求与响应处理、连接测试、模型发现，以及现有 providers / hooks。服务商模板和运行时组装迁到 `adapter/openaichat`，适配器持有 providers，调用按 providerName 和 model 解析；根层按 openai_chat 选择该适配器。先验收完整调用链及三级选择，再引入来源状态、切换投影和容量检查。当前工作区已有的单 provider 实例草稿保持原状，后续按本节设计调整，不在公共基建单元中处理。
 
 对同协议不同厂商分别验证 reasoning 字段、thinking 参数和工具历史要求。完整保存当前端点确实返回、后续需要回传的推理状态；缺少原始推理时按第 4.3 节构造兼容历史，不统一生成非空占位思考。这个阶段完成后形成后两个 SDK 适配器遵循的调用与事件契约。
 
@@ -296,11 +336,11 @@ usage 在 llm 层转换为现有统计口径，使用一个共用归一化入口
 
 ## 9. 验证与发布边界
 
-主要使用 `httptest` 返回 HTTP / SSE，让 OpenAI 现有传输或真正的 SDK 和适配器经过完整调用链。先验证 OpenAI 适配器，再验收 Claude 的完整功能与切换，最后验收 Gemini 及三协议互切。样例不含真实密钥、用户小说内容或其他敏感数据。测试不限于 mock 出几个 SDK event。
+公共基建先独立构建并检查契约，不导入具体协议。后续主要使用 `httptest` 返回 HTTP / SSE，让 OpenAI 现有传输或真正的 SDK 和适配器经过完整调用链。先验证按协议路由及 provider 作用域，再验收 OpenAI，之后完成 Claude 的完整功能与切换，最后验收 Gemini 及三协议互切。样例不含真实密钥、用户小说内容或其他敏感数据。测试不限于 mock 出几个 SDK event。
 
 | 验证组 | 必须覆盖 |
 |---|---|
-| 配置 / 适配器 | 缺省 OpenAI 协议、provider_type / 实例名称分离、内置 / 自定义复用 hooks、发现 / 测试 / 对话共用配置、端点路径前缀、显式凭据、热重载、单次尝试、长流取消 |
+| 配置 / 适配器 | adapterName → providerName → model 三级选择、同名 provider 在不同协议下隔离、未知 adapter / provider 不跨协议回退、旧配置迁入 OpenAI、provider_type / 实例名称分离、内置 / 自定义复用规则、发现 / 测试 / 对话共用配置、路径前缀、凭据、热重载、长流取消 |
 | OpenAI 首阶段 | 现有 HTTP / SSE / hooks 收拢前后行为一致，文本 / 工具 / 错误、标题、摘要、CallTool、连接测试、模型发现均走适配器 |
 | Claude | 文本 / thinking / tool_use 交错、redacted / 空 thinking、signature 累积、并行工具、工具结果次序 |
 | Gemini | thought / text / functionCall、无原生 ID、同名并行调用、单独签名片段、最后空文本 part |
@@ -311,14 +351,16 @@ usage 在 llm 层转换为现有统计口径，使用一个共用归一化入口
 | 辅助入口 / usage | 标题、摘要、CallTool、连接测试、发现分页、缺失模型能力、usage 不重复累计 |
 | 回归 | 当前 OpenAI 请求 hook、headers、tool_args_invalid、partial 和切换行为保持可用；无内部 metadata 外发 |
 
-代码阶段从仓库根目录执行 `go build ./...`、`go test ./...`，按 Go 变更执行 lint；前端阶段进入 frontend 执行 build / lint / test。涉及 DTO 的阶段通过 Wails 命令重新生成绑定。仅本次文档编写不运行 Go / 前端整套验证。
+代码阶段从仓库根目录执行 `go build ./...`、`go test ./...`，按 Go 变更执行 lint；前端阶段进入 frontend 执行 build / lint / test。涉及 DTO 的阶段通过 Wails 命令重新生成绑定。当前单元只验证公共 adapter 包与文档。用户允许分阶段签名改造造成工作区编译失败；具体协议和上层尚未接线时记录失败位置，不改冻结草稿来凑整仓通过。上层接线阶段再恢复生产包完整验证。
 
 SDK 版本已锁定，内置型号能力、外部历史导入规则和目标中转站路径仍需实施阶段核验。官方直连烟测仅在有可用凭据时进行，并报告具体模型 / 端点与未验证项；本轮没有真实 API 互通证据。模拟测试通过不代表所有中转站、账户或模型均兼容。
 
-## 10. 实现状态
+## 10. 实现状态与当前边界
 
-- 已确认使用官方 SDK，并在当前 worktree 创建 `feat/v1.8.0-llm-protocols`。
-- Anthropic `v1.81.0`、Google `v1.75.0` 已加入依赖，`go.mod` / `go.sum` 尚未提交。SDK 及生产包构建通过；整仓构建 / 测试仍有既存 `dev_test/rag_debug`、`dev_test/rag_test/cmd` 编译问题，不能报告整套验证通过。
-- SSE 样本已按 anthropic / google 分目录提交（`e1bfb0a9`），附来源与许可证；尚未接入自动化回放测试，缺少的签名与切换场景需补样本。
-- 本次修订设计、消息示例与实施路线，协议适配器、来源状态、切换和 UI 代码尚未实现，未生成绑定。旧调查保留，不覆盖其历史内容。
-- 实现顺序已确定为 OpenAI Chat → Claude Messages → Gemini GenerateContent；每个协议阶段完成其完整调用链及切换验收后，再进入下一个协议。代码实现另行开始，每阶段报告验证结果并等待 review；暂存、提交和推送需要用户另行明确授权。
+- 设计文档基线已提交（`d38f6ed1`）；本单元修订顶层 adapter、providers 归属、providerName 命名及实施范围。
+- 当前只验收 `internal/llm/adapter` 的公共 Provider、含 ProviderName 的 Request、统一结果 / 事件，以及包含生成 / 发现 / 探测的统一接口。公共层不提供 Base；实际持有 providers、配置快照隔离、原 llm.Provider 的迁移、根层注册表和具体协议接线属于后续单元。
+- 工作区此前已产生单 provider 绑定式 OpenAI 子包、Client / factory、配置引用和测试迁移草稿；用户要求保持现状，本次不继续修改、不回滚、不暂存这些文件，也不将其标记为新设计已完成。
+- 本单元提交公共 adapter 基建及配套设计文档；SDK 依赖和上述具体实现草稿继续保留为未暂存改动。
+- 公共包通过 build / test / vet / lint 检查；当前没有具体适配器行为测试，providers 持有与快照隔离测试随具体实现补充。工作区完整 LLM 目录仍受冻结草稿的旧接口及未接线影响，本单元不修复其编译错误。此前旧方案的生产包 / race / lint 通过记录不作为本次三级路由的验收证据。
+- Anthropic `v1.81.0`、Google `v1.75.0` 已安装，依赖改动未提交；SSE 资料已按供应商分目录提交（`e1bfb0a9`）。原生 SDK 业务接入、来源状态、同会话切换和 UI 尚未实现，未生成绑定；真实模型 API 烟测未进行。
+- 总体顺序为公共基建 → OpenAI → Claude → Gemini；每个实现单元完成后等待 review。既存 dev_test 编译问题仍单独记录，旧调查保留。

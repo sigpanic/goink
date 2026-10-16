@@ -1,6 +1,6 @@
 # LLM 协议消息速查：同一个工具调用如何组织
 
-> 2026-10-16 修订。用最小示例理解协议，配合 [接入设计](./llm-protocol-design.md) 和 [实施路线](./commit-roadmap.md) 阅读。本版本顺序为 OpenAI Chat 适配器 → Claude Messages 适配器 → Gemini GenerateContent 适配器；支持同会话模型切换，允许丢弃不兼容推理状态。Interactions 仅作协议对照，留到后续。
+> 2026-10-16 修订。用最小示例理解协议，配合 [接入设计](./llm-protocol-design.md) 和 [实施路线](./commit-roadmap.md) 阅读。本版本顺序为公共适配层基建 → OpenAI Chat 适配器 → Claude Messages 适配器 → Gemini GenerateContent 适配器；支持同会话模型切换，允许丢弃不兼容推理状态。Interactions 仅作协议对照，留到后续。
 
 ## 1. Google 官方现在推荐哪个 API
 
@@ -148,7 +148,9 @@ SSE 是响应逐步到达的格式；上面的 messages / contents / input 是�
 
 数据库继续使用统一的 Role / Content / ThinkingContent 和工具 metadata；新增来源及原生状态保存到 `ExtraMetadata.llm_state`，无需按协议增加消息表。上面的 JSON 是各适配器出站生成的格式，Session 保持统一存储。OpenAI Chat 也作为适配器实现，内部复用现有 HTTP、SSE 和厂商 hooks。
 
-三个实现分别封装在 `internal/llm/adapter/{openaichat,anthropic,gemini}` 子包，共同实现公共 `adapter.ProtocolAdapter` 的 `Stream` / `Generate`：前者输出 Goink 事件，后者返回包含正文、工具调用、usage 和原生状态的完整响应。上层 `llm.Client` 负责选择和调用；`GenerateText` 提取正文供标题 / 摘要使用，`CallTool` 共用流式包装，工具执行仍由 Goink 业务层负责。公共类型放在 `adapter`，创建入口留在 `llm`，实现子包不反向导入上层。
+三个实现分别封装在 `internal/llm/adapter/{openaichat,anthropic,gemini}` 子包，每个适配器持有自己的 providers，providers.go 和厂商 hooks / 规则归入各自子包。调用按 `adapterName → providerName → model` 选择：Client 按协议取适配器，Goink Request 携带 ProviderName、Model、messages / tools / options，适配器再构造实际 HTTP / SDK 请求。例如同名 gemini provider 可分别配置在 openai_chat 与 gemini_generate_content 下，按调用时明确指定的协议使用。
+
+公共 `Stream` 返回 Goink 事件，`Generate` 返回统一完整结果；来源 / 原生状态在后续持久化单元补齐。GenerateText 提取正文，CallTool 共用流式包装，业务层执行工具。当前只做公共适配层基建，现有 OpenAI 草稿保持原状，不纳入当前暂存和验收。
 
 ## 4. 已取得的 SSE 有什么用，能否换成我们的工具
 
@@ -179,13 +181,13 @@ data: {"candidates":[{"content":{"role":"model","parts":[{"functionCall":{"name"
 | 工具执行中取消 / 重试、压缩后续聊 | 难点，既要满足协议，又要避免漏配结果或重复执行 |
 | 同时覆盖两种 Gemini 协议、不同中转站和型号能力 | 增加适配与验证工作，不能仅靠一次连接测试确认 |
 
-实现时先把现有 HTTP / SSE / hooks 收进 OpenAI Chat 适配器子包，配置模板和实例组装留在 `llm`，建立公共 Stream / Generate 契约、状态和切换能力；随后完成 Claude 的工具闭环、多轮 / 重启、压缩 / 取消 / 重试、设置和 OpenAI 双向切换；最后完成 Gemini 的同等能力及三协议互切。先保留现有 messages 和工具业务逻辑，按协议逐个验收完整产品链路。
+实现时先独立验收公共适配层的协议标识、含 ProviderName 的请求、统一结果 / 事件和能力接口；下一步才迁移 OpenAI，将 providers、hooks 和运行时组装内聚到其子包，并接通三级调用和后续状态 / 切换能力；随后完成 Claude 的工具闭环、多轮 / 重启、压缩 / 取消 / 重试、设置和 OpenAI 双向切换；最后完成 Gemini 的同等能力及三协议互切。先保留现有 messages 和工具业务逻辑，按协议逐个验收完整产品链路。
 
 ## 6. 同一会话切换时发生什么
 
 例如 OpenAI Chat → Claude → Gemini → Claude：
 
-1. 在空闲且工具组完整的边界选择目标，后端检查配置和目标容量；有运行中的调用或审批时先完成收尾。
+1. 在空闲且工具组完整的边界按 adapterName、providerName、model 选择目标，后端检查配置和目标容量；有运行中的调用或审批时先完成收尾。
 2. Claude 适配器将现有正文、工具调用和结果转成 Messages；来源不兼容的 thinking / signature 从本次请求移除，数据库和前端历史保留。
 3. 切到 Gemini 时生成 contents / parts；有需要导入的外部工具轨迹时，使用官方允许的导入标记或经过验证的完整文本投影，正常 Gemini 工具循环继续保留真实签名。[官方 FAQ](https://ai.google.dev/gemini-api/docs/generate-content/thought-signatures#faqs)
 4. 切回 Claude 后仍可在原会话继续，但不自动复活已经失效的旧推理链。后端保存来源和推理状态 epoch，使重启后的处理一致；普通正文和工具结果继续作为历史使用，历史工具不会重新执行。
