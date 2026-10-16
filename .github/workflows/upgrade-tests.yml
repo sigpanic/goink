@@ -50,6 +50,25 @@ jobs:
           unzip -qjo "$RUNNER_TEMP/sqlite-amalgamation.zip" -d "$RUNNER_TEMP/sqlite"
           echo "CGO_CFLAGS=${CGO_CFLAGS} -I${RUNNER_TEMP}/sqlite" >> "$GITHUB_ENV"
 
+      - name: Verify frozen migration models
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          snapshots=(internal/migrate/v*/models.gen.go)
+          if (( ${#snapshots[@]} == 0 )); then
+            echo "::error::No frozen migration models found"
+            exit 1
+          fi
+          for snapshot in "${snapshots[@]}"; do
+            source_ref=$(awk '/^\/\/ Source: / { print $3; exit }' "$snapshot")
+            if [[ -z "$source_ref" ]]; then
+              echo "::error file=$snapshot::Missing Source header"
+              exit 1
+            fi
+            go run ./scripts/freeze-models -ref "$source_ref" -out "$snapshot" -check
+          done
+
       - name: Verify frozen inputs and historical tag coverage
         shell: bash
         run: go run ./scripts/upgrade-fixtures -check -target "$UPGRADE_TARGET"
