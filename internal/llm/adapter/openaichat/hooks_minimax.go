@@ -1,4 +1,4 @@
-package llm
+package openaichat
 
 // minimaxBuildRequest 适配 MiniMax 与标准 OpenAI 格式的差异：
 // - reasoning_split 将思考内容从 <think> 标签分离到 reasoning_content 字段

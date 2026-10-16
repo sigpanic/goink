@@ -1,4 +1,4 @@
-package llm
+package openaichat
 
 // qwenBuildRequest 将标准 OpenAI thinking 参数转换为 Qwen 的 enable_thinking。
 // Qwen 非流式请求开启 enable_thinking 会报错，因此非流式时显式关闭。
