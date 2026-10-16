@@ -149,6 +149,9 @@ func backupBeforeUpgrade(db *gorm.DB, log *slog.Logger, name string) error {
 			removeTmp(log, tmp)
 			return fmt.Errorf("backup novels: %w", err)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		removeTmp(log, tmp)
+		return fmt.Errorf("stat backup novels: %w", err)
 	}
 
 	// 3. 原子 rename：正式目录只出现完整备份
