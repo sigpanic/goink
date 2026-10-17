@@ -59,7 +59,7 @@ func TestMultipleProvidersRouteAllOperations(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 		configs[target.name] = adapter.Provider{
-			ProviderType: target.providerType, ChatURL: server.URL + "/v1/chat/completions", APIKey: target.name + "-key",
+			Name: target.name, ProviderType: target.providerType, ChatURL: server.URL + "/v1/chat/completions", APIKey: target.name + "-key",
 			Models: []ModelInfo{{ID: target.name + "-model", MaxOutputTokens: target.maxTokens}},
 		}
 	}
@@ -114,7 +114,7 @@ func TestConnectionFallbackDoesNotModifyProvider(t *testing.T) {
 		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
 	}))
 	defer server.Close()
-	backend, err := New(map[string]adapter.Provider{"draft": {ProviderType: "mimo", ChatURL: server.URL, APIKey: "draft-key"}}, server.Client(), nil)
+	backend, err := New(map[string]adapter.Provider{"draft": {Name: "draft", ProviderType: "mimo", ChatURL: server.URL, APIKey: "draft-key"}}, server.Client(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

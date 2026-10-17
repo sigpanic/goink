@@ -1,10 +1,12 @@
-package llm
+package openaichat
 
 import (
 	"net/http"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // --- parseRetryAfter ---
@@ -100,8 +102,8 @@ func TestStatusRetryable(t *testing.T) {
 		{0, false},   // 网络错误（无状态码）
 	}
 	for _, c := range cases {
-		if got := statusRetryable(c.code); got != c.want {
-			t.Errorf("statusRetryable(%d): got %v, want %v", c.code, got, c.want)
+		if got := adapter.StatusRetryable(c.code); got != c.want {
+			t.Errorf("adapter.StatusRetryable(%d): got %v, want %v", c.code, got, c.want)
 		}
 	}
 }
