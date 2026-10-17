@@ -53,7 +53,7 @@ func New(configs map[string]adapter.Provider, client *http.Client, logger *slog.
 func (c *Adapter) Providers() map[string]adapter.Provider {
 	providers := make(map[string]adapter.Provider, len(c.providers))
 	for providerName, p := range c.providers {
-		providers[providerName] = cloneProvider(p.Provider)
+		providers[providerName] = p.Clone()
 	}
 	return providers
 }

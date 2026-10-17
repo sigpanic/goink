@@ -699,7 +699,7 @@ var builtin = map[string]adapter.Provider{
 func BuiltinProviders() map[string]adapter.Provider {
 	providers := make(map[string]adapter.Provider, len(builtin))
 	for providerName, p := range builtin {
-		providers[providerName] = cloneProvider(p)
+		providers[providerName] = p.Clone()
 	}
 	return providers
 }
