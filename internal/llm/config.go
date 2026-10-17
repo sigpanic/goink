@@ -24,6 +24,9 @@ type AdapterConfig struct {
 	Providers []adapter.Provider `json:"providers"`
 }
 
+// ProviderMap 按实例 Name 索引单个协议下的公共配置。
+type ProviderMap = map[string]adapter.Provider
+
 // AvailableModel 是前端下拉列表的模型选项。
 type AvailableModel struct {
 	Key              string // "deepseek/deepseek-v4-pro"
@@ -47,26 +50,46 @@ func derefOrZero(p *float64) float64 {
 	return *p
 }
 
-// Merge 按协议和 Name 组装用户已配置的实例，不按 ProviderType 继承实例配置。
+// Merge 按协议和 Name 组装有 APIKey 的运行时实例，不按 ProviderType 继承实例配置。
 // 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
-func Merge(user *UserLLMConfig) (map[adapter.Protocol]map[string]adapter.Provider, error) {
-	return mergeConfig(user, builtinProviders())
+func Merge(user *UserLLMConfig) (map[adapter.Protocol]ProviderMap, error) {
+	result, err := mergeConfig(user, builtinProviders())
+	if err != nil {
+		return nil, err
+	}
+	for protocol, providers := range result {
+		for name, p := range providers {
+			if p.APIKey == "" {
+				delete(providers, name)
+			}
+		}
+		if len(providers) == 0 {
+			delete(result, protocol)
+		}
+	}
+	return result, nil
 }
 
-func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]map[string]adapter.Provider) (map[adapter.Protocol]map[string]adapter.Provider, error) {
+// mergeConfig 合并全部内置实例和用户配置，供设置视图与运行时过滤共用。
+func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) (map[adapter.Protocol]ProviderMap, error) {
 	if user == nil {
 		user = emptyUserConfig()
 	}
 	if err := validateUserConfig(user, defaults); err != nil {
 		return nil, err
 	}
-	result := make(map[adapter.Protocol]map[string]adapter.Provider, len(user.Adapters))
-	for protocol, group := range user.Adapters {
-		providers := make(map[string]adapter.Provider, len(group.Providers))
-		for _, p := range group.Providers {
-			providers[p.Name] = mergeProvider(defaults[protocol][p.Name], p)
+	result := make(map[adapter.Protocol]ProviderMap, len(defaults))
+	for protocol, builtins := range defaults {
+		providers := make(ProviderMap, len(builtins))
+		for name, p := range builtins {
+			providers[name] = p.Clone()
 		}
 		result[protocol] = providers
+	}
+	for protocol, group := range user.Adapters {
+		for _, p := range group.Providers {
+			result[protocol][p.Name] = mergeProvider(defaults[protocol][p.Name], p)
+		}
 	}
 	return result, nil
 }
@@ -92,8 +115,7 @@ func mergeProvider(preset, user adapter.Provider) adapter.Provider {
 			continue
 		}
 		seen[model.ID] = true
-		model.ReasoningLevels = append([]string(nil), model.ReasoningLevels...)
-		p.Models = append(p.Models, model)
+		p.Models = append(p.Models, model.Clone())
 	}
 	return p
 }
@@ -126,7 +148,7 @@ func ValidateUserConfig(user *UserLLMConfig) error {
 	return validateUserConfig(user, builtinProviders())
 }
 
-func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]map[string]adapter.Provider) error {
+func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) error {
 	if user == nil {
 		return fmt.Errorf("LLM config must not be nil")
 	}
