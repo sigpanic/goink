@@ -47,44 +47,55 @@ func derefOrZero(p *float64) float64 {
 	return *p
 }
 
-// Merge 合并内置模板和用户配置，返回组装完成的 Provider map。
-// 内置模型全量加入（随代码版本），用户自定义模型去重追加。只产出用户配置过的 Provider。
-func Merge(builtin map[string]Provider, user *UserLLMConfig) map[string]Provider {
-	result := make(map[string]Provider, len(user.Providers))
+// Merge 按协议和 Name 组装用户已配置的实例，不按 ProviderType 继承实例配置。
+// 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
+func Merge(user *UserLLMConfig) (map[adapter.Protocol]map[string]adapter.Provider, error) {
+	return mergeConfig(user, builtinProviders())
+}
 
-	for _, up := range user.Providers {
-		bp, isBuiltin := builtin[up.Name]
-
-		p := Provider{Name: up.Name, ChatURL: up.ChatURL, APIKey: up.APIKey}
-
-		if isBuiltin {
-			if p.ChatURL == "" {
-				p.ChatURL = bp.ChatURL
-			}
-			if up.Temperature != nil {
-				p.Temperature = up.Temperature
-			} else {
-				p.Temperature = bp.Temperature
-			}
-			p.BuildRequest = bp.BuildRequest
-			p.BuildHeaders = bp.BuildHeaders
-			p.ParseError = bp.ParseError
-
-			// 内置模型全量加入（随代码版本自动更新）
-			p.Models = append([]ModelInfo{}, bp.Models...)
-		}
-
-		// 用户自定义模型去重追加
-		for _, um := range up.Models {
-			if !modelExists(p.Models, um.ID) {
-				p.Models = append(p.Models, um)
-			}
-		}
-
-		result[up.Name] = p
+func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]map[string]adapter.Provider) (map[adapter.Protocol]map[string]adapter.Provider, error) {
+	if user == nil {
+		user = emptyUserConfig()
 	}
+	if err := validateUserConfig(user, defaults); err != nil {
+		return nil, err
+	}
+	result := make(map[adapter.Protocol]map[string]adapter.Provider, len(user.Adapters))
+	for protocol, group := range user.Adapters {
+		providers := make(map[string]adapter.Provider, len(group.Providers))
+		for _, p := range group.Providers {
+			providers[p.Name] = mergeProvider(defaults[protocol][p.Name], p)
+		}
+		result[protocol] = providers
+	}
+	return result, nil
+}
 
-	return result
+func mergeProvider(preset, user adapter.Provider) adapter.Provider {
+	if preset.Name == "" {
+		return user.Clone()
+	}
+	p := preset.Clone()
+	p.APIKey = user.APIKey
+	if user.ChatURL != "" {
+		p.ChatURL = user.ChatURL
+	}
+	if user.Temperature != nil {
+		p.Temperature = floatPtr(*user.Temperature)
+	}
+	seen := make(map[string]bool, len(p.Models)+len(user.Models))
+	for _, model := range p.Models {
+		seen[model.ID] = true
+	}
+	for _, model := range user.Models {
+		if seen[model.ID] {
+			continue
+		}
+		seen[model.ID] = true
+		model.ReasoningLevels = append([]string(nil), model.ReasoningLevels...)
+		p.Models = append(p.Models, model)
+	}
+	return p
 }
 
 // LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置模板和用户配置。
