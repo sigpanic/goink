@@ -2,12 +2,22 @@ package llm
 
 import (
 	"sort"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
+const ConfigVersion = 2
+
 // UserLLMConfig 是用户 LLM 配置的持久化格式（加密 JSON）。
-// 一个 provider 一个 key，内置模型随代码自动更新，自定义模型需完整填写信息。
+// 只保存用户配置；内置模型由具体适配器提供，自定义模型需完整填写信息。
 type UserLLMConfig struct {
-	Providers []Provider `json:"providers"`
+	Version  int                                `json:"version"`
+	Adapters map[adapter.Protocol]AdapterConfig `json:"adapters"`
+}
+
+// AdapterConfig 按协议保存用户修改和自定义实例，Name 在所属协议内唯一。
+type AdapterConfig struct {
+	Providers []adapter.Provider `json:"providers"`
 }
 
 // AvailableModel 是前端下拉列表的模型选项。
@@ -90,6 +100,10 @@ type ProviderView struct {
 	Source        string      `json:"source"`         // "builtin" | "custom"
 	BuiltinModels []ModelInfo `json:"builtin_models"` // 内置模型，自定义 provider 为 nil
 	CustomModels  []ModelInfo `json:"custom_models"`  // 用户添加的自定义模型
+}
+
+func emptyUserConfig() *UserLLMConfig {
+	return &UserLLMConfig{Version: ConfigVersion, Adapters: make(map[adapter.Protocol]AdapterConfig)}
 }
 
 // BuildConfigView 合并内置模板和用户配置，生成前端可用的完整视图。
