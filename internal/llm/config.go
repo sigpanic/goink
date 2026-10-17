@@ -45,76 +45,6 @@ type AvailableModel struct {
 // Builtin 内置 provider 模板。APIKey 留空，运行时由用户配置注入。
 func floatPtr(f float64) *float64 { return &f }
 
-// Merge 按协议和 Name 组装有 APIKey 的运行时实例，不按 ProviderType 继承实例配置。
-// 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
-func Merge(user *UserLLMConfig) (map[adapter.Protocol]ProviderMap, error) {
-	result, err := mergeConfig(user, builtinProviders())
-	if err != nil {
-		return nil, err
-	}
-	for protocol, providers := range result {
-		for name, p := range providers {
-			if p.APIKey == "" {
-				delete(providers, name)
-			}
-		}
-		if len(providers) == 0 {
-			delete(result, protocol)
-		}
-	}
-	return result, nil
-}
-
-// mergeConfig 合并全部内置实例和用户配置，供设置视图与运行时过滤共用。
-func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) (map[adapter.Protocol]ProviderMap, error) {
-	if user == nil {
-		user = emptyUserConfig()
-	}
-	if err := validateUserConfig(user, defaults); err != nil {
-		return nil, err
-	}
-	result := make(map[adapter.Protocol]ProviderMap, len(defaults))
-	for protocol, builtins := range defaults {
-		providers := make(ProviderMap, len(builtins))
-		for name, p := range builtins {
-			providers[name] = p.Clone()
-		}
-		result[protocol] = providers
-	}
-	for protocol, group := range user.Adapters {
-		for _, p := range group.Providers {
-			result[protocol][p.Name] = mergeProvider(defaults[protocol][p.Name], p)
-		}
-	}
-	return result, nil
-}
-
-func mergeProvider(preset, user adapter.Provider) adapter.Provider {
-	if preset.Name == "" {
-		return user.Clone()
-	}
-	p := preset.Clone()
-	p.APIKey = user.APIKey
-	if user.ChatURL != "" {
-		p.ChatURL = user.ChatURL
-	}
-	if user.Temperature != nil {
-		p.Temperature = floatPtr(*user.Temperature)
-	}
-	seen := make(map[string]bool, len(p.Models)+len(user.Models))
-	for _, model := range p.Models {
-		seen[model.ID] = true
-	}
-	for _, model := range user.Models {
-		if seen[model.ID] {
-			continue
-		}
-		seen[model.ID] = true
-		p.Models = append(p.Models, model.Clone())
-	}
-	return p
-}
-
 // LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置实例和用户配置。
 type LLMConfigView struct {
 	Providers []ProviderView `json:"providers"`
@@ -199,6 +129,76 @@ func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]Provi
 		}
 	}
 	return nil
+}
+
+// Merge 按协议和 Name 组装有 APIKey 的运行时实例，不按 ProviderType 继承实例配置。
+// 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
+func Merge(user *UserLLMConfig) (map[adapter.Protocol]ProviderMap, error) {
+	result, err := mergeConfig(user, builtinProviders())
+	if err != nil {
+		return nil, err
+	}
+	for protocol, providers := range result {
+		for name, p := range providers {
+			if p.APIKey == "" {
+				delete(providers, name)
+			}
+		}
+		if len(providers) == 0 {
+			delete(result, protocol)
+		}
+	}
+	return result, nil
+}
+
+// mergeConfig 合并全部内置实例和用户配置，供设置视图与运行时过滤共用。
+func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) (map[adapter.Protocol]ProviderMap, error) {
+	if user == nil {
+		user = emptyUserConfig()
+	}
+	if err := validateUserConfig(user, defaults); err != nil {
+		return nil, err
+	}
+	result := make(map[adapter.Protocol]ProviderMap, len(defaults))
+	for protocol, builtins := range defaults {
+		providers := make(ProviderMap, len(builtins))
+		for name, p := range builtins {
+			providers[name] = p.Clone()
+		}
+		result[protocol] = providers
+	}
+	for protocol, group := range user.Adapters {
+		for _, p := range group.Providers {
+			result[protocol][p.Name] = mergeProvider(defaults[protocol][p.Name], p)
+		}
+	}
+	return result, nil
+}
+
+func mergeProvider(preset, user adapter.Provider) adapter.Provider {
+	if preset.Name == "" {
+		return user.Clone()
+	}
+	p := preset.Clone()
+	p.APIKey = user.APIKey
+	if user.ChatURL != "" {
+		p.ChatURL = user.ChatURL
+	}
+	if user.Temperature != nil {
+		p.Temperature = floatPtr(*user.Temperature)
+	}
+	seen := make(map[string]bool, len(p.Models)+len(user.Models))
+	for _, model := range p.Models {
+		seen[model.ID] = true
+	}
+	for _, model := range user.Models {
+		if seen[model.ID] {
+			continue
+		}
+		seen[model.ID] = true
+		p.Models = append(p.Models, model.Clone())
+	}
+	return p
 }
 
 // BuildConfigView 使用同一合并规则生成设置视图，并展示尚未配置的全部内置实例。
