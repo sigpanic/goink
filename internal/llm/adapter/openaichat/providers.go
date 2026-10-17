@@ -2,9 +2,9 @@ package openaichat
 
 import "github.com/sigpanic/goink/internal/llm/adapter"
 
-// builtin 内置 provider 模板。APIKey 留空，运行时由用户配置注入。
+// builtin 内置 provider 实例的默认配置，key 与 Name 一致。APIKey 留空，由配置层合并用户修改。
 var builtin = map[string]adapter.Provider{
-	"deepseek": {
+	"DeepSeek": {
 		ProviderType: "deepseek",
 		Name:         "DeepSeek",
 		ChatURL:      "https://api.deepseek.com/v1/chat/completions",
@@ -32,7 +32,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"opencode": {
+	"OpenCode Zen": {
 		ProviderType: "opencode",
 		Name:         "OpenCode Zen",
 		ChatURL:      "https://opencode.ai/zen/v1/chat/completions",
@@ -243,7 +243,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"opencode-go": {
+	"OpenCode Go": {
 		ProviderType: "opencode-go",
 		Name:         "OpenCode Go",
 		ChatURL:      "https://opencode.ai/zen/go/v1/chat/completions",
@@ -430,7 +430,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"doubao": {
+	"Doubao": {
 		ProviderType: "doubao",
 		Name:         "Doubao",
 		ChatURL:      "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
@@ -472,7 +472,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"qwen": {
+	"Qwen": {
 		ProviderType: "qwen",
 		Name:         "Qwen",
 		ChatURL:      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
@@ -514,7 +514,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"zhipu": {
+	"GLM": {
 		ProviderType: "zhipu",
 		Name:         "GLM",
 		ChatURL:      "https://open.bigmodel.cn/api/paas/v4/chat/completions",
@@ -607,7 +607,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"minimax": {
+	"MiniMax": {
 		ProviderType: "minimax",
 		Name:         "MiniMax",
 		ChatURL:      "https://api.minimaxi.com/v1/chat/completions",
@@ -625,7 +625,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"mimo": {
+	"MiMo": {
 		ProviderType: "mimo",
 		Name:         "MiMo",
 		ChatURL:      "https://api.xiaomimimo.com/v1/chat/completions",
@@ -651,7 +651,7 @@ var builtin = map[string]adapter.Provider{
 			},
 		},
 	},
-	"moonshot": {
+	"Kimi": {
 		ProviderType: "moonshot",
 		Name:         "Kimi",
 		ChatURL:      "https://api.moonshot.cn/v1/chat/completions",
@@ -695,7 +695,7 @@ var builtin = map[string]adapter.Provider{
 	},
 }
 
-// BuiltinProviders 返回本协议的内置模板副本，供根层汇总配置视图。
+// BuiltinProviders 返回本协议的内置实例默认配置副本，供配置层合并用户修改。
 func BuiltinProviders() map[string]adapter.Provider {
 	providers := make(map[string]adapter.Provider, len(builtin))
 	for providerName, p := range builtin {
