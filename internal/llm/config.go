@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math"
 	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -43,12 +44,6 @@ type AvailableModel struct {
 
 // Builtin 内置 provider 模板。APIKey 留空，运行时由用户配置注入。
 func floatPtr(f float64) *float64 { return &f }
-func derefOrZero(p *float64) float64 {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
 
 // Merge 按协议和 Name 组装有 APIKey 的运行时实例，不按 ProviderType 继承实例配置。
 // 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
@@ -120,23 +115,25 @@ func mergeProvider(preset, user adapter.Provider) adapter.Provider {
 	return p
 }
 
-// LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置模板和用户配置。
+// LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置实例和用户配置。
 type LLMConfigView struct {
 	Providers []ProviderView `json:"providers"`
 }
 
 // ProviderView 是单个 provider 的前端展示视图。
 type ProviderView struct {
-	Key           string      `json:"key"`            // provider 标识符，如 "deepseek"
-	Name          string      `json:"name"`           // 显示名称
-	ChatURL       string      `json:"chat_url"`       // API 端点
-	APIKey        string      `json:"api_key"`        // 用户配置的 key，空表示未配置
-	PlatformURL   string      `json:"platform_url"`   // 注册平台链接
-	HelpText      string      `json:"help_text"`      // 注册引导文字
-	Temperature   float64     `json:"temperature"`    // 默认创意度 0~2
-	Source        string      `json:"source"`         // "builtin" | "custom"
-	BuiltinModels []ModelInfo `json:"builtin_models"` // 内置模型，自定义 provider 为 nil
-	CustomModels  []ModelInfo `json:"custom_models"`  // 用户添加的自定义模型
+	Key           string           `json:"key"` // 由协议和 Name 派生，仅供 UI 使用，不反解析调用目标
+	AdapterName   adapter.Protocol `json:"adapter_name"`
+	ProviderType  string           `json:"provider_type"`
+	Name          string           `json:"name"`
+	ChatURL       string           `json:"chat_url"`
+	APIKey        string           `json:"api_key"`
+	PlatformURL   string           `json:"platform_url"`
+	HelpText      string           `json:"help_text"`
+	Temperature   *float64         `json:"temperature"`
+	Source        string           `json:"source"` // "builtin" | "custom"
+	BuiltinModels []ModelInfo      `json:"builtin_models"`
+	CustomModels  []ModelInfo      `json:"custom_models"`
 }
 
 func emptyUserConfig() *UserLLMConfig {
@@ -204,66 +201,50 @@ func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]Provi
 	return nil
 }
 
-// BuildConfigView 合并内置模板和用户配置，生成前端可用的完整视图。
-func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
-	view := &LLMConfigView{}
-
-	// 内置 provider：从 Builtin 取模板，从 user 取 key、URL 和自定义模型
-	for key, bp := range Builtin {
-		var apiKey, chatURL string
-		var customModels []ModelInfo
-		temperature := derefOrZero(bp.Temperature)
-		for _, up := range user.Providers {
-			if up.Name == key {
-				apiKey = up.APIKey
-				if up.ChatURL != "" {
-					chatURL = up.ChatURL
-				}
-				customModels = up.Models
-				if up.Temperature != nil {
-					temperature = *up.Temperature
-				}
-				break
+// BuildConfigView 使用同一合并规则生成设置视图，并展示尚未配置的全部内置实例。
+func BuildConfigView(user *UserLLMConfig) (*LLMConfigView, error) {
+	defaults := builtinProviders()
+	resolved, err := mergeConfig(user, defaults)
+	if err != nil {
+		return nil, err
+	}
+	saved := make(map[adapter.Protocol]ProviderMap)
+	if user != nil {
+		for protocol, group := range user.Adapters {
+			saved[protocol] = make(ProviderMap, len(group.Providers))
+			for _, p := range group.Providers {
+				saved[protocol][p.Name] = p
 			}
 		}
-		if chatURL == "" {
-			chatURL = bp.ChatURL
-		}
-		view.Providers = append(view.Providers, ProviderView{
-			Key:           key,
-			Name:          bp.Name,
-			ChatURL:       chatURL,
-			APIKey:        apiKey,
-			PlatformURL:   bp.PlatformURL,
-			HelpText:      bp.HelpText,
-			Temperature:   temperature,
-			Source:        "builtin",
-			BuiltinModels: append([]ModelInfo{}, bp.Models...),
-			CustomModels:  append([]ModelInfo{}, customModels...),
-		})
 	}
-
-	// 自定义 provider：不在 Builtin 中的用户 provider
-	for _, up := range user.Providers {
-		if _, isBuiltin := Builtin[up.Name]; !isBuiltin {
-			view.Providers = append(view.Providers, ProviderView{
-				Key:           up.Name,
-				Name:          up.Name,
-				ChatURL:       up.ChatURL,
-				APIKey:        up.APIKey,
-				Temperature:   derefOrZero(up.Temperature),
-				Source:        "custom",
-				BuiltinModels: nil,
-				CustomModels:  append([]ModelInfo{}, up.Models...),
-			})
+	view := &LLMConfigView{Providers: []ProviderView{}}
+	for protocol, providers := range resolved {
+		for name, p := range providers {
+			preset, builtin := defaults[protocol][name]
+			source := "custom"
+			if builtin {
+				source = "builtin"
+			}
+			view.Providers = append(view.Providers, providerView(protocol, p, preset, saved[protocol][name].Models, source))
 		}
 	}
+	sort.Slice(view.Providers, func(i, j int) bool { return view.Providers[i].Key < view.Providers[j].Key })
+	return view, nil
+}
 
-	sort.Slice(view.Providers, func(i, j int) bool {
-		return view.Providers[i].Key < view.Providers[j].Key
-	})
+func providerView(protocol adapter.Protocol, p, preset adapter.Provider, customModels []adapter.ModelInfo, source string) ProviderView {
+	p = p.Clone()
+	return ProviderView{
+		Key: providerViewKey(protocol, p.Name), AdapterName: protocol,
+		Name: p.Name, ProviderType: p.ProviderType,
+		ChatURL: p.ChatURL, APIKey: p.APIKey, Temperature: p.Temperature,
+		PlatformURL: p.PlatformURL, HelpText: p.HelpText, Source: source,
+		BuiltinModels: cloneModels(preset.Models), CustomModels: cloneModels(customModels),
+	}
+}
 
-	return view
+func providerViewKey(adapterName adapter.Protocol, providerName string) string {
+	return url.PathEscape(string(adapterName)) + "/" + url.PathEscape(providerName)
 }
 
 // ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
@@ -330,4 +311,12 @@ func modelExists(models []ModelInfo, id string) bool {
 		}
 	}
 	return false
+}
+
+func cloneModels(models []ModelInfo) []ModelInfo {
+	models = slices.Clone(models)
+	for i := range models {
+		models[i] = models[i].Clone()
+	}
+	return models
 }
