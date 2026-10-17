@@ -7,6 +7,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // TestTestConnection_SSEValid 验证标准 OpenAI SSE 流能通过连通性测试。
@@ -21,13 +23,14 @@ func TestTestConnection_SSEValid(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	result, err := TestConnection(context.Background(), Builtin, input)
+	result, err := TestConnection(context.Background(), input)
 	if err != nil {
 		t.Fatalf("expected pass, got error: %v", err)
 	}
@@ -48,13 +51,14 @@ func TestTestConnection_HTMLPage(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	_, err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), input)
 	if err == nil {
 		t.Fatal("expected error for HTML response, got nil")
 	}
@@ -75,13 +79,14 @@ func TestTestConnection_EmptySSE(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	_, err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), input)
 	if err == nil {
 		t.Fatal("expected error for empty SSE stream, got nil")
 	}
@@ -99,13 +104,14 @@ func TestTestConnection_NonChoicesChunk(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	_, err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), input)
 	if err == nil {
 		t.Fatal("expected error for non-choices SSE chunk, got nil")
 	}
@@ -121,13 +127,14 @@ func TestTestConnection_HTTPError(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	_, err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), input)
 	if err == nil {
 		t.Fatal("expected error for 401, got nil")
 	}
@@ -145,13 +152,14 @@ func TestTestConnection_RateLimited429(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1/chat/completions",
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	result, err := TestConnection(context.Background(), Builtin, input)
+	result, err := TestConnection(context.Background(), input)
 	if err != nil {
 		t.Fatalf("expected pass for 429 (rate limited but valid), got error: %v", err)
 	}
@@ -183,13 +191,15 @@ func TestTestConnection_FallbackBareDomain(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL, // 裸域名，无路径
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL, // 裸域名，无路径
+			APIKey:  "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	result, err := TestConnection(context.Background(), Builtin, input)
+	result, err := TestConnection(context.Background(), input)
 	if err != nil {
 		t.Fatalf("expected pass via fallback, got error: %v", err)
 	}
@@ -214,13 +224,15 @@ func TestTestConnection_FallbackBaseURL(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL + "/v1", // base URL
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL + "/v1", // base URL
+			APIKey:  "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	result, err := TestConnection(context.Background(), Builtin, input)
+	result, err := TestConnection(context.Background(), input)
 	if err != nil {
 		t.Fatalf("expected pass via fallback, got error: %v", err)
 	}
@@ -239,17 +251,58 @@ func TestTestConnection_AllCandidatesFail(t *testing.T) {
 	defer server.Close()
 
 	input := TestConnectionInput{
-		ProviderName: "custom",
-		ChatURL:      server.URL,
-		APIKey:       "sk-test",
-		ModelID:      "test-model",
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "custom", ProviderType: "openai",
+			ChatURL: server.URL, APIKey: "sk-test",
+		},
+		ModelID: "test-model",
 	}
 
-	_, err := TestConnection(context.Background(), Builtin, input)
+	_, err := TestConnection(context.Background(), input)
 	if err == nil {
 		t.Fatal("expected error when all candidates fail, got nil")
 	}
 	if !strings.Contains(err.Error(), "均验证失败") {
 		t.Errorf("error should mention all candidates failed, got: %v", err)
+	}
+}
+
+func TestTestConnectionUsesProviderTypeAuthentication(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("api-key") != "secret" || r.Header.Get("Authorization") != "" {
+			t.Errorf("MiMo authentication was not selected by provider type: %v", r.Header)
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"hi\"}}]}\n\n")
+	}))
+	defer server.Close()
+	input := TestConnectionInput{
+		ProviderProbeInput: ProviderProbeInput{
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "my relay", ProviderType: "mimo",
+			ChatURL: server.URL + "/v1/chat/completions", APIKey: "secret",
+		},
+		ModelID: "mimo-model",
+	}
+	result, err := TestConnection(context.Background(), input)
+	if err != nil || result.URL != input.ChatURL {
+		t.Fatalf("test connection = %+v, %v", result, err)
+	}
+}
+
+func TestProviderProbesRejectUnknownProtocol(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Errorf("unknown protocol issued a request to %s", r.URL)
+		w.WriteHeader(http.StatusBadRequest)
+	}))
+	defer server.Close()
+	input := ProviderProbeInput{
+		AdapterName: "unknown", ProviderName: "relay", ProviderType: "openai",
+		ChatURL: server.URL, APIKey: "secret",
+	}
+	if _, err := DiscoverModels(context.Background(), input); err == nil || !strings.Contains(err.Error(), "unsupported adapter") {
+		t.Fatalf("discovery should reject unknown protocol: %v", err)
+	}
+	if _, err := TestConnection(context.Background(), TestConnectionInput{ProviderProbeInput: input, ModelID: "model"}); err == nil || !strings.Contains(err.Error(), "unsupported adapter") {
+		t.Fatalf("connection test should reject unknown protocol: %v", err)
 	}
 }

@@ -24,11 +24,13 @@ func TestBuildAdaptersUsesMergedInstancesAndTypeHooks(t *testing.T) {
 		Version: ConfigVersion,
 		Adapters: map[adapter.Protocol]AdapterConfig{
 			adapter.ProtocolOpenAIChat: {Providers: []adapter.Provider{
-				{Name: "MiMo", ProviderType: "mimo", APIKey: "official-key", Temperature: &zero,
+				{Name: "MiMo", APIKey: "official-key", Temperature: &zero,
 					Models: []adapter.ModelInfo{{ID: "extra-model"}}},
 				{Name: "中转站1", ProviderType: "mimo", ChatURL: "https://relay.example/v1/chat/completions",
 					APIKey: "relay-key", Temperature: &relayTemperature,
 					Models: []adapter.ModelInfo{{ID: "relay-model"}}},
+				{Name: "未启用", ProviderType: "mimo", ChatURL: "https://disabled.example",
+					Models: []adapter.ModelInfo{{ID: "disabled-model"}}},
 			}},
 		},
 	}
@@ -89,7 +91,7 @@ func TestBuildAdaptersUsesMergedInstancesAndTypeHooks(t *testing.T) {
 		t.Fatalf("requests = %d, want 2", requests)
 	}
 	stored := cfg.Adapters[adapter.ProtocolOpenAIChat].Providers[0]
-	if stored.ChatURL != "" || len(stored.Models) != 1 || stored.Models[0].ID != "extra-model" {
+	if stored.ProviderType != "" || stored.ChatURL != "" || len(stored.Models) != 1 || stored.Models[0].ID != "extra-model" {
 		t.Fatalf("runtime assembly mutated persisted overrides: %+v", stored)
 	}
 }

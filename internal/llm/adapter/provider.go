@@ -23,7 +23,7 @@ func (p Provider) Clone() Provider {
 	}
 	p.Models = slices.Clone(p.Models)
 	for i := range p.Models {
-		p.Models[i].ReasoningLevels = slices.Clone(p.Models[i].ReasoningLevels)
+		p.Models[i] = p.Models[i].Clone()
 	}
 	return p
 }

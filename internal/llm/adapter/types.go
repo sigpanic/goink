@@ -3,6 +3,7 @@ package adapter
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"time"
 
 	"github.com/sigpanic/goink/internal/apperr"
@@ -17,6 +18,12 @@ type ModelInfo struct {
 	SupportsThinking bool     `json:"supports_thinking"`          // 是否支持思考模式
 	ReasoningLevels  []string `json:"reasoning_levels,omitempty"` // 多级推理等级，如 ["low","high","max"]；nil=二值开关
 	SupportsVision   bool     `json:"supports_vision"`            // 是否支持图片输入
+}
+
+// Clone 返回独立的模型元信息副本，复制可变的推理等级列表。
+func (m ModelInfo) Clone() ModelInfo {
+	m.ReasoningLevels = slices.Clone(m.ReasoningLevels)
+	return m
 }
 
 // APIError 表示 LLM API 的调用错误，包含可重试标记。

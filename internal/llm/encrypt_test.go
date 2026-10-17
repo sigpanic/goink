@@ -97,9 +97,10 @@ func TestLoadUserConfigRejectsLegacyAndInvalidSchema(t *testing.T) {
 		{"unknown version", `{"version":3,"adapters":{}}`, "version"},
 		{"missing adapters", `{"version":2}`, "adapters"},
 		{"null adapters", `{"version":2,"adapters":null}`, "adapters"},
-		{"missing type", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","api_key":"private-test-key"}]}}}`, "provider type"},
-		{"duplicate name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"mimo"},{"name":"MiMo","provider_type":"mimo"}]}}}`, "duplicate provider"},
-		{"unknown nested field", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"mimo","extra":"value"}]}}}`, `unknown field "extra"`},
+		{"missing custom type", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","chat_url":"https://relay.example","api_key":"private-test-key"}]}}}`, "provider type"},
+		{"builtin type not persisted", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"mimo"}]}}}`, "must omit provider_type"},
+		{"duplicate name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo"},{"name":"MiMo"}]}}}`, "duplicate provider"},
+		{"unknown nested field", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","extra":"value"}]}}}`, `unknown field "extra"`},
 		{"multiple documents", `{"version":2,"adapters":{}} {"version":2,"adapters":{}}`, "parse config failed"},
 	}
 	for _, tt := range tests {
@@ -121,11 +122,11 @@ func TestLoadUserConfigRejectsLegacyAndInvalidSchema(t *testing.T) {
 func TestSaveUserConfigRejectsInvalidWithoutChangingFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "config.enc")
-	valid := testUserConfig(adapter.Provider{Name: "MiMo", ProviderType: "mimo", APIKey: "key", Temperature: floatPtr(0)})
+	valid := testUserConfig(adapter.Provider{Name: "MiMo", APIKey: "key", Temperature: floatPtr(0)})
 	require.NoError(t, SaveUserConfig(path, valid))
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
-	invalid := testUserConfig(adapter.Provider{Name: "MiMo", ProviderType: "mimo"}, adapter.Provider{Name: "MiMo", ProviderType: "mimo"})
+	invalid := testUserConfig(adapter.Provider{Name: "MiMo"}, adapter.Provider{Name: "MiMo"})
 	require.ErrorContains(t, SaveUserConfig(path, invalid), "duplicate provider")
 	after, err := os.ReadFile(path)
 	require.NoError(t, err)
@@ -144,8 +145,49 @@ func TestSaveUserConfigPersistsExplicitRecordsWithoutKey(t *testing.T) {
 	require.NoError(t, SaveUserConfig(path, state))
 	loaded, err := LoadUserConfig(path)
 	require.NoError(t, err)
-	require.Equal(t, state, loaded, "底层IO不使用设置页的无Key过滤规则")
+	require.Equal(t, state, loaded, "无 Key 配置应完整保留")
 	info, err := os.Stat(path)
 	require.NoError(t, err)
 	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
+
+func TestBuiltinOverridesRoundTripWithoutPersistingDefaults(t *testing.T) {
+	user := testUserConfig(
+		adapter.Provider{Name: "DeepSeek", ChatURL: "https://override.example", Temperature: floatPtr(0)},
+		adapter.Provider{Name: "MiMo", APIKey: "official-key"},
+		adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "https://relay.example"},
+	)
+	view, err := BuildConfigView(user)
+	require.NoError(t, err)
+	saved, err := view.ToUserConfig()
+	require.NoError(t, err)
+	require.Equal(t, user, saved)
+
+	path := filepath.Join(t.TempDir(), "config.enc")
+	require.NoError(t, SaveUserConfig(path, saved))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	plain, err := config.Decrypt(data)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"version": 2,
+		"adapters": {"openai_chat": {"providers": [
+			{"name": "DeepSeek", "chat_url": "https://override.example", "models": null, "temperature": 0},
+			{"name": "MiMo", "chat_url": "", "api_key": "official-key", "models": null},
+			{"name": "relay", "provider_type": "mimo", "chat_url": "https://relay.example", "models": null}
+		]}}
+	}`, string(plain))
+
+	loaded, err := LoadUserConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, user, loaded)
+	resolved, err := Merge(loaded)
+	require.NoError(t, err)
+	require.Len(t, resolved[adapter.ProtocolOpenAIChat], 1, "只有已配置 APIKey 的 MiMo 进入运行时")
+	preset := builtinProviders()[adapter.ProtocolOpenAIChat]["MiMo"]
+	official := resolved[adapter.ProtocolOpenAIChat]["MiMo"]
+	require.Equal(t, preset.ProviderType, official.ProviderType)
+	require.Equal(t, preset.ChatURL, official.ChatURL)
+	require.Equal(t, preset.Temperature, official.Temperature)
+	require.Equal(t, preset.Models, official.Models)
 }

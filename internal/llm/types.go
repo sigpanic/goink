@@ -1,178 +1,21 @@
 package llm
 
-import (
-	"encoding/json"
-	"fmt"
-	"log/slog"
-	"strings"
-	"time"
+import "github.com/sigpanic/goink/internal/llm/adapter"
 
-	"github.com/sigpanic/goink/internal/apperr"
-)
-
-// Provider 定义一个大模型供应商的完整配置。
-// 默认行为走 OpenAI 兼容格式，钩子函数用于处理供应商差异。
-// 同时用作用户配置的 JSON 格式（Hooks 不参与序列化，反序列化后为 nil）。
-type Provider struct {
-	Name         string                                                            `json:"name"`                  // 供应商名称，如 "DeepSeek"
-	ChatURL      string                                                            `json:"chat_url"`              // 聊天补全端点
-	APIKey       string                                                            `json:"api_key,omitempty"`     // API 密钥
-	PlatformURL  string                                                            `json:"-"`                     // 注册平台 URL，仅内置模板使用
-	HelpText     string                                                            `json:"-"`                     // 注册引导文字，仅内置模板使用
-	Models       []ModelInfo                                                       `json:"models"`                // 可用模型列表
-	Temperature  *float64                                                          `json:"temperature,omitempty"` // 默认创意度 0~2，nil 表示未设置，运行时取内置默认
-	BuildRequest func(payload map[string]any) map[string]any                       `json:"-"`                     // 发送前改造请求体，nil 则原样发送
-	BuildHeaders func(opts *CallOptions, base map[string]string) map[string]string `json:"-"`                     // 发送前改造请求头，nil 则使用默认 Bearer 鉴权；opts 可为 nil（无请求级上下文）
-	ParseError   func(body []byte) error                                           `json:"-"`                     // 解析非标准错误响应体，nil 则使用默认 OpenAI 格式解析
-}
-
-// ModelInfo 描述一个具体模型的元信息。
-type ModelInfo struct {
-	ID               string   `json:"id"`                         // 模型标识，如 "deepseek-v4-pro"
-	Name             string   `json:"name"`                       // 显示名称，如 "DeepSeek V4 Pro"
-	ContextWindow    int      `json:"context_window"`             // 上下文窗口大小（token 数）
-	MaxOutputTokens  int      `json:"max_output_tokens"`          // 最大输出 token 数
-	SupportsThinking bool     `json:"supports_thinking"`          // 是否支持思考模式
-	ReasoningLevels  []string `json:"reasoning_levels,omitempty"` // 多级推理等级，如 ["low","high","max"]；nil=二值开关
-	SupportsVision   bool     `json:"supports_vision"`            // 是否支持图片输入
-}
-
-// APIError 表示 LLM API 的调用错误，包含可重试标记。
-type APIError struct {
-	StatusCode int
-	Message    string
-	Retryable  bool
-	RetryAfter time.Duration // 服务商指定的重试等待时间（来自 Retry-After header），0 表示无指定
-	Kind       string        // 错误类型标记，用于 agent 层区分处理路径（如 "tool_args_invalid"）；空字符串=普通错误
-}
-
-func (e *APIError) Error() string {
-	return fmt.Sprintf("[%d] %s", e.StatusCode, e.Message)
-}
-
-// Code 实现 apperr.Coder 接口，将 StatusCode 映射为 apperr.Code 供 apperr.CodeFromError 提取。
-// 映射逻辑从 apperr.codeFromLLMAPIError 搬来（v1.3.0 集中映射改接口模式），
-// apperr 不再 import llm，依赖方向反转为 llm → apperr。
-func (e *APIError) Code() apperr.Code {
-	switch {
-	case e.StatusCode == 429:
-		return apperr.CodeLLMRateLimited
-	case e.StatusCode == 404:
-		return apperr.CodeLLMNotFound
-	case e.StatusCode == 403:
-		return apperr.CodeLLMForbidden
-	case e.StatusCode >= 500:
-		return apperr.CodeLLMServerError
-	default:
-		return apperr.CodeLLMClientError
-	}
-}
-
-// CallOptions LLM 调用的可选参数。nil 时全部使用 Provider/ModelInfo 默认值。
-type CallOptions struct {
-	Temperature     *float64 // 不传走 Provider 默认
-	MaxTokens       *int     // 不传走 ModelInfo 默认
-	ReasoningEffort *string  // 不传从 ModelInfo 取
-	ThinkingEnabled *bool    // 不传从 ModelInfo 判断
-	ToolChoice      any      // OpenAI tool_choice payload; nil = provider default
-	SessionID       string   // 会话标识（如 Goink session_id），仅需要会话感知的服务商消费；空=无会话上下文（hook 内部兜底）
-}
-
-// StreamEventType 流式事件的类型。
-type StreamEventType int
+// ModelInfo 与适配层共用同一类型，供根包调用方直接使用。
+type ModelInfo = adapter.ModelInfo
+type APIError = adapter.APIError
+type CallOptions = adapter.CallOptions
+type StreamEventType = adapter.StreamEventType
+type StreamEvent = adapter.StreamEvent
+type ToolCallDelta = adapter.ToolCallDelta
 
 const (
-	EventThinking          StreamEventType = iota // 模型推理/思考内容（DeepSeek reasoning_content）
-	EventContent                                  // 普通文本内容
-	EventToolCallStart                            // 工具调用开始（携带名称和 ID）
-	EventToolCallArguments                        // 工具参数增量（arguments 累计字符串）
-	EventToolCallEnd                              // 工具调用完成（arguments 已 parse 为 JSON）
-	EventUsage                                    // 本次调用 token 用量
-	EventError                                    // 错误（HTTP 错误或网络异常）
+	EventThinking          = adapter.EventThinking
+	EventContent           = adapter.EventContent
+	EventToolCallStart     = adapter.EventToolCallStart
+	EventToolCallArguments = adapter.EventToolCallArguments
+	EventToolCallEnd       = adapter.EventToolCallEnd
+	EventUsage             = adapter.EventUsage
+	EventError             = adapter.EventError
 )
-
-// StreamEvent 流式对话过程中产出的单个事件。
-// Data 承载 thinking/content 文本，Delta 承载工具调用信息，Usage 承载 token 统计。
-// 错误事件通过 Error 字段传递。
-type StreamEvent struct {
-	Type  StreamEventType
-	Data  string         // EventThinking / EventContent 的文本数据
-	Delta *ToolCallDelta // EventToolCallStart / EventToolCallArguments / EventToolCallEnd
-	Usage map[string]any // EventUsage 时，原样透传 API 返回的 usage 对象
-	Error error          // EventError 时的错误信息
-}
-
-// ToolCallDelta 描述一次工具调用的增量信息。
-// 工具调用通过 SSE 流分多次下发：先来 ID 和名称，再逐片来 arguments 字符串。
-// 客户端内部维护按 index 的累积缓冲区，流结束后校验并发送原始 JSON。
-type ToolCallDelta struct {
-	ToolName      string          // EventToolCallStart 时填充
-	ToolID        string          // EventToolCallStart 时填充
-	ArgumentsText string          // EventToolCallArguments 时，累积后的完整 JSON 字符串
-	ArgumentsJSON json.RawMessage // EventToolCallEnd 时，原始 JSON 字节，由调用方按需反序列化
-}
-
-// sseDiagnostics 追踪 parseSSE 流的诊断信息。
-// 实现 slog.LogValuer 接口，日志中作为单个字段传入即展开为结构化字段组（嵌套在 diag 名下）。
-// empty sse 时填充 HTTP 快照后传入日志，便于区分限流软拒绝 / 推理失控 / 非标准格式等场景。
-type sseDiagnostics struct {
-	// 循环追踪值（parseSSE 内累积）
-	hasContent    bool           // 收到过 content 文本
-	hasToolCalls  bool           // tool call 收尾成功（发过 EventToolCallEnd）
-	hasReason     bool           // 收到过 reasoning_content
-	dataLineCount int            // data: 行总数
-	gotDone       bool           // 是否收到 [DONE]
-	lastUsage     map[string]any // 最后一个 usage chunk（发 EventUsage 用）
-	headLines     []string       // 前 10 行原始行
-	tailLines     []string       // 后 10 行原始行（环形切片）
-
-	// HTTP 快照（empty 分支从 resp 填入）
-	statusCode      int
-	contentType     string
-	contentLength   string
-	retryAfter      string
-	rateLimitRemain string
-}
-
-// 编译时验证 sseDiagnostics 实现 slog.LogValuer 接口。
-// 若 LogValue 方法签名被改坏，此行编译报错，防止运行时退化为 fmt 格式化。
-var _ slog.LogValuer = sseDiagnostics{}
-
-// LogValue 实现 slog.LogValuer，将诊断字段展开为结构化日志属性组。
-// raw_head / raw_tail 每行截断到 500 rune，避免超长 JSON 错误体撑爆日志。
-func (d sseDiagnostics) LogValue() slog.Value {
-	const maxLineRunes = 500
-	head := make([]string, len(d.headLines))
-	for i, s := range d.headLines {
-		head[i] = truncateLine(s, maxLineRunes)
-	}
-	tail := make([]string, len(d.tailLines))
-	for i, s := range d.tailLines {
-		tail[i] = truncateLine(s, maxLineRunes)
-	}
-	return slog.GroupValue(
-		slog.Int("status_code", d.statusCode),
-		slog.String("content_type", d.contentType),
-		slog.String("content_length", d.contentLength),
-		slog.String("retry_after", d.retryAfter),
-		slog.String("x_ratelimit_remaining", d.rateLimitRemain),
-		slog.Bool("has_content", d.hasContent),
-		slog.Bool("has_tool_calls", d.hasToolCalls),
-		slog.Bool("has_reason", d.hasReason),
-		slog.Int("data_lines", d.dataLineCount),
-		slog.Bool("got_done", d.gotDone),
-		slog.Bool("has_usage", d.lastUsage != nil),
-		slog.String("raw_head", strings.Join(head, "\n")),
-		slog.String("raw_tail", strings.Join(tail, "\n")),
-	)
-}
-
-// truncateLine 截断单行到 maxRunes 字符（按 rune 计数，避免截断 UTF-8 多字节字符中段）。
-// 超长时保留前 maxRunes 个字符并追加 "..." 标记。
-func truncateLine(s string, maxRunes int) string {
-	r := []rune(s)
-	if len(r) <= maxRunes {
-		return s
-	}
-	return string(r[:maxRunes]) + "..."
-}
