@@ -1,7 +1,11 @@
 package llm
 
 import (
+	"fmt"
+	"math"
+	"net/url"
 	"sort"
+	"strings"
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
@@ -104,6 +108,67 @@ type ProviderView struct {
 
 func emptyUserConfig() *UserLLMConfig {
 	return &UserLLMConfig{Version: ConfigVersion, Adapters: make(map[adapter.Protocol]AdapterConfig)}
+}
+
+// ValidateUserConfig 只校验新格式，不推断协议、实例名称或厂商类型。
+func ValidateUserConfig(user *UserLLMConfig) error {
+	return validateUserConfig(user, builtinProviders())
+}
+
+func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]map[string]adapter.Provider) error {
+	if user == nil {
+		return fmt.Errorf("LLM config must not be nil")
+	}
+	if user.Version != ConfigVersion {
+		return fmt.Errorf("unsupported LLM config version: %d; expected %d", user.Version, ConfigVersion)
+	}
+	if user.Adapters == nil {
+		return fmt.Errorf("LLM config adapters must be an object")
+	}
+	for protocol, group := range user.Adapters {
+		builtins, ok := defaults[protocol]
+		if !ok {
+			return fmt.Errorf("unsupported adapter: %s", protocol)
+		}
+		seen := make(map[string]bool, len(group.Providers))
+		for _, p := range group.Providers {
+			if p.Name == "" || strings.TrimSpace(p.Name) != p.Name {
+				return fmt.Errorf("provider name must not be empty or have surrounding whitespace in adapter %s", protocol)
+			}
+			if seen[p.Name] {
+				return fmt.Errorf("duplicate provider: %s/%s", protocol, p.Name)
+			}
+			seen[p.Name] = true
+			_, builtin := builtins[p.Name]
+			if builtin {
+				if p.ProviderType != "" {
+					return fmt.Errorf("builtin provider %s/%s must omit provider_type", protocol, p.Name)
+				}
+			} else if err := validateProviderType(protocol, p.ProviderType); err != nil {
+				return fmt.Errorf("provider %s/%s: %w", protocol, p.Name, err)
+			}
+			if p.ChatURL != "" || !builtin {
+				parsed, err := url.Parse(p.ChatURL)
+				if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+					return fmt.Errorf("provider %s/%s requires an absolute HTTP(S) chat_url", protocol, p.Name)
+				}
+			}
+			if p.Temperature != nil && (math.IsNaN(*p.Temperature) || math.IsInf(*p.Temperature, 0)) {
+				return fmt.Errorf("provider %s/%s temperature must be finite", protocol, p.Name)
+			}
+			models := make(map[string]bool, len(p.Models))
+			for _, model := range p.Models {
+				if strings.TrimSpace(model.ID) == "" {
+					return fmt.Errorf("provider %s/%s model id must not be empty", protocol, p.Name)
+				}
+				if models[model.ID] {
+					return fmt.Errorf("provider %s/%s has duplicate model: %s", protocol, p.Name, model.ID)
+				}
+				models[model.ID] = true
+			}
+		}
+	}
+	return nil
 }
 
 // BuildConfigView 合并内置模板和用户配置，生成前端可用的完整视图。
