@@ -248,32 +248,52 @@ func providerViewKey(adapterName adapter.Protocol, providerName string) string {
 }
 
 // ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
-// 只保留有 APIKey 的 provider，无 key 的不写入（内置模板由 Merge 自动提供）。
-//
-// 保存用户填的 URL 原值，不再 normalizeURL：
-//   - 保存前前端已通过 TestConnection 验证 URL，并把探测到的正确 URL 回写到 pv.ChatURL
-//   - 二次 normalizeURL 会破坏已验证的 URL（测试和保存不一致）
-//   - 内置 provider 用户未改 URL 时留空，由 Merge 用 bp.ChatURL 兜底
-func (v *LLMConfigView) ToUserConfig() *UserLLMConfig {
-	providers := make([]Provider, 0, len(v.Providers))
-	for _, pv := range v.Providers {
-		if pv.APIKey == "" {
-			continue
-		}
-		p := Provider{
-			Name:   pv.Key,
-			APIKey: pv.APIKey,
-			Models: append([]ModelInfo{}, pv.CustomModels...),
-		}
-		if pv.Source != "builtin" {
-			p.ChatURL = pv.ChatURL
-		} else if bp, ok := Builtin[pv.Key]; ok && pv.ChatURL != bp.ChatURL {
-			p.ChatURL = pv.ChatURL
-		}
-		p.Temperature = floatPtr(pv.Temperature)
-		providers = append(providers, p)
+// 保留无 APIKey 的用户覆盖和自定义实例；无任何覆盖的内置实例不写入。
+// 保存经过探测的 URL 原值；等于内置默认地址时留空，后续随内置配置更新。
+// URL 和温度与当前默认值相等时统一归一为继承，不区分原先是否显式保存过该等值字段。
+func (v *LLMConfigView) ToUserConfig() (*UserLLMConfig, error) {
+	if v == nil {
+		return nil, fmt.Errorf("LLM config view must not be nil")
 	}
-	return &UserLLMConfig{Providers: providers}
+	defaults := builtinProviders()
+	all := emptyUserConfig()
+	result := emptyUserConfig()
+	for _, pv := range v.Providers {
+		preset, builtin := defaults[pv.AdapterName][pv.Name]
+		if (builtin && pv.Source != "builtin") || (!builtin && pv.Source != "custom") {
+			return nil, fmt.Errorf("provider %s/%s source does not match builtin membership", pv.AdapterName, pv.Name)
+		}
+		p := adapter.Provider{
+			Name: pv.Name, ProviderType: pv.ProviderType, ChatURL: pv.ChatURL, APIKey: pv.APIKey,
+			Models: pv.CustomModels, Temperature: pv.Temperature,
+		}
+		if builtin {
+			p.ProviderType = ""
+			if p.ChatURL == preset.ChatURL {
+				p.ChatURL = ""
+			}
+			if sameTemperature(p.Temperature, preset.Temperature) {
+				p.Temperature = nil
+			}
+		}
+		p = p.Clone()
+		group := all.Adapters[pv.AdapterName]
+		group.Providers = append(group.Providers, p)
+		all.Adapters[pv.AdapterName] = group
+		if !builtin || p.APIKey != "" || p.ChatURL != "" || p.Temperature != nil || len(p.Models) > 0 {
+			group = result.Adapters[pv.AdapterName]
+			group.Providers = append(group.Providers, p)
+			result.Adapters[pv.AdapterName] = group
+		}
+	}
+	if err := validateUserConfig(all, defaults); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+func sameTemperature(a, b *float64) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
 // Models 从 Provider map 中提取前端下拉列表。
