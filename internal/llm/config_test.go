@@ -314,8 +314,9 @@ func TestModels_UsesProtocolAndInstanceName(t *testing.T) {
 	require.Equal(t, "anthropic_messages/%E4%B8%AD%E8%BD%AC%E7%AB%991/m", list[0].Key)
 	require.Equal(t, "openai_chat/%E4%B8%AD%E8%BD%AC%E7%AB%991/m", list[1].Key)
 	require.Equal(t, "中转站1", list[1].ProviderName)
-	require.Equal(t, "mimo", list[1].ProviderKey)
-	list[1].ReasoningLevels[0] = "changed"
+	require.Equal(t, "mimo", list[1].ProviderType)
+	require.Equal(t, providers[adapter.ProtocolOpenAIChat]["中转站1"].Models[0], list[1].Model)
+	list[1].Model.ReasoningLevels[0] = "changed"
 	require.Equal(t, "high", providers[adapter.ProtocolOpenAIChat]["中转站1"].Models[0].ReasoningLevels[0])
 	require.Empty(t, Models(nil))
 }
@@ -331,9 +332,9 @@ func TestModels_KeysEscapeEachNameAndModelSegment(t *testing.T) {
 	require.Len(t, list, 2)
 	require.Equal(t, "openai_chat/a/b%2Fc", list[0].Key)
 	require.Equal(t, "a", list[0].ProviderName)
-	require.Equal(t, "b/c", list[0].ModelID)
+	require.Equal(t, "b/c", list[0].Model.ID)
 	require.Equal(t, "openai_chat/a%2Fb/c", list[1].Key)
 	require.Equal(t, "a/b", list[1].ProviderName)
-	require.Equal(t, "c", list[1].ModelID)
+	require.Equal(t, "c", list[1].Model.ID)
 	require.NotEqual(t, providerViewKey(adapter.ProtocolOpenAIChat, "a/b"), providerViewKey(adapter.ProtocolOpenAIChat, "a%2Fb"))
 }

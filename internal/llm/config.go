@@ -30,19 +30,13 @@ type ProviderMap = map[string]adapter.Provider
 
 // AvailableModel 是前端下拉列表的模型选项。
 type AvailableModel struct {
-	Key              string // "deepseek/deepseek-v4-pro"
-	ModelID          string // "deepseek-v4-pro"（独立字段，不依赖 Key 拆分）
-	ProviderKey      string // "deepseek"（小写 key，与 ProviderView.Key 一致，供 ProviderIcon 匹配）
-	ProviderName     string // "DeepSeek"
-	ModelName        string // "DeepSeek V4 Pro"
-	ContextWindow    int
-	MaxOutputTokens  int
-	SupportsThinking bool
-	ReasoningLevels  []string
-	SupportsVision   bool
+	Model        ModelInfo `json:"model"`
+	Key          string
+	AdapterName  adapter.Protocol
+	ProviderName string // 所属协议内的实例 Name，调用方直接传递，不解析 Key
+	ProviderType string // 厂商规则类型，可用于匹配图标，不充当实例索引
 }
 
-// Builtin 内置 provider 模板。APIKey 留空，运行时由用户配置注入。
 func floatPtr(f float64) *float64 { return &f }
 
 // LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置实例和用户配置。
@@ -296,41 +290,30 @@ func sameTemperature(a, b *float64) bool {
 	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
 }
 
-// Models 从 Provider map 中提取前端下拉列表。
-func Models(providers map[string]Provider) []AvailableModel {
-	var list []AvailableModel
-	for name, p := range providers {
-		for _, m := range p.Models {
-			list = append(list, AvailableModel{
-				Key:              name + "/" + m.ID,
-				ModelID:          m.ID,
-				ProviderKey:      name,
-				ProviderName:     p.Name,
-				ModelName:        m.Name,
-				ContextWindow:    m.ContextWindow,
-				MaxOutputTokens:  m.MaxOutputTokens,
-				SupportsThinking: m.SupportsThinking,
-				ReasoningLevels:  m.ReasoningLevels,
-				SupportsVision:   m.SupportsVision,
-			})
+// Models 从按协议分组的 provider 快照中提取模型选项。
+// Key 包含协议，避免跨协议同名 provider/model 冲突；调用使用独立字段。
+func Models(providers map[adapter.Protocol]ProviderMap) []AvailableModel {
+	list := make([]AvailableModel, 0)
+	for adapterName, group := range providers {
+		for providerName, p := range group {
+			for _, m := range p.Models {
+				list = append(list, AvailableModel{
+					Model: m.Clone(), Key: providerViewKey(adapterName, providerName) + "/" + url.PathEscape(m.ID),
+					AdapterName: adapterName, ProviderName: p.Name, ProviderType: p.ProviderType,
+				})
+			}
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
 		if list[i].ProviderName != list[j].ProviderName {
 			return list[i].ProviderName < list[j].ProviderName
 		}
-		return list[i].ModelName < list[j].ModelName
+		if list[i].AdapterName != list[j].AdapterName {
+			return list[i].AdapterName < list[j].AdapterName
+		}
+		return list[i].Model.ID < list[j].Model.ID
 	})
 	return list
-}
-
-func modelExists(models []ModelInfo, id string) bool {
-	for i := range models {
-		if models[i].ID == id {
-			return true
-		}
-	}
-	return false
 }
 
 func cloneModels(models []ModelInfo) []ModelInfo {
