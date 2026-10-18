@@ -9,6 +9,10 @@ type CallOptions = adapter.CallOptions
 type StreamEventType = adapter.StreamEventType
 type StreamEvent = adapter.StreamEvent
 type ToolCallDelta = adapter.ToolCallDelta
+type Message = adapter.Message
+type ToolCall = adapter.ToolCall
+type MessageOrigin = adapter.MessageOrigin
+type ResponseState = adapter.ResponseState
 
 const (
 	EventThinking          = adapter.EventThinking
@@ -18,4 +22,5 @@ const (
 	EventToolCallEnd       = adapter.EventToolCallEnd
 	EventUsage             = adapter.EventUsage
 	EventError             = adapter.EventError
+	EventResponseState     = adapter.EventResponseState
 )

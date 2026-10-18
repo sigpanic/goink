@@ -78,6 +78,7 @@ const (
 	EventToolCallEnd                              // 工具调用完成（arguments 已 parse 为 JSON）
 	EventUsage                                    // 本次调用 token 用量
 	EventError                                    // 错误（HTTP 错误或网络异常）
+	EventResponseState                            // 响应收尾及原生回放状态，不代表业务 turn 一定结束
 )
 
 // StreamEvent 流式对话过程中产出的单个事件。
@@ -89,6 +90,7 @@ type StreamEvent struct {
 	Delta *ToolCallDelta // EventToolCallStart / EventToolCallArguments / EventToolCallEnd
 	Usage map[string]any // EventUsage 时，原样透传 API 返回的 usage 对象
 	Error error          // EventError 时的错误信息
+	State *ResponseState // EventResponseState 时的公共收尾信息和原生状态
 }
 
 // ToolCallDelta 描述一次工具调用的增量信息。
@@ -119,6 +121,7 @@ type Response struct {
 	ToolCalls       []ToolCallDelta
 	Usage           map[string]any
 	StopReason      string
+	State           *ResponseState
 }
 
 // TestConnectionResult 是最小调用探测的结果。
