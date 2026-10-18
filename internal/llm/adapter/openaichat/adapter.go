@@ -28,7 +28,7 @@ var _ adapter.ProtocolAdapter = (*Adapter)(nil)
 
 // New 接收配置层已合并的完整实例配置，创建独立的 providers 快照。
 // 构造后配置只读；热重载应创建新实例，让进行中的请求继续使用旧实例。
-func New(configs map[string]adapter.Provider, client *http.Client, logger *slog.Logger) (*Adapter, error) {
+func New(configs adapter.ProviderMap, client *http.Client, logger *slog.Logger) (*Adapter, error) {
 	providers := make(map[string]Provider, len(configs))
 	for providerName, config := range configs {
 		if providerName != config.Name {
@@ -50,8 +50,8 @@ func New(configs map[string]adapter.Provider, client *http.Client, logger *slog.
 }
 
 // Providers 返回公共配置副本，不暴露本包的运行时 hooks 或内部可变字段。
-func (c *Adapter) Providers() map[string]adapter.Provider {
-	providers := make(map[string]adapter.Provider, len(c.providers))
+func (c *Adapter) Providers() adapter.ProviderMap {
+	providers := make(adapter.ProviderMap, len(c.providers))
 	for providerName, p := range c.providers {
 		providers[providerName] = p.Clone()
 	}

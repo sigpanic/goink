@@ -3,7 +3,7 @@ package openaichat
 import "github.com/sigpanic/goink/internal/llm/adapter"
 
 // builtin 内置 provider 实例的默认配置，key 与 Name 一致。APIKey 留空，由配置层合并用户修改。
-var builtin = map[string]adapter.Provider{
+var builtin = adapter.ProviderMap{
 	"DeepSeek": {
 		ProviderType: "deepseek",
 		Name:         "DeepSeek",
@@ -696,8 +696,8 @@ var builtin = map[string]adapter.Provider{
 }
 
 // BuiltinProviders 返回本协议的内置实例默认配置副本，供配置层合并用户修改。
-func BuiltinProviders() map[string]adapter.Provider {
-	providers := make(map[string]adapter.Provider, len(builtin))
+func BuiltinProviders() adapter.ProviderMap {
+	providers := make(adapter.ProviderMap, len(builtin))
 	for providerName, p := range builtin {
 		providers[providerName] = p.Clone()
 	}

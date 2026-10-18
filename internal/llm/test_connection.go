@@ -46,7 +46,7 @@ type TestConnectionResult = adapter.TestConnectionResult
 func TestConnection(ctx context.Context, input TestConnectionInput) (TestConnectionResult, error) {
 	client := newHTTPClient()
 	defer client.CloseIdleConnections()
-	backend, err := newProtocolAdapter(input.AdapterName, map[string]adapter.Provider{
+	backend, err := newProtocolAdapter(input.AdapterName, ProviderMap{
 		input.ProviderName: {Name: input.ProviderName, ProviderType: input.ProviderType, ChatURL: input.ChatURL, APIKey: input.APIKey},
 	}, client, nil)
 	if err != nil {

@@ -2,6 +2,9 @@ package adapter
 
 import "slices"
 
+// ProviderMap 按实例 Name 索引单个协议下的公共配置。
+type ProviderMap = map[string]Provider
+
 // Provider 是各协议共用的服务商配置，不包含 SDK client 或协议专属 hooks。
 // providerName 是所属适配器 providers 集合中的名称；Name 可用于展示。
 type Provider struct {

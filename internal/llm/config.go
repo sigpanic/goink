@@ -26,7 +26,7 @@ type AdapterConfig struct {
 }
 
 // ProviderMap 按实例 Name 索引单个协议下的公共配置。
-type ProviderMap = map[string]adapter.Provider
+type ProviderMap = adapter.ProviderMap
 
 // AvailableModel 是前端下拉列表的模型选项。
 type AvailableModel struct {

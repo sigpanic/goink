@@ -38,7 +38,7 @@ func (s stubAdapter) Generate(ctx context.Context, req adapter.Request) (adapter
 	return s.generate(ctx, req)
 }
 
-func (s stubAdapter) Providers() map[string]adapter.Provider {
+func (s stubAdapter) Providers() adapter.ProviderMap {
 	return nil
 }
 

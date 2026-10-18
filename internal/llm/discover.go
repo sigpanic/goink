@@ -1,10 +1,6 @@
 package llm
 
-import (
-	"context"
-
-	"github.com/sigpanic/goink/internal/llm/adapter"
-)
+import "context"
 
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
 // 从 chatURL 推导 modelsURL（去掉 /chat/completions，拼接 /models），
@@ -12,7 +8,7 @@ import (
 func DiscoverModels(ctx context.Context, input ProviderProbeInput) ([]ModelInfo, error) {
 	client := newHTTPClient()
 	defer client.CloseIdleConnections()
-	backend, err := newProtocolAdapter(input.AdapterName, map[string]adapter.Provider{
+	backend, err := newProtocolAdapter(input.AdapterName, ProviderMap{
 		input.ProviderName: {Name: input.ProviderName, ProviderType: input.ProviderType, ChatURL: input.ChatURL, APIKey: input.APIKey},
 	}, client, nil)
 	if err != nil {

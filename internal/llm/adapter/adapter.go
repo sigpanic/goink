@@ -20,7 +20,7 @@ const (
 // 顶层调用方先按 Protocol 选择适配器，具体实现之间不查找或回退 provider。
 type ProtocolAdapter interface {
 	// Providers 返回本适配器的 provider 配置快照，调用方修改副本不影响正在执行的请求。
-	Providers() map[string]Provider
+	Providers() ProviderMap
 	Stream(ctx context.Context, req Request) <-chan StreamEvent
 	Generate(ctx context.Context, req Request) (Response, error)
 
