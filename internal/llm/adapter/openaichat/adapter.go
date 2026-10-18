@@ -41,7 +41,7 @@ func New(configs map[string]adapter.Provider, client *http.Client, logger *slog.
 		providers[providerName] = p
 	}
 	if client == nil {
-		client = newHTTPClient()
+		return nil, fmt.Errorf("OpenAI Chat adapter requires an injected HTTP client")
 	}
 	if logger == nil {
 		logger = slog.Default()

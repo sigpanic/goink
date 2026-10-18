@@ -26,7 +26,7 @@ func TestProviderAssemblyUsesCompleteInstanceConfiguration(t *testing.T) {
 		},
 		"MiMo": {Name: "MiMo", ProviderType: "mimo"},
 	}
-	backend, err := New(configs, nil, nil)
+	backend, err := New(configs, testHTTPClient(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestProviderHooksUseOnlyExplicitType(t *testing.T) {
 		ChatURL: "https://api.xiaomimimo.com/v1/chat/completions",
 		Models:  []ModelInfo{{ID: "mimo-v2-flash"}},
 	}
-	backend, err := New(map[string]adapter.Provider{config.Name: config}, nil, nil)
+	backend, err := New(map[string]adapter.Provider{config.Name: config}, testHTTPClient(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestProviderTypesAreValidatedIndependentlyFromBuiltins(t *testing.T) {
 				t.Fatal(err)
 			}
 			config := adapter.Provider{Name: "independent-instance", ProviderType: providerType}
-			if _, err := New(map[string]adapter.Provider{config.Name: config}, nil, nil); err != nil {
+			if _, err := New(map[string]adapter.Provider{config.Name: config}, testHTTPClient(), nil); err != nil {
 				t.Fatalf("supported type rejected for custom instance: %v", err)
 			}
 		})
@@ -100,7 +100,7 @@ func TestProviderSnapshotsIsolateMutableConfiguration(t *testing.T) {
 		Name: "relay", ProviderType: "openai", ChatURL: "https://original.invalid", Temperature: &temperature,
 		Models: []ModelInfo{{ID: "model", ReasoningLevels: []string{"high"}}},
 	}}
-	backend, err := New(input, nil, nil)
+	backend, err := New(input, testHTTPClient(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -149,12 +149,12 @@ func TestProviderAssemblyRejectsInvalidIdentity(t *testing.T) {
 		{"unknown type", map[string]adapter.Provider{"relay": {Name: "relay", ProviderType: "unknown"}}},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := New(tt.configs, nil, nil); err == nil {
+			if _, err := New(tt.configs, testHTTPClient(), nil); err == nil {
 				t.Fatalf("invalid provider accepted: %+v", tt.configs)
 			}
 		})
 	}
-	backend, err := New(nil, nil, nil)
+	backend, err := New(nil, testHTTPClient(), nil)
 	if err != nil || len(backend.Providers()) != 0 {
 		t.Fatalf("empty user configuration activated providers: %v", err)
 	}

@@ -223,6 +223,9 @@ func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+// testHTTPClient 返回测试用 HTTP client：生产路径要求上层注入，测试统一显式提供。
+func testHTTPClient() *http.Client { return &http.Client{} }
+
 type trackedBody struct {
 	io.Reader
 	closed chan struct{}

@@ -63,7 +63,7 @@ func TestMultipleProvidersRouteAllOperations(t *testing.T) {
 			Models: []ModelInfo{{ID: target.name + "-model", MaxOutputTokens: target.maxTokens}},
 		}
 	}
-	backend, err := New(configs, nil, nil)
+	backend, err := New(configs, testHTTPClient(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
