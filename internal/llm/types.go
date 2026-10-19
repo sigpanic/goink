@@ -9,6 +9,7 @@ type CallOptions = adapter.CallOptions
 type StreamEventType = adapter.StreamEventType
 type StreamEvent = adapter.StreamEvent
 type ToolCallDelta = adapter.ToolCallDelta
+type ToolDefinition = adapter.ToolDefinition
 type Message = adapter.Message
 type ToolCall = adapter.ToolCall
 type MessageOrigin = adapter.MessageOrigin

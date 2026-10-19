@@ -21,7 +21,11 @@ func (c *Adapter) Generate(ctx context.Context, input adapter.Request) (adapter.
 	if err != nil {
 		return adapter.Response{}, err
 	}
-	payload := c.buildPayload(&p, messages, input.Tools, input.Model, input.Options, false)
+	tools, err := buildTools(input.Tools)
+	if err != nil {
+		return adapter.Response{}, err
+	}
+	payload := c.buildPayload(&p, messages, tools, input.Model, input.Options, false)
 	body, err := json.Marshal(payload)
 	if err != nil {
 		return adapter.Response{}, fmt.Errorf("failed to marshal request body: %w", err)

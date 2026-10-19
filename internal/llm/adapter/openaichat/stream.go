@@ -20,7 +20,7 @@ import (
 
 // Stream 转换一次 Goink 请求并产出统一事件。
 func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan StreamEvent {
-	tools, model, opts := input.Tools, input.Model, input.Options
+	model, opts := input.Model, input.Options
 	ch := make(chan StreamEvent, 32)
 	go func() {
 		defer close(ch)
@@ -31,6 +31,11 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 			return
 		}
 		messages, err := c.buildMessages(input.Messages)
+		if err != nil {
+			sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
+			return
+		}
+		tools, err := buildTools(input.Tools)
 		if err != nil {
 			sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
 			return

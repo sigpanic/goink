@@ -155,12 +155,14 @@ func TestBothModesPrepareHistoryBeforeProviderHooks(t *testing.T) {
 				ProviderType: tt.providerType, ChatURL: server.URL, APIKey: "test-key",
 				Models: []adapter.ModelInfo{{ID: tt.model, SupportsThinking: true, ReasoningLevels: []string{"max"}}},
 			}, server.Client())
-			input := adapter.Request{ProviderName: "test", Model: tt.model, Options: &CallOptions{}, Messages: []adapter.Message{
-				{Role: "system", Content: "one"}, {Role: "system", Content: "two"},
-				{Role: "assistant", ToolCalls: []adapter.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"chapter":3}`)}}},
-				{Role: "tool", ToolCallID: "call-1", ToolName: "read", Content: "result"},
-				{Role: "tool", ToolCallID: "orphan", Content: "must not send"},
-			}}
+			input := adapter.Request{ProviderName: "test", Model: tt.model, Options: &CallOptions{},
+				Tools: []adapter.ToolDefinition{{Name: "read", InputSchema: json.RawMessage(`{"type":"object","properties":{"chapter":{"type":"integer"}}}`)}},
+				Messages: []adapter.Message{
+					{Role: "system", Content: "one"}, {Role: "system", Content: "two"},
+					{Role: "assistant", ToolCalls: []adapter.ToolCall{{ID: "call-1", Name: "read", Arguments: json.RawMessage(`{"chapter":3}`)}}},
+					{Role: "tool", ToolCallID: "call-1", ToolName: "read", Content: "result"},
+					{Role: "tool", ToolCallID: "orphan", Content: "must not send"},
+				}}
 			response, err := backend.Generate(context.Background(), input)
 			if err != nil || response.Content != "ok" {
 				t.Fatalf("generate: %+v, %v", response, err)
@@ -173,6 +175,9 @@ func TestBothModesPrepareHistoryBeforeProviderHooks(t *testing.T) {
 			nonStream, stream := <-requests, <-requests
 			if !reflect.DeepEqual(nonStream["messages"], stream["messages"]) {
 				t.Fatal("Stream and Generate prepared different histories")
+			}
+			if !reflect.DeepEqual(nonStream["tools"], stream["tools"]) || len(nonStream["tools"].([]any)) != 1 {
+				t.Fatal("provider hooks changed the prepared tool definitions")
 			}
 			messages := nonStream["messages"].([]any)
 			if len(messages) != 3 || messages[0].(map[string]any)["content"] != "one\n\ntwo" {

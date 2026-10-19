@@ -106,7 +106,7 @@ func TestGenerateCompleteResponse(t *testing.T) {
 	backend.providers["test"] = p
 	maxTokens := 256
 	result, err := backend.Generate(context.Background(), adapter.Request{ProviderName: "test",
-		Model: "model", Tools: []map[string]any{{"type": "function"}},
+		Model: "model", Tools: []adapter.ToolDefinition{{Name: "lookup", InputSchema: json.RawMessage(`{"type":"object"}`)}},
 		Options: &CallOptions{MaxTokens: &maxTokens, SessionID: "session", ToolChoice: "auto"},
 	})
 	if err != nil {

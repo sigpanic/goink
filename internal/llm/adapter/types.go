@@ -103,13 +103,27 @@ type ToolCallDelta struct {
 	ArgumentsJSON json.RawMessage // EventToolCallEnd 时，原始 JSON 字节，由调用方按需反序列化
 }
 
+// ToolDefinition 描述可供模型调用的客户端函数，不包含执行器或协议包装。
+// InputSchema 保留完整 JSON Schema；支持范围及出站转换由目标适配器负责。
+type ToolDefinition struct {
+	Name        string
+	Description string
+	InputSchema json.RawMessage
+}
+
+// Clone 复制参数 schema，避免请求处理修改调用方的工具定义。
+func (t ToolDefinition) Clone() ToolDefinition {
+	t.InputSchema = slices.Clone(t.InputSchema)
+	return t
+}
+
 // Request 是一次 Goink 模型调用的输入，适配器负责构造实际 HTTP / SDK 请求。
-// Messages 使用结构化业务消息，Tools 暂时沿用现有 map 结构；调用期间由调用方保持只读。
+// Messages 和 Tools 使用结构化业务输入；调用期间由调用方保持只读。
 type Request struct {
 	ProviderName string // 已选适配器内部的 provider 名称，由调用方显式指定
 	Model        string
 	Messages     []Message
-	Tools        []map[string]any
+	Tools        []ToolDefinition
 	Options      *CallOptions
 }
 

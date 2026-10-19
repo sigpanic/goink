@@ -60,7 +60,7 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 		{Role: "assistant", ToolCalls: []ToolCall{{ID: "call-1", Name: "lookup", Arguments: json.RawMessage(`{"id":1}`)}}, State: state},
 		{Role: "tool", ToolCallID: "call-1", ToolName: "lookup", Content: `{"ok":true}`},
 	}
-	tools := []map[string]any{{"type": "function", "function": map[string]any{"name": "lookup"}}}
+	tools := []ToolDefinition{{Name: "lookup", Description: "Look up an item", InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"}}}`)}}
 	opts := &CallOptions{SessionID: "session-test"}
 	backend := stubAdapter{
 		stream: func(_ context.Context, req adapter.Request) <-chan StreamEvent {
@@ -197,7 +197,7 @@ func TestClientSnapshotAndReloadDuringStream(t *testing.T) {
 func TestCallToolCancelsProducerAfterResult(t *testing.T) {
 	done := make(chan struct{})
 	messages := []Message{{Role: "user", Content: "lookup"}}
-	tools := []map[string]any{{"type": "function", "function": map[string]any{"name": "lookup"}}}
+	tools := []ToolDefinition{{Name: "lookup", InputSchema: json.RawMessage(`{"type":"object"}`)}}
 	backend := stubAdapter{stream: func(ctx context.Context, req adapter.Request) <-chan StreamEvent {
 		if req.ProviderName != "test" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) || !reflect.DeepEqual(req.Tools, tools) {
 			t.Errorf("unexpected CallTool request: %+v", req)

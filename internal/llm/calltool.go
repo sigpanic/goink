@@ -41,7 +41,7 @@ func (c *Client) CallTool(
 	adapterName adapter.Protocol,
 	providerName, modelID string,
 	messages []Message,
-	tools []map[string]any,
+	tools []ToolDefinition,
 	toolName string,
 	opts *CallToolOptions,
 ) (json.RawMessage, error) {
