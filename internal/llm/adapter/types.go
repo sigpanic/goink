@@ -104,11 +104,11 @@ type ToolCallDelta struct {
 }
 
 // Request 是一次 Goink 模型调用的输入，适配器负责构造实际 HTTP / SDK 请求。
-// Messages 和 Tools 暂时沿用现有 map 结构，调用期间由调用方保持只读。
+// Messages 使用结构化业务消息，Tools 暂时沿用现有 map 结构；调用期间由调用方保持只读。
 type Request struct {
 	ProviderName string // 已选适配器内部的 provider 名称，由调用方显式指定
 	Model        string
-	Messages     []map[string]any
+	Messages     []Message
 	Tools        []map[string]any
 	Options      *CallOptions
 }
