@@ -80,34 +80,36 @@ func CountTokens(text string) (int, error) {
 	return len(enc.Encode(text, nil, nil)), nil
 }
 
-// CountMessageTokens 计算一条 OpenAI 格式消息的 token 数。
+// CountMessageTokens 估算结构化消息的 token 数，不统计来源和不透明原生 payload。
 // 与 Python _count_msg_tokens 一致：只算 content + tool_calls + tool_call_id + reasoning_content。
-func CountMessageTokens(msg map[string]any) (int, error) {
+func CountMessageTokens(msg Message) (int, error) {
 	enc, err := getTokenEnc()
 	if err != nil {
 		return 0, err
 	}
 
 	n := 0
-	if content, _ := msg["content"].(string); content != "" {
-		n += len(enc.Encode(content, nil, nil))
+	if msg.Content != "" {
+		n += len(enc.Encode(msg.Content, nil, nil))
 	}
-	if toolCalls, ok := msg["tool_calls"]; ok && toolCalls != nil {
-		if b, err := json.Marshal(toolCalls); err == nil {
-			n += len(enc.Encode(string(b), nil, nil))
+	if len(msg.ToolCalls) > 0 {
+		b, err := json.Marshal(msg.ToolCalls)
+		if err != nil {
+			return 0, err
 		}
+		n += len(enc.Encode(string(b), nil, nil))
 	}
-	if id, _ := msg["tool_call_id"].(string); id != "" {
-		n += len(enc.Encode(id, nil, nil))
+	if msg.ToolCallID != "" {
+		n += len(enc.Encode(msg.ToolCallID, nil, nil))
 	}
-	if reasoning, _ := msg["reasoning_content"].(string); reasoning != "" {
-		n += len(enc.Encode(reasoning, nil, nil))
+	if msg.ThinkingContent != "" {
+		n += len(enc.Encode(msg.ThinkingContent, nil, nil))
 	}
 	return n, nil
 }
 
 // CountMessagesTokens 计算消息列表的总 token 数，并按 role 分组计数。
-func CountMessagesTokens(messages []map[string]any) (total int, byRole map[string]int, err error) {
+func CountMessagesTokens(messages []Message) (total int, byRole map[string]int, err error) {
 	byRole = map[string]int{}
 	for _, msg := range messages {
 		n, err := CountMessageTokens(msg)
@@ -115,8 +117,7 @@ func CountMessagesTokens(messages []map[string]any) (total int, byRole map[strin
 			return 0, nil, err
 		}
 		total += n
-		role, _ := msg["role"].(string)
-		byRole[role] += n
+		byRole[msg.Role] += n
 	}
 	return total, byRole, nil
 }

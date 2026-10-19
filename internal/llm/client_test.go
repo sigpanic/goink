@@ -51,7 +51,15 @@ func (s stubAdapter) TestConnection(context.Context, string, string) (adapter.Te
 }
 
 func TestClientDelegatesUnifiedRequests(t *testing.T) {
-	messages := []map[string]any{{"role": "user", "content": "hello"}}
+	state := &ResponseState{
+		Origin:   MessageOrigin{AdapterName: adapter.ProtocolAnthropicMessages, ProviderName: "source", Model: "source-model"},
+		Complete: true, Payload: json.RawMessage(`{"content":[{"type":"thinking","signature":"private"}]}`),
+	}
+	messages := []Message{
+		{Role: "user", Content: "hello"},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "call-1", Name: "lookup", Arguments: json.RawMessage(`{"id":1}`)}}, State: state},
+		{Role: "tool", ToolCallID: "call-1", ToolName: "lookup", Content: `{"ok":true}`},
+	}
 	tools := []map[string]any{{"type": "function", "function": map[string]any{"name": "lookup"}}}
 	opts := &CallOptions{SessionID: "session-test"}
 	backend := stubAdapter{
@@ -59,8 +67,9 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 			if req.ProviderName != "my relay" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) || !reflect.DeepEqual(req.Tools, tools) || req.Options != opts {
 				t.Errorf("unexpected stream request: %+v", req)
 			}
-			ch := make(chan StreamEvent, 1)
+			ch := make(chan StreamEvent, 2)
 			ch <- StreamEvent{Type: EventContent, Data: "stream result"}
+			ch <- StreamEvent{Type: EventResponseState, State: state}
 			close(ch)
 			return ch
 		},
@@ -77,11 +86,18 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 	}
 	client.adapters[adapter.ProtocolOpenAIChat] = backend
 	var text string
+	var receivedState *ResponseState
 	for event := range client.ChatStream(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages, tools, opts) {
 		text += event.Data
+		if event.Type == EventResponseState {
+			receivedState = event.State
+		}
 	}
 	if text != "stream result" {
 		t.Fatalf("stream text = %q", text)
+	}
+	if receivedState != state {
+		t.Fatal("root streaming did not transparently forward response state")
 	}
 	text, err = client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages)
 	if err != nil || text != "title" {
@@ -180,7 +196,12 @@ func TestClientSnapshotAndReloadDuringStream(t *testing.T) {
 
 func TestCallToolCancelsProducerAfterResult(t *testing.T) {
 	done := make(chan struct{})
-	backend := stubAdapter{stream: func(ctx context.Context, _ adapter.Request) <-chan StreamEvent {
+	messages := []Message{{Role: "user", Content: "lookup"}}
+	tools := []map[string]any{{"type": "function", "function": map[string]any{"name": "lookup"}}}
+	backend := stubAdapter{stream: func(ctx context.Context, req adapter.Request) <-chan StreamEvent {
+		if req.ProviderName != "test" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) || !reflect.DeepEqual(req.Tools, tools) {
+			t.Errorf("unexpected CallTool request: %+v", req)
+		}
 		ch := make(chan StreamEvent)
 		go func() {
 			defer close(done)
@@ -201,7 +222,7 @@ func TestCallToolCancelsProducerAfterResult(t *testing.T) {
 	client.adapters[adapter.ProtocolOpenAIChat] = backend
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	result, err := client.CallTool(ctx, adapter.ProtocolOpenAIChat, "test", "model", nil, nil, "lookup", nil)
+	result, err := client.CallTool(ctx, adapter.ProtocolOpenAIChat, "test", "model", messages, tools, "lookup", nil)
 	if err != nil || string(result) != `{"ok":true}` {
 		t.Fatalf("CallTool = %s, %v", result, err)
 	}

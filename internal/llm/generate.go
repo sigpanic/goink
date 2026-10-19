@@ -8,7 +8,7 @@ import (
 
 // GenerateText 发起非流式对话，返回模型生成的纯文本。
 // messages 由调用方自行组装，格式与 ChatStream 一致。
-func (c *Client) GenerateText(ctx context.Context, adapterName adapter.Protocol, providerName, model string, messages []map[string]any) (string, error) {
+func (c *Client) GenerateText(ctx context.Context, adapterName adapter.Protocol, providerName, model string, messages []Message) (string, error) {
 	backend, err := c.protocolAdapter(adapterName)
 	if err != nil {
 		return "", err

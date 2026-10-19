@@ -40,7 +40,7 @@ func (c *Client) CallTool(
 	ctx context.Context,
 	adapterName adapter.Protocol,
 	providerName, modelID string,
-	messages []map[string]any,
+	messages []Message,
 	tools []map[string]any,
 	toolName string,
 	opts *CallToolOptions,
