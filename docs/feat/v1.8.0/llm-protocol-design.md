@@ -1,5 +1,7 @@
 # v1.8.0 — 协议适配器、Claude / Gemini 接入与同会话切换
 
+> 2026-10-22 更新：已确认 Google 原生接入改用 Interactions；以 [Gemini 子包新路线](../../../internal/llm/adapter/gemini/design.md)为准。本文下方的 GenerateContent、parts 和旧阶段状态保留为历史方案，不再作为本轮实现依据。
+
 > 2026-10-16 修订。已确认采用协议适配器、官方 SDK 和同会话模型切换；不兼容的推理状态允许在出站时丢弃。实现顺序：先完成公共 adapter 基建，再迁移 OpenAI Chat，之后实现 Claude Messages、Gemini GenerateContent。当前只验收公共适配层，已改动的 OpenAI 草稿保持原状。配套 [commit-roadmap.md](./commit-roadmap.md)。
 
 ## 1. 目标与范围

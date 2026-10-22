@@ -1,5 +1,7 @@
 # v1.8.0 协议适配器与同会话切换 Commit 路线
 
+> 2026-10-22 更新：OpenAI 和 Claude 的 llm 包内适配已完成；上层接线、持久化及会话切换尚未完成。Google 后续改用 Interactions，按 [Gemini 子包五个新单元](../../../internal/llm/adapter/gemini/design.md)推进；下方旧 C 阶段的 GenerateContent 路线不再执行，当前仍不扩大到上层。
+
 > 2026-10-16 修订，配套 [llm-protocol-design.md](./llm-protocol-design.md)。顺序为公共 adapter 基建 → OpenAI Chat → Claude Messages → Gemini GenerateContent。调用按 adapterName → providerName → model，适配器持有其 providers，具体服务商模板与规则归入对应子包。同会话切换目标及允许丢弃不兼容推理状态的原则保留。
 
 ## 当前范围与工作区状态

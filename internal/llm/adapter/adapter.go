@@ -10,6 +10,7 @@ const (
 	ProtocolOpenAIChat            Protocol = "openai_chat"
 	ProtocolAnthropicMessages     Protocol = "anthropic_messages"
 	ProtocolGeminiGenerateContent Protocol = "gemini_generate_content"
+	ProtocolGeminiInteractions    Protocol = "gemini_interactions"
 )
 
 // ProtocolAdapter 将一次 Goink 调用转换为对应协议，并返回统一结果。
