@@ -1,6 +1,6 @@
 # Claude Messages 适配器设计
 
-状态：实例与 SDK 构建、出站转换已提交；2026-10-22 非流式生成单元待 review，流式和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
+状态：实例与 SDK 构建、出站转换、非流式生成已提交；2026-10-22 流式单元待 review，发现、连接测试和根包注册尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
 
 ## 目标与范围
 
@@ -40,6 +40,7 @@ anthropic/
   errors.go              # SDK HTTP 错误及 Retry-After 转换
   generate.go
   stream.go
+  stream_state.go        # 事件顺序、原始工具分片和完整收尾检查
   discover.go
   test_connection.go
   *_test.go
@@ -126,6 +127,15 @@ DB metadata 提取和真实用户的稳定时间前缀由 session 映射负责�
 
 HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束顺序按[官方 Streaming 文档](https://platform.claude.com/docs/en/build-with-claude/streaming)验证。
 
+已实现的流式单元：
+
+- `Stream` 通过 SDK NewStreaming 发送，检查 SSE Content-Type，逐事件使用 SDK Accumulate。文本、思考和工具参数实时产出；参数事件保持累计字符串语义，签名、redacted data 和 citations 只进入原生状态。SDK 忽略 ping 和未知顶层事件，本包拒绝无法累计保真的未知内容块和 delta。
+- `streamState` 检查 message_start、连续块索引、块内 delta / stop、message_delta 和 message_stop 的顺序；允许不同已打开块交错更新，但不允许关闭后继续更新。工具的原始 input / partial_json 单独保存，块关闭前验证对象 JSON，收尾再与 SDK 累计值比较，阻止 SDK 将截断参数改为 `{}` 后误交付。
+- 收到 message_stop 后继续检查 SDK 的最终 Err，流无错误才发布最终 usage、EventResponseState、按块顺序的全部 EventToolCallEnd。HTTP body 提前断开、缺少结束事件、流内 error（包括 message_stop 后的 error）均不发布这些成功收尾事件。上游须正常结束响应体；保持连接不结束时由调用方 context 控制等待。
+- SDK Accumulate 更新 RawJSON 但不刷新全部 JSON 字段元数据，故结束时重解码 SDK 最终原文，再复用 convertResponse。累计 usage 覆盖而非求和，空 thinking、签名分片、redacted data、citation 和块内扩展字段保留到下一轮请求。
+- 所有 channel 发送响应 context，退出时关闭 SDK 流；测试覆盖读取等待和消费者背压时取消。HTTP 200 SSE 中 overloaded_error、rate_limit_error、api_error 保留实际 HTTP 状态及错误类型，并标为可重试；本包不执行重试。
+- 本地验证包含录制 SSE、交错同名工具、截断参数、签名往返、实时文本及取消释放连接；真实服务端的签名接受、上层持久化及工具执行仍未接线。
+
 ## 用量、错误与地址
 
 - Anthropic usage 转成现有 Goink 输入、输出、总量及缓存明细口径；准确处理未缓存输入、缓存读取和缓存创建，避免重复计数。保持当前消费方需要的数字表示（现有 map 统计路径使用 `float64`），不能直接透传 SDK `int64` 后假定统计可用。
@@ -151,7 +161,7 @@ HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束
 | 1. 实例与 SDK 构建 | 本包 `adapter.go`、`provider.go`、`providers.go` 及测试 | 真持有 providers；共享 HTTP、独立凭据、禁用 SDK 重试；完整端点覆盖、单次候选隔离和快照隔离；不实现 TestConnection、不注册根包 |
 | 2. 出站转换 | 本包 `request*.go` 及测试 | 结构化文本、工具定义和历史调用 / 结果转换；system 和配对规则；选项校验；原生回放与外部历史投影；输入不变 |
 | 3. 非流式生成 | 本包 `generate.go`、`response.go` 及测试 | 统一完整响应、usage、停止原因和原生状态；模型输出不执行工具 |
-| 4. 流式生成 | 本包 `stream.go` 及回放测试 | 事件顺序、原始参数校验、取消、错误、完整收尾与签名保真 |
+| 4. 流式生成 | 本包 `stream*.go`、错误映射及回放测试 | 事件顺序、原始参数校验、取消、错误、完整收尾与签名保真 |
 | 5. 发现、探测和注册 | 本包发现 / 探测文件、根包 `factory.go` 及相关测试 | 注册构建、类型校验和内置实例；分页、热重载、配置保存与运行时闭环 |
 
 根包最后注册该协议，避免半成品适配器进入运行时。已有配置格式无需再设计；旧数据迁移和上层签名改造另行安排。
