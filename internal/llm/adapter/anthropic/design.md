@@ -1,6 +1,6 @@
 # Claude Messages 适配器设计
 
-状态：实例与 SDK 构建已提交；2026-10-22 出站转换单元待 review，生成和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
+状态：实例与 SDK 构建、出站转换已提交；2026-10-22 非流式生成单元待 review，流式和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
 
 ## 目标与范围
 
@@ -37,6 +37,7 @@ anthropic/
   request_messages.go    # 历史角色投影和工具配对
   request_state.go       # 私有 payload 与原生状态回放校验
   response.go            # 完整响应、usage、原生状态转换
+  errors.go              # SDK HTTP 错误及 Retry-After 转换
   generate.go
   stream.go
   discover.go
@@ -94,6 +95,15 @@ DB metadata 提取和真实用户的稳定时间前缀由 session 映射负责�
 ## Generate 与 Stream
 
 `Generate` 使用 `Messages.New`，`Stream` 使用 `Messages.NewStreaming`。两者共享请求构建、完整响应转换和 usage 归一化，返回文本、显示用思考、工具调用、停止原因及原生状态。`GenerateText` 等根包辅助入口继续从统一响应提取所需部分。
+
+已实现的非流式单元：
+
+- `Generate` 按实例查找配置，复用 `buildRequest` 和 `messagesURLOption`。显式设置 10 分钟请求超时，避免 SDK 因大输出上限在发送前要求流式；不降低 max_tokens，调用方更短的 context deadline 仍优先。长请求的上游超时仍可能失败，本单元不自动切换传输模式。
+- 完整响应按块顺序拼接显示文本和思考，函数调用只返回声明。整组 ID、名称、对象参数与 stop_reason 校验全部通过后才交付；任一工具无效时不返回部分工具或可回放状态。拒绝服务器工具、provider-executed caller、未知块和 pause_turn；不提前实现服务端续接。文本因 max_tokens 停止仍返回真实停止原因和完整协议状态。
+- 原生 payload 直接保存 SDK 的 `message.JSON.Content.Raw()` 和出站请求摘要，保留空 thinking、签名、redacted data、扩展字段及大整数。来源的 Model 使用请求所选标识，允许服务端返回实际快照名；本单元测试覆盖响应 → 公共消息序列化/恢复 → 工具结果 → 下一次真实 SDK 请求。
+- SDK 会宽松转换标量；用于原生回放的字符串字段和 usage 整数核对原始 JSON，防止公共内容与回放内容不一致或统计被截断。usage 的 prompt_tokens 为 input + cache_creation + cache_read，cache miss 为 input + cache_creation；总量只再加 output，thinking 作为 completion 明细，不重复累加，所有数字输出为 float64。缓存 TTL 细分不再加一次。参考[缓存计数口径](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#tracking-cache-performance)。
+- SDK HTTP 错误转成 APIError，保留状态码、原生错误类型、消息、可重试标记和 Retry-After；context 与传输错误保留错误链。HTTP 400 签名错误不自动清状态或重试；合法 HTTP 响应不等于合法 Messages 响应。
+- State.Complete 表示合法的完整协议响应；TurnComplete 仅对 end_turn、stop_sequence、refusal 为 true，本包不据此驱动业务循环。流式事件、根包注册及真实服务端签名验收仍在后续范围。
 
 流式使用已安装 SDK 的 `Message.Accumulate` 累积原生消息，并映射事件：
 
