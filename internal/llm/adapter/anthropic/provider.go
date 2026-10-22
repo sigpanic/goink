@@ -30,7 +30,7 @@ func assembleProvider(config adapter.Provider, client *http.Client) (Provider, e
 		return Provider{}, fmt.Errorf("provider %q: %w", config.Name, err)
 	}
 	// SDK 的默认地址只保留本实例的 origin；Messages 调用通过 messagesURLOption 指定完整端点。
-	// Models 等其他 API 的实际路由由后续各自实现，不从 Messages 路径推断。
+	// Models 等其他 API 由各自调用指定路由，不复用 Messages 的完整端点覆盖。
 	origin := (&url.URL{Scheme: endpoint.Scheme, Host: endpoint.Host}).String()
 	return Provider{
 		Provider: config.Clone(),

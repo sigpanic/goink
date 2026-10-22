@@ -1,6 +1,6 @@
 # Claude Messages 适配器设计
 
-状态：实例与 SDK 构建、出站转换、非流式生成已提交；2026-10-22 流式单元待 review，发现、连接测试和根包注册尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
+状态：实例与 SDK 构建、出站转换、非流式及流式生成已提交；2026-10-22 发现、连接测试和根包注册单元已实现，待 review。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
 
 ## 目标与范围
 
@@ -104,7 +104,7 @@ DB metadata 提取和真实用户的稳定时间前缀由 session 映射负责�
 - 原生 payload 直接保存 SDK 的 `message.JSON.Content.Raw()` 和出站请求摘要，保留空 thinking、签名、redacted data、扩展字段及大整数。来源的 Model 使用请求所选标识，允许服务端返回实际快照名；本单元测试覆盖响应 → 公共消息序列化/恢复 → 工具结果 → 下一次真实 SDK 请求。
 - SDK 会宽松转换标量；用于原生回放的字符串字段和 usage 整数核对原始 JSON，防止公共内容与回放内容不一致或统计被截断。usage 的 prompt_tokens 为 input + cache_creation + cache_read，cache miss 为 input + cache_creation；总量只再加 output，thinking 作为 completion 明细，不重复累加，所有数字输出为 float64。缓存 TTL 细分不再加一次。参考[缓存计数口径](https://platform.claude.com/docs/en/build-with-claude/prompt-caching#tracking-cache-performance)。
 - SDK HTTP 错误转成 APIError，保留状态码、原生错误类型、消息、可重试标记和 Retry-After；context 与传输错误保留错误链。HTTP 400 签名错误不自动清状态或重试；合法 HTTP 响应不等于合法 Messages 响应。
-- State.Complete 表示合法的完整协议响应；TurnComplete 仅对 end_turn、stop_sequence、refusal 为 true，本包不据此驱动业务循环。流式事件、根包注册及真实服务端签名验收仍在后续范围。
+- State.Complete 表示合法的完整协议响应；TurnComplete 仅对 end_turn、stop_sequence、refusal 为 true，本包不据此驱动业务循环。流式和根包注册见下文；真实服务端签名验收仍在后续范围。
 
 流式使用已安装 SDK 的 `Message.Accumulate` 累积原生消息，并映射事件：
 
@@ -148,7 +148,17 @@ HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束
 
 发现使用 SDK Models API 并处理分页，映射服务端实际返回的模型名称、上下文、输出限制与能力；缺失信息使用已验证预设或保留未知，不凭展示名推断。中转不支持发现时返回明确错误，仍允许手工添加模型，不回退其他协议。参考[Models API](https://platform.claude.com/docs/en/api/models/list)。
 
-连接测试保留 OpenAI 的使用语义：先请求用户原地址，失败后按 Messages 路由生成去重候选，最后尝试 host 根路径兜底；每个候选使用同一实例 SDK 和 `messagesURLOption`，设置单候选超时、响应取消、关闭自动重试。验证 Anthropic SSE 而非 OpenAI `choices`；成功返回完整 URL，由上层保存，全部失败汇总各候选错误，不在 SDK client 或配置快照内修改地址。最小请求按模型能力选择，不照搬固定 `max_tokens=1`；限流只给相应告警，不伪装成成功生成。本单元只准备 URL 覆盖能力，候选生成和探测循环后续实现。
+连接测试保留 OpenAI 的使用语义：先请求用户原地址，失败后按 Messages 路由生成去重候选，最后尝试 host 根路径兜底；每个候选使用同一实例 SDK 和 `messagesURLOption`，设置单候选超时、响应取消、关闭自动重试。验证 Anthropic SSE 而非 OpenAI `choices`；成功返回完整 URL，由上层保存，全部失败汇总各候选错误，不在 SDK client 或配置快照内修改地址。最小请求不照搬固定 `max_tokens=1`；限流只给相应告警，不伪装成成功生成。
+
+本单元的具体约定：
+
+- 发现仅将完整端点末尾的 `/messages`（允许尾斜杠）替换为 `/models`，保留原有版本和转义前缀；如 `/tenant%2Fname/v8/messages` 对应同前缀 `/models`。任意 `/proxy/chat` 路由无法可靠推导，返回明确错误并提示手工添加；不尝试其他主机或协议。
+- Models 单独使用 SDK 请求选项，合并路由查询参数和 SDK 分页参数；after_id / before_id 由发现流程管理，limit 使用 1000，不沿用 Messages 查询中的游标。总超时 15 秒；逐页累积、按模型 ID 去重，缺少或循环游标、无效页和后续页失败都返回错误，不交付部分成功。
+- 返回服务端展示名、输入 / 输出限制、图片与推理能力和 effort。缺失字段采用实例配置或内置的精确 ID 预设，否则保留未知；服务端明确 false 优先于预设。已知默认 effort 在仍受支持时排首位；未知模型没有默认等级元数据，仅按 low 到 max 排列支持项，不据此自动启用高级参数。发现新模型能力不等于扩展 buildRequest 的已验证 thinking 策略，未知 ID 仍只支持基础请求。
+- 探测先保留原地址，再尝试路径补 `/messages`、必要时补 `/v1/messages` 或切换末尾 v1 形式，最后尝试同 host 的 `/v1/messages`；查询参数和转义路径保留，各地址去重。根包仅对临时探测输入补 https://，正式构建和生成仍要求并直用保存的完整 HTTP(S) URL。
+- 最小探测发送 user `hi`、stream=true、max_tokens=64，不带工具或高级参数；单候选超时 8 秒。收到合法 message_start 后立即关闭流，不等待整轮输出，因此验证的是协议握手，不能替代完整生成验收。HTML、空流、错误协议及无效开始事件均失败；调用方取消立即停止读流和后续候选。
+- HTTP 429 且明确为 Anthropic rate_limit_error 时返回候选和 Warning，告知尚未验证密钥、模型和生成能力；通用 429 网页不作为通过。此结果允许上层保留端点并提示重试，不宣称配置全部有效。
+- 根包仅注册构建、类型校验和内置实例，复用现有配置合并、APIKey 过滤、保存和快照热重载；未配置 Anthropic 仍显示在配置视图，不进入运行时。无需新配置格式，也不改上层调用方。
 
 ## 实现与 review 路线
 

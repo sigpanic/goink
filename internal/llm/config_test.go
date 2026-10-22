@@ -154,7 +154,10 @@ func TestBuildConfigView_ToUserConfigPreservesOverrides(t *testing.T) {
 	)
 	view, err := BuildConfigView(user)
 	require.NoError(t, err)
-	count := len(builtinProviders()[adapter.ProtocolOpenAIChat])
+	count := 0
+	for _, providers := range builtinProviders() {
+		count += len(providers)
+	}
 	require.Len(t, view.Providers, count+1)
 	for i, pv := range view.Providers {
 		if i > 0 {
