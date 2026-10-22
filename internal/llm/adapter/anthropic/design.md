@@ -1,6 +1,6 @@
 # Claude Messages 适配器设计
 
-状态：待实现。以已完成的 OpenAI Chat 适配器和现有公共接口为基础，使用已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`。
+状态：首个实例与 SDK 构建单元待 review；2026-10-20 对齐完整 Messages URL 语义，生成和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
 
 ## 目标与范围
 
@@ -8,7 +8,11 @@
 
 首阶段支持 Anthropic 官方 API 和兼容 Messages 的中转端点。Bedrock、Vertex 的鉴权与平台接入另行实现。SDK 负责请求、协议解码和流式累积；工具执行、审批、业务重试仍由 Goink 上层负责，不使用 SDK 自动工具循环。
 
+首阶段输入限定为文本和客户端函数工具。图片输入、服务端内置工具及其续接流程另做，不为本包提前扩展公共消息类型。
+
 本阶段只改 `internal/llm/`。Agent、Session、数据库迁移、前端与 Wails 绑定不在范围内。后续产品目标仍是同一会话可切换协议族，允许丢弃不兼容的推理状态；完成本包不等于已完成会话存储和切换接线。
+
+已完成的前置工作见[结构化消息实施路线](../../../../docs/feat/v1.8.0/structured-messages-implementation.md)：`Request.Messages` 为 `[]adapter.Message`，`Request.Tools` 为 `[]adapter.ToolDefinition`；`Response.State`、`EventResponseState` 及 session 双向映射均已存在。OpenAI 已自行构造出站消息和工具，但 App / Agent 尚未迁移，原生响应状态的生产、实际落库及切换回放尚未接通。本包直接复用这些契约，不重做基建。
 
 ## 所有权与包边界
 
@@ -40,37 +44,41 @@ anthropic/
 
 配置读写继续使用根包现有格式和 [合并流程](../../DESIGN.md)：内置项是实例，用户保存可编辑字段的覆盖，自定义项保存明确的类型和地址。协议内名称唯一；不同协议可以同名。本包接收已合并的配置，不再次实现配置文件读写或旧数据兼容。
 
-## 先补齐原生响应状态契约
+## 复用公共消息与原生状态
 
-当前公共 `Response` / `StreamEvent` 只有显示用思考、文本、工具和用量，没有完整回放状态。仅拼接 `ThinkingContent` 无法恢复签名，因此先补最小公共契约，再实现 Claude。
+公共 [Message / ResponseState](../message.go) 与 [Request / Response / StreamEvent](../types.go) 不包含 SDK 类型。Claude 出站读取业务字段和可选 `Message.State`；入站分别生成公共文本、工具调用及原生状态，session 不从原生块提取工具或解释签名。
 
-计划增加 SDK 无关的响应状态：来源协议、provider、model、完成信息及不透明的原生 JSON 内容。`Response` 携带该状态；流式增加最终状态事件（暂称 `EventResponseState`，在现有事件末尾追加，保持已有值）。具体类型名在第一个 review 单元确定。
+`Response.State` 与最终 `EventResponseState.State` 承载同一语义的 `ResponseState`：来源包含协议、provider 实例、providerType 和 model，`Payload` 是不透明原生 JSON。现有事件值保持不变，不再增加另一套状态事件。
+
+现有状态字段需区分用途：`Complete` 仅表示单次协议响应完整，不证明签名或前缀兼容；`StopReason` 保留原始协议原因，不作为跨协议统一枚举。`TurnComplete` 当前没有公共消费者，是否移除需单独 review；本包不据此设计业务 turn 状态机或服务端续接。本文同步现状，不视为已修改或定稿这些公共字段。
 
 Claude 状态保存完整、有序的 assistant content，包括 `thinking`、`signature`、`redacted_thinking`、空块、文本和 `tool_use`。不能只保存一段签名，也不能把显示用思考当作原生块重建。若模型需要上下文前缀校验，应同时记录足以判断兼容性的依据。
 
-历史输入通过明确的内部键（沿用总设计的 `_goink_llm_state`）传递状态。所有出站实现必须移除内部键，OpenAI 路径也须覆盖，不能通过 SDK extra fields 发出。适配器不修改调用方消息，不用进程内“最后一次响应”缓存替代消息存储。
+历史原生状态直接通过 `Message.State` 传递，不使用 map 保留键。SDK 请求由本包显式构造，公共状态结构不能整体发送或通过 extra fields 泄漏。适配器不修改调用方消息，不用进程内“最后一次响应”缓存替代消息存储。
 
-兼容续聊回放原生 content；跨协议、跨模型或前缀变化时，按目标模型规则判断，无法确认兼容则重建文本与工具轨迹并丢弃不兼容推理。来源相同本身不足以证明签名仍有效，不伪造签名或 thinking 占位。状态落库、上下文版本及切换生命周期由后续 Agent / Session 阶段接入。
+兼容续聊回放原生 content；跨协议、跨模型或前缀变化时，按目标模型规则判断，无法确认兼容则重建文本与工具轨迹并丢弃不兼容推理。来源相同本身不足以证明签名仍有效，不伪造签名或 thinking 占位。session 已提供状态映射，实际调用映射和落库、上下文版本及切换生命周期仍由后续上层接线完成；llm 不依赖 session。
 
 [Thinking 工具循环](https://platform.claude.com/docs/en/build-with-claude/thinking-tool-workflows)要求回传对应原生块；部分模型还存在[保留推理与前缀约束](https://platform.claude.com/docs/en/build-with-claude/preserved-thinking)。不把所有签名 400 都当成清空状态后重试的信号。
 
 ## 出站转换
 
-`adapter.Request` 是 Goink 调用输入，不是 HTTP 请求。当前 `Messages` / `Tools` 仍采用 OpenAI 形状，由本包构造强类型 SDK 参数。
+`adapter.Request` 是 Goink 调用输入，不是 HTTP 请求。本包直接将 `[]adapter.Message` 和 `[]adapter.ToolDefinition` 转为强类型 SDK 参数，不经过 OpenAI map。
+
+DB metadata 提取和真实用户的稳定时间前缀由 session 映射负责，本包使用传入的 Content。整组历史的角色组织、工具配对处理和 system 投影由本包负责，不调用 OpenAI 的 `buildMessages` / `buildTools`，也不套用强制公共去重流水线。
 
 | Goink 输入 | Messages 输出与要求 |
 | --- | --- |
 | 开头的 system 消息 | 顶层 `system`，保持原始顺序；不能把中途注入的 system 任意挪到旧前缀，中途 system 的投影规则须单独验证 |
-| user / assistant 文本 | 对应角色的 content blocks；按公共消息表示转换图片，不支持的内容明确报错 |
-| `tools[].function` | `name`、`description`、`input_schema` |
-| assistant `tool_calls` | `tool_use`，保留 ID，将 arguments JSON 转为对象并校验 |
-| role=tool | 下一条 user 消息中的 `tool_result`，以 `tool_use_id` 配对并保留内容和错误语义 |
-| 兼容的原生状态 | 回放完整 assistant content，避免由扁平字段重建丢失块顺序与签名 |
+| user / assistant 的 Content | 对应角色的文本 content blocks；ThinkingContent 仅为显示用思考，不伪造成原生 thinking |
+| ToolDefinition.Name / Description / InputSchema | `name`、`description`、`input_schema`；保留 schema，按本协议要求校验并构造 SDK 类型 |
+| assistant 的 ToolCalls | `tool_use`，保留 ID / Name，将 Arguments 原始 JSON 转为 SDK 所需对象并校验，避免大整数精度丢失 |
+| tool 的 Content / ToolCallID / ToolName | 下一条 user 消息中的 `tool_result`，以 ID 配对并保留结果正文；错误标志的映射依据须显式定义 |
+| 兼容的 Message.State | 回放完整 assistant content，避免由扁平字段重建丢失块顺序与签名 |
 | 外部协议历史 | 从文本、调用及结果重建，不携带外部推理签名；不生成只有空内容的 assistant 占位 |
 
 并行工具先收齐对应结果，在紧随调用的 user 消息中组织整组 `tool_result`，工具结果位于普通文本之前。同名工具按调用 ID / 原始位置配对，不能按工具名配对。不能合并掉工具调用与结果的配对边界。详见[官方工具结果规则](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls)。
 
-参数转换集中在本包：将公共 `ToolChoice` 转为原生形式，明确拒绝不支持的组合。thinking 模式、effort、预算、温度及强制工具选择按模型能力处理；不能假定所有 Claude 都支持手动 budget、关闭思考或非默认 temperature。优先使用明确的模型能力和已验证预设；未知中转模型允许手工配置，但不猜测高级能力。参考[Thinking 文档](https://platform.claude.com/docs/en/build-with-claude/thinking)。
+参数转换集中在本包。当前 `CallOptions.ToolChoice` 仍是 OpenAI 形状的 `any`，尚未完成协议无关建模；实现出站转换时明确支持的现有语义及到原生形式的映射，未知形式和不支持的组合明确报错，必要的公共契约调整单独 review。thinking 模式、effort、预算、温度及强制工具选择按模型能力处理；不能假定所有 Claude 都支持手动 budget、关闭思考或非默认 temperature。优先使用明确的模型能力和已验证预设；未知中转模型允许手工配置，但不猜测高级能力。参考[Thinking 文档](https://platform.claude.com/docs/en/build-with-claude/thinking)。
 
 ## Generate 与 Stream
 
@@ -101,27 +109,29 @@ HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束
 
 - Anthropic usage 转成现有 Goink 输入、输出、总量及缓存明细口径；准确处理未缓存输入、缓存读取和缓存创建，避免重复计数。保持当前消费方需要的数字表示（现有 map 统计路径使用 `float64`），不能直接透传 SDK `int64` 后假定统计可用。
 - SDK 错误保留 HTTP 状态、可重试标记、`Retry-After` 及足够的错误类型。参数、历史和签名错误不按通用网络错误重试；本包不执行业务退避。
-- `chat_url` 在本协议表示 SDK API 根地址；可规范化明确可识别的完整 Messages 端点。保留中转路径前缀，避免重复拼接 `v1/messages`，不能直接截成 host。
-- 对话、发现和连接测试共用规范化后的 SDK 配置。SDK 不能表达的任意自定义路由明确提示不支持，不另藏一套手写 HTTP 传输。
+- `chat_url` 表示完整 Messages 端点，官方默认值为 `https://api.anthropic.com/v1/messages`。正式生成不补后缀、不猜版本、不做网络探测；保留任意代理路径、转义路径和查询参数，禁止用户信息及 fragment。构建时只校验 URL，不要求路径以 `/v1/messages` 结尾，也允许根地址作为后续探测候选。
+- `messagesURLOption(rawURL)` 返回单次请求的 SDK middleware，克隆请求后覆盖完整 URL 和 Host。仅传给 `Messages.New` / `NewStreaming`，不挂到整个 SDK client 或共享 HTTP transport。正式请求传保存的 ChatURL，连接测试传当前候选；SDK 继续负责请求编码、鉴权、响应解码及流累计。
+- SDK client 的默认 BaseURL 仅取实例 origin，避免采用官方默认站点；这不是模型发现的路由策略。Models、count_tokens 等其他 API 的端点分别处理，不从任意 Messages 路径推断，也不能复用 Messages 的 URL 覆盖选项。
 
 ## 模型发现与连接测试
 
 发现使用 SDK Models API 并处理分页，映射服务端实际返回的模型名称、上下文、输出限制与能力；缺失信息使用已验证预设或保留未知，不凭展示名推断。中转不支持发现时返回明确错误，仍允许手工添加模型，不回退其他协议。参考[Models API](https://platform.claude.com/docs/en/api/models/list)。
 
-连接测试通过同一个实例 SDK 发送模型允许的最小合法请求，不复用 OpenAI 路径猜测或固定 `max_tokens=1`。区分路由 / 鉴权可能正确与实际生成成功，例如限流只给出相应告警，不伪装成成功生成。
+连接测试保留 OpenAI 的使用语义：先请求用户原地址，失败后按 Messages 路由生成去重候选，最后尝试 host 根路径兜底；每个候选使用同一实例 SDK 和 `messagesURLOption`，设置单候选超时、响应取消、关闭自动重试。验证 Anthropic SSE 而非 OpenAI `choices`；成功返回完整 URL，由上层保存，全部失败汇总各候选错误，不在 SDK client 或配置快照内修改地址。最小请求按模型能力选择，不照搬固定 `max_tokens=1`；限流只给相应告警，不伪装成成功生成。本单元只准备 URL 覆盖能力，候选生成和探测循环后续实现。
 
 ## 实现与 review 路线
 
-每个单元完成后验证并等待 review；这里的 commit 拆分是建议，不代表自动暂存或提交授权。
+从实例与 SDK 构建开始，公共结构化消息、工具及状态契约不再列为待重做单元。状态字段和 ToolChoice 的必要调整在其首次使用前单独确认，不把整个上层接线纳入本包。
+
+每个单元完成后验证并等待 review；这里的 commit 拆分是建议，不代表自动暂存或提交授权。允许阶段性编译失败，不通过空壳方法或越界改调用方来凑齐接口。
 
 | 单元 | 文件范围 | 验收重点 |
 | --- | --- | --- |
-| 1. 原生状态契约 | `adapter/types.go`、必要的 OpenAI 出站过滤及相关测试 | 非 SDK 类型；内部状态不泄漏；已有事件值与普通请求行为保持一致 |
-| 2. 实例与 SDK 构建 | 本包 `adapter.go`、`provider.go`、`providers.go` 及测试 | 真持有 providers；共享 HTTP、独立凭据、禁用 SDK 重试；快照隔离 |
-| 3. 出站转换 | 本包 `request.go` 及测试 | 文本、图片、工具往返、选项校验；原生回放与外部历史投影；输入不变 |
-| 4. 非流式生成 | 本包 `generate.go`、`response.go` 及测试 | 统一完整响应、usage、停止原因和原生状态 |
-| 5. 流式生成 | 本包 `stream.go` 及回放测试 | 事件顺序、原始参数校验、取消、错误、完整收尾与签名保真 |
-| 6. 发现、探测和注册 | 本包发现 / 探测文件、根包 `factory.go` 及相关测试 | 注册构建、类型校验和内置实例；分页、热重载、配置保存与运行时闭环 |
+| 1. 实例与 SDK 构建 | 本包 `adapter.go`、`provider.go`、`providers.go` 及测试 | 真持有 providers；共享 HTTP、独立凭据、禁用 SDK 重试；完整端点覆盖、单次候选隔离和快照隔离；不实现 TestConnection、不注册根包 |
+| 2. 出站转换 | 本包 `request.go` 及测试 | 结构化文本、工具定义和历史调用 / 结果转换；system 和配对规则；选项校验；原生回放与外部历史投影；输入不变 |
+| 3. 非流式生成 | 本包 `generate.go`、`response.go` 及测试 | 统一完整响应、usage、停止原因和原生状态；模型输出不执行工具 |
+| 4. 流式生成 | 本包 `stream.go` 及回放测试 | 事件顺序、原始参数校验、取消、错误、完整收尾与签名保真 |
+| 5. 发现、探测和注册 | 本包发现 / 探测文件、根包 `factory.go` 及相关测试 | 注册构建、类型校验和内置实例；分页、热重载、配置保存与运行时闭环 |
 
 根包最后注册该协议，避免半成品适配器进入运行时。已有配置格式无需再设计；旧数据迁移和上层签名改造另行安排。
 
@@ -135,7 +145,7 @@ HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束
 - 签名分片、redacted / 空 thinking、多个同名并行工具、无效及截断参数；任一工具失败时整组不可执行。
 - HTTP 错误、HTTP 200 流内错误、缺失结束事件、取消与消费阻塞；累计 usage 不重复统计。
 - Generate 与 Stream 的结果语义一致；Models 分页、地址前缀、不同实例鉴权隔离；未知协议或 provider 不回退。
-- 兼容状态保留，外部 / 不兼容状态丢弃推理后仍保留文本与工具配对，输入 map 不被修改。
+- 兼容状态保留，外部 / 不兼容状态丢弃推理后仍保留文本与工具配对，输入 Message、ToolDefinition 和其中的 RawMessage 不被修改。
 
 从仓库根目录执行 `go build ./internal/llm/...`、`go test -race ./internal/llm/...`，并运行对应范围的 lint。若调用方尚未接线导致整仓失败，报告边界，不越界修改 Agent、App 或前端以凑编译通过。
 
