@@ -1,6 +1,6 @@
 # Claude Messages 适配器设计
 
-状态：首个实例与 SDK 构建单元待 review；2026-10-20 对齐完整 Messages URL 语义，生成和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
+状态：实例与 SDK 构建已提交；2026-10-22 出站转换单元待 review，生成和连接测试尚未实现。使用仓库已安装的 `github.com/anthropics/anthropic-sdk-go v1.81.0`，不在本阶段升级依赖。
 
 ## 目标与范围
 
@@ -34,6 +34,8 @@ anthropic/
   provider.go            # 组合配置与 SDK client
   providers.go           # 内置实例、行为类型及已知模型信息
   request.go             # 消息、工具、选项的出站转换
+  request_messages.go    # 历史角色投影和工具配对
+  request_state.go       # 私有 payload 与原生状态回放校验
   response.go            # 完整响应、usage、原生状态转换
   generate.go
   stream.go
@@ -79,6 +81,15 @@ DB metadata 提取和真实用户的稳定时间前缀由 session 映射负责�
 并行工具先收齐对应结果，在紧随调用的 user 消息中组织整组 `tool_result`，工具结果位于普通文本之前。同名工具按调用 ID / 原始位置配对，不能按工具名配对。不能合并掉工具调用与结果的配对边界。详见[官方工具结果规则](https://platform.claude.com/docs/en/agents-and-tools/tool-use/handle-tool-calls)。
 
 参数转换集中在本包。当前 `CallOptions.ToolChoice` 仍是 OpenAI 形状的 `any`，尚未完成协议无关建模；实现出站转换时明确支持的现有语义及到原生形式的映射，未知形式和不支持的组合明确报错，必要的公共契约调整单独 review。thinking 模式、effort、预算、温度及强制工具选择按模型能力处理；不能假定所有 Claude 都支持手动 budget、关闭思考或非默认 temperature。优先使用明确的模型能力和已验证预设；未知中转模型允许手工配置，但不猜测高级能力。参考[Thinking 文档](https://platform.claude.com/docs/en/build-with-claude/thinking)。
+
+本出站单元的具体约定：
+
+- `Provider.buildRequest` 返回 SDK 参数，不发送请求。开头 system 依次投影为顶层块，中途 system 在原位置变成 user 的 `<system-reminder>` 文本；后续 user 文本合入前一个 user 消息。首条有效消息必须是 user，不支持末尾 assistant prefill。
+- 只在 assistant 紧邻的连续 tool 记录中按 ID 找结果，同组重复项保留首项；过滤孤立结果和缺少结果的调用，不跨消息边界找结果、不伪造工具结果。冲突声明、跨组重用 ID 和名称不匹配报错。结果按调用顺序放在 user 内容开头；无公共错误标志时不从正文猜测 `is_error`。
+- ToolChoice 支持 `auto`、`none`、`required` 及现有具名 function 对象，分别映射为原生 auto、none、any、tool；拒绝未知形式和不存在的工具。工具 schema 和参数要求 object，原始 JSON 独立复制，保留额外 schema 关键字及大整数。
+- 已验证高级选项仅覆盖四个内置精确模型 ID：默认使用 adaptive + summarized 和配置的首个 effort。Opus 5.5、Sonnet 5.5、Fable 5.1 不接受关闭思考或强制工具；Haiku 5.5 仅在 high 及以下允许关闭思考。Sonnet 的 between_tools 不等于完全关闭，故不把 ThinkingEnabled=false 偷换成该模式。现代预设的默认温度 1 省略，非默认值报错；未知模型允许基础请求和显式温度，不猜测 thinking/effort 能力。SDK API 版本保持既有默认，不在本单元切换 API 版本。
+- 私有 payload 使用 `{"content":[...],"request_hash":"..."}`。摘要绑定生成该响应的完整 SDK 请求、端点和凭据，密钥只参与摘要、不写入 payload。后续 Generate / Stream 入站转换负责生产此结构；本单元测试通过消息 JSON 往返构造该状态。
+- 原生回放要求来源一致、Complete、摘要及公共正文/调用一致。来源、前缀、工具、选项、端点或凭据变化则重建公共内容并丢弃原生推理；同源且前缀匹配但原生块损坏或不在本阶段支持范围时明确报错。保留块顺序、空 thinking、signature、redacted data 及已支持块内的额外字段；本地摘要不代替真实服务端的签名验证。
 
 ## Generate 与 Stream
 
@@ -128,7 +139,7 @@ HTTP 200 仍可能包含 SSE error；签名增量、累计 usage 和消息结束
 | 单元 | 文件范围 | 验收重点 |
 | --- | --- | --- |
 | 1. 实例与 SDK 构建 | 本包 `adapter.go`、`provider.go`、`providers.go` 及测试 | 真持有 providers；共享 HTTP、独立凭据、禁用 SDK 重试；完整端点覆盖、单次候选隔离和快照隔离；不实现 TestConnection、不注册根包 |
-| 2. 出站转换 | 本包 `request.go` 及测试 | 结构化文本、工具定义和历史调用 / 结果转换；system 和配对规则；选项校验；原生回放与外部历史投影；输入不变 |
+| 2. 出站转换 | 本包 `request*.go` 及测试 | 结构化文本、工具定义和历史调用 / 结果转换；system 和配对规则；选项校验；原生回放与外部历史投影；输入不变 |
 | 3. 非流式生成 | 本包 `generate.go`、`response.go` 及测试 | 统一完整响应、usage、停止原因和原生状态；模型输出不执行工具 |
 | 4. 流式生成 | 本包 `stream.go` 及回放测试 | 事件顺序、原始参数校验、取消、错误、完整收尾与签名保真 |
 | 5. 发现、探测和注册 | 本包发现 / 探测文件、根包 `factory.go` 及相关测试 | 注册构建、类型校验和内置实例；分页、热重载、配置保存与运行时闭环 |
