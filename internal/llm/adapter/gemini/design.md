@@ -1,6 +1,6 @@
 # Google Interactions 适配器实施路线
 
-> 2026-10-23。前三单元已提交，第四单元已实现，待 review；发现 / 探测和注册尚未实现。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
+> 2026-10-23。前四单元已提交，第五单元已实现，待 review。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
 
 ## 目标与边界
 
@@ -111,3 +111,12 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 - completed / requires_action 的状态事件或完成事件提供终态依据，核对 interaction ID 和所有 step 已闭合；其他失败状态及 error 事件不交付成功收尾。finish 复用 convertResponse，顺序发送最终 usage、ResponseState、整组 ToolCallEnd。终态附带完整 steps 时优先保留其原文，但必须与已发布正文、摘要、调用及签名一致。
 - SDK 公开读取器使用空 sentinel，兼容合法终态后的正常 EOF 和可选 [DONE]；未收到终态、格式损坏、终态后的非法事件或真实读取错误仍失败。不会通过忽略 io.ErrUnexpectedEOF 掩盖断流。usage 的累计快照逐字段覆盖，缺省保留，忽略 step_usage 明细，不跨事件相加。
 - 新增子包 testdata/interactions-tools.sse 和来源说明，均为本地合成资料，非真实抓包。测试经实际 Create、SDK 生成的事件解码器和公开 SSE 读取器，覆盖实时事件、工具组失败、状态 JSON 往返和模型切换续接、终态原文一致性、SSE 格式 / UTF-8、HTTP 错误、取消与连接关闭。Generate 保持现状，根包注册仍留在第五单元。
+
+## 第五单元实现结果
+
+- 接口完整后注册根包 factory 的构造、类型校验和内置实例目录，并增加编译期接口检查。协议为 gemini_interactions，类型为 google；旧 gemini_generate_content 仍不注册。配置 IO、无密钥过滤和热重载复用根包现有流程。
+- Models 是独立目录 API，不使用 SDK 的 Agents.List。由注入的共享 HTTP client 发 GET，仅把明确的 /interactions 后缀换成 /models，保留主机、前缀、版本、转义和查询参数；任意代理路径无法推导时返回可手工配置的错误。官方 [v1 服务目录](https://generativelanguage.googleapis.com/$discovery/rest?version=v1)列出 GET /v1/models；[Models 参考](https://ai.google.dev/api/models)提供分页和字段定义。目录无需顶层 genai.NewClient，避免引入其环境凭据回退和另一套重试设置；生成和探测继续走 Interactions SDK。
+- pageSize 固定 1000，pageToken 由本次分页控制；按 ID 去重，拒绝循环游标、带游标的空页和损坏列表，整次发现限制 15 秒。资源名 models/ 前缀移除，采用服务端名称、输入输出上限和 thinking；缺省能力只从精确配置 / 预设补全，未知模型不猜推理等级或视觉能力。不返回明确只支持 embedding 等其他方法的条目；generateContent 方法标记和目录条目均不证明支持 Interactions，选定模型仍需测试连接。
+- 连接探测原地址优先，随后尝试附加 /interactions、适用的 /v1 变体和同主机 /v1/interactions 兜底；保留查询参数及路径转义，去重，不改正式实例。每个候选 8 秒，同凭据及共享传输，SDK 重试关闭。通过 SDK 发送最小无状态流式请求，验证首个合法的 model interaction.created 后立即关闭；返回候选完整 URL，供上层保存，不等待或宣称完整生成已验证。
+- HTTP 429 只有[官方限流 / 配额错误码](https://ai.google.dev/gemini-api/docs/api-errors)或旧式 RESOURCE_EXHAUSTED 才返回带提示结果，明确密钥、模型及生成能力尚未验证；通用网关 429、HTML、其他协议 SSE、空流或错误事件均不判定成功。候选全部失败时保留各错误链，调用方取消后停止后续候选并释放连接。
+- 测试覆盖真实 SDK 探测、目录分页 / 元数据、原地址与回退顺序、路径及查询保真、空密钥不回退环境、取消和连接关闭；根包覆盖 Generate / Stream 路由、配置加密往返、内置覆盖不固化 type、无密钥实例保留在设置页、热重载和跨协议同名隔离。只改 internal/llm，真实 Google / 中转验收尚未执行，上层及迁移继续留待后续。

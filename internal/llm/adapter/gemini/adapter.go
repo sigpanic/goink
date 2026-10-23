@@ -9,11 +9,13 @@ import (
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
-// Adapter 持有本协议的 provider 快照；生成、发现及探测在后续单元接入。
+// Adapter 持有本协议的 provider 快照，封装生成、发现及探测。
 type Adapter struct {
 	providers map[string]Provider
 	logger    *slog.Logger
 }
+
+var _ adapter.ProtocolAdapter = (*Adapter)(nil)
 
 // New 接收完整实例配置和共享 HTTP client；构造不发请求，不自行补入内置实例。
 func New(configs adapter.ProviderMap, client *http.Client, logger *slog.Logger) (*Adapter, error) {

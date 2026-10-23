@@ -7,6 +7,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/llm/adapter/anthropic"
+	"github.com/sigpanic/goink/internal/llm/adapter/gemini"
 	"github.com/sigpanic/goink/internal/llm/adapter/openaichat"
 )
 
@@ -34,6 +35,8 @@ func newProtocolAdapter(adapterName adapter.Protocol, providers ProviderMap, cli
 		return openaichat.New(providers, client, logger)
 	case adapter.ProtocolAnthropicMessages:
 		return anthropic.New(providers, client, logger)
+	case adapter.ProtocolGeminiInteractions:
+		return gemini.New(providers, client, logger)
 	default:
 		return nil, fmt.Errorf("unsupported adapter: %s", adapterName)
 	}
@@ -45,6 +48,8 @@ func validateProviderType(adapterName adapter.Protocol, providerType string) err
 		return openaichat.ValidateProviderType(providerType)
 	case adapter.ProtocolAnthropicMessages:
 		return anthropic.ValidateProviderType(providerType)
+	case adapter.ProtocolGeminiInteractions:
+		return gemini.ValidateProviderType(providerType)
 	default:
 		return fmt.Errorf("unsupported adapter: %s", adapterName)
 	}
@@ -52,7 +57,8 @@ func validateProviderType(adapterName adapter.Protocol, providerType string) err
 
 func builtinProviders() map[adapter.Protocol]ProviderMap {
 	return map[adapter.Protocol]ProviderMap{
-		adapter.ProtocolOpenAIChat:        openaichat.BuiltinProviders(),
-		adapter.ProtocolAnthropicMessages: anthropic.BuiltinProviders(),
+		adapter.ProtocolOpenAIChat:         openaichat.BuiltinProviders(),
+		adapter.ProtocolAnthropicMessages:  anthropic.BuiltinProviders(),
+		adapter.ProtocolGeminiInteractions: gemini.BuiltinProviders(),
 	}
 }
