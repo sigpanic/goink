@@ -1,6 +1,6 @@
 # Google Interactions 适配器实施路线
 
-> 2026-10-22。第一单元已提交，第二单元已实现，待 review；生成、发现 / 探测和注册尚未实现。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
+> 2026-10-23。前两单元已提交，第三单元已实现，待 review；流式、发现 / 探测和注册尚未实现。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
 
 ## 目标与边界
 
@@ -91,3 +91,13 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 - 与 Claude 不同，[Google 要求切换模型仍重传原 thought](https://ai.google.dev/gemini-api/docs/thinking#thought-signatures)，由后端处理兼容性。因此摘要不绑定 model、推理等级或输出上限；同一服务实例切 Gemini 模型仍可回放，跨协议或端点 / 密钥变化则丢弃原生状态。摘要只是本地一致性检查，不替代服务端签名验证。
 - 按内置精确 ID 校验推理等级和输出上限，用户配置可进一步收紧范围，不能扩大已验证能力；未知 ID 可发普通请求，但显式推理配置报错。2.5 Flash-Lite 保持默认关闭，显式开启才选 low；其他型号不把 minimal 或 thinking_summaries=none 当成关闭。Interactions 没有 thinking_budget / disabled 字段，不能照搬 GenerateContent 的 budget=0。
 - 当前 [v1 GenerationConfig](https://ai.google.dev/api/interactions-api-v1) 不提供 temperature；虽然 SDK 仍保留已弃用字段，显式设置温度会报错，不静默丢弃。MaxTokens 映射 max_output_tokens：已知模型取已配置的更小上限，未知模型默认 4096。ToolChoice 映射 auto / none / required 与指定函数，拒绝未声明函数和未知字段。
+
+## 第三单元实现结果
+
+- 新增 Adapter.Generate：构造公共 Request 的 SDK 参数，显式 stream=false / Accept: application/json，使用已有实例的 SDK client 和完整端点。一次调用只发一次请求，不执行函数或启动自动工具循环。
+- 已安装 SDK 的 ConsumeRawBody 会关闭网络 Body 并把原文放回 HTTPMeta.Response.Body；Generate 读取这份原文后关闭，保留完整 steps，不从 SDK 已解码的 map / step 重编码。收到意外 SSE 时关闭事件流并报错，不等待后续事件或挂起连接。
+- 复用原生 step 校验，归一化全部交错文本、文本思考摘要和客户端函数；图片思考摘要仅随原生状态保存，不作正文。拒绝未支持的服务端工具、非文本 model_output、缺失签名及 step 错误。任一函数无效则不返回部分工具组；本包校验出的参数错误使用公共 tool_args_invalid 可重试标记，SDK 在返回响应前拒绝的 schema 错误则保留其错误链，不依赖错误字符串猜测具体字段。
+- 只有 completed 和带有效客户端函数的 requires_action 成功；二者的 Complete=true，只有前者 TurnComplete=true。incomplete（包括达到输出上限）、failed、cancelled 分别报错，本阶段不把截断正文或工具作为成功结果交付；非终态、未知状态、诊断 errors 及状态与函数不符同样失败，不生成可回放状态。
+- usage 按[官方 v1 定义和示例](https://ai.google.dev/api/interactions-api-v1)归一：completion_tokens=total_output_tokens+total_thought_tokens，缓存是输入子集，tool-use 保留为明细；服务端 total_tokens 原样保留，不重复累加这些明细。缺省统计不伪造，非法计数及缓存超过输入报错；公共数字继续使用 float64。
+- HTTP 错误转换保留状态、原生 code / message、Retry-After 与可重试标记；也覆盖代理返回的 numeric code / status、HTML 和损坏错误 JSON。签名类 400 不清状态、不自动重试，context / 读取 / 传输错误保留错误链。
+- 本地真实 SDK 闭环覆盖：Generate → 公共 Message JSON 往返 → 工具结果 → 切 Gemini 模型 → 第二次 Generate，核对原始 steps、签名、扩展及大整数；另覆盖整组工具失败、usage、异常 HTTP、取消与连接关闭。仍未注册根包或更改上层，真实服务验收留待有凭据时执行。

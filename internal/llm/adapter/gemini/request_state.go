@@ -115,7 +115,8 @@ func replayProjection(rawSteps json.RawMessage) ([]types.Step, string, []adapter
 			}
 		case "function_call":
 			if strings.TrimSpace(step.ID) == "" || strings.TrimSpace(step.Name) == "" || !jsonObject(step.Arguments) || seen[step.ID] {
-				return nil, "", nil, fmt.Errorf("invalid or duplicate Gemini replay function call %q", step.ID)
+				return nil, "", nil, &adapter.APIError{Kind: "tool_args_invalid", Retryable: true,
+					Message: fmt.Sprintf("invalid or duplicate Gemini replay function call %q", step.ID)}
 			}
 			seen[step.ID] = true
 			calls = append(calls, adapter.ToolCall{ID: step.ID, Name: step.Name, Arguments: slices.Clone(step.Arguments)})
