@@ -1,0 +1,32 @@
+{
+  "repository": "https://github.com/0xPlaygrounds/rig",
+  "commit": "6eff50a2fd95de3a505000a0e39d2893d83c6f4d",
+  "license": "MIT",
+  "license_file": "LICENSE.txt",
+  "retrieval_date": "2026-10-23",
+  "source_kind": "third-party-recorded-http-cassette",
+  "recorded_path": "/v1beta/interactions",
+  "recorded_api_revision": null,
+  "replay_sdk": "google.golang.org/genai v1.75.0",
+  "replay_api_revision": "2026-05-20",
+  "files": [
+    {
+      "file": "interactions-tool-loop.yaml",
+      "upstream_path": "crates/rig-cassette/fixtures/cassettes/gemini/corpus_delta/interactions_baseline.yaml",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/6eff50a2fd95de3a505000a0e39d2893d83c6f4d/crates/rig-cassette/fixtures/cassettes/gemini/corpus_delta/interactions_baseline.yaml",
+      "sha256": "8ec49a723e321073daff2df7bc61b4fb60e258c339b9b6503eea6fc6c4cd688f"
+    },
+    {
+      "file": "interactions-signature-only.yaml",
+      "upstream_path": "crates/rig-cassette/fixtures/cassettes/gemini/streaming_grammar/interactions_signature_without_summaries.yaml",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/6eff50a2fd95de3a505000a0e39d2893d83c6f4d/crates/rig-cassette/fixtures/cassettes/gemini/streaming_grammar/interactions_signature_without_summaries.yaml",
+      "sha256": "69bc1cf981423ba76a062147b4a72cdab064f1e9229da6b4e969b2817d1c1ecf"
+    },
+    {
+      "file": "LICENSE.txt",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/6eff50a2fd95de3a505000a0e39d2893d83c6f4d/LICENSE",
+      "sha256": "42cf0f78132fe1de338cbff947bf5b9f7d2d8a377cb827c9df9e90b4b9499ef7"
+    }
+  ]
+}
