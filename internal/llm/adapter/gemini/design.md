@@ -1,6 +1,6 @@
 # Google Interactions 适配器实施路线
 
-> 2026-10-23。前两单元已提交，第三单元已实现，待 review；流式、发现 / 探测和注册尚未实现。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
+> 2026-10-23。前三单元已提交，第四单元已实现，待 review；发现 / 探测和注册尚未实现。本文替代旧总设计中的 Gemini GenerateContent 实施路线。本阶段继续自底向上，仅改 `internal/llm/`，每个单元完成后等待 review，不自动暂存或提交。
 
 ## 目标与边界
 
@@ -59,7 +59,7 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 | 1. 实例与 SDK 基建 | `feat(llm): bootstrap the Gemini Interactions adapter` | 新协议常量；gemini/adapter.go、provider.go、providers.go 及测试。真持有 providers、独立凭据、共享 HTTP、无环境回退与 SDK 重试；正式和候选端点的路径 / 转义 / 查询保真。核对 SDK revision 和官方 schema，准备内置实例；不实现生成和探测，不注册根包，不写空壳接口方法。 |
 | 2. 出站与回放 | `feat(llm): build stateless Gemini interaction requests` | request*.go 及测试。完整 steps 历史、system、工具 schema / 配对、选项映射、store=false 和原生回放。只按验证的模型能力处理 thinking / effort / 温度；先验证 SDK JSON 保真，必要处理内聚本包，不扩展公共类型来绕过问题。 |
 | 3. 非流式生成 | `feat(llm): normalize Gemini interaction responses` | generate.go、response.go、errors.go 及测试。正文、思考、整组工具、终态、usage、原生 payload；错误保留 HTTP 状态和 Retry-After。完成响应 → 公共消息 JSON 往返 → 工具结果 → 下一次真实 SDK 请求的本地闭环。 |
-| 4. 流式生成 | `feat(llm): stream Gemini interaction steps` | stream*.go、协议样本和测试。真实 SDK SSE、step 累积、参数和签名分片、终态及错误、取消释放连接；任一工具损坏不交付部分可执行组。旧 Google testdata 是 GenerateContent，不能当作 Interactions 正确性证据。 |
+| 4. 流式生成 | `feat(llm): stream Gemini interaction steps` | stream*.go、协议样本和测试。真实 SDK SSE、step 累积、参数分片及独立签名、终态及错误、取消释放连接；任一工具损坏不交付部分可执行组。旧 Google testdata 是 GenerateContent，不能当作 Interactions 正确性证据。 |
 | 5. 发现、探测与注册 | `feat(llm): register Gemini interaction discovery and probes` | 子包 discover.go / test_connection.go、根包 factory.go 及相关测试。Models 目录映射 / 分页，原地址优先探测并返回完整端点；配置保存、无密钥过滤、热重载、同名跨协议隔离；接口完整后才注册。 |
 
 ## 第一单元的完成条件
@@ -101,3 +101,13 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 - usage 按[官方 v1 定义和示例](https://ai.google.dev/api/interactions-api-v1)归一：completion_tokens=total_output_tokens+total_thought_tokens，缓存是输入子集，tool-use 保留为明细；服务端 total_tokens 原样保留，不重复累加这些明细。缺省统计不伪造，非法计数及缓存超过输入报错；公共数字继续使用 float64。
 - HTTP 错误转换保留状态、原生 code / message、Retry-After 与可重试标记；也覆盖代理返回的 numeric code / status、HTML 和损坏错误 JSON。签名类 400 不清状态、不自动重试，context / 读取 / 传输错误保留错误链。
 - 本地真实 SDK 闭环覆盖：Generate → 公共 Message JSON 往返 → 工具结果 → 切 Gemini 模型 → 第二次 Generate，核对原始 steps、签名、扩展及大整数；另覆盖整组工具失败、usage、异常 HTTP、取消与连接关闭。仍未注册根包或更改上层，真实服务验收留待有凭据时执行。
+
+## 第四单元实现结果
+
+- 新增 Adapter.Stream，以现有 SDK client 调用一次 Create，显式 stream=true / Accept: text/event-stream。正文、思考和函数参数实时发布，channel 发送和网络读取受调用方 context 控制，取消可释放连接和阻塞生产方。
+- 生成的 SDK 事件对象不保留已知类型的原文，因此从同一 HTTP Body 使用 SDK 公开 types/stream.NewEventStream 读取 ServerEvent.Data；不再发请求，不自行实现 SSE 解帧，不修改 SDK 或共享传输。原 Create stream 负责关闭网络 Body，借用读取器的 Close 不重复关闭底层连接。
+- 按连续 step 索引建组，允许不同函数交错增量 / 停止；保留 step.start 的初始正文、摘要及扩展。参数按 JSON 字符串累计，stop 时验证对象；完整初始参数与后续碎片冲突时明确失败，不猜测拼法。未知 step / delta、重复或未闭合 step 均报错。
+- [官方 thought_signature](https://ai.google.dev/gemini-api/docs/thinking#streaming-with-thinking) 是 thought 结束前的完整签名，按原值保存，拒绝拼接重复签名或追加签名后的摘要。summary 允许缺省 / 空数组，图片摘要仅保留原文；文本摘要作为 EventThinking 交付。
+- completed / requires_action 的状态事件或完成事件提供终态依据，核对 interaction ID 和所有 step 已闭合；其他失败状态及 error 事件不交付成功收尾。finish 复用 convertResponse，顺序发送最终 usage、ResponseState、整组 ToolCallEnd。终态附带完整 steps 时优先保留其原文，但必须与已发布正文、摘要、调用及签名一致。
+- SDK 公开读取器使用空 sentinel，兼容合法终态后的正常 EOF 和可选 [DONE]；未收到终态、格式损坏、终态后的非法事件或真实读取错误仍失败。不会通过忽略 io.ErrUnexpectedEOF 掩盖断流。usage 的累计快照逐字段覆盖，缺省保留，忽略 step_usage 明细，不跨事件相加。
+- 新增子包 testdata/interactions-tools.sse 和来源说明，均为本地合成资料，非真实抓包。测试经实际 Create、SDK 生成的事件解码器和公开 SSE 读取器，覆盖实时事件、工具组失败、状态 JSON 往返和模型切换续接、终态原文一致性、SSE 格式 / UTF-8、HTTP 错误、取消与连接关闭。Generate 保持现状，根包注册仍留在第五单元。
