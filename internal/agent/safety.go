@@ -23,9 +23,7 @@ var readOnlyTools = map[string]bool{
 }
 
 type toolOutput struct {
-	name         string
-	id           string
-	rawArgs      json.RawMessage
+	call         llm.ToolCall
 	result       *mcp_tools.ToolResult
 	displayText  string // buildDisplay 生成的展示文本
 	activityKind string // buildDisplay 生成的活动类别
@@ -50,11 +48,7 @@ func (to toolOutput) resultJSON() string {
 func buildToolCalls(outputs []toolOutput) []llm.ToolCall {
 	var calls []llm.ToolCall
 	for _, o := range outputs {
-		calls = append(calls, llm.ToolCall{
-			ID:        o.id,
-			Name:      o.name,
-			Arguments: o.rawArgs,
-		})
+		calls = append(calls, o.call)
 	}
 	return calls
 }
@@ -73,7 +67,7 @@ func isStuckLoop(patterns []string, outputs []toolOutput, loopCount int) bool {
 		return false
 	}
 	for _, o := range outputs {
-		if !readOnlyTools[o.name] {
+		if !readOnlyTools[o.call.Name] {
 			return false
 		}
 	}
@@ -85,7 +79,7 @@ func isStuckLoop(patterns []string, outputs []toolOutput, loopCount int) bool {
 func toolPattern(outputs []toolOutput) string {
 	parts := make([]string, len(outputs))
 	for i, o := range outputs {
-		parts[i] = o.name + ":" + string(o.rawArgs)
+		parts[i] = o.call.Name + ":" + string(o.call.Arguments)
 		if len(parts[i]) > 100 {
 			parts[i] = parts[i][:100]
 		}

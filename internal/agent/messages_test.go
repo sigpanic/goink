@@ -27,7 +27,7 @@ func TestAppendMsgUsesStructuredHistory(t *testing.T) {
 				opts.SubTaskID = "subtask"
 			}
 			tokens := a.InitRunningTokens(nil)
-			calls := buildToolCalls([]toolOutput{{name: "read", id: "call_1", rawArgs: json.RawMessage(`{"chapter":9007199254740993}`)}})
+			calls := buildToolCalls([]toolOutput{{call: llm.ToolCall{Name: "read", ID: "call_1", Arguments: json.RawMessage(`{"chapter":9007199254740993}`)}}})
 			a.appendMsg(llm.Message{Role: "user", Content: "工具注入的提示"}, nil, &opts, tokens)
 			a.appendMsg(llm.Message{Role: "assistant", Content: "读取章节", ThinkingContent: "显示思考", ToolCalls: calls}, map[string]any{
 				"tool_displays": []map[string]any{{"tool_id": "call_1", "display_text": "读取章节"}},

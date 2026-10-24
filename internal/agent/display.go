@@ -274,13 +274,13 @@ func buildToolDisplay(toolOutputs []toolOutput) []map[string]any {
 			phase = "failed"
 		}
 		entry := map[string]any{
-			"tool_id":       to.id,
-			"tool_name":     to.name,
+			"tool_id":       to.call.ID,
+			"tool_name":     to.call.Name,
 			"display_text":  to.displayText,
 			"activity_kind": to.activityKind,
 			"phase":         phase,
 		}
-		if resultFieldTools[to.name] && to.result != nil && to.result.Success && to.result.Data != nil {
+		if resultFieldTools[to.call.Name] && to.result != nil && to.result.Success && to.result.Data != nil {
 			entry["result"] = to.result.Data
 		}
 		// 失败时持久化 error，供前端历史回放显示

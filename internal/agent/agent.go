@@ -381,7 +381,10 @@ func (a *Agent) run(
 						Metadata: metadata, Timestamp: time.Now(),
 					})
 
-					toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: result, displayText: display.DisplayText, activityKind: display.ActivityKind})
+					toolOutputs = append(toolOutputs, toolOutput{
+						call: llm.ToolCall{ID: id, Name: name, Arguments: rawArgs}, result: result,
+						displayText: display.DisplayText, activityKind: display.ActivityKind,
+					})
 
 					// 失败计数：system 5 次/args 5 次/全局连续 10 次触发中断
 					if result.Success {
@@ -575,13 +578,13 @@ func (a *Agent) run(
 
 		// 2. tool 结果
 		for _, to := range toolOutputs {
-			a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.id, ToolName: to.name}, nil,
+			a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.call.ID, ToolName: to.call.Name}, nil,
 				&opts, runningTokens)
 		}
 
 		// 3. inject（role=user，<system-reminder> 包裹）
 		for _, to := range toolOutputs {
-			for _, inj := range pendingInjects[to.id] {
+			for _, inj := range pendingInjects[to.call.ID] {
 				content := "<system-reminder>\n" + inj.Content + "\n</system-reminder>"
 				a.appendMsg(llm.Message{Role: inj.Role, Content: content}, nil, &opts, runningTokens)
 			}
