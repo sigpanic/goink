@@ -6,6 +6,7 @@ import (
 	"errors"
 	"io"
 	"log/slog"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -27,6 +28,58 @@ func (t systemErrorTestTool) ExposeToLLM() bool { return false }
 func (t systemErrorTestTool) NewArgs() any      { return &systemErrorTestArgs{} }
 func (t systemErrorTestTool) Execute(context.Context, any, ToolContext) (*ToolResult, error) {
 	return t.result, t.err
+}
+
+func TestRegistryDefinitions(t *testing.T) {
+	const schema = `{ "type": "object", "properties": {"id": {"type": "integer", "minimum": 9007199254740993}}, "required": ["id"], "additionalProperties": false }`
+	reg := NewRegistry(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	for _, tool := range []catalogTestTool{
+		{name: "z_tool", description: "最后一个工具", exposed: true},
+		{name: "a_tool", description: "第一个工具", exposed: true},
+		{name: "hidden_tool", description: "按需调用工具"},
+	} {
+		tool.schema = json.RawMessage(schema)
+		reg.Register(tool)
+	}
+	for _, tt := range []struct {
+		name    string
+		allowed map[string]bool
+		want    []string
+	}{
+		{name: "unrestricted", want: []string{"a_tool", "z_tool"}},
+		{name: "empty allowlist", allowed: map[string]bool{}},
+		{name: "filtered", allowed: map[string]bool{"a_tool": true, "z_tool": false, "hidden_tool": true, "missing": true}, want: []string{"a_tool"}},
+		{name: "unknown tool", allowed: map[string]bool{"missing": true}},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var names []string
+			for _, definition := range reg.Definitions(tt.allowed) {
+				names = append(names, definition.Name)
+				tool, ok := reg.Get(definition.Name)
+				if !ok || definition.Description != tool.Description() || string(definition.InputSchema) != schema {
+					t.Fatalf("tool declaration lost its description or schema: %+v", definition)
+				}
+			}
+			if !slices.Equal(names, tt.want) {
+				t.Fatalf("visible tools = %v, want %v", names, tt.want)
+			}
+		})
+	}
+}
+
+func TestRegistryDefinitionsOwnSchemaBytes(t *testing.T) {
+	const original = `{"type":"object","properties":{}}`
+	schema := json.RawMessage(original)
+	reg := NewRegistry(slog.New(slog.NewTextHandler(io.Discard, nil)))
+	reg.Register(catalogTestTool{name: "test_tool", schema: schema, exposed: true})
+	first, second := reg.Definitions(nil), reg.Definitions(nil)
+	if len(first) != 1 || len(second) != 1 {
+		t.Fatal("expected one tool declaration per snapshot")
+	}
+	first[0].InputSchema[0] = '['
+	if string(schema) != original || string(second[0].InputSchema) != original || string(reg.Definitions(nil)[0].InputSchema) != original {
+		t.Fatal("changing a declaration modified the tool schema or another snapshot")
+	}
 }
 
 func TestRegistryExecute_CompactsToolResultError(t *testing.T) {
