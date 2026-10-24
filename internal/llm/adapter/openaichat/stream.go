@@ -27,24 +27,24 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 
 		p, err := c.provider(input.ProviderName)
 		if err != nil {
-			sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
+			adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
 			return
 		}
 		messages, err := c.buildMessages(input.Messages)
 		if err != nil {
-			sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
+			adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
 			return
 		}
 		tools, err := buildTools(input.Tools)
 		if err != nil {
-			sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
+			adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: err})
 			return
 		}
 		payload := c.buildPayload(&p, messages, tools, model, opts, true)
 
 		body, err := json.Marshal(payload)
 		if err != nil {
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: fmt.Errorf("failed to marshal request body: %w", err)}) {
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: fmt.Errorf("failed to marshal request body: %w", err)}) {
 				return
 			}
 			return
@@ -52,7 +52,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, p.ChatURL, bytes.NewReader(body))
 		if err != nil {
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: fmt.Errorf("failed to create HTTP request: %w", err)}) {
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: fmt.Errorf("failed to create HTTP request: %w", err)}) {
 				return
 			}
 			return
@@ -96,7 +96,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 				c.logger.Warn("llm network error", "err", err, "url", req.URL.String(), "retryable", retryable)
 			}
 
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
 				Message:    msg,
 				Retryable:  retryable,
@@ -126,7 +126,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 			// 解析 Retry-After header（HTTP 429/503 等场景）
 			// 支持两种格式：秒数（"120"）或 HTTP-date（"Wed, 21 Oct 2026 07:28:00 GMT"）
 			retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: resp.StatusCode,
 				Message:    msg,
 				Retryable:  adapter.StatusRetryable(resp.StatusCode),
@@ -308,7 +308,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 
 		// reasoning_content → EventThinking
 		if reasoning, ok := delta["reasoning_content"].(string); ok && reasoning != "" {
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventThinking, Data: reasoning}) {
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventThinking, Data: reasoning}) {
 				return
 			}
 			diag.hasReason = true
@@ -316,7 +316,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 
 		// content → EventContent
 		if content, ok := delta["content"].(string); ok && content != "" {
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventContent, Data: content}) {
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventContent, Data: content}) {
 				return
 			}
 			diag.hasContent = true
@@ -348,7 +348,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			// ID（首次出现）
 			if id, ok := tc["id"].(string); ok && id != "" && acc.id == "" {
 				acc.id = id
-				if !sendEvent(ctx, ch, StreamEvent{
+				if !adapter.SendEvent(ctx, ch, StreamEvent{
 					Type:  EventToolCallStart,
 					Delta: &ToolCallDelta{ToolID: id},
 				}) {
@@ -365,7 +365,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			// 名称（首次出现）
 			if name, ok := fn["name"].(string); ok && name != "" && acc.name == "" {
 				acc.name = name
-				if !sendEvent(ctx, ch, StreamEvent{
+				if !adapter.SendEvent(ctx, ch, StreamEvent{
 					Type:  EventToolCallStart,
 					Delta: &ToolCallDelta{ToolName: name, ToolID: acc.id},
 				}) {
@@ -376,7 +376,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			// arguments 增量追加
 			if args, ok := fn["arguments"].(string); ok && args != "" {
 				acc.arguments.WriteString(args)
-				if !sendEvent(ctx, ch, StreamEvent{
+				if !adapter.SendEvent(ctx, ch, StreamEvent{
 					Type: EventToolCallArguments,
 					Delta: &ToolCallDelta{
 						ToolName:      acc.name,
@@ -396,7 +396,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 
 	if err := scanner.Err(); err != nil {
 		c.logger.Warn("sse stream interrupted", "err", err)
-		if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
+		if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
 			StatusCode: 0,
 			Message:    fmt.Sprintf("SSE stream read error: %s", err),
 			Retryable:  true,
@@ -411,7 +411,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 	// 流正常结束：发送本次 stream 的最终 usage（只发一次，见循环内缓冲说明）。
 	// 放在 tool call 收尾之前，与标准 provider「末尾 chunk 发 usage」的时序一致。
 	if diag.lastUsage != nil {
-		if !sendEvent(ctx, ch, StreamEvent{Type: EventUsage, Usage: diag.lastUsage}) {
+		if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventUsage, Usage: diag.lastUsage}) {
 			return
 		}
 	}
@@ -465,7 +465,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 	// tool arguments 解析失败：全丢弃（不发送成功的 tool call），发 EventError（tool_args_invalid）
 	if len(invalidToolErrors) > 0 {
 		errMsg := buildToolArgsInvalidMsg(invalidToolErrors)
-		if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
+		if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
 			StatusCode: 0,
 			Message:    errMsg,
 			Retryable:  true,
@@ -477,7 +477,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 		// 没有失败，发送完整的 tool call
 		for _, vtc := range validToolCalls {
 			acc := &accumulated[vtc.idx]
-			if !sendEvent(ctx, ch, StreamEvent{
+			if !adapter.SendEvent(ctx, ch, StreamEvent{
 				Type: EventToolCallEnd,
 				Delta: &ToolCallDelta{
 					ToolName:      acc.name,
@@ -500,7 +500,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			diag.retryAfter = resp.Header.Get("Retry-After")
 			diag.rateLimitRemain = resp.Header.Get("X-RateLimit-Remaining")
 			c.logger.Warn("empty sse response", "diag", diag)
-			if !sendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
+			if !adapter.SendEvent(ctx, ch, StreamEvent{Type: EventError, Error: &APIError{
 				StatusCode: 0,
 				Message:    "流式响应为空，服务商可能不支持流式请求或返回了非标准格式",
 				Retryable:  true,

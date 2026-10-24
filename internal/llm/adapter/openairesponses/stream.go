@@ -15,7 +15,7 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 	ch := make(chan adapter.StreamEvent, 32)
 	go func() {
 		defer close(ch)
-		emit := func(event adapter.StreamEvent) bool { return sendEvent(ctx, ch, event) }
+		emit := func(event adapter.StreamEvent) bool { return adapter.SendEvent(ctx, ch, event) }
 		fail := func(err error) { emit(adapter.StreamEvent{Type: adapter.EventError, Error: err}) }
 		p, err := c.provider(req.ProviderName)
 		if err != nil {
@@ -82,16 +82,4 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 		}
 	}()
 	return ch
-}
-
-func sendEvent(ctx context.Context, ch chan<- adapter.StreamEvent, event adapter.StreamEvent) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	select {
-	case ch <- event:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }

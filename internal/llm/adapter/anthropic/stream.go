@@ -15,7 +15,7 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 	ch := make(chan adapter.StreamEvent, 32)
 	go func() {
 		defer close(ch)
-		emitError := func(err error) { sendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventError, Error: err}) }
+		emitError := func(err error) { adapter.SendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventError, Error: err}) }
 		p, err := c.provider(req.ProviderName)
 		if err != nil {
 			emitError(err)
@@ -54,7 +54,7 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 				emitError(err)
 				return
 			}
-			if publish && !sendEvent(ctx, ch, event) {
+			if publish && !adapter.SendEvent(ctx, ch, event) {
 				return
 			}
 		}
@@ -70,27 +70,15 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 			emitError(err)
 			return
 		}
-		if !sendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventUsage, Usage: response.Usage}) ||
-			!sendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventResponseState, State: response.State}) {
+		if !adapter.SendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventUsage, Usage: response.Usage}) ||
+			!adapter.SendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventResponseState, State: response.State}) {
 			return
 		}
 		for _, call := range response.ToolCalls {
-			if !sendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventToolCallEnd, Delta: &call}) {
+			if !adapter.SendEvent(ctx, ch, adapter.StreamEvent{Type: adapter.EventToolCallEnd, Delta: &call}) {
 				return
 			}
 		}
 	}()
 	return ch
-}
-
-func sendEvent(ctx context.Context, ch chan<- adapter.StreamEvent, event adapter.StreamEvent) bool {
-	if ctx.Err() != nil {
-		return false
-	}
-	select {
-	case ch <- event:
-		return true
-	case <-ctx.Done():
-		return false
-	}
 }
