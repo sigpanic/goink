@@ -15,6 +15,8 @@ type Adapter struct {
 	logger    *slog.Logger
 }
 
+var _ adapter.ProtocolAdapter = (*Adapter)(nil)
+
 // New 接收已合并的完整实例配置，不补入内置实例，也不发送请求。
 func New(configs adapter.ProviderMap, client *http.Client, logger *slog.Logger) (*Adapter, error) {
 	if client == nil {

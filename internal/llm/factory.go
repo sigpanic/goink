@@ -9,6 +9,7 @@ import (
 	"github.com/sigpanic/goink/internal/llm/adapter/anthropic"
 	"github.com/sigpanic/goink/internal/llm/adapter/gemini"
 	"github.com/sigpanic/goink/internal/llm/adapter/openaichat"
+	"github.com/sigpanic/goink/internal/llm/adapter/openairesponses"
 )
 
 // buildAdapters 按协议分组配置，构建独立实例；热重载后已有请求继续持有旧适配器。
@@ -33,6 +34,8 @@ func newProtocolAdapter(adapterName adapter.Protocol, providers ProviderMap, cli
 	switch adapterName {
 	case adapter.ProtocolOpenAIChat:
 		return openaichat.New(providers, client, logger)
+	case adapter.ProtocolOpenAIResponses:
+		return openairesponses.New(providers, client, logger)
 	case adapter.ProtocolAnthropicMessages:
 		return anthropic.New(providers, client, logger)
 	case adapter.ProtocolGeminiInteractions:
@@ -46,6 +49,8 @@ func validateProviderType(adapterName adapter.Protocol, providerType string) err
 	switch adapterName {
 	case adapter.ProtocolOpenAIChat:
 		return openaichat.ValidateProviderType(providerType)
+	case adapter.ProtocolOpenAIResponses:
+		return openairesponses.ValidateProviderType(providerType)
 	case adapter.ProtocolAnthropicMessages:
 		return anthropic.ValidateProviderType(providerType)
 	case adapter.ProtocolGeminiInteractions:
@@ -58,6 +63,7 @@ func validateProviderType(adapterName adapter.Protocol, providerType string) err
 func builtinProviders() map[adapter.Protocol]ProviderMap {
 	return map[adapter.Protocol]ProviderMap{
 		adapter.ProtocolOpenAIChat:         openaichat.BuiltinProviders(),
+		adapter.ProtocolOpenAIResponses:    openairesponses.BuiltinProviders(),
 		adapter.ProtocolAnthropicMessages:  anthropic.BuiltinProviders(),
 		adapter.ProtocolGeminiInteractions: gemini.BuiltinProviders(),
 	}
