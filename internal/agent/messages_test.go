@@ -28,11 +28,11 @@ func TestAppendMsgUsesStructuredHistory(t *testing.T) {
 			}
 			tokens := a.InitRunningTokens(nil)
 			calls := buildToolCalls([]toolOutput{{name: "read", id: "call_1", rawArgs: json.RawMessage(`{"chapter":9007199254740993}`)}})
-			a.appendMsg("user", "工具注入的提示", "", nil, &opts, tokens)
-			a.appendMsg("assistant", "读取章节", "显示思考", map[string]any{
-				"tool_calls": calls, "tool_displays": []map[string]any{{"tool_id": "call_1", "display_text": "读取章节"}},
+			a.appendMsg(llm.Message{Role: "user", Content: "工具注入的提示"}, nil, &opts, tokens)
+			a.appendMsg(llm.Message{Role: "assistant", Content: "读取章节", ThinkingContent: "显示思考", ToolCalls: calls}, map[string]any{
+				"tool_displays": []map[string]any{{"tool_id": "call_1", "display_text": "读取章节"}},
 			}, &opts, tokens)
-			a.appendMsg("tool", "", "", map[string]any{"tool_call_id": "call_1", "tool_name": "read"}, &opts, tokens)
+			a.appendMsg(llm.Message{Role: "tool", ToolCallID: "call_1", ToolName: "read"}, nil, &opts, tokens)
 			require.Equal(t, []llm.Message{
 				{Role: "user", Content: "工具注入的提示"},
 				{Role: "assistant", Content: "读取章节", ThinkingContent: "显示思考", ToolCalls: []llm.ToolCall{

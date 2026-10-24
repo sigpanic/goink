@@ -157,6 +157,23 @@ func agentTypeFromString(s string) agentcfg.AgentType {
 
 // Run 执行 Agent 循环，返回最终文本和轮数。
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, error) {
+	return a.run(ctx, opts,
+		func(ctx context.Context, opts RunOptions, tools []llm.ToolDefinition, callOpts *llm.CallOptions) <-chan llm.StreamEvent {
+			return a.llm.ChatStream(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, opts.Messages, tools, callOpts)
+		},
+		func(event AgentEvent) {
+			wails.EventsEmit(ctx, "agent:"+strconv.Itoa(opts.TurnID), event)
+		},
+	)
+}
+
+// run 通过回调发起请求和发布事件，供局部回归覆盖响应收尾、重试及中断。
+func (a *Agent) run(
+	ctx context.Context,
+	opts RunOptions,
+	openStream func(context.Context, RunOptions, []llm.ToolDefinition, *llm.CallOptions) <-chan llm.StreamEvent,
+	publish func(AgentEvent),
+) (AgentLoopResult, error) {
 	if opts.MaxTurns <= 0 {
 		opts.MaxTurns = 100
 	}
@@ -174,7 +191,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	tracker := newInterruptTracker() // 工具连续失败计数（system 5/args 5/全局 10 中断）
 	runningTokens := a.InitRunningTokens(opts.Messages)
 	tools := a.registry.Definitions(opts.AllowedTools)
-	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
 	eventSeq := opts.EventSeq
 	if eventSeq == nil {
 		seq := 0
@@ -188,7 +204,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			event.Timestamp = time.Now()
 		}
 		event.SubTaskID = opts.SubTaskID
-		wails.EventsEmit(ctx, agentEventName, event)
+		publish(event)
 	}
 
 	canceled := false    // 用户手动取消（ctx.Done）
@@ -229,10 +245,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
 	RETRY_STREAM:
+		var responseState *llm.ResponseState
 		// 记录本轮 streamLoop 第一个事件 seq（前端据此清空本轮 partial segments）
 		// +1 是因为 emit 闭包是 `*eventSeq++; event.Seq = *eventSeq`（先自增再赋值）
 		streamStartSeq := *eventSeq + 1
-		stream := a.llm.ChatStream(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, opts.Messages, tools, callOpts)
+		streamCtx, cancelStream := context.WithCancel(ctx)
+		stream := openStream(streamCtx, opts, tools, callOpts)
 
 		// ---- SSE 流处理 ----
 	streamLoop:
@@ -240,6 +258,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			select {
 			case <-ctx.Done():
 				canceled = true
+				cancelStream()
 				a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 				break streamLoop
 
@@ -249,6 +268,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				}
 
 				switch event.Type {
+				case llm.EventResponseState:
+					if event.State != nil && event.State.Complete {
+						state := event.State.Clone()
+						responseState = &state
+					}
+
 				case llm.EventThinking:
 					isThinking = true
 					thinkingBuffer.WriteString(event.Data)
@@ -356,6 +381,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						Metadata: metadata, Timestamp: time.Now(),
 					})
 
+					toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: result, displayText: display.DisplayText, activityKind: display.ActivityKind})
+
 					// 失败计数：system 5 次/args 5 次/全局连续 10 次触发中断
 					if result.Success {
 						tracker.recordSuccess(name)
@@ -363,6 +390,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if interrupt, reason := tracker.recordFailure(name, result.ErrKind); interrupt {
 							interrupted = true
 							interruptErr = reason
+							cancelStream()
 							a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 							break streamLoop
 						}
@@ -373,12 +401,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						pendingInjects[id] = result.Inject
 					}
 
-					toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: result, displayText: display.DisplayText, activityKind: display.ActivityKind})
-
 				case llm.EventUsage:
 					a.updateUsage(ctx, event.Usage, runningTokens, opts)
 
 				case llm.EventError:
+					cancelStream()
+					responseState = nil
 					// 关键节点日志：agent 收到 EventError
 					var apiErr *llm.APIError
 					if errors.As(event.Error, &apiErr) {
@@ -403,7 +431,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						// 仅首次 tool_args_invalid 时追加，避免重试耗尽后残留多条孤立 reminder
 						if !reminderAdded {
 							reminder := buildToolArgsReminder(apiErr.Message)
-							a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+							a.appendMsg(llm.Message{Role: "user", Content: reminder}, nil, &opts, runningTokens)
 							reminderAdded = true
 						}
 
@@ -503,12 +531,25 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					finalText := responseBuffer.String()
 					thinkingContent := thinkingBuffer.String()
 					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-						a.appendMsg("assistant", finalText, thinkingContent,
+						a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent},
 							nil, &opts, runningTokens)
 					}
 					return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, event.Error
 				}
 			}
+		}
+
+		cancelStream()
+		if ctx.Err() != nil {
+			canceled = true
+		}
+		// 中断可能只接收了部分工具；原生状态不随不完整的公共消息回放。
+		if canceled || interrupted {
+			responseState = nil
+		}
+		message := llm.Message{
+			Role: "assistant", Content: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(),
+			ToolCalls: buildToolCalls(toolOutputs), State: responseState,
 		}
 
 		// ---- 流结束，判断是否有工具调用 ----
@@ -518,9 +559,8 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now(),
 				})
 			}
-			if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-				a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
-					nil, &opts, runningTokens)
+			if message.Content != "" || message.ThinkingContent != "" || message.State != nil {
+				a.appendMsg(message, nil, &opts, runningTokens)
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
 			normalEnd = true
 			break
@@ -528,16 +568,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 		// 1. assistant + tool_calls + tool_displays
 
-		a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
+		a.appendMsg(message,
 			map[string]any{
-				"tool_calls":    buildToolCalls(toolOutputs),
 				"tool_displays": buildToolDisplay(toolOutputs),
 			}, &opts, runningTokens)
 
 		// 2. tool 结果
 		for _, to := range toolOutputs {
-			a.appendMsg("tool", to.resultJSON(),
-				"", map[string]any{"tool_call_id": to.id, "tool_name": to.name},
+			a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.id, ToolName: to.name}, nil,
 				&opts, runningTokens)
 		}
 
@@ -545,7 +583,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		for _, to := range toolOutputs {
 			for _, inj := range pendingInjects[to.id] {
 				content := "<system-reminder>\n" + inj.Content + "\n</system-reminder>"
-				a.appendMsg(inj.Role, content, "", nil, &opts, runningTokens)
+				a.appendMsg(llm.Message{Role: inj.Role, Content: content}, nil, &opts, runningTokens)
 			}
 		}
 
@@ -590,26 +628,29 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
 // opts 必须传指针，因为 opts.Messages 需要被追加（Go 切片传值会丢失 append）。
-func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[string]any, opts *RunOptions, runningTokens map[string]int) {
-	msg := &session.Message{
-		SessionID:       opts.SessionID,
-		TurnID:          opts.TurnID,
-		AgentType:       opts.AgentType,
-		SubTaskID:       opts.SubTaskID,
-		Role:            role,
-		Content:         content,
-		ThinkingContent: thinkingContent,
-		ExtraMetadata:   extraJSON(extra),
-		Version:         opts.ActiveVersion,
-		ToAPI:           opts.AgentType == "main",
-		ToFrontend:      role == "assistant",
+func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) {
+	role := message.Role
+	draft := session.Message{
+		SessionID:     opts.SessionID,
+		TurnID:        opts.TurnID,
+		AgentType:     opts.AgentType,
+		SubTaskID:     opts.SubTaskID,
+		ExtraMetadata: extraJSON(extra),
+		Version:       opts.ActiveVersion,
+		ToAPI:         opts.AgentType == "main",
+		ToFrontend:    role == "assistant",
+	}
+	msg, err := draft.WithLLMMessage(message)
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return
 	}
 	a.logger.Debug("appendMsg", "role", role, "agentType", opts.AgentType, "subTaskID", opts.SubTaskID, "turnID", opts.TurnID)
-	if err := a.db.Create(msg).Error; err != nil {
+	if err := a.db.Create(&msg).Error; err != nil {
 		a.logger.Error("持久化消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 	}
 
-	message, err := msg.ToLLMRequestMessage()
+	message, err = msg.ToLLMRequestMessage()
 	if err != nil {
 		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 		return
