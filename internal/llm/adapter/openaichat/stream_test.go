@@ -1,84 +1,11 @@
 package openaichat
 
 import (
-	"net/http"
 	"reflect"
 	"testing"
-	"time"
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
-
-// --- parseRetryAfter ---
-
-func TestParseRetryAfter_Empty(t *testing.T) {
-	if got := parseRetryAfter(""); got != 0 {
-		t.Errorf("empty string: got %v, want 0", got)
-	}
-}
-
-func TestParseRetryAfter_WhitespaceOnly(t *testing.T) {
-	if got := parseRetryAfter("   "); got != 0 {
-		t.Errorf("whitespace only: got %v, want 0", got)
-	}
-}
-
-func TestParseRetryAfter_Seconds(t *testing.T) {
-	cases := []struct {
-		input string
-		want  time.Duration
-	}{
-		{"0", 0},
-		{"1", time.Second},
-		{"120", 120 * time.Second},
-	}
-	for _, c := range cases {
-		if got := parseRetryAfter(c.input); got != c.want {
-			t.Errorf("parseRetryAfter(%q): got %v, want %v", c.input, got, c.want)
-		}
-	}
-}
-
-func TestParseRetryAfter_SecondsWithSurroundingSpaces(t *testing.T) {
-	// TrimSpace 后等价于 "120"
-	if got := parseRetryAfter("  120  "); got != 120*time.Second {
-		t.Errorf("got %v, want 120s", got)
-	}
-}
-
-func TestParseRetryAfter_NegativeSeconds(t *testing.T) {
-	// secs >= 0 检查拒绝负数；HTTP-date 解析也失败 → 0
-	if got := parseRetryAfter("-5"); got != 0 {
-		t.Errorf("negative seconds: got %v, want 0", got)
-	}
-}
-
-func TestParseRetryAfter_InvalidString(t *testing.T) {
-	if got := parseRetryAfter("abc"); got != 0 {
-		t.Errorf("invalid string: got %v, want 0", got)
-	}
-}
-
-func TestParseRetryAfter_FutureHTTPDate(t *testing.T) {
-	// 未来日期 → 正 duration
-	future := time.Now().Add(2 * time.Hour).UTC().Format(http.TimeFormat)
-	got := parseRetryAfter(future)
-	if got <= 0 {
-		t.Errorf("future date %q: got %v, want > 0", future, got)
-	}
-	// 应接近 2 小时（容忍漂移）
-	if got > 2*time.Hour+10*time.Second {
-		t.Errorf("future date %q: got %v, want <= ~2h", future, got)
-	}
-}
-
-func TestParseRetryAfter_PastHTTPDate(t *testing.T) {
-	// 过去日期 → time.Until 负数 → 不返回 → 0
-	past := time.Now().Add(-2 * time.Hour).UTC().Format(http.TimeFormat)
-	if got := parseRetryAfter(past); got != 0 {
-		t.Errorf("past date %q: got %v, want 0", past, got)
-	}
-}
 
 // --- statusRetryable ---
 

@@ -31,7 +31,7 @@ func (c *Adapter) DiscoverModels(ctx context.Context, providerName string) ([]ad
 	if err != nil {
 		return nil, err
 	}
-	endpoint, err := parseInteractionsURL(p.ChatURL)
+	endpoint, err := adapter.ParseChatURL(p.ChatURL)
 	if err != nil {
 		return nil, err
 	}

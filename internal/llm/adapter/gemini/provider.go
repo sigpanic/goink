@@ -50,7 +50,7 @@ func (p Provider) clientForURL(rawURL string) (*sdk.Interactions, error) {
 	if p.http == nil {
 		return nil, fmt.Errorf("gemini provider requires an injected HTTP client")
 	}
-	endpoint, err := parseInteractionsURL(rawURL)
+	endpoint, err := adapter.ParseChatURL(rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -62,18 +62,6 @@ func (p Provider) clientForURL(rawURL string) (*sdk.Interactions, error) {
 		sdk.WithRetryConfig(retry.Config{Strategy: "none"}),
 		sdk.WithClient(interactionsEndpointClient{client: p.http, endpoint: *endpoint}),
 	).Interactions, nil
-}
-
-// parseInteractionsURL 只校验完整地址，不补路径或猜测版本；根地址可用于后续探测。
-func parseInteractionsURL(raw string) (*url.URL, error) {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, fmt.Errorf("chat_url requires an absolute HTTP(S) URL")
-	}
-	if u.User != nil || u.Fragment != "" {
-		return nil, fmt.Errorf("chat_url must not contain user info or a fragment")
-	}
-	return u, nil
 }
 
 // interactionsEndpointClient 只为 SDK Create 覆盖完整端点，不修改共享 client 或 transport。

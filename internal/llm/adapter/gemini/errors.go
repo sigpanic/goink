@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	"google.golang.org/genai/interactions/models/apierrors"
@@ -75,23 +73,7 @@ func convertSDKError(err error) error {
 	}
 	var retryAfter time.Duration
 	if response != nil {
-		retryAfter = parseRetryAfter(response.Header.Get("Retry-After"))
+		retryAfter = adapter.ParseRetryAfter(response.Header.Get("Retry-After"))
 	}
 	return &adapter.APIError{StatusCode: status, Message: message, Kind: kind, Retryable: adapter.StatusRetryable(status), RetryAfter: retryAfter}
-}
-
-func parseRetryAfter(value string) time.Duration {
-	value = strings.TrimSpace(value)
-	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
-		if seconds >= 0 && seconds <= int64((1<<63-1)/time.Second) {
-			return time.Duration(seconds) * time.Second
-		}
-		return 0
-	}
-	if date, err := http.ParseTime(value); err == nil {
-		if delay := time.Until(date); delay > 0 {
-			return delay
-		}
-	}
-	return 0
 }

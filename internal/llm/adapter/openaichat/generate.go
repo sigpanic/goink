@@ -63,7 +63,7 @@ func (c *Adapter) Generate(ctx context.Context, input adapter.Request) (adapter.
 		if p.ParseError != nil {
 			msg = p.ParseError(respBody).Error()
 		}
-		return adapter.Response{}, &APIError{StatusCode: resp.StatusCode, Message: msg, Retryable: adapter.StatusRetryable(resp.StatusCode), RetryAfter: parseRetryAfter(resp.Header.Get("Retry-After"))}
+		return adapter.Response{}, &APIError{StatusCode: resp.StatusCode, Message: msg, Retryable: adapter.StatusRetryable(resp.StatusCode), RetryAfter: adapter.ParseRetryAfter(resp.Header.Get("Retry-After"))}
 	}
 
 	var result struct {

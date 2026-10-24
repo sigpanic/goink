@@ -251,7 +251,7 @@ func TestResponsesURLRejectsInvalidAddresses(t *testing.T) {
 			}
 		})
 	}
-	u, err := parseResponsesURL("  https://relay.invalid/v8/responses/?token=a%2Fb  ")
+	u, err := adapter.ParseChatURL("  https://relay.invalid/v8/responses/?token=a%2Fb  ")
 	if err != nil || u.String() != "https://relay.invalid/v8/responses/?token=a%2Fb" {
 		t.Fatalf("endpoint was rewritten: %v %v", u, err)
 	}

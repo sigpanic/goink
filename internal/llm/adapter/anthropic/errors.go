@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
 	"time"
 
 	sdk "github.com/anthropics/anthropic-sdk-go"
@@ -38,27 +36,11 @@ func convertSDKError(err error) error {
 	}
 	var retryAfter time.Duration
 	if apiErr.Response != nil {
-		retryAfter = parseRetryAfter(apiErr.Response.Header.Get("Retry-After"))
+		retryAfter = adapter.ParseRetryAfter(apiErr.Response.Header.Get("Retry-After"))
 	}
 	return &adapter.APIError{
 		StatusCode: apiErr.StatusCode, Message: message, Kind: kind,
 		Retryable: adapter.StatusRetryable(apiErr.StatusCode) || (apiErr.StatusCode == http.StatusOK &&
 			(kind == "overloaded_error" || kind == "rate_limit_error" || kind == "api_error")), RetryAfter: retryAfter,
 	}
-}
-
-func parseRetryAfter(value string) time.Duration {
-	value = strings.TrimSpace(value)
-	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
-		if seconds >= 0 && seconds <= int64((1<<63-1)/time.Second) {
-			return time.Duration(seconds) * time.Second
-		}
-		return 0
-	}
-	if date, err := http.ParseTime(value); err == nil {
-		if delay := time.Until(date); delay > 0 {
-			return delay
-		}
-	}
-	return 0
 }

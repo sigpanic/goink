@@ -12,6 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 const probeStart = "event: message_start\ndata: {\"type\":\"message_start\",\"message\":{\"id\":\"msg_probe\",\"type\":\"message\",\"role\":\"assistant\",\"content\":[],\"model\":\"relay-model\",\"usage\":{\"input_tokens\":1,\"output_tokens\":0}}}\n\n"
@@ -28,7 +30,7 @@ func TestMessagesURLCandidatesPreserveEscapingAndQuery(t *testing.T) {
 		{"/proxy/chat", []string{"/proxy/chat", "/proxy/chat/messages", "/proxy/chat/v1/messages", "/v1/messages"}},
 		{"/v1/", []string{"/v1/", "/v1/messages"}},
 	} {
-		u, err := parseMessagesURL("https://relay.invalid" + tt.path + "?route=a%2Fb&x=1&x=2")
+		u, err := adapter.ParseChatURL("https://relay.invalid" + tt.path + "?route=a%2Fb&x=1&x=2")
 		if err != nil {
 			t.Fatal(err)
 		}

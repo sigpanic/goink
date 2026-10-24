@@ -34,7 +34,7 @@ func TestResponsesURLCandidatesPreserveFullEndpointEscapingAndQuery(t *testing.T
 		{"/proxy/responses/", []string{"/proxy/responses/", "/proxy/responses", "/proxy/v1/responses", "/v1/responses"}},
 	} {
 		for _, query := range []string{"?route=a%2Fb&x=1&x=2", "?"} {
-			u, err := parseResponsesURL("https://relay.invalid" + tt.path + query)
+			u, err := adapter.ParseChatURL("https://relay.invalid" + tt.path + query)
 			if err != nil {
 				t.Fatal(err)
 			}

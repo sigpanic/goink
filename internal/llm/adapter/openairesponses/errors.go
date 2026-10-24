@@ -6,9 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strconv"
-	"strings"
-	"time"
 
 	sdk "github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/packages/ssestream"
@@ -44,7 +41,7 @@ func convertSDKError(err error, response *http.Response) error {
 		Message:    message,
 		Kind:       kind,
 		Retryable:  adapter.StatusRetryable(response.StatusCode),
-		RetryAfter: parseRetryAfter(response.Header.Get("Retry-After")),
+		RetryAfter: adapter.ParseRetryAfter(response.Header.Get("Retry-After")),
 	}
 }
 
@@ -75,22 +72,6 @@ func streamError(raw json.RawMessage) error {
 		Message:   fault.Message,
 		Retryable: fault.Code == "server_error" || fault.Code == "rate_limit_exceeded" || fault.Code == "vector_store_timeout",
 	}
-}
-
-func parseRetryAfter(value string) time.Duration {
-	value = strings.TrimSpace(value)
-	if seconds, err := strconv.ParseInt(value, 10, 64); err == nil {
-		if seconds >= 0 && seconds <= int64((1<<63-1)/time.Second) {
-			return time.Duration(seconds) * time.Second
-		}
-		return 0
-	}
-	if date, err := http.ParseTime(value); err == nil {
-		if delay := time.Until(date); delay > 0 {
-			return delay
-		}
-	}
-	return 0
 }
 
 func invalidResponse(message string) error {

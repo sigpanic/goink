@@ -217,7 +217,7 @@ func TestInteractionsURLValidationAndOverrideScope(t *testing.T) {
 			t.Fatalf("invalid endpoint was accepted: %q", raw)
 		}
 	}
-	endpoint, err := parseInteractionsURL(" https://relay.invalid/prefix/v8/interactions/?token=a%2Fb ")
+	endpoint, err := adapter.ParseChatURL(" https://relay.invalid/prefix/v8/interactions/?token=a%2Fb ")
 	if err != nil || endpoint.String() != "https://relay.invalid/prefix/v8/interactions/?token=a%2Fb" {
 		t.Fatalf("endpoint was changed: %v %v", endpoint, err)
 	}

@@ -25,7 +25,7 @@ func assembleProvider(config adapter.Provider, client *http.Client) (Provider, e
 	if err := ValidateProviderType(config.ProviderType); err != nil {
 		return Provider{}, fmt.Errorf("provider %q: %w", config.Name, err)
 	}
-	endpoint, err := parseResponsesURL(config.ChatURL)
+	endpoint, err := adapter.ParseChatURL(config.ChatURL)
 	if err != nil {
 		return Provider{}, fmt.Errorf("provider %q: %w", config.Name, err)
 	}
@@ -50,22 +50,10 @@ func ValidateProviderType(providerType string) error {
 	return nil
 }
 
-// parseResponsesURL 只校验地址，不补路径；根地址可留待连接测试探测。
-func parseResponsesURL(raw string) (*url.URL, error) {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, fmt.Errorf("chat_url requires an absolute HTTP(S) URL")
-	}
-	if u.User != nil || u.Fragment != "" {
-		return nil, fmt.Errorf("chat_url must not contain user info or a fragment")
-	}
-	return u, nil
-}
-
 // responsesURLOptions 用于 New / NewStreaming 的单次调用，正式请求与探测共用完整 URL 语义。
 // 同时设置本次调用的 origin，满足 SDK 的来源校验，不污染实例或其他 API 的路由。
 func responsesURLOptions(rawURL string) ([]option.RequestOption, error) {
-	endpoint, err := parseResponsesURL(rawURL)
+	endpoint, err := adapter.ParseChatURL(rawURL)
 	if err != nil {
 		return nil, err
 	}

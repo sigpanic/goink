@@ -25,7 +25,7 @@ func assembleProvider(config adapter.Provider, client *http.Client) (Provider, e
 	if err := ValidateProviderType(config.ProviderType); err != nil {
 		return Provider{}, fmt.Errorf("provider %q: %w", config.Name, err)
 	}
-	endpoint, err := parseMessagesURL(config.ChatURL)
+	endpoint, err := adapter.ParseChatURL(config.ChatURL)
 	if err != nil {
 		return Provider{}, fmt.Errorf("provider %q: %w", config.Name, err)
 	}
@@ -53,22 +53,10 @@ func ValidateProviderType(providerType string) error {
 	return nil
 }
 
-// parseMessagesURL 只校验地址，不补路径或移除后缀；根地址也可作为后续连接测试的候选。
-func parseMessagesURL(raw string) (*url.URL, error) {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
-		return nil, fmt.Errorf("chat_url requires an absolute HTTP(S) URL")
-	}
-	if u.User != nil || u.Fragment != "" {
-		return nil, fmt.Errorf("chat_url must not contain user info or a fragment")
-	}
-	return u, nil
-}
-
 // messagesURLOption 仅用于 Messages.New / NewStreaming 的单次调用，不能挂在整个 SDK client 上。
 // 正式请求传保存的 ChatURL，连接测试传候选 URL；两者均保留完整路径、转义及查询参数。
 func messagesURLOption(rawURL string) (option.RequestOption, error) {
-	endpoint, err := parseMessagesURL(rawURL)
+	endpoint, err := adapter.ParseChatURL(rawURL)
 	if err != nil {
 		return nil, err
 	}

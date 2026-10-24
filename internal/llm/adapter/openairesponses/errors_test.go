@@ -26,20 +26,3 @@ func TestConvertSDKErrorPreservesTypeFallbackAndCancellation(t *testing.T) {
 		}
 	}
 }
-
-func TestRetryAfterHandlesBoundsAndDates(t *testing.T) {
-	for value, want := range map[string]time.Duration{
-		"0": 0, " 12 ": 12 * time.Second, "-1": 0, "9223372036854775807": 0,
-		"9223372036854775808": 0, "not a date": 0, "1.5": 0, "": 0,
-	} {
-		if got := parseRetryAfter(value); got != want {
-			t.Fatalf("Retry-After %q = %v, want %v", value, got, want)
-		}
-	}
-	if got := parseRetryAfter(time.Now().Add(time.Minute).UTC().Format(http.TimeFormat)); got < 58*time.Second || got > time.Minute {
-		t.Fatalf("future HTTP date not preserved: %v", got)
-	}
-	if got := parseRetryAfter(time.Now().Add(-time.Hour).UTC().Format(http.TimeFormat)); got != 0 {
-		t.Fatalf("past HTTP date produced a delay: %v", got)
-	}
-}

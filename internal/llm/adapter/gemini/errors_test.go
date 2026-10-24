@@ -28,22 +28,3 @@ func TestSDKErrorKeepsWrappedHTTPMetadata(t *testing.T) {
 		}
 	}
 }
-
-func TestRetryAfter(t *testing.T) {
-	for _, tc := range []struct {
-		raw  string
-		want time.Duration
-	}{
-		{raw: "0"}, {raw: "-1"}, {raw: "invalid"}, {raw: "9223372036854775807"},
-		{raw: "9223372036854775808"}, {raw: " 12 ", want: 12 * time.Second},
-		{raw: time.Now().Add(-time.Minute).UTC().Format(http.TimeFormat)},
-	} {
-		if got := parseRetryAfter(tc.raw); got != tc.want {
-			t.Fatalf("parseRetryAfter(%q)=%v, want %v", tc.raw, got, tc.want)
-		}
-	}
-	got := parseRetryAfter(time.Now().Add(time.Minute).UTC().Format(http.TimeFormat))
-	if got < 58*time.Second || got > time.Minute {
-		t.Fatalf("future HTTP date lost: %v", got)
-	}
-}

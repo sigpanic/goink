@@ -281,7 +281,7 @@ func TestMessagesURLRejectsInvalidAddresses(t *testing.T) {
 			}
 		})
 	}
-	got, err := parseMessagesURL("  https://relay.invalid/prefix/v8/messages/?token=a%2Fb  ")
+	got, err := adapter.ParseChatURL("  https://relay.invalid/prefix/v8/messages/?token=a%2Fb  ")
 	if err != nil {
 		t.Fatal(err)
 	}

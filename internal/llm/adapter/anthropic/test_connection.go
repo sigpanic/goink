@@ -25,7 +25,7 @@ func (c *Adapter) TestConnection(ctx context.Context, providerName, model string
 	if strings.TrimSpace(model) == "" {
 		return adapter.TestConnectionResult{}, fmt.Errorf("model must not be empty")
 	}
-	endpoint, err := parseMessagesURL(p.ChatURL)
+	endpoint, err := adapter.ParseChatURL(p.ChatURL)
 	if err != nil {
 		return adapter.TestConnectionResult{}, err
 	}
