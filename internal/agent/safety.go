@@ -5,6 +5,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
@@ -45,17 +46,14 @@ func (to toolOutput) resultJSON() string {
 	return string(b)
 }
 
-// buildToolCalls 将本轮 toolOutputs 转换为 OpenAI tool_calls JSON 数组。
-func buildToolCalls(outputs []toolOutput) []map[string]any {
-	var calls []map[string]any
+// buildToolCalls 将本轮 toolOutputs 转换为公共工具调用，参数保留原始 JSON。
+func buildToolCalls(outputs []toolOutput) []llm.ToolCall {
+	var calls []llm.ToolCall
 	for _, o := range outputs {
-		calls = append(calls, map[string]any{
-			"id":   o.id,
-			"type": "function",
-			"function": map[string]any{
-				"name":      o.name,
-				"arguments": string(o.rawArgs), //api期望字符串 而不是map对象
-			},
+		calls = append(calls, llm.ToolCall{
+			ID:        o.id,
+			Name:      o.name,
+			Arguments: o.rawArgs,
 		})
 	}
 	return calls

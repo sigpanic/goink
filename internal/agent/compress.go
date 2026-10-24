@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"maps"
 	"strconv"
@@ -13,6 +12,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/agentcfg"
+	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/session"
 )
 
@@ -41,12 +41,12 @@ const maxUserRetain = 15
 const minConversationTurns = 4
 
 // generateSummary 调用 LLM 生成压缩摘要，返回摘要文本和应保留的历史消息。
-func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, []map[string]any, error) {
-	msgs := make([]map[string]any, len(opts.Messages)+1)
+func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, []llm.Message, error) {
+	msgs := make([]llm.Message, len(opts.Messages)+1)
 	copy(msgs, opts.Messages)
-	msgs[len(opts.Messages)] = map[string]any{"role": "user", "content": compressionPrompt}
+	msgs[len(opts.Messages)] = llm.Message{Role: "user", Content: compressionPrompt}
 
-	summary, err := a.llm.GenerateText(ctx, opts.ProviderName, msgs, opts.Model.ID)
+	summary, err := a.llm.GenerateText(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, msgs)
 	if err != nil {
 		a.logger.Warn("压缩摘要生成失败，保持原上下文", "err", err)
 		return "", nil, fmt.Errorf("compress: LLM summary failed: %w", err)
@@ -97,11 +97,15 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 	if err != nil {
 		return fmt.Errorf("compress: load messages after persist: %w", err)
 	}
-	opts.ActiveVersion = newVersion
-	opts.Messages = make([]map[string]any, len(apiMsgs))
+	messages := make([]llm.Message, len(apiMsgs))
 	for i, m := range apiMsgs {
-		opts.Messages[i] = m.ToAPIFormat(a.logger)
+		messages[i], err = m.ToLLMRequestMessage()
+		if err != nil {
+			return fmt.Errorf("compress: render message: %w", err)
+		}
 	}
+	opts.ActiveVersion = newVersion
+	opts.Messages = messages
 
 	newTokens := a.InitRunningTokens(opts.Messages)
 	clear(runningTokens)
@@ -139,22 +143,21 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 	// 提取头部 system 消息，不动
 	sysEnd := 0
 	for i, m := range opts.Messages {
-		role, _ := m["role"].(string)
-		if role == "system" {
+		if m.Role == "system" {
 			sysEnd = i + 1
 		} else {
 			break
 		}
 	}
-	sysMsgs := make([]map[string]any, sysEnd)
+	sysMsgs := make([]llm.Message, sysEnd)
 	copy(sysMsgs, opts.Messages[:sysEnd])
 
 	// 内存重建 opts.Messages
-	newMsgs := make([]map[string]any, 0, sysEnd+2+len(retained))
+	newMsgs := make([]llm.Message, 0, sysEnd+2+len(retained))
 	newMsgs = append(newMsgs, sysMsgs...)
 	newMsgs = append(newMsgs,
-		map[string]any{"role": "user", "content": compressionReminder},
-		map[string]any{"role": "user", "content": "<system-reminder>\n" + summary + "\n</system-reminder>"},
+		llm.Message{Role: "user", Content: compressionReminder},
+		llm.Message{Role: "user", Content: "<system-reminder>\n" + summary + "\n</system-reminder>"},
 	)
 	newMsgs = append(newMsgs, retained...)
 	opts.Messages = newMsgs
@@ -193,7 +196,7 @@ func (a *Agent) compressInMemory(ctx context.Context, opts *RunOptions, runningT
 }
 
 // persistCompression 在事务中递增 active_version 并写入所有压缩消息。
-func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *agentcfg.SystemMessages, summary string, retained []map[string]any) (int, error) {
+func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *agentcfg.SystemMessages, summary string, retained []llm.Message) (int, error) {
 	var newVersion int
 
 	err := a.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -250,8 +253,11 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *
 		}
 		// 保留消息副本
 		for _, m := range retained {
-			rm := apiMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
-			if err := tx.Create(rm).Error; err != nil {
+			rm, err := llmMsgToMessage(m, opts.SessionID, opts.TurnID, newVersion)
+			if err != nil {
+				return fmt.Errorf("转换保留消息失败: %w", err)
+			}
+			if err := tx.Create(&rm).Error; err != nil {
 				return fmt.Errorf("写入保留消息失败: %w", err)
 			}
 		}
@@ -266,46 +272,18 @@ func (a *Agent) persistCompression(ctx context.Context, opts *RunOptions, msgs *
 	return newVersion, err
 }
 
-// apiMsgToMessage 将 API 格式的 map 反向转换为 session.Message，提取 ExtraMetadata。
-func apiMsgToMessage(m map[string]any, sessionID string, turnID, version int) *session.Message {
-	role, _ := m["role"].(string)
-	content, _ := m["content"].(string)
-
-	msg := &session.Message{
+// llmMsgToMessage 将已渲染的保留消息映射为新记录，避免重载时重复添加时间前缀。
+func llmMsgToMessage(m llm.Message, sessionID string, turnID, version int) (session.Message, error) {
+	msg := session.Message{
 		SessionID:  sessionID,
 		TurnID:     turnID,
-		Role:       role,
-		Content:    content,
 		Version:    version,
 		ToAPI:      true,
 		ToFrontend: false,
 		AgentType:  "main",
 	}
 
-	if tc, ok := m["reasoning_content"].(string); ok {
-		msg.ThinkingContent = tc
-	}
-
-	meta := make(map[string]any)
-	switch role {
-	case "assistant":
-		if tc, ok := m["tool_calls"]; ok && tc != nil {
-			meta["tool_calls"] = tc
-		}
-	case "tool":
-		if id, ok := m["tool_call_id"]; ok && id != nil {
-			meta["tool_call_id"] = id
-		}
-		if name, ok := m["name"]; ok && name != nil {
-			meta["tool_name"] = name
-		}
-	}
-	if len(meta) > 0 {
-		b, _ := json.Marshal(meta)
-		msg.ExtraMetadata = string(b)
-	}
-
-	return msg
+	return msg.WithLLMMessage(m)
 }
 
 // emitCompression 推送压缩事件到前端。
@@ -322,7 +300,7 @@ func (a *Agent) emitCompression(ctx context.Context, turnID int, phase, summary,
 
 // retainMessages 筛选应保留的历史消息。
 // 跳过前 N 条 system 消息，后续应用保留规则。
-func retainMessages(messages []map[string]any) []map[string]any {
+func retainMessages(messages []llm.Message) []llm.Message {
 	if len(messages) == 0 {
 		return nil
 	}
@@ -330,8 +308,7 @@ func retainMessages(messages []map[string]any) []map[string]any {
 	// 跳过前部 system 消息
 	sysEnd := 0
 	for _, m := range messages {
-		role, _ := m["role"].(string)
-		if role == "system" {
+		if m.Role == "system" {
 			sysEnd++
 		} else {
 			break
@@ -346,8 +323,7 @@ func retainMessages(messages []map[string]any) []map[string]any {
 	// 找到所有 user 消息的位置
 	userIdx := make([]int, 0)
 	for i, m := range history {
-		role, _ := m["role"].(string)
-		if role == "user" {
+		if m.Role == "user" {
 			userIdx = append(userIdx, i)
 		}
 	}
@@ -370,11 +346,9 @@ func retainMessages(messages []map[string]any) []map[string]any {
 		}
 	}
 
-	retained := make([]map[string]any, 0, len(history)-keepFrom)
+	retained := make([]llm.Message, 0, len(history)-keepFrom)
 	for _, m := range history[keepFrom:] {
-		dup := make(map[string]any, len(m))
-		maps.Copy(dup, m)
-		retained = append(retained, dup)
+		retained = append(retained, m.Clone())
 	}
 
 	return retained

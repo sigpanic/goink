@@ -20,6 +20,7 @@ import (
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/search"
 	"github.com/sigpanic/goink/internal/session"
@@ -46,11 +47,12 @@ type RunOptions struct {
 	TurnID          int
 	SessionID       string
 	NovelID         int64
-	Messages        []map[string]any
+	Messages        []llm.Message
 	AllowedTools    map[string]bool
 	ActiveVersion   int
 	SubAgentVersion int // 子 Agent 内存版本计数器，不持久化
 	Model           *llm.ModelInfo
+	AdapterName     adapter.Protocol
 	ProviderName    string
 	AgentType       string
 	SubTaskID       string // 子 Agent 事件路由 ID
@@ -98,17 +100,17 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	sysPrompt := agentcfg.AgentIdentity(at)
 	allowed := agentcfg.Allowlist(at)
 
-	msgs := []map[string]any{
-		{"role": "system", "content": sysPrompt},
+	msgs := []llm.Message{
+		{Role: "system", Content: sysPrompt},
 	}
 	// subagent 不需要 always/catalog（只读上下文），只注入 Profile + State
 	if profile, err := agentcfg.NovelProfile(ctx, a.db, req.NovelID); err == nil && profile != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": profile})
+		msgs = append(msgs, llm.Message{Role: "system", Content: profile})
 	}
 	if state, err := agentcfg.NovelState(ctx, a.db, req.NovelID); err == nil && state != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": state})
+		msgs = append(msgs, llm.Message{Role: "system", Content: state})
 	}
-	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
+	msgs = append(msgs, llm.Message{Role: "user", Content: req.Instruction})
 
 	subOpts := RunOptions{
 		TurnID:          parentOpts.TurnID,
@@ -122,6 +124,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		EventSeq:        parentOpts.EventSeq,
 		MaxTurns:        100,
 		Model:           parentOpts.Model,
+		AdapterName:     parentOpts.AdapterName,
 		ProviderName:    parentOpts.ProviderName,
 		ReasoningEffort: parentOpts.ReasoningEffort,
 	}
@@ -170,7 +173,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	recentPatterns := make([]string, 0, 6)
 	tracker := newInterruptTracker() // 工具连续失败计数（system 5/args 5/全局 10 中断）
 	runningTokens := a.InitRunningTokens(opts.Messages)
-	tools := a.registry.OpenAI(opts.AllowedTools)
+	tools := a.registry.Definitions(opts.AllowedTools)
 	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
 	eventSeq := opts.EventSeq
 	if eventSeq == nil {
@@ -229,7 +232,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 		// 记录本轮 streamLoop 第一个事件 seq（前端据此清空本轮 partial segments）
 		// +1 是因为 emit 闭包是 `*eventSeq++; event.Seq = *eventSeq`（先自增再赋值）
 		streamStartSeq := *eventSeq + 1
-		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+		stream := a.llm.ChatStream(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, opts.Messages, tools, callOpts)
 
 		// ---- SSE 流处理 ----
 	streamLoop:
@@ -606,9 +609,13 @@ func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[strin
 		a.logger.Error("持久化消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 	}
 
-	apiFormat := msg.ToAPIFormat(a.logger)
-	opts.Messages = append(opts.Messages, apiFormat)
-	n, err := llm.CountMessageTokens(apiFormat)
+	message, err := msg.ToLLMRequestMessage()
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return
+	}
+	opts.Messages = append(opts.Messages, message)
+	n, err := llm.CountMessageTokens(message)
 	if err != nil {
 		a.logger.Warn("token count failed", "role", role, "err", err)
 	}
@@ -645,7 +652,7 @@ func displayPhase(phase string) mcp_tools.DisplayPhase {
 // buildWebSearch 构建 WebSearch 闭包，从当前 providers 中读取 DeepSeek 配置。
 func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
 	providers := a.llm.Providers()
-	ds, ok := providers["deepseek"]
+	ds, ok := providers[adapter.ProtocolOpenAIChat]["deepseek"]
 	if !ok || ds.APIKey == "" {
 		return nil
 	}
