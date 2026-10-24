@@ -105,6 +105,11 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 			CallID           string            `json:"call_id"`
 			Name             string            `json:"name"`
 			Arguments        string            `json:"arguments"`
+			Async            bool              `json:"async"`
+			Namespace        string            `json:"namespace"`
+			Caller           *struct {
+				Type string `json:"type"`
+			} `json:"caller"`
 		}
 		if err := json.Unmarshal(data, &item); err != nil {
 			return nil, "", nil, fmt.Errorf("decode OpenAI Responses replay item: %w", err)
@@ -143,9 +148,16 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 				}
 			}
 		case "function_call":
+			if item.Async || item.Namespace != "" || (item.Caller != nil && item.Caller.Type != "direct") {
+				return nil, "", nil, fmt.Errorf("provider-executed, asynchronous or namespaced OpenAI function calls are not supported")
+			}
 			arguments := json.RawMessage(item.Arguments)
 			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" || !jsonObject(arguments) || seen[item.CallID] {
-				return nil, "", nil, fmt.Errorf("invalid or duplicate OpenAI Responses replay function call %q", item.CallID)
+				return nil, "", nil, &adapter.APIError{
+					Kind:      "tool_args_invalid",
+					Retryable: true,
+					Message:   fmt.Sprintf("invalid or duplicate OpenAI Responses function call %q", item.CallID),
+				}
 			}
 			seen[item.CallID] = true
 			calls = append(calls, adapter.ToolCall{ID: item.CallID, Name: item.Name, Arguments: arguments})
