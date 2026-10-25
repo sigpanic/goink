@@ -17,18 +17,20 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
 )
 
 // ChatInput 是一次对话请求的入参。
 type ChatInput struct {
-	SessionID       string `json:"session_id"` // 空=新建会话
-	NovelID         int64  `json:"novel_id"`
-	Message         string `json:"message"`
-	ProviderName    string `json:"provider_name"`    // "deepseek"
-	ModelID         string `json:"model_id"`         // "deepseek-v4-pro"
-	ReasoningEffort string `json:"reasoning_effort"` // "high" | "max" | ""
+	SessionID       string           `json:"session_id"` // 空=新建会话
+	NovelID         int64            `json:"novel_id"`
+	Message         string           `json:"message"`
+	AdapterName     adapter.Protocol `json:"adapter_name"`
+	ProviderName    string           `json:"provider_name"`    // "deepseek"
+	ModelID         string           `json:"model_id"`         // "deepseek-v4-pro"
+	ReasoningEffort string           `json:"reasoning_effort"` // "high" | "max" | ""
 }
 
 // ChatResult 是一次对话请求的返回值。
@@ -41,9 +43,9 @@ type ChatResult struct {
 // Chat 是对话入口。Wails 绑定，前端调用后同步执行，期间通过 EventsEmit 推流。
 func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	// 1. 验证模型（最早失败，不污染 DB）
-	model, ok := a.llmClient.ProviderModel(input.ProviderName, input.ModelID)
+	model, ok := a.llmClient.ProviderModel(input.AdapterName, input.ProviderName, input.ModelID)
 	if !ok {
-		return nil, fmt.Errorf("模型未找到: %s/%s", input.ProviderName, input.ModelID)
+		return nil, fmt.Errorf("模型未找到: %s/%s/%s", input.AdapterName, input.ProviderName, input.ModelID)
 	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -65,7 +67,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 
 	// 3. 新会话自动生成标题（异步，与 agent LLM 调用并发）
 	if isNew && sess.Title == "" {
-		go a.generateTitle(sess.SessionID, input.Message, input.ProviderName, input.ModelID)
+		go a.generateTitle(sess.SessionID, input.Message, input.AdapterName, input.ProviderName, input.ModelID)
 	}
 
 	// 4. 获取下一个 turn ID
@@ -170,6 +172,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		AllowedTools:    agentcfg.Allowlist(agentcfg.MainAgent),
 		ActiveVersion:   sess.ActiveVersion,
 		Model:           model,
+		AdapterName:     input.AdapterName,
 		ProviderName:    input.ProviderName,
 		AgentType:       "main",
 		MaxTurns:        100,
@@ -284,19 +287,19 @@ func (a *App) loadLLMMessages(ctx context.Context, sessionID string, version int
 }
 
 // generateTitle 用 LLM 为非流式调用生成对话标题（≤10 字）。
-func (a *App) generateTitle(sessionID, userMessage, providerName, modelID string) {
+func (a *App) generateTitle(sessionID, userMessage string, adapterName adapter.Protocol, providerName, modelID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	messages := []map[string]any{
+	messages := []llm.Message{
 		{
-			"role":    "system",
-			"content": "基于用户消息，生成一个不超过10个字的对话标题。只需输出标题文本，不要添加引号、标点或者额外解释。",
+			Role:    "system",
+			Content: "基于用户消息，生成一个不超过10个字的对话标题。只需输出标题文本，不要添加引号、标点或者额外解释。",
 		},
-		{"role": "user", "content": userMessage},
+		{Role: "user", Content: userMessage},
 	}
 
-	title, err := a.llmClient.GenerateText(ctx, providerName, messages, modelID)
+	title, err := a.llmClient.GenerateText(ctx, adapterName, providerName, modelID, messages)
 	if err != nil {
 		a.logger.Warn("自动生成标题失败", "err", err)
 		return
@@ -341,9 +344,10 @@ func (a *App) CancelChat(sessionID string) {
 
 // CompressInput 是手动压缩请求的入参。
 type CompressInput struct {
-	SessionID    string `json:"session_id"`
-	ProviderName string `json:"provider_name"`
-	ModelID      string `json:"model_id"`
+	SessionID    string           `json:"session_id"`
+	AdapterName  adapter.Protocol `json:"adapter_name"`
+	ProviderName string           `json:"provider_name"`
+	ModelID      string           `json:"model_id"`
 }
 
 // CompressResult 是手动压缩请求的返回值。
@@ -364,9 +368,9 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	}
 
 	// 2. 查找模型
-	model, ok := a.llmClient.ProviderModel(input.ProviderName, input.ModelID)
+	model, ok := a.llmClient.ProviderModel(input.AdapterName, input.ProviderName, input.ModelID)
 	if !ok {
-		return nil, fmt.Errorf("模型未找到: %s/%s", input.ProviderName, input.ModelID)
+		return nil, fmt.Errorf("模型未找到: %s/%s/%s", input.AdapterName, input.ProviderName, input.ModelID)
 	}
 
 	// 3. 获取下一个 turn ID（手动压缩独立成一个 turn）
@@ -399,6 +403,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 		Messages:      messages,
 		ActiveVersion: sess.ActiveVersion,
 		Model:         model,
+		AdapterName:   input.AdapterName,
 		ProviderName:  input.ProviderName,
 		AgentType:     "main",
 	}
