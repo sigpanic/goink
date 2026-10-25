@@ -17,6 +17,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/skill"
 )
@@ -47,8 +48,8 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 	if input.NovelID <= 0 {
 		return nil, fmt.Errorf("novel_id 不能为空")
 	}
-	if input.ProviderName == "" || input.ModelID == "" {
-		return nil, fmt.Errorf("provider_name 和 model_id 不能为空")
+	if input.AdapterName == "" || input.ProviderName == "" || input.ModelID == "" {
+		return nil, fmt.Errorf("adapter_name、provider_name 和 model_id 不能为空")
 	}
 	if input.TaskID == "" {
 		input.TaskID = fmt.Sprintf("pattern-%d", time.Now().UnixNano())
@@ -66,7 +67,7 @@ func (e *Extractor) Extract(ctx context.Context, input ExtractPatternInput) (*Ex
 	}
 	readingNumbers := readingNumbersFromChapters(chapters)
 
-	contextWindow := e.modelContextWindow(input.ProviderName, input.ModelID)
+	contextWindow := e.modelContextWindow(input.AdapterName, input.ProviderName, input.ModelID)
 	budget := batchBudget(contextWindow)
 	trace := &Trace{
 		TaskID:        input.TaskID,
@@ -510,14 +511,11 @@ func buildSkillMarkdown(name, description, content string) string {
 
 // callTool 请求 LLM 调用指定工具，返回结构化 JSON。
 // 薄封装：组装单工具 tools 数组 + 适配 llm.CallToolOptions，核心流式接收/重试/错误聚合在 llm.CallTool。
-func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, toolName string, schema any, messages []map[string]any, attempts int, maxTokens int, onStatus func(LLMStatus)) (json.RawMessage, error) {
-	tools := []map[string]any{{
-		"type": "function",
-		"function": map[string]any{
-			"name":        toolName,
-			"description": "返回模式提取的结构化输出。",
-			"parameters":  mcp_tools.SchemaOf(schema),
-		},
+func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, toolName string, schema any, messages []llm.Message, attempts int, maxTokens int, onStatus func(LLMStatus)) (json.RawMessage, error) {
+	tools := []llm.ToolDefinition{{
+		Name:        toolName,
+		Description: "返回模式提取的结构化输出。",
+		InputSchema: mcp_tools.SchemaOf(schema),
 	}}
 	opts := &llm.CallToolOptions{
 		Attempts: attempts,
@@ -533,7 +531,7 @@ func (e *Extractor) callTool(ctx context.Context, input ExtractPatternInput, too
 	if input.ReasoningEffort != "" {
 		opts.ReasoningEffort = input.ReasoningEffort
 	}
-	return e.LLMClient.CallTool(ctx, input.ProviderName, input.ModelID, messages, tools, toolName, opts)
+	return e.LLMClient.CallTool(ctx, input.AdapterName, input.ProviderName, input.ModelID, messages, tools, toolName, opts)
 }
 
 // batchBudget 根据模型上下文窗口计算每批 token 预算：≥200K 用 100K，否则取 70%
@@ -544,9 +542,9 @@ func batchBudget(contextWindow int) int {
 	return int(float64(contextWindow) * 0.7)
 }
 
-func (e *Extractor) modelContextWindow(providerName, modelID string) int {
+func (e *Extractor) modelContextWindow(adapterName adapter.Protocol, providerName, modelID string) int {
 	if e.LLMClient != nil {
-		if m, ok := e.LLMClient.ProviderModel(providerName, modelID); ok && m.ContextWindow > 0 {
+		if m, ok := e.LLMClient.ProviderModel(adapterName, providerName, modelID); ok && m.ContextWindow > 0 {
 			return m.ContextWindow
 		}
 	}
