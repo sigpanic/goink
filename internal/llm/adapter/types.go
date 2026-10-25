@@ -9,6 +9,14 @@ import (
 	"github.com/sigpanic/goink/internal/apperr"
 )
 
+// ModelSelection 标识完整的模型选择；ProviderName 在 AdapterName 内唯一。
+// 不包含模型能力或凭据，也不依赖 UI key 的编码方式。
+type ModelSelection struct {
+	AdapterName  Protocol `json:"adapter_name"`
+	ProviderName string   `json:"provider_name"`
+	ModelID      string   `json:"model_id"`
+}
+
 // ModelInfo 描述一个具体模型的元信息。
 type ModelInfo struct {
 	ID               string   `json:"id"`                         // 模型标识，如 "deepseek-v4-pro"

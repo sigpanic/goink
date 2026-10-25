@@ -4,25 +4,27 @@ import (
 	"encoding/json"
 	"log/slog"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // Session 是对话会话的元数据容器。
 // 不持有 messages——消息通过 Store 按 to_api/to_frontend/version 三条路径独立查询。
 // active_version 配合 Message.version 实现上下文压缩和版本级回滚，压缩不删旧消息。
 type Session struct {
-	SessionID       string    `gorm:"column:session_id;primaryKey"                                 json:"session_id"`
-	NovelID         int64     `gorm:"column:novel_id;index:idx_sessions_novel;not null"            json:"novel_id"`
-	Title           string    `gorm:"column:title;not null;default:''"                            json:"title"`
-	Model           string    `gorm:"column:model;not null;default:deepseek-v4-pro"               json:"model"`
-	ReasoningEffort string    `gorm:"column:reasoning_effort"                                      json:"reasoning_effort,omitempty"` // "high" | "max" | ""，DeepSeek 推理深度
-	Summary         string    `gorm:"column:summary;not null;default:''"                          json:"summary"`                     // 最新压缩摘要，每次压缩全量替换
-	PendingChanges  string    `gorm:"column:pending_changes"                                       json:"pending_changes,omitempty"`  // JSON，待确认的编辑变更列表
-	ExtraMetadata   string    `gorm:"column:extra_metadata"                                        json:"extra_metadata,omitempty"`   // JSON，扩展槽
-	ActiveVersion   int       `gorm:"column:active_version;not null;default:1"                    json:"active_version"`              // 当前活跃的上下文代数
-	LastTurnID      int       `gorm:"column:last_turn_id;not null;default:0"                      json:"last_turn_id"`                // 最后一个 turn 的编号，原子自增
-	Usage           string    `gorm:"column:usage"                                                 json:"usage,omitempty"`            // JSON，最近一次 LLM 调用的 token 用量
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"                            json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime;index:idx_sessions_novel"   json:"updated_at"`
+	SessionID       string                 `gorm:"column:session_id;primaryKey"                                 json:"session_id"`
+	NovelID         int64                  `gorm:"column:novel_id;index:idx_sessions_novel;not null"            json:"novel_id"`
+	Title           string                 `gorm:"column:title;not null;default:''"                            json:"title"`
+	ModelSelection  adapter.ModelSelection `gorm:"embedded" json:"model_selection"`
+	ReasoningEffort string                 `gorm:"column:reasoning_effort"                                      json:"reasoning_effort,omitempty"` // "high" | "max" | ""，DeepSeek 推理深度
+	Summary         string                 `gorm:"column:summary;not null;default:''"                          json:"summary"`                     // 最新压缩摘要，每次压缩全量替换
+	PendingChanges  string                 `gorm:"column:pending_changes"                                       json:"pending_changes,omitempty"`  // JSON，待确认的编辑变更列表
+	ExtraMetadata   string                 `gorm:"column:extra_metadata"                                        json:"extra_metadata,omitempty"`   // JSON，扩展槽
+	ActiveVersion   int                    `gorm:"column:active_version;not null;default:1"                    json:"active_version"`              // 当前活跃的上下文代数
+	LastTurnID      int                    `gorm:"column:last_turn_id;not null;default:0"                      json:"last_turn_id"`                // 最后一个 turn 的编号，原子自增
+	Usage           string                 `gorm:"column:usage"                                                 json:"usage,omitempty"`            // JSON，最近一次 LLM 调用的 token 用量
+	CreatedAt       time.Time              `gorm:"column:created_at;autoCreateTime"                            json:"created_at"`
+	UpdatedAt       time.Time              `gorm:"column:updated_at;autoUpdateTime;index:idx_sessions_novel"   json:"updated_at"`
 }
 
 func (Session) TableName() string { return "sessions" }

@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/storage"
 
 	"gorm.io/gorm"
@@ -86,48 +87,54 @@ func (s *Store) search(ctx context.Context, novelID int64, search string) (*stor
 
 // ========== Session 更新 ==========
 
-// UpdateSessionMeta 增量更新标题、模型、推理深度。空字符串不更新。
-func (s *Store) UpdateSessionMeta(ctx context.Context, sessionID, title, model, reasoningEffort string) error {
-	if title == "" && model == "" && reasoningEffort == "" {
+// UpdateSessionTitle 只更新标题；空字符串保持现有标题。
+func (s *Store) UpdateSessionTitle(ctx context.Context, sessionID, title string) error {
+	if title == "" {
 		return nil
 	}
 
-	var sess Session
-	if err := s.DB.WithContext(ctx).
+	result := s.DB.WithContext(ctx).Model(&Session{}).
 		Where("session_id = ?", sessionID).
-		First(&sess).Error; err != nil {
-		return fmt.Errorf("session store: update meta: %w", err)
+		Update("title", title)
+	if result.Error != nil {
+		return fmt.Errorf("session store: update title: %w", result.Error)
 	}
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("session store: update title: %w", gorm.ErrRecordNotFound)
+	}
+	return nil
+}
 
-	if title != "" {
-		sess.Title = title
+// UpdateSessionModelSelection 整体替换模型选择和推理等级，允许清空推理等级。
+// 仅更新目标会话的对应列；模型可用性由上层校验，不创建缺失会话。
+func (s *Store) UpdateSessionModelSelection(ctx context.Context, sessionID string, selection adapter.ModelSelection, reasoningEffort string) error {
+	result := s.DB.WithContext(ctx).Model(&Session{}).
+		Where("session_id = ?", sessionID).
+		Updates(map[string]any{
+			"adapter_name":     selection.AdapterName,
+			"provider_name":    selection.ProviderName,
+			"model_id":         selection.ModelID,
+			"reasoning_effort": reasoningEffort,
+		})
+	if result.Error != nil {
+		return fmt.Errorf("session store: update model selection: %w", result.Error)
 	}
-	if model != "" {
-		sess.Model = model
-	}
-	if reasoningEffort != "" {
-		sess.ReasoningEffort = reasoningEffort
-	}
-
-	if err := s.DB.WithContext(ctx).Save(&sess).Error; err != nil {
-		return fmt.Errorf("session store: update meta: %w", err)
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("session store: update model selection: %w", gorm.ErrRecordNotFound)
 	}
 	return nil
 }
 
 // UpdateSessionUsage 更新最近一次 LLM 的 token 用量。
 func (s *Store) UpdateSessionUsage(ctx context.Context, sessionID, usageJSON string) error {
-	var sess Session
-	if err := s.DB.WithContext(ctx).
+	result := s.DB.WithContext(ctx).Model(&Session{}).
 		Where("session_id = ?", sessionID).
-		First(&sess).Error; err != nil {
-		return fmt.Errorf("session store: update usage: %w", err)
+		Update("usage", usageJSON)
+	if result.Error != nil {
+		return fmt.Errorf("session store: update usage: %w", result.Error)
 	}
-
-	sess.Usage = usageJSON
-
-	if err := s.DB.WithContext(ctx).Save(&sess).Error; err != nil {
-		return fmt.Errorf("session store: update usage: %w", err)
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("session store: update usage: %w", gorm.ErrRecordNotFound)
 	}
 	return nil
 }
