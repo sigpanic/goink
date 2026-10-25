@@ -134,20 +134,23 @@ func (a *App) GetLLMConfig() (*llm.LLMConfigView, error) {
 		a.logger.Error("failed to load LLM config", "err", err)
 		return nil, fmt.Errorf("app: load llm config: %w", err)
 	}
-	return llm.BuildConfigView(user), nil
+	return llm.BuildConfigView(user)
 }
 
 // SaveLLMConfig 保存用户 LLM 配置并热重载 Client。
 func (a *App) SaveLLMConfig(input llm.LLMConfigView) error {
-	cfg := input.ToUserConfig()
-	if err := llm.SaveUserConfig(config.LLMConfigPath(), cfg); err != nil {
+	cfg, err := input.ToUserConfig()
+	if err != nil {
+		return fmt.Errorf("app: convert llm config: %w", err)
+	}
+	if a.llmClient != nil {
+		err = a.llmClient.SaveConfig(config.LLMConfigPath(), cfg)
+	} else {
+		err = llm.SaveUserConfig(config.LLMConfigPath(), cfg)
+	}
+	if err != nil {
 		a.logger.Error("failed to save LLM config", "err", err)
 		return fmt.Errorf("app: save llm config: %w", err)
-	}
-
-	if a.llmClient != nil {
-		providers := llm.Merge(llm.Builtin, cfg)
-		a.llmClient.Reload(providers)
 	}
 
 	a.logger.Info("LLM config saved and hot-reloaded")
@@ -155,17 +158,12 @@ func (a *App) SaveLLMConfig(input llm.LLMConfigView) error {
 }
 
 // DiscoverModels 调用 /models 端点自动发现可用模型列表。
-func (a *App) DiscoverModels(providerName, chatURL, apiKey string) ([]llm.ModelInfo, error) {
-	return llm.DiscoverModels(a.ctx, llm.Builtin, providerName, chatURL, apiKey)
+func (a *App) DiscoverModels(input llm.ProviderProbeInput) ([]llm.ModelInfo, error) {
+	return llm.DiscoverModels(a.ctx, input)
 }
 
 // TestConnectionInput 是连通性测试的入参。
-type TestConnectionInput struct {
-	ProviderName string `json:"provider_name"`
-	ChatURL      string `json:"chat_url"`
-	APIKey       string `json:"api_key"`
-	ModelID      string `json:"model_id"`
-}
+type TestConnectionInput = llm.TestConnectionInput
 
 // TestConnection 发送最小化请求验证 provider 连通性。
 // 多层 fallback 真测，返回验证通过的实际 URL（可能和入参不同，是探测到的正确端点）。
@@ -173,10 +171,5 @@ type TestConnectionInput struct {
 // result.Warning 非空时（如 429 限流）也应展示给用户，但不影响 ok 判定。
 // 失败返回 (TestConnectionResult{}, error)。
 func (a *App) TestConnection(input TestConnectionInput) (llm.TestConnectionResult, error) {
-	return llm.TestConnection(a.ctx, llm.Builtin, llm.TestConnectionInput{
-		ProviderName: input.ProviderName,
-		ChatURL:      input.ChatURL,
-		APIKey:       input.APIKey,
-		ModelID:      input.ModelID,
-	})
+	return llm.TestConnection(a.ctx, input)
 }
