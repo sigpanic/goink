@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
@@ -32,7 +33,7 @@ func (a *App) mcpToolContext(ctx context.Context) (context.Context, mcp_tools.To
 			if a.llmClient == nil {
 				return nil, errors.New("LLM 客户端未初始化")
 			}
-			provider, ok := a.llmClient.Providers()["deepseek"]
+			provider, ok := a.llmClient.Providers()[adapter.ProtocolOpenAIChat]["DeepSeek"]
 			if !ok || provider.APIKey == "" {
 				return nil, errors.New("DeepSeek API key 未配置")
 			}

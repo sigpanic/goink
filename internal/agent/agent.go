@@ -715,7 +715,7 @@ func displayPhase(phase string) mcp_tools.DisplayPhase {
 // buildWebSearch 构建 WebSearch 闭包，从当前 providers 中读取 DeepSeek 配置。
 func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
 	providers := a.llm.Providers()
-	ds, ok := providers[adapter.ProtocolOpenAIChat]["deepseek"]
+	ds, ok := providers[adapter.ProtocolOpenAIChat]["DeepSeek"]
 	if !ok || ds.APIKey == "" {
 		return nil
 	}
