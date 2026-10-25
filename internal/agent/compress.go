@@ -46,7 +46,11 @@ func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, 
 	copy(msgs, opts.Messages)
 	msgs[len(opts.Messages)] = llm.Message{Role: "user", Content: compressionPrompt}
 
-	summary, err := a.llm.GenerateText(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, msgs)
+	callOpts := &llm.CallOptions{SessionID: opts.SessionID}
+	if opts.ReasoningEffort != "" {
+		callOpts.ReasoningEffort = &opts.ReasoningEffort
+	}
+	summary, err := a.llm.GenerateText(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, msgs, callOpts)
 	if err != nil {
 		a.logger.Warn("压缩摘要生成失败，保持原上下文", "err", err)
 		return "", nil, fmt.Errorf("compress: LLM summary failed: %w", err)

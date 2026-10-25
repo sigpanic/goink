@@ -63,7 +63,7 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 		t.Fatal("registered provider lost preset model metadata")
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
-	text, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "Google", "gemini-3.8-flash", messages)
+	text, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "Google", "gemini-3.8-flash", messages, nil)
 	if err != nil || text != "gemini" {
 		t.Fatalf("registered Generate: %q %v", text, err)
 	}
@@ -83,7 +83,7 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 	if streamed != "gemini" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolGeminiInteractions || state.Origin.ProviderName != "Google" {
 		t.Fatalf("registered Stream: %q %+v", streamed, state)
 	}
-	if _, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "shared", "relay-model", messages); err == nil {
+	if _, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "shared", "relay-model", messages, nil); err == nil {
 		t.Fatal("missing Gemini instance fell back to same-name OpenAI instance")
 	}
 	if _, err := newProtocolAdapter(adapter.ProtocolGeminiGenerateContent, nil, client.http, nil); err == nil {

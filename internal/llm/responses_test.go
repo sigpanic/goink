@@ -93,7 +93,7 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
 	for protocol, want := range map[adapter.Protocol]string{adapter.ProtocolOpenAIResponses: "responses", adapter.ProtocolOpenAIChat: "chat"} {
-		text, err := client.GenerateText(context.Background(), protocol, "OpenAI", "gpt-6.1-sol", messages)
+		text, err := client.GenerateText(context.Background(), protocol, "OpenAI", "gpt-6.1-sol", messages, nil)
 		if err != nil || text != want {
 			t.Fatalf("registered generation for %s: %q %v", protocol, text, err)
 		}
@@ -113,7 +113,7 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	if text != "responses" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolOpenAIResponses || state.Origin.ProviderName != "OpenAI" || requests.Load() != 3 {
 		t.Fatalf("registered stream did not finish correctly: %q %+v", text, state)
 	}
-	if _, err := client.GenerateText(context.Background(), adapter.ProtocolOpenAIResponses, "chat-only", "gpt-6.1-sol", messages); err == nil || requests.Load() != 3 {
+	if _, err := client.GenerateText(context.Background(), adapter.ProtocolOpenAIResponses, "chat-only", "gpt-6.1-sol", messages, nil); err == nil || requests.Load() != 3 {
 		t.Fatal("missing Responses provider fell back to same-name Chat provider")
 	}
 	path := filepath.Join(t.TempDir(), "llm.enc")

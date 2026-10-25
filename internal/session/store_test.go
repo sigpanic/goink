@@ -23,16 +23,16 @@ func TestModelSelectionPersistenceKeepsScopesIndependent(t *testing.T) {
 
 	initial := adapter.ModelSelection{
 		AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "shared/relay", ModelID: "org/shared-model",
+		ReasoningEffort: "high",
 	}
 	settings, err := config.LoadSettings(db)
 	require.NoError(t, err)
 	require.Empty(t, settings.DefaultModelSelection)
 	settings.DefaultModelSelection = initial
-	settings.ReasoningEffort = "high"
 	require.NoError(t, config.SaveSettings(db, settings))
 	for _, id := range []string{"a", "b"} {
 		require.NoError(t, db.Create(&Session{
-			SessionID: id, NovelID: 1, Title: id, ModelSelection: initial, ReasoningEffort: "high",
+			SessionID: id, NovelID: 1, Title: id, ModelSelection: initial,
 			Summary: "saved summary", Usage: `{"total_tokens":10}`, ActiveVersion: 3, LastTurnID: 9,
 		}).Error)
 	}
@@ -49,13 +49,14 @@ func TestModelSelectionPersistenceKeepsScopesIndependent(t *testing.T) {
 
 	selectionA := initial
 	selectionA.AdapterName = adapter.ProtocolAnthropicMessages
-	require.NoError(t, store.UpdateSessionModelSelection(ctx, "a", selectionA, ""))
+	selectionA.ReasoningEffort = ""
+	require.NoError(t, store.UpdateSessionModelSelection(ctx, "a", selectionA))
 	require.NoError(t, store.UpdateSessionUsage(ctx, "a", `{"total_tokens":20}`))
 	require.NoError(t, store.UpdateSessionTitle(ctx, "a", "updated title"))
 	afterA, err := store.GetSession(ctx, "a")
 	require.NoError(t, err)
 	wantA := *beforeA
-	wantA.ModelSelection, wantA.ReasoningEffort, wantA.Title = selectionA, "", "updated title"
+	wantA.ModelSelection, wantA.Title = selectionA, "updated title"
 	wantA.Usage = `{"total_tokens":20}`
 	wantA.UpdatedAt = afterA.UpdatedAt
 	require.Equal(t, wantA, *afterA)
@@ -68,17 +69,18 @@ func TestModelSelectionPersistenceKeepsScopesIndependent(t *testing.T) {
 
 	defaultSelection := initial
 	defaultSelection.AdapterName = adapter.ProtocolGeminiInteractions
-	afterGlobal.DefaultModelSelection, afterGlobal.ReasoningEffort = defaultSelection, ""
+	defaultSelection.ReasoningEffort = ""
+	afterGlobal.DefaultModelSelection = defaultSelection
 	require.NoError(t, config.SaveSettings(db, afterGlobal))
 	loadedGlobal, err := config.LoadSettings(db)
 	require.NoError(t, err)
 	require.Equal(t, defaultSelection, loadedGlobal.DefaultModelSelection)
-	require.Empty(t, loadedGlobal.ReasoningEffort)
+	require.Empty(t, loadedGlobal.DefaultModelSelection.ReasoningEffort)
 	loadedA, err := store.GetSession(ctx, "a")
 	require.NoError(t, err)
 	require.Equal(t, afterA, loadedA)
 	loadedB, err := store.GetSession(ctx, "b")
 	require.NoError(t, err)
 	require.Equal(t, beforeB, loadedB)
-	require.ErrorIs(t, store.UpdateSessionModelSelection(ctx, "missing", selectionA, ""), gorm.ErrRecordNotFound)
+	require.ErrorIs(t, store.UpdateSessionModelSelection(ctx, "missing", selectionA), gorm.ErrRecordNotFound)
 }

@@ -19,16 +19,15 @@ type SessionMeta struct {
 
 // SessionDetail 是单个会话的完整元数据视图，含用量、推理程度等。
 type SessionDetail struct {
-	SessionID       string             `json:"session_id"`
-	NovelID         int64              `json:"novel_id"`
-	Title           string             `json:"title"`
-	ModelSelection  llm.ModelSelection `json:"model_selection"`
-	ReasoningEffort string             `json:"reasoning_effort"`
-	ActiveVersion   int                `json:"active_version"`
-	LastTurnID      int                `json:"last_turn_id"`
-	Usage           json.RawMessage    `json:"usage,omitempty"`
-	CreatedAt       string             `json:"created_at"`
-	UpdatedAt       string             `json:"updated_at"`
+	SessionID      string             `json:"session_id"`
+	NovelID        int64              `json:"novel_id"`
+	Title          string             `json:"title"`
+	ModelSelection llm.ModelSelection `json:"model_selection"`
+	ActiveVersion  int                `json:"active_version"`
+	LastTurnID     int                `json:"last_turn_id"`
+	Usage          json.RawMessage    `json:"usage,omitempty"`
+	CreatedAt      string             `json:"created_at"`
+	UpdatedAt      string             `json:"updated_at"`
 }
 
 // GetModels 返回所有可用模型列表，由后端决定能力和推理程度。
@@ -82,16 +81,15 @@ func (a *App) GetSession(sessionID string) (*SessionDetail, error) {
 		return nil, fmt.Errorf("app: get session: %w", err)
 	}
 	return &SessionDetail{
-		SessionID:       s.SessionID,
-		NovelID:         s.NovelID,
-		Title:           s.Title,
-		ModelSelection:  s.ModelSelection,
-		ReasoningEffort: s.ReasoningEffort,
-		ActiveVersion:   s.ActiveVersion,
-		LastTurnID:      s.LastTurnID,
-		Usage:           json.RawMessage(s.Usage),
-		CreatedAt:       s.CreatedAt.Format("2006-01-02T15:04:05"),
-		UpdatedAt:       s.UpdatedAt.Format("2006-01-02T15:04:05"),
+		SessionID:      s.SessionID,
+		NovelID:        s.NovelID,
+		Title:          s.Title,
+		ModelSelection: s.ModelSelection,
+		ActiveVersion:  s.ActiveVersion,
+		LastTurnID:     s.LastTurnID,
+		Usage:          json.RawMessage(s.Usage),
+		CreatedAt:      s.CreatedAt.Format("2006-01-02T15:04:05"),
+		UpdatedAt:      s.UpdatedAt.Format("2006-01-02T15:04:05"),
 	}, nil
 }
 

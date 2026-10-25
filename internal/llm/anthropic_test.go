@@ -52,7 +52,7 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 		t.Fatalf("configuration filtering or namespace isolation failed: %+v", providers)
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
-	text, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "Anthropic", "relay-model", messages)
+	text, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "Anthropic", "relay-model", messages, nil)
 	if err != nil || text != "claude" {
 		t.Fatalf("registered Generate: %s %v", text, err)
 	}
@@ -72,7 +72,7 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 	if streamed != "claude" || state == nil || state.Origin.AdapterName != adapter.ProtocolAnthropicMessages {
 		t.Fatalf("registered Stream: %s %+v", streamed, state)
 	}
-	if _, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "shared", "relay-model", messages); err == nil {
+	if _, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "shared", "relay-model", messages, nil); err == nil {
 		t.Fatal("missing Anthropic instance fell back to OpenAI instance with same name")
 	}
 	oldBackend := client.adapters[adapter.ProtocolAnthropicMessages]

@@ -107,14 +107,14 @@ func (s *Store) UpdateSessionTitle(ctx context.Context, sessionID, title string)
 
 // UpdateSessionModelSelection 整体替换模型选择和推理等级，允许清空推理等级。
 // 仅更新目标会话的对应列；模型可用性由上层校验，不创建缺失会话。
-func (s *Store) UpdateSessionModelSelection(ctx context.Context, sessionID string, selection adapter.ModelSelection, reasoningEffort string) error {
+func (s *Store) UpdateSessionModelSelection(ctx context.Context, sessionID string, selection adapter.ModelSelection) error {
 	result := s.DB.WithContext(ctx).Model(&Session{}).
 		Where("session_id = ?", sessionID).
 		Updates(map[string]any{
 			"adapter_name":     selection.AdapterName,
 			"provider_name":    selection.ProviderName,
 			"model_id":         selection.ModelID,
-			"reasoning_effort": reasoningEffort,
+			"reasoning_effort": selection.ReasoningEffort,
 		})
 	if result.Error != nil {
 		return fmt.Errorf("session store: update model selection: %w", result.Error)

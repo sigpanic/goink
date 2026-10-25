@@ -12,7 +12,7 @@ import (
 
 // GenerateTextFunc 是调用 LLM 生成文本的函数签名。
 // import 包通过此接口解耦对 llm 包的直接依赖。
-type GenerateTextFunc func(ctx context.Context, adapterName adapter.Protocol, providerName, model string, messages []adapter.Message) (string, error)
+type GenerateTextFunc func(ctx context.Context, adapterName adapter.Protocol, providerName, model string, messages []adapter.Message, opts *adapter.CallOptions) (string, error)
 
 // chapterAnalysisPrompt 是 LLM 分析章节格式的系统提示。
 const chapterAnalysisPrompt = `你是一个小说章节格式识别专家。用户将提供一部小说的前 150 行文本，请分析其中的章节标题格式，并输出一个 Go 正则表达式用于匹配所有章节标题行。
@@ -56,7 +56,7 @@ func AnalyzeWithLLM(ctx context.Context, filePath string, adapterName adapter.Pr
 		{Role: "user", Content: preview},
 	}
 
-	llmOutput, err := generateFn(ctx, adapterName, providerName, modelID, messages)
+	llmOutput, err := generateFn(ctx, adapterName, providerName, modelID, messages, nil)
 	if err != nil {
 		return nil, fmt.Errorf("AI 分析失败: %w", err)
 	}

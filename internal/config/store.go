@@ -16,7 +16,6 @@ type AppSettings struct {
 	ID                    uint                   `gorm:"column:id;primaryKey;default:1"`
 	LastNovelID           int64                  `gorm:"column:last_novel_id;default:0"       json:"last_novel_id"`
 	DefaultModelSelection adapter.ModelSelection `gorm:"embedded;embeddedPrefix:default_" json:"default_model_selection"`
-	ReasoningEffort       string                 `gorm:"column:reasoning_effort;default:''"    json:"reasoning_effort"`
 	ApprovalMode          string                 `gorm:"column:approval_mode;default:manual"   json:"approval_mode"`
 	LastSessionID         string                 `gorm:"column:last_session_id;default:''"     json:"last_session_id"`
 	UserName              string                 `gorm:"column:user_name;default:''"            json:"user_name"`

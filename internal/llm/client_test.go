@@ -61,7 +61,8 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 		{Role: "tool", ToolCallID: "call-1", ToolName: "lookup", Content: `{"ok":true}`},
 	}
 	tools := []ToolDefinition{{Name: "lookup", Description: "Look up an item", InputSchema: json.RawMessage(`{"type":"object","properties":{"id":{"type":"integer"}}}`)}}
-	opts := &CallOptions{SessionID: "session-test"}
+	effort := "high"
+	opts := &CallOptions{SessionID: "session-test", ReasoningEffort: &effort}
 	backend := stubAdapter{
 		stream: func(_ context.Context, req adapter.Request) <-chan StreamEvent {
 			if req.ProviderName != "my relay" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) || !reflect.DeepEqual(req.Tools, tools) || req.Options != opts {
@@ -74,7 +75,7 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 			return ch
 		},
 		generate: func(_ context.Context, req adapter.Request) (adapter.Response, error) {
-			if req.ProviderName != "my relay" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) {
+			if req.ProviderName != "my relay" || req.Model != "model" || !reflect.DeepEqual(req.Messages, messages) || req.Options != opts {
 				t.Errorf("unexpected generate request: %+v", req)
 			}
 			return adapter.Response{Content: "title", ThinkingContent: "private reasoning"}, nil
@@ -99,11 +100,11 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 	if receivedState != state {
 		t.Fatal("root streaming did not transparently forward response state")
 	}
-	text, err = client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages)
+	text, err = client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages, opts)
 	if err != nil || text != "title" {
 		t.Fatalf("GenerateText = %q, %v", text, err)
 	}
-	if _, err := client.GenerateText(context.Background(), "missing", "my relay", "model", nil); err == nil {
+	if _, err := client.GenerateText(context.Background(), "missing", "my relay", "model", nil, nil); err == nil {
 		t.Fatal("unknown protocol should fail without falling back to OpenAI Chat")
 	}
 	var events []StreamEvent
@@ -117,7 +118,7 @@ func TestClientDelegatesUnifiedRequests(t *testing.T) {
 		return adapter.Response{}, &APIError{StatusCode: 429, Retryable: true}
 	}
 	client.adapters[adapter.ProtocolOpenAIChat] = backend
-	_, err = client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages)
+	_, err = client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "my relay", "model", messages, nil)
 	var apiErr *APIError
 	if !errors.As(err, &apiErr) || apiErr.StatusCode != 429 {
 		t.Fatalf("GenerateText error = %v", err)
@@ -182,7 +183,7 @@ func TestClientSnapshotAndReloadDuringStream(t *testing.T) {
 	if err := client.Reload(testUserConfig(adapter.Provider{Name: "test", ProviderType: "openai", ChatURL: newServer.URL, APIKey: "new-key"})); err != nil {
 		t.Fatal(err)
 	}
-	text, err := client.GenerateText(ctx, adapter.ProtocolOpenAIChat, "test", "model", nil)
+	text, err := client.GenerateText(ctx, adapter.ProtocolOpenAIChat, "test", "model", nil, nil)
 	if err != nil || text != "new" {
 		t.Fatalf("reloaded generation = %q, %v", text, err)
 	}
@@ -289,7 +290,7 @@ func TestClientRejectedConfigPreservesFileAndRuntime(t *testing.T) {
 			if err != nil || string(after) != string(before) {
 				t.Fatalf("original encrypted config changed: %v", err)
 			}
-			text, err := client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "test", "model", nil)
+			text, err := client.GenerateText(context.Background(), adapter.ProtocolOpenAIChat, "test", "model", nil, nil)
 			if err != nil || text != "old" {
 				t.Fatalf("previous runtime not preserved: %q, %v", text, err)
 			}

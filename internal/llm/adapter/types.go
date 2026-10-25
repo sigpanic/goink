@@ -12,9 +12,10 @@ import (
 // ModelSelection 标识完整的模型选择；ProviderName 在 AdapterName 内唯一。
 // 不包含模型能力或凭据，也不依赖 UI key 的编码方式。
 type ModelSelection struct {
-	AdapterName  Protocol `json:"adapter_name"`
-	ProviderName string   `json:"provider_name"`
-	ModelID      string   `json:"model_id"`
+	AdapterName     Protocol `json:"adapter_name"`
+	ProviderName    string   `json:"provider_name"`
+	ModelID         string   `json:"model_id"`
+	ReasoningEffort string   `json:"reasoning_effort"` // 空值沿用模型默认等级，不参与模型身份匹配。
 }
 
 // ModelInfo 描述一个具体模型的元信息。

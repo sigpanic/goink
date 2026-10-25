@@ -24,11 +24,10 @@ import (
 
 // ChatInput 是一次对话请求的入参。
 type ChatInput struct {
-	SessionID       string             `json:"session_id"` // 空=新建会话
-	NovelID         int64              `json:"novel_id"`
-	Message         string             `json:"message"`
-	ModelSelection  llm.ModelSelection `json:"model_selection"`
-	ReasoningEffort string             `json:"reasoning_effort"` // "high" | "max" | ""
+	SessionID      string             `json:"session_id"` // 空=新建会话
+	NovelID        int64              `json:"novel_id"`
+	Message        string             `json:"message"`
+	ModelSelection llm.ModelSelection `json:"model_selection"`
 }
 
 // ChatResult 是一次对话请求的返回值。
@@ -175,7 +174,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		ProviderName:    selection.ProviderName,
 		AgentType:       "main",
 		MaxTurns:        100,
-		ReasoningEffort: input.ReasoningEffort,
+		ReasoningEffort: selection.ReasoningEffort,
 	})
 
 	// 10. 最终回复已由 agent.Run() 内部 appendMsg 持久化，此处不重复存储
@@ -234,10 +233,9 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 
 	// 创建新 session
 	sess := &session.Session{
-		SessionID:       fmt.Sprintf("sess_%d_%x", input.NovelID, time.Now().UnixNano()),
-		NovelID:         input.NovelID,
-		ModelSelection:  input.ModelSelection,
-		ReasoningEffort: input.ReasoningEffort,
+		SessionID:      fmt.Sprintf("sess_%d_%x", input.NovelID, time.Now().UnixNano()),
+		NovelID:        input.NovelID,
+		ModelSelection: input.ModelSelection,
 	}
 	if err := a.session.DB.WithContext(ctx).Create(sess).Error; err != nil {
 		return nil, false, err
@@ -298,7 +296,7 @@ func (a *App) generateTitle(sessionID, userMessage string, adapterName adapter.P
 		{Role: "user", Content: userMessage},
 	}
 
-	title, err := a.llmClient.GenerateText(ctx, adapterName, providerName, modelID, messages)
+	title, err := a.llmClient.GenerateText(ctx, adapterName, providerName, modelID, messages, nil)
 	if err != nil {
 		a.logger.Warn("自动生成标题失败", "err", err)
 		return
@@ -403,7 +401,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 		Model:           model,
 		AdapterName:     selection.AdapterName,
 		ProviderName:    selection.ProviderName,
-		ReasoningEffort: sess.ReasoningEffort,
+		ReasoningEffort: selection.ReasoningEffort,
 		AgentType:       "main",
 	}
 

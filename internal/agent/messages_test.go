@@ -103,31 +103,41 @@ func TestPersistCompressionRollsBackInvalidStructuredMessage(t *testing.T) {
 	require.Zero(t, count)
 }
 
-func TestGenerateSummaryUsesSelectedProtocol(t *testing.T) {
-	requests := make(chan string, 2)
+func TestGenerateSummaryUsesSelectedProtocolAndEffort(t *testing.T) {
+	const modelID = "claude-opus-5-5"
+	type summaryRequest struct{ path, effort string }
+	requests := make(chan summaryRequest, 2)
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, err := io.ReadAll(r.Body)
 		if err != nil {
 			t.Error(err)
 		}
-		var request struct{ Model string }
+		var request struct {
+			Model           string
+			ReasoningEffort string                  `json:"reasoning_effort"`
+			OutputConfig    struct{ Effort string } `json:"output_config"`
+		}
 		if err := json.Unmarshal(body, &request); err != nil {
 			t.Error(err)
 		}
-		if request.Model != "same-model" {
+		if request.Model != modelID {
 			t.Errorf("model = %q", request.Model)
 		}
 		if !json.Valid(body) || !containsCompressionPrompt(body) {
 			t.Errorf("missing compression prompt: %s", body)
 		}
+		effort := request.ReasoningEffort
+		if r.URL.Path == "/messages" {
+			effort = request.OutputConfig.Effort
+		}
 		select {
-		case requests <- r.URL.Path:
+		case requests <- summaryRequest{path: r.URL.Path, effort: effort}:
 		default:
 			t.Error("unexpected extra summary request")
 		}
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/messages" {
-			_, _ = fmt.Fprint(w, `{"id":"msg_1","type":"message","role":"assistant","model":"same-model","content":[{"type":"text","text":"Claude 摘要"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`)
+			_, _ = fmt.Fprintf(w, `{"id":"msg_1","type":"message","role":"assistant","model":%q,"content":[{"type":"text","text":"Claude 摘要"}],"stop_reason":"end_turn","usage":{"input_tokens":1,"output_tokens":1}}`, modelID)
 			return
 		}
 		_, _ = fmt.Fprint(w, `{"choices":[{"finish_reason":"stop","message":{"content":"Chat 摘要"}}]}`)
@@ -139,7 +149,10 @@ func TestGenerateSummaryUsesSelectedProtocol(t *testing.T) {
 		if protocol == adapter.ProtocolAnthropicMessages {
 			providerType = "anthropic"
 		}
-		config.Adapters[protocol] = llm.AdapterConfig{Providers: []adapter.Provider{{Name: "relay", ProviderType: providerType, APIKey: "test-key", ChatURL: server.URL + path}}}
+		config.Adapters[protocol] = llm.AdapterConfig{Providers: []adapter.Provider{{
+			Name: "relay", ProviderType: providerType, APIKey: "test-key", ChatURL: server.URL + path,
+			Models: []llm.ModelInfo{{ID: modelID, SupportsThinking: true, ReasoningLevels: []string{"low", "high"}}},
+		}}}
 	}
 	a := newCompressTestAgent(t, "routing")
 	var err error
@@ -149,18 +162,25 @@ func TestGenerateSummaryUsesSelectedProtocol(t *testing.T) {
 		protocol adapter.Protocol
 		path     string
 		summary  string
+		effort   string
 	}{
-		{adapter.ProtocolOpenAIChat, "/chat/completions", "Chat 摘要"},
-		{adapter.ProtocolAnthropicMessages, "/messages", "Claude 摘要"},
+		{adapter.ProtocolOpenAIChat, "/chat/completions", "Chat 摘要", "high"},
+		{adapter.ProtocolOpenAIChat, "/chat/completions", "Chat 摘要", ""},
+		{adapter.ProtocolAnthropicMessages, "/messages", "Claude 摘要", "high"},
+		{adapter.ProtocolAnthropicMessages, "/messages", "Claude 摘要", ""},
 	} {
-		t.Run(string(tt.protocol), func(t *testing.T) {
+		t.Run(string(tt.protocol)+"/"+tt.effort, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
-			opts := RunOptions{AdapterName: tt.protocol, ProviderName: "relay", Model: &llm.ModelInfo{ID: "same-model"}, Messages: []llm.Message{{Role: "system", Content: "system"}, {Role: "user", Content: "继续"}}}
+			opts := RunOptions{AdapterName: tt.protocol, ProviderName: "relay", Model: &llm.ModelInfo{ID: modelID}, ReasoningEffort: tt.effort, Messages: []llm.Message{{Role: "system", Content: "system"}, {Role: "user", Content: "继续"}}}
 			summary, retained, err := a.generateSummary(ctx, &opts)
 			require.NoError(t, err)
 			require.Equal(t, tt.summary, summary)
-			require.Equal(t, tt.path, <-requests)
+			wantEffort := tt.effort
+			if wantEffort == "" {
+				wantEffort = "low"
+			}
+			require.Equal(t, summaryRequest{path: tt.path, effort: wantEffort}, <-requests)
 			require.Equal(t, opts.Messages[1:], retained)
 			require.Len(t, opts.Messages, 2)
 		})
