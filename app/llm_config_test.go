@@ -28,8 +28,9 @@ func TestLLMConfigSaveReloadAndFailures(t *testing.T) {
 		{AdapterName: adapter.ProtocolAnthropicMessages, Name: "relay", ProviderType: "anthropic", Source: "custom",
 			ChatURL: "https://example.invalid/custom/v8/messages", CustomModels: []llm.ModelInfo{{ID: "unconfigured-model"}}},
 	}}
-	require.NoError(t, a.SaveLLMConfig(view))
 	path := config.LLMConfigPath()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
+	require.NoError(t, a.SaveLLMConfig(view))
 	beforeFile, err := os.ReadFile(path)
 	require.NoError(t, err)
 	require.NotContains(t, string(beforeFile), "old-key", "configuration must remain encrypted")
@@ -65,7 +66,8 @@ func TestLLMConfigSaveReloadAndFailures(t *testing.T) {
 			case "invalid view":
 				candidate.Providers[0].ProviderType = "unsupported"
 			case "adapter construction":
-				candidate.Providers[0].ChatURL += "#invalid-fragment"
+				candidate.Providers[1].APIKey = "replacement-key"
+				candidate.Providers[1].ChatURL += "#invalid-fragment"
 			case "file write":
 				blockedHome := filepath.Join(t.TempDir(), "not-a-directory")
 				require.NoError(t, os.WriteFile(blockedHome, []byte("blocked"), 0600))
@@ -104,9 +106,10 @@ func TestProviderProbesUseExplicitProtocolAndType(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.Method == http.MethodPost {
 			w.WriteHeader(http.StatusTooManyRequests)
-		} else {
-			w.WriteHeader(http.StatusUnauthorized)
+			_, _ = io.WriteString(w, `{"type":"error","error":{"type":"rate_limit_error","message":"test rejection"}}`)
+			return
 		}
+		w.WriteHeader(http.StatusUnauthorized)
 		_, _ = io.WriteString(w, `{"type":"error","error":{"type":"authentication_error","message":"test rejection"}}`)
 	}))
 	t.Cleanup(server.Close)

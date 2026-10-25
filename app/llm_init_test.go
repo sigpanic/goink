@@ -4,6 +4,7 @@ import (
 	"io"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ func TestLoadLLMClientFallsBackOnAdapterConstructionFailure(t *testing.T) {
 		}}},
 	}}
 	path := config.LLMConfigPath()
+	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	require.NoError(t, llm.SaveUserConfig(path, user))
 	before, err := os.ReadFile(path)
 	require.NoError(t, err)
