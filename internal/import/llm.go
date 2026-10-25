@@ -6,11 +6,13 @@ import (
 	"regexp"
 	"strings"
 	"unicode/utf8"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // GenerateTextFunc 是调用 LLM 生成文本的函数签名。
 // import 包通过此接口解耦对 llm 包的直接依赖。
-type GenerateTextFunc func(ctx context.Context, providerName string, messages []map[string]any, model string) (string, error)
+type GenerateTextFunc func(ctx context.Context, adapterName adapter.Protocol, providerName, model string, messages []adapter.Message) (string, error)
 
 // chapterAnalysisPrompt 是 LLM 分析章节格式的系统提示。
 const chapterAnalysisPrompt = `你是一个小说章节格式识别专家。用户将提供一部小说的前 150 行文本，请分析其中的章节标题格式，并输出一个 Go 正则表达式用于匹配所有章节标题行。
@@ -34,7 +36,7 @@ const chapterAnalysisPrompt = `你是一个小说章节格式识别专家。用�
 // AnalyzeWithLLM 使用 LLM 分析小说文件的章节格式。
 // 读取文件前 150 行，让 LLM 生成正则，编译后全文匹配分割。
 // ctx 用于取消 LLM 调用（如用户关闭窗口）。
-func AnalyzeWithLLM(ctx context.Context, filePath string, providerName string, modelID string, generateFn GenerateTextFunc) (*Result, error) {
+func AnalyzeWithLLM(ctx context.Context, filePath string, adapterName adapter.Protocol, providerName, modelID string, generateFn GenerateTextFunc) (*Result, error) {
 	// 1. 读取文件 + 解码
 	content, err := readFileContent(filePath)
 	if err != nil {
@@ -49,12 +51,12 @@ func AnalyzeWithLLM(ctx context.Context, filePath string, providerName string, m
 	preview := strings.Join(lines, "\n")
 
 	// 3. 调用 LLM
-	messages := []map[string]any{
-		{"role": "system", "content": chapterAnalysisPrompt},
-		{"role": "user", "content": preview},
+	messages := []adapter.Message{
+		{Role: "system", Content: chapterAnalysisPrompt},
+		{Role: "user", Content: preview},
 	}
 
-	llmOutput, err := generateFn(ctx, providerName, messages, modelID)
+	llmOutput, err := generateFn(ctx, adapterName, providerName, modelID, messages)
 	if err != nil {
 		return nil, fmt.Errorf("AI 分析失败: %w", err)
 	}
