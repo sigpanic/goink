@@ -151,7 +151,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	}
 
 	// 8. 构建消息列表：全部来自 DB（含系统消息/历史/用户消息）
-	messages, err := a.loadAPIMessages(ctx, sess.SessionID, sess.ActiveVersion)
+	messages, err := a.loadLLMMessages(ctx, sess.SessionID, sess.ActiveVersion)
 	if err != nil {
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
 	}
@@ -263,6 +263,25 @@ func writeSystemMessages(tx *gorm.DB, sessionID string, turnID int, msgs *agentc
 		}
 	}
 	return nil
+}
+
+// loadLLMMessages 加载当前版本的模型请求历史，只执行 Session 的结构化映射。
+// 时间前缀和原生状态由 Session 映射保留；历史配对、清理及协议转换由目标适配器负责。
+// 旧 loadAPIMessages 暂留，待旧入口及其回归用例单独清理，不作为新路径的兼容回退。
+func (a *App) loadLLMMessages(ctx context.Context, sessionID string, version int) ([]llm.Message, error) {
+	msgs, err := a.session.GetMessagesForAPI(ctx, sessionID, version)
+	if err != nil {
+		return nil, err
+	}
+	result := make([]llm.Message, 0, len(msgs))
+	for _, m := range msgs {
+		message, err := m.ToLLMRequestMessage()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, message)
+	}
+	return result, nil
 }
 
 // loadAPIMessages 加载指定 version 的所有 to_api 消息，转为 map 格式。
@@ -424,7 +443,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	}
 
 	// 4. 构建消息列表：全部来自 DB
-	messages, err := a.loadAPIMessages(context.Background(), sess.SessionID, sess.ActiveVersion)
+	messages, err := a.loadLLMMessages(context.Background(), sess.SessionID, sess.ActiveVersion)
 	if err != nil {
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
 	}
