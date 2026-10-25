@@ -61,13 +61,14 @@ func TestChatAndCompressionRequireExplicitProtocol(t *testing.T) {
 		{name: "foreign model", protocol: adapter.ProtocolAnthropicMessages, model: "only-openai_chat"},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := a.Chat(ChatInput{AdapterName: tt.protocol, ProviderName: "relay", ModelID: tt.model, Message: "继续"})
+			selection := llm.ModelSelection{AdapterName: tt.protocol, ProviderName: "relay", ModelID: tt.model}
+			_, err := a.Chat(ChatInput{ModelSelection: selection, Message: "继续"})
 			if tt.valid {
 				require.ErrorContains(t, err, "session write reached")
 			} else {
 				require.ErrorContains(t, err, "模型未找到")
 			}
-			_, err = a.CompressContext(CompressInput{SessionID: "existing", AdapterName: tt.protocol, ProviderName: "relay", ModelID: tt.model})
+			_, err = a.CompressContext(CompressInput{SessionID: "existing", ModelSelection: selection})
 			if tt.valid {
 				require.ErrorContains(t, err, "turn allocation reached")
 			} else {

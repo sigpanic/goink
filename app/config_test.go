@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
+	"github.com/sigpanic/goink/internal/session"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -24,27 +27,58 @@ func TestGetSettings(t *testing.T) {
 func TestSetSelectedModel(t *testing.T) {
 	app := setupTestApp(t)
 
-	err := app.SetSelectedModel("gpt-4o", "high")
+	selection := llm.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "relay", ModelID: "shared-model"}
+	err := app.SetSelectedModel(SetSelectedModelInput{ModelSelection: selection, ReasoningEffort: "high"})
 	require.NoError(t, err)
 
 	settings, err := app.GetSettings()
 	require.NoError(t, err)
-	assert.Equal(t, "gpt-4o", settings.SelectedModelKey)
+	assert.Equal(t, selection, settings.DefaultModelSelection)
 	assert.Equal(t, "high", settings.ReasoningEffort)
+	for _, id := range []string{"a", "b"} {
+		require.NoError(t, app.db.Create(&session.Session{
+			SessionID: id, ModelSelection: selection, ReasoningEffort: "high",
+		}).Error)
+	}
+	sessionSelection := selection
+	sessionSelection.AdapterName = adapter.ProtocolAnthropicMessages
+	require.NoError(t, app.SetSelectedModel(SetSelectedModelInput{SessionID: "a", ModelSelection: sessionSelection}))
+	detail, err := app.GetSession("a")
+	require.NoError(t, err)
+	assert.Equal(t, sessionSelection, detail.ModelSelection)
+	assert.Empty(t, detail.ReasoningEffort)
+	other, err := app.GetSession("b")
+	require.NoError(t, err)
+	assert.Equal(t, selection, other.ModelSelection)
+	assert.Equal(t, "high", other.ReasoningEffort)
+	require.Error(t, app.SetSelectedModel(SetSelectedModelInput{SessionID: "missing", ModelSelection: sessionSelection}))
+	require.Error(t, app.SetSelectedModel(SetSelectedModelInput{SessionID: "a"}))
+	after, err := app.GetSettings()
+	require.NoError(t, err)
+	assert.Equal(t, settings, after)
+	persisted, err := config.LoadSettings(app.db)
+	require.NoError(t, err)
+	assert.Equal(t, settings, persisted)
+	reloaded, err := app.GetSession("a")
+	require.NoError(t, err)
+	assert.Equal(t, detail.ModelSelection, reloaded.ModelSelection)
+	assert.Empty(t, reloaded.ReasoningEffort)
 }
 
 func TestSetSelectedModelSaveFailurePreservesSettings(t *testing.T) {
 	app := setupTestApp(t)
-	require.NoError(t, app.SetSelectedModel("original-model", "low"))
+	selection := llm.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "relay", ModelID: "original-model"}
+	require.NoError(t, app.SetSelectedModel(SetSelectedModelInput{ModelSelection: selection, ReasoningEffort: "low"}))
 	before, err := app.GetSettings()
 	require.NoError(t, err)
 
 	require.NoError(t, app.db.Exec(`CREATE TRIGGER reject_model_settings
 		BEFORE UPDATE ON app_config
-		WHEN NEW.selected_model_key = 'rejected-model'
+		WHEN NEW.default_model_id = 'rejected-model'
 		BEGIN SELECT RAISE(FAIL, 'settings save failed'); END`).Error)
 
-	err = app.SetSelectedModel("rejected-model", "high")
+	selection.ModelID = "rejected-model"
+	err = app.SetSelectedModel(SetSelectedModelInput{ModelSelection: selection, ReasoningEffort: "high"})
 	require.ErrorContains(t, err, "settings save failed")
 	settings, err := app.GetSettings()
 	require.NoError(t, err)
@@ -65,15 +99,17 @@ func TestSetSelectedModelSaveFailurePreservesSettings(t *testing.T) {
 	assert.Equal(t, &expected, persisted)
 }
 
-func TestSetReasoningEffort(t *testing.T) {
+func TestSetSelectedModelClearsDefaultReasoningEffort(t *testing.T) {
 	app := setupTestApp(t)
 
-	err := app.SetReasoningEffort("medium")
-	require.NoError(t, err)
+	selection := llm.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "relay", ModelID: "shared-model"}
+	require.NoError(t, app.SetSelectedModel(SetSelectedModelInput{ModelSelection: selection, ReasoningEffort: "medium"}))
+	require.NoError(t, app.SetSelectedModel(SetSelectedModelInput{ModelSelection: selection}))
 
 	settings, err := app.GetSettings()
 	require.NoError(t, err)
-	assert.Equal(t, "medium", settings.ReasoningEffort)
+	assert.Equal(t, selection, settings.DefaultModelSelection)
+	assert.Empty(t, settings.ReasoningEffort)
 }
 
 func TestSetLastSession(t *testing.T) {
