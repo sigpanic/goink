@@ -267,7 +267,6 @@ func writeSystemMessages(tx *gorm.DB, sessionID string, turnID int, msgs *agentc
 
 // loadLLMMessages 加载当前版本的模型请求历史，只执行 Session 的结构化映射。
 // 时间前缀和原生状态由 Session 映射保留；历史配对、清理及协议转换由目标适配器负责。
-// 旧 loadAPIMessages 暂留，待旧入口及其回归用例单独清理，不作为新路径的兼容回退。
 func (a *App) loadLLMMessages(ctx context.Context, sessionID string, version int) ([]llm.Message, error) {
 	msgs, err := a.session.GetMessagesForAPI(ctx, sessionID, version)
 	if err != nil {
@@ -280,72 +279,6 @@ func (a *App) loadLLMMessages(ctx context.Context, sessionID string, version int
 			return nil, err
 		}
 		result = append(result, message)
-	}
-	return result, nil
-}
-
-// loadAPIMessages 加载指定 version 的所有 to_api 消息，转为 map 格式。
-// 出口防御：历史 DB 数据可能存在重复 tool_call_id（DeepSeek 偶发 bug + 早期未去重），
-// 这里按 id 去重 assistant.tool_calls 和对应的 tool 消息，避免发给 DeepSeek 时触发 400。
-func (a *App) loadAPIMessages(ctx context.Context, sessionID string, version int) ([]map[string]any, error) {
-	msgs, err := a.session.GetMessagesForAPI(ctx, sessionID, version)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]map[string]any, 0, len(msgs))
-	// validToolCallIDs: assistant 消息去重后的 tool_call id 集合
-	// seenToolMsgIDs: 已保留的 tool 消息 tool_call_id 集合（每个 id 只保留一条 tool 消息）
-	validToolCallIDs := make(map[string]bool)
-	seenToolMsgIDs := make(map[string]bool)
-	for _, m := range msgs {
-		api := m.ToAPIFormat(a.logger)
-		role, _ := api["role"].(string)
-
-		// assistant 消息：去重 tool_calls，保留首次出现的 id
-		if role == "assistant" {
-			if tc, ok := api["tool_calls"].([]any); ok && len(tc) > 0 {
-				seen := make(map[string]bool, len(tc))
-				deduped := make([]any, 0, len(tc))
-				for _, item := range tc {
-					call, ok := item.(map[string]any)
-					if !ok {
-						deduped = append(deduped, item)
-						continue
-					}
-					id, _ := call["id"].(string)
-					if id != "" {
-						if seen[id] {
-							a.logger.Warn("duplicate tool_call_id in DB assistant tool_calls, skipping",
-								"session_id", sessionID, "tool_call_id", id)
-							continue
-						}
-						seen[id] = true
-						validToolCallIDs[id] = true
-					}
-					deduped = append(deduped, item)
-				}
-				api["tool_calls"] = deduped
-			}
-		}
-
-		// tool 消息：跳过没有对应 tool_call 的 orphan + 跳过重复 tool 消息
-		if role == "tool" {
-			if id, ok := api["tool_call_id"].(string); ok && id != "" {
-				if !validToolCallIDs[id] {
-					a.logger.Warn("orphan tool message without matching tool_call, skipping",
-						"session_id", sessionID, "tool_call_id", id)
-					continue
-				}
-				if seenToolMsgIDs[id] {
-					a.logger.Warn("duplicate tool message in DB, skipping",
-						"session_id", sessionID, "tool_call_id", id)
-					continue
-				}
-				seenToolMsgIDs[id] = true
-			}
-		}
-
-		result = append(result, api)
 	}
 	return result, nil
 }
