@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/sigpanic/goink/internal/agent"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/style"
 	"github.com/sigpanic/goink/internal/text"
@@ -128,11 +129,12 @@ func (a *App) ComputeStyleStats(input ComputeStyleStatsInput) (*style.Stats, err
 
 // ExtractStyleInput 是风格提取的入参。
 type ExtractStyleInput struct {
-	TaskID          string  `json:"task_id"`
-	SampleIDs       []int64 `json:"sample_ids"`
-	ProviderName    string  `json:"provider_name"`
-	ModelID         string  `json:"model_id"`
-	ReasoningEffort string  `json:"reasoning_effort"`
+	TaskID          string           `json:"task_id"`
+	SampleIDs       []int64          `json:"sample_ids"`
+	AdapterName     adapter.Protocol `json:"adapter_name"`
+	ProviderName    string           `json:"provider_name"`
+	ModelID         string           `json:"model_id"`
+	ReasoningEffort string           `json:"reasoning_effort"`
 }
 
 // ExtractStyle 从选中的素材中提取写作风格，生成仿写 skill。
@@ -162,7 +164,7 @@ func (a *App) ExtractStyle(input ExtractStyleInput) (*style.ExtractResult, error
 	}()
 
 	return style.Extract(ctx, a.llmClient, samples,
-		input.ProviderName, input.ModelID, input.ReasoningEffort)
+		input.AdapterName, input.ProviderName, input.ModelID, input.ReasoningEffort)
 }
 
 // CancelExtract 取消指定 taskID 的风格提取任务。
