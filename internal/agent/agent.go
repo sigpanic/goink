@@ -434,7 +434,9 @@ func (a *Agent) run(
 						// 仅首次 tool_args_invalid 时追加，避免重试耗尽后残留多条孤立 reminder
 						if !reminderAdded {
 							reminder := buildToolArgsReminder(apiErr.Message)
-							a.appendMsg(llm.Message{Role: "user", Content: reminder}, nil, &opts, runningTokens)
+							if err := a.appendMsg(llm.Message{Role: "user", Content: reminder}, nil, &opts, runningTokens); err != nil {
+								return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(event.Error, err)
+							}
 							reminderAdded = true
 						}
 
@@ -534,8 +536,10 @@ func (a *Agent) run(
 					finalText := responseBuffer.String()
 					thinkingContent := thinkingBuffer.String()
 					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-						a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent},
-							nil, &opts, runningTokens)
+						if err := a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent},
+							nil, &opts, runningTokens); err != nil {
+							return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, errors.Join(event.Error, err)
+						}
 					}
 					return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, event.Error
 				}
@@ -563,7 +567,9 @@ func (a *Agent) run(
 				})
 			}
 			if message.Content != "" || message.ThinkingContent != "" || message.State != nil {
-				a.appendMsg(message, nil, &opts, runningTokens)
+				if err := a.appendMsg(message, nil, &opts, runningTokens); err != nil {
+					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+				}
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
 			normalEnd = true
 			break
@@ -571,22 +577,28 @@ func (a *Agent) run(
 
 		// 1. assistant + tool_calls + tool_displays
 
-		a.appendMsg(message,
+		if err := a.appendMsg(message,
 			map[string]any{
 				"tool_displays": buildToolDisplay(toolOutputs),
-			}, &opts, runningTokens)
+			}, &opts, runningTokens); err != nil {
+			return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+		}
 
 		// 2. tool 结果
 		for _, to := range toolOutputs {
-			a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.call.ID, ToolName: to.call.Name}, nil,
-				&opts, runningTokens)
+			if err := a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.call.ID, ToolName: to.call.Name}, nil,
+				&opts, runningTokens); err != nil {
+				return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+			}
 		}
 
 		// 3. inject（role=user，<system-reminder> 包裹）
 		for _, to := range toolOutputs {
 			for _, inj := range pendingInjects[to.call.ID] {
 				content := "<system-reminder>\n" + inj.Content + "\n</system-reminder>"
-				a.appendMsg(llm.Message{Role: inj.Role, Content: content}, nil, &opts, runningTokens)
+				if err := a.appendMsg(llm.Message{Role: inj.Role, Content: content}, nil, &opts, runningTokens); err != nil {
+					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+				}
 			}
 		}
 
@@ -631,14 +643,19 @@ func (a *Agent) run(
 
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
 // opts 必须传指针，因为 opts.Messages 需要被追加（Go 切片传值会丢失 append）。
-func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) {
+func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) error {
 	role := message.Role
+	metadata, err := extraJSON(extra)
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: encode metadata for %s message: %w", role, err)
+	}
 	draft := session.Message{
 		SessionID:     opts.SessionID,
 		TurnID:        opts.TurnID,
 		AgentType:     opts.AgentType,
 		SubTaskID:     opts.SubTaskID,
-		ExtraMetadata: extraJSON(extra),
+		ExtraMetadata: metadata,
 		Version:       opts.ActiveVersion,
 		ToAPI:         opts.AgentType == "main",
 		ToFrontend:    role == "assistant",
@@ -646,17 +663,18 @@ func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOp
 	msg, err := draft.WithLLMMessage(message)
 	if err != nil {
 		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
-		return
+		return fmt.Errorf("agent: build %s message: %w", role, err)
 	}
 	a.logger.Debug("appendMsg", "role", role, "agentType", opts.AgentType, "subTaskID", opts.SubTaskID, "turnID", opts.TurnID)
 	if err := a.db.Create(&msg).Error; err != nil {
 		a.logger.Error("持久化消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: persist %s message: %w", role, err)
 	}
 
 	message, err = msg.ToLLMRequestMessage()
 	if err != nil {
 		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
-		return
+		return fmt.Errorf("agent: render %s message: %w", role, err)
 	}
 	opts.Messages = append(opts.Messages, message)
 	n, err := llm.CountMessageTokens(message)
@@ -664,6 +682,7 @@ func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOp
 		a.logger.Warn("token count failed", "role", role, "err", err)
 	}
 	runningTokens[role] += n
+	return nil
 }
 
 // sumRunningTokens 计算各角色 token 总数。
@@ -707,12 +726,12 @@ func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.W
 }
 
 // extraJSON 将 map 序列化为 JSON 字符串存入 ExtraMetadata。
-func extraJSON(extra map[string]any) string {
+func extraJSON(extra map[string]any) (string, error) {
 	if len(extra) == 0 {
-		return ""
+		return "", nil
 	}
-	b, _ := json.Marshal(extra)
-	return string(b)
+	b, err := json.Marshal(extra)
+	return string(b), err
 }
 
 // parseArgs 将 JSON args 解析为 map。
