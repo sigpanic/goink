@@ -421,6 +421,8 @@
     "add": "Add",
     "newCustomProvider": "New Custom Provider",
     "providerName": "Provider Name",
+    "protocol": "API protocol",
+    "providerNameConflict": "A provider with this name already exists under this protocol, including built-in providers. Please use a different name.",
     "confirmDeleteProvider": "Confirm delete provider",
     "deleteProvider": "Delete Provider",
     "modelIdRequired": "Model ID is required",

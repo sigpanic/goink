@@ -412,6 +412,8 @@
     "add": "添加",
     "newCustomProvider": "新建自定义服务商",
     "providerName": "服务商名称",
+    "protocol": "API 协议",
+    "providerNameConflict": "该协议下已存在同名服务商（含内置），请使用其他名称。",
     "confirmDeleteProvider": "确定删除服务商",
     "deleteProvider": "删除服务商",
     "modelIdRequired": "模型 ID 不能为空",

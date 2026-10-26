@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { llm, type adapter } from "@/lib/wailsjs/go/models";
+import { createProviderLabeler } from "@/lib/llmProviders";
 import { toastSuccess } from "@/utils/toast";
 import { useSaveLLMConfig } from "./useSaveLLMConfig";
 import { useLLMConfig } from "./useLLMConfig";
@@ -276,6 +277,9 @@ export default function ModelConfigTab() {
   );
 
   const handleSave = useCallback(async () => {
+    const providerLabel = createProviderLabeler(
+      providers.map((p) => [p.name, p.adapter_name] as const),
+    );
     // 收集有 key 的 provider
     const withKey = providers.filter((p) => p.api_key);
 
@@ -304,12 +308,13 @@ export default function ModelConfigTab() {
           // 弹确认框：用户决定是否保留此失败配置
           // 选"保留"→ 加入 acknowledgedFailures，下次保存跳过该 provider，继续测下一个
           // 选"取消"→ 不保存，切到失败 provider 视图，让用户先修复
-          const keep = await confirmFailure(p.key, p.name, result.error);
+          const name = providerLabel(p.name, p.adapter_name);
+          const keep = await confirmFailure(p.key, name, result.error);
           if (!keep) {
             // 错误消息不清空（保留到下次成功保存或新错误覆盖），让用户看清错误内容
             // ✗ 前缀让用户一眼看出是失败消息（颜色已是红色，符号强化识别）
             setSaveMsg(
-              `✗ ${p.name} ${t("settings.connectionTestFailed")}: ${result.error}`,
+              `✗ ${name} ${t("settings.connectionTestFailed")}: ${result.error}`,
             );
             // 切换到失败 provider 所在的视图并选中该 provider，方便用户定位
             setSubNav(p.source === "builtin" ? "builtin" : "custom");
@@ -324,7 +329,7 @@ export default function ModelConfigTab() {
             return next;
           });
           // 记录被保留的失败 provider name，最后汇总提示
-          keptFailures.push(p.name);
+          keptFailures.push(name);
           // 提示用户此 provider 已被保留为已知失败，不在保存数据中改 URL
           // （resolvedUrls 不写入，使用 providers 中原值）
           continue;
@@ -436,6 +441,7 @@ export default function ModelConfigTab() {
         ) : (
           <CustomProviderPane
             providers={customProviders}
+            existingProviders={providers}
             onAdd={handleAddCustomProvider}
             onUpdate={handleUpdateProvider}
             onRemove={handleRemoveCustomProvider}
