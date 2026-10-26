@@ -1,0 +1,289 @@
+// This adapter is compiled against the selected release's unmodified source and
+// go.mod. It creates no schema itself: all DDL belongs to that release's Run.
+package main
+
+import (
+	"encoding/json"
+	"fmt"
+	"log/slog"
+	"os"
+	"os/exec"
+	"path/filepath"
+
+	"gorm.io/gorm"
+	"{{.}}/internal/config"
+	"{{.}}/internal/migrate"
+	"{{.}}/internal/platform"
+	"{{.}}/internal/storage"
+)
+
+func main() {
+	if err := run(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
+	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
+	config.Set(&config.AppConfig{})
+	if filepath.Clean(platform.DataDir()) != filepath.Join(os.Getenv("HOME"), "Goink") {
+		return fmt.Errorf("historical data directory was not isolated")
+	}
+	if err := os.MkdirAll(platform.DataDir(), 0755); err != nil {
+		return err
+	}
+	db, err := storage.Open(config.GlobalDBPath(), log)
+	if err != nil {
+		return err
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			_ = storage.Close(db)
+		}
+	}()
+	if err := migrate.Run(db, log); err != nil {
+		return err
+	}
+	if os.Args[1] == "seed" {
+		if err := seed(db, log); err != nil {
+			return err
+		}
+	}
+	// Expected counts are supplied by the seed, never recomputed from the result
+	// of a historical upgrade (which would bless historical data corruption).
+	meta := map[string]any{}
+	if os.Args[1] == "upgrade" {
+		data, err := os.ReadFile(os.Args[2])
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(data, &meta); err != nil {
+			return err
+		}
+	} else {
+		added, deleted := 100, 50
+		if db.Migrator().HasColumn("writing_log", "words_added") {
+			added, deleted = 160, 110
+		}
+		meta["writing_added"], meta["writing_deleted"] = added, deleted
+	}
+	meta["legacy_chapters"] = db.Migrator().HasColumn("chapters", "chapter_number")
+	heads := map[string]string{}
+	for _, id := range []int{1, 2} {
+		cmd := exec.Command("git", "rev-parse", "HEAD")
+		cmd.Dir = config.NovelDirPath(int64(id))
+		out, err := cmd.Output()
+		if err != nil {
+			return err
+		}
+		heads[fmt.Sprint(id)] = string(bytesTrim(out))
+	}
+	meta["git_heads"] = heads
+	data, err := json.MarshalIndent(meta, "", "  ")
+	if err != nil {
+		return err
+	}
+	if err := storage.Close(db); err != nil {
+		return err
+	}
+	closed = true
+	return os.WriteFile(os.Args[2], data, 0644)
+}
+
+func bytesTrim(data []byte) []byte {
+	for len(data) > 0 && (data[len(data)-1] == '\n' || data[len(data)-1] == '\r') {
+		data = data[:len(data)-1]
+	}
+	return data
+}
+
+func seed(db *gorm.DB, log *slog.Logger) error {
+	insert := func(table string, row map[string]any) error {
+		if db.Migrator().HasColumn(table, "created_at") {
+			row["created_at"] = "2026-01-01 00:00:00+00:00"
+		}
+		if db.Migrator().HasColumn(table, "updated_at") {
+			row["updated_at"] = "2026-01-01 00:00:00+00:00"
+		}
+		if err := db.Table(table).Create(row).Error; err != nil {
+			return fmt.Errorf("seed %s: %w", table, err)
+		}
+		return nil
+	}
+	legacy := db.Migrator().HasColumn("chapters", "chapter_number")
+	for _, id := range []int{1, 2} {
+		if err := insert("novels", map[string]any{"id": id, "title": fmt.Sprintf("升级样本%d", id), "genre": "玄幻", "description": "保留中文与 UTF-8"}); err != nil {
+			return err
+		}
+	}
+	for _, c := range []struct{ id, novel, number int }{{11, 1, 1}, {12, 1, 2}, {21, 2, 1}} {
+		row := map[string]any{"id": c.id, "novel_id": c.novel, "title": fmt.Sprintf("章节%d", c.id), "summary": "章节摘要", "word_count": 8}
+		if legacy {
+			row["chapter_number"] = c.number
+		} else {
+			row["sort_order"] = c.number
+		}
+		if err := insert("chapters", row); err != nil {
+			return err
+		}
+	}
+	ref := func(table, old, current string, number, id int) (string, any) {
+		if legacy {
+			if db.Migrator().HasColumn(table, old) {
+				return old, number
+			}
+			return current, number
+		}
+		if id == 0 {
+			return current, nil
+		}
+		return current, id
+	}
+	for _, v := range []struct{ id, novel, source, sourceID, resolved, resolvedID int }{{1, 1, 1, 11, 2, 12}, {2, 2, 1, 21, 0, 0}} {
+		row := map[string]any{"id": v.id, "novel_id": v.novel, "category": "foreshadowing", "status": "pending", "title": "伏笔", "importance": 3}
+		target := "target_reading_number"
+		if legacy {
+			target = "target_chapter"
+		}
+		row[target] = 999
+		key, value := ref("time_entries", "source_chapter", "source_chapter_id", v.source, v.sourceID)
+		row[key] = value
+		key, value = ref("time_entries", "resolved_chapter", "resolved_chapter_id", v.resolved, v.resolvedID)
+		row[key] = value
+		if err := insert("time_entries", row); err != nil {
+			return err
+		}
+	}
+	if err := insert("story_arcs", map[string]any{"id": 1, "novel_id": 1, "name": "主线", "arc_type": "main", "status": "active"}); err != nil {
+		return err
+	}
+	arc := map[string]any{"id": 1, "novel_id": 1, "story_arc_id": 1, "title": "弧线节点", "status": "completed"}
+	target := "target_reading_number"
+	if legacy {
+		target = "target_chapter"
+	}
+	arc[target] = 999
+	key, value := ref("arc_nodes", "actual_chapter", "actual_chapter_id", 2, 12)
+	arc[key] = value
+	if err := insert("arc_nodes", arc); err != nil {
+		return err
+	}
+	for _, v := range []struct{ id, novel, planted, plantedID, revealed, revealedID int }{{1, 1, 1, 11, 0, 0}, {2, 2, 99, 0, 1, 21}} {
+		row := map[string]any{"id": v.id, "novel_id": v.novel, "type": "suspense", "content": "读者认知"}
+		key, value := ref("reader_perspectives", "planted_chapter", "planted_chapter_id", v.planted, v.plantedID)
+		row[key] = value
+		key, value = ref("reader_perspectives", "revealed_chapter", "revealed_chapter_id", v.revealed, v.revealedID)
+		row[key] = value
+		if err := insert("reader_perspectives", row); err != nil {
+			return err
+		}
+	}
+	for _, id := range []int{31, 32} {
+		if err := insert("characters", map[string]any{"id": id, "novel_id": 1, "name": fmt.Sprintf("角色%d", id)}); err != nil {
+			return err
+		}
+	}
+	for _, id := range []int{1, 2} {
+		row := map[string]any{"id": id, "novel_id": 1, "source_character_id": 31, "target_character_id": 32, "relation_describe": "关系历史", "is_current": id == 1}
+		number, chapterID := 0, 0
+		if id == 1 {
+			number, chapterID = 2, 12
+		}
+		key, value := ref("character_relations", "chapter_number", "chapter_id", number, chapterID)
+		row[key] = value
+		if err := insert("character_relations", row); err != nil {
+			return err
+		}
+	}
+	for _, id := range []int{1, 2} {
+		if err := insert("preference_items", map[string]any{"id": id, "novel_id": id - 1, "is_global": id == 1, "category": "文风", "content": "使用短句"}); err != nil {
+			return err
+		}
+	}
+	if err := insert("app_config", map[string]any{"id": 1, "last_novel_id": 2, "selected_model_key": "fixture-model", "approval_mode": "manual"}); err != nil {
+		return err
+	}
+	if err := insert("sessions", map[string]any{"session_id": "upgrade-session", "novel_id": 1, "title": "历史对话", "active_version": 2}); err != nil {
+		return err
+	}
+	for _, id := range []int{1, 2, 3} {
+		if err := insert("messages", map[string]any{"id": id, "session_id": "upgrade-session", "role": "user", "content": fmt.Sprintf("消息%d", id), "version": 1 + (id % 2), "to_api": id == 1, "to_frontend": id == 2}); err != nil {
+			return err
+		}
+	}
+	detailed := db.Migrator().HasColumn("writing_log", "words_added")
+	daily := db.Migrator().HasIndex("writing_log", "uk_writing_date_novel")
+	if daily {
+		if err := insert("writing_log", map[string]any{"id": 1, "date": "2026-01-01", "novel_id": 1, "word_delta": 50, "words_added": 160, "words_deleted": 110}); err != nil {
+			return err
+		}
+	} else {
+		for i, delta := range []int{100, -50, 0} {
+			row := map[string]any{"id": i + 1, "date": "2026-01-01", "novel_id": 1, "word_delta": delta}
+			key, value := ref("writing_log", "chapter_number", "chapter_id", 1, 11)
+			row[key] = value
+			if detailed {
+				row["words_added"] = []int{120, 10, 30}[i]
+				row["words_deleted"] = []int{20, 60, 30}[i]
+			}
+			if err := insert("writing_log", row); err != nil {
+				return err
+			}
+		}
+	}
+	for _, novelID := range []int64{1, 2} {
+		dir := config.NovelDirPath(novelID)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+		if err := runGit(dir, "init", "-b", "main"); err != nil {
+			return err
+		}
+		if err := runGit(dir, "config", "user.name", "Upgrade Fixture"); err != nil {
+			return err
+		}
+		if err := runGit(dir, "config", "user.email", "fixture@goink.local"); err != nil {
+			return err
+		}
+		if err := runGit(dir, "config", "core.autocrlf", "false"); err != nil {
+			return err
+		}
+		for _, c := range []struct{ id, novel, number int }{{11, 1, 1}, {12, 1, 2}, {21, 2, 1}} {
+			if int64(c.novel) != novelID {
+				continue
+			}
+			for _, dir := range []string{"chapters", "outlines"} {
+				name := fmt.Sprintf("id_%d.md", c.id)
+				if legacy {
+					name = fmt.Sprintf("%03d.md", c.number)
+				}
+				path := filepath.Join(config.NovelDirPath(novelID), dir, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(path, []byte(fmt.Sprintf("%s：小说%d，章节%d\n", dir, c.novel, c.id)), 0644); err != nil {
+					return err
+				}
+			}
+		}
+		if err := runGit(dir, "add", "-A"); err != nil {
+			return err
+		}
+		if err := runGit(dir, "commit", "-m", "test: seed historical upgrade fixture"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func runGit(dir string, args ...string) error {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("fixture git %v: %w: %s", args, err, out)
+	}
+	return nil
+}

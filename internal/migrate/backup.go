@@ -25,51 +25,109 @@ const (
 	backupBusyRetryDelay = 10 * time.Millisecond
 )
 
-// backupBeforeMigrate 在破坏性迁移前备份数据目录，提供恢复兜底。migration 为本次迁移标识
-// （如 "v1.6.0-chapter-id-refactor"），未来新迁移传新标识即可复用：目录名/组判断/临时目录均按它隔离。
-//
-// 仅在"迁移需要执行"时备份一次，迁移完成后不再备份：
-//   - migrate_state 中本迁移组（migration = migration）有记录且全部 done → 跳过
-//   - 备份目录 backups/{migration}/ 已存在（完整备份）→ 跳过
-//   - DB 文件不存在（无数据库文件）→ 跳过
-//   - 新库由迁移计划直接登记 done，不会调用本函数；本函数只处理已计划执行的迁移
-//
-// 备份内容：通过 SQLite Online Backup API 取得的 novel-agent.db 一致性快照 + novels/（含每个 novel 的 git 仓库）。
-// 备份目录 = backups/{migration}/，与 migrate_state 的 migration 标识对应，未来迁移各占一目录互不覆盖。
-//
-// 原子性：先拷贝到临时目录 backups/.tmp-{migration}-{pid}/，成功后 os.Rename 到正式目录。
-// 正式目录只存在"完整"或"不存在"两种状态，无半截备份；失败删临时目录，下次启动重来；
-// 崩溃残留的临时目录下次启动清理。备份是破坏性迁移的硬前置：失败时迁移不会开始。
-func backupBeforeMigrate(db *gorm.DB, log *slog.Logger, migration string) error {
-	// 本迁移组（migration）有记录且全部 done → 迁移已完成，无需再备份
-	var total, done int64
-	db.Model(&engine.MigrateState{}).Where("migration = ?", migration).Count(&total)
-	db.Model(&engine.MigrateState{}).Where("migration = ? AND status = ?", migration, "done").Count(&done)
-	if total > 0 && total == done {
-		log.Info("迁移已完成，跳过备份", "migration", migration)
+// prepareUpgradeBackup 仅预检备份需求，不固定后续逐组执行的计划或登记完成状态。
+// 从首个待执行组开始，只要后续存在破坏性组就保守提前备份，不再区分后续组的计划状态。
+// 起点使用首个待执行组之前最后完成的迁移版本；缺少记录时使用 legacy。
+func prepareUpgradeBackup(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []engine.Migration) error {
+	if isNewDatabase {
 		return nil
 	}
+	plans, err := engine.BuildPlans(db, log, false, registry)
+	if err != nil {
+		return fmt.Errorf("inspect upgrade backup requirements: %w", err)
+	}
+	from := "legacy"
+	mayRun, needsBackup := false, false
+	for _, plan := range plans {
+		if !mayRun && plan.Action == engine.PlanSkip {
+			from = migrationVersion(plan.Migration.Name)
+		}
+		mayRun = mayRun || plan.Action == engine.PlanRun
+		if mayRun && plan.Migration.Destructive {
+			needsBackup = true
+			break
+		}
+	}
+	if !needsBackup {
+		return nil
+	}
+	to := migrationVersion(registry[len(registry)-1].Name)
+	name, err := findUpgradeBackup(filepath.Join(platform.DataDir(), "backups"), to)
+	if err != nil {
+		return err
+	}
+	if name == "" {
+		name = from + "-upgrade-to-" + to
+	}
+	return backupBeforeUpgrade(db, log, name)
+}
 
+func migrationVersion(name string) string {
+	version, _, _ := strings.Cut(name, "-")
+	return version
+}
+
+// findUpgradeBackup 按目标复用完整备份，避免重启时起点推进造成重复备份。
+// 只识别本轮命名，既有按迁移组命名的备份保持不变；不跨不同目标接管备份。
+func findUpgradeBackup(root, to string) (string, error) {
+	entries, err := os.ReadDir(root)
+	if errors.Is(err, os.ErrNotExist) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read upgrade backups: %w", err)
+	}
+	var found string
+	for _, entry := range entries {
+		if strings.HasPrefix(entry.Name(), ".tmp-") || !strings.HasSuffix(entry.Name(), "-upgrade-to-"+to) {
+			continue
+		}
+		if !entry.IsDir() {
+			return "", fmt.Errorf("upgrade backup is not a directory: %s", entry.Name())
+		}
+		if found != "" {
+			return "", fmt.Errorf("multiple upgrade backups for target %s", to)
+		}
+		found = entry.Name()
+	}
+	return found, nil
+}
+
+// backupBeforeUpgrade 生成一份整轮升级的数据库和小说目录起始快照，不再自行判断迁移状态。
+// name 由备份预检确定，如 v1.6.1-upgrade-to-v1.8.0；完整目录已存在时直接复用。
+// 备份内容：通过 SQLite Online Backup API 取得的 novel-agent.db 一致性快照 + novels/（含每个 novel 的 git 仓库）。
+// 原子性：先拷贝到临时目录 backups/.tmp-{name}-{pid}/，成功后 os.Rename 到正式目录。
+// 正式目录只存在"完整"或"不存在"两种状态，无半截备份；失败删临时目录，下次启动重来；
+// 崩溃残留的临时目录下次启动清理。备份是破坏性迁移的硬前置：失败时迁移不会开始。
+func backupBeforeUpgrade(db *gorm.DB, log *slog.Logger, name string) error {
 	// DB 不存在（无数据库文件）→ 无需备份
 	if _, err := os.Stat(config.GlobalDBPath()); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("stat upgrade database: %w", err)
+		}
 		log.Info("无数据库文件，跳过备份")
 		return nil
 	}
 
 	backupRoot := filepath.Join(platform.DataDir(), "backups")
-	dest := filepath.Join(backupRoot, migration)
+	dest := filepath.Join(backupRoot, name)
 
-	// 完整备份已存在 → 跳过（迁移名目录天然幂等）
-	if _, err := os.Stat(dest); err == nil {
+	// 完整备份已存在 → 跳过，保留本轮首次备份的起始状态。
+	if info, err := os.Stat(dest); err == nil {
+		if !info.IsDir() {
+			return fmt.Errorf("upgrade backup is not a directory: %s", dest)
+		}
 		log.Info("备份已存在，跳过", "backup", dest)
 		return nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("stat upgrade backup: %w", err)
 	}
 
 	// 清理残留临时目录（上次备份崩溃遗留）
-	cleanupStaleTempBackups(backupRoot, migration, log)
+	cleanupStaleTempBackups(backupRoot, name, log)
 
 	// 拷贝到临时目录，成功后原子 rename 到正式目录
-	tmp := filepath.Join(backupRoot, fmt.Sprintf(".tmp-%s-%d", migration, os.Getpid()))
+	tmp := filepath.Join(backupRoot, fmt.Sprintf(".tmp-%s-%d", name, os.Getpid()))
 	if err := os.RemoveAll(tmp); err != nil {
 		return fmt.Errorf("backup: clear tmp %s: %w", tmp, err)
 	}
@@ -91,6 +149,9 @@ func backupBeforeMigrate(db *gorm.DB, log *slog.Logger, migration string) error 
 			removeTmp(log, tmp)
 			return fmt.Errorf("backup novels: %w", err)
 		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		removeTmp(log, tmp)
+		return fmt.Errorf("stat backup novels: %w", err)
 	}
 
 	// 3. 原子 rename：正式目录只出现完整备份

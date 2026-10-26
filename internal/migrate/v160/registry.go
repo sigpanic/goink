@@ -45,15 +45,16 @@ func needsMigration(db *gorm.DB) (bool, error) {
 	return db.Migrator().HasTable("chapters") && db.Migrator().HasColumn("chapters", "chapter_number"), nil
 }
 
-// init 自注册进 engine：migrate.Run 遍历 engine.Registry 统一执行，无需感知本包。
+// Register 注册章节 id 化迁移，由 migrate 包按版本顺序调用。
 // Destructive：本次迁移含数据重写 + 文件 rename + 删旧列，属破坏性迁移，需自动备份。
-func init() {
+func Register() {
 	engine.Register(engine.Migration{
 		Name:            migration,
 		Description:     "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
 		Destructive:     true,
 		NeedsMigration:  needsMigration,
 		PreSchemaSteps:  preSchemaRegistry,
+		SchemaStep:      engine.AutoMigrateStep{Models: FrozenModels},
 		PostSchemaSteps: registry,
 	})
 }

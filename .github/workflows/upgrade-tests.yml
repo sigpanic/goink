@@ -1,0 +1,90 @@
+name: Historical Upgrade Tests
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: Candidate tag excluded from historical fixture coverage
+        type: string
+        default: ''
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Candidate tag excluded from historical fixture coverage
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  upgrade:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 25
+    env:
+      CGO_ENABLED: 1
+      GOINK_UPGRADE_TARGET_COMMIT: ${{ github.sha }}
+      UPGRADE_TARGET: ${{ inputs.target }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.25'
+
+      - name: Install sqlite3 headers (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev gcc
+
+      - name: Install sqlite3 headers (Windows)
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/sqlite-amalgamation.zip" "https://www.sqlite.org/2023/sqlite-amalgamation-3440000.zip"
+          unzip -qjo "$RUNNER_TEMP/sqlite-amalgamation.zip" -d "$RUNNER_TEMP/sqlite"
+          echo "CGO_CFLAGS=${CGO_CFLAGS} -I${RUNNER_TEMP}/sqlite" >> "$GITHUB_ENV"
+
+      - name: Verify frozen migration models
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          shopt -s nullglob
+          snapshots=(internal/migrate/v*/models.gen.go)
+          if (( ${#snapshots[@]} == 0 )); then
+            echo "::error::No frozen migration models found"
+            exit 1
+          fi
+          for snapshot in "${snapshots[@]}"; do
+            source_ref=$(awk '/^\/\/ Source: / { print $3; exit }' "$snapshot")
+            if [[ -z "$source_ref" ]]; then
+              echo "::error file=$snapshot::Missing Source header"
+              exit 1
+            fi
+            go run ./scripts/freeze-models -ref "$source_ref" -out "$snapshot" -check
+          done
+
+      - name: Verify frozen inputs and historical tag coverage
+        shell: bash
+        run: go run ./scripts/upgrade-fixtures -check -target "$UPGRADE_TARGET"
+
+      - name: Run migration black-box tests
+        env:
+          GOINK_UPGRADE_REPORT_DIR: ${{ runner.temp }}/goink-upgrade-reports
+        shell: bash
+        run: go test -tags=upgrade -count=1 -timeout=15m -v ./internal/migrate/upgrade/... ./scripts/upgrade-fixtures/...
+
+      - name: Preserve upgrade logs and failure data
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: upgrade-reports-${{ runner.os }}
+          path: ${{ runner.temp }}/goink-upgrade-reports
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14
