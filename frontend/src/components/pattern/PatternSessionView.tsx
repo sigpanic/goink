@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Save, Sparkle } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toErrorMessage } from "@/utils/error";
+import type { adapter } from "@/lib/wailsjs/go/models";
 import {
   ExtractPattern,
   CancelExtractPattern,
@@ -20,9 +21,7 @@ interface Props {
   taskId: string;
   novelId: number;
   chapterIds: number[]; // 空数组表示全书
-  providerName: string; // 结构化模型入参（替代拼接 modelKey + splitModelKey）
-  modelId: string;
-  reasoningEffort: string; // reasoning effort（model 不支持时为空串）
+  modelSelection: adapter.ModelSelection;
   title: string; // 小说标题（进度页展示用）
   chapterCount: number; // 本次提取的章节数
   onExit: () => void; // 返回选择页
@@ -43,9 +42,7 @@ export default function PatternSessionView({
   taskId,
   novelId,
   chapterIds,
-  providerName,
-  modelId,
-  reasoningEffort,
+  modelSelection,
   title,
   chapterCount,
   onExit,
@@ -70,7 +67,11 @@ export default function PatternSessionView({
     reset();
 
     // 结构化入参校验（替代 splitModelKey 拆解 + 校验）
-    if (!providerName || !modelId) {
+    if (
+      !modelSelection.adapter_name ||
+      !modelSelection.provider_name ||
+      !modelSelection.model_id
+    ) {
       setError(t("extract.extractFailed"));
       setStatus("failed");
       return;
@@ -80,9 +81,7 @@ export default function PatternSessionView({
       const res = await ExtractPattern({
         task_id: taskId,
         novel_id: novelId,
-        provider_name: providerName,
-        model_id: modelId,
-        reasoning_effort: reasoningEffort,
+        ...modelSelection,
         chapter_ids: chapterIds.length > 0 ? chapterIds : undefined,
       });
       setResult({

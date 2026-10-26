@@ -5,7 +5,7 @@ import { useNovels } from "@/components/novel/useNovels";
 import { useChapters } from "@/components/chapter/useChapters";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
-import type { llm } from "@/lib/wailsjs/go/models";
+import type { adapter, llm } from "@/lib/wailsjs/go/models";
 import { createPatternTaskID } from "@/hooks/usePatternProgress";
 import PopSelect from "@/components/shared/PopSelect";
 import ModelPicker from "@/components/model/ModelPicker";
@@ -23,9 +23,7 @@ interface SessionParams {
   taskId: string;
   novelId: number;
   chapterIds: number[];
-  providerName: string;
-  modelId: string;
-  reasoningEffort: string;
+  modelSelection: adapter.ModelSelection;
   title: string;
   chapterCount: number;
 }
@@ -70,8 +68,21 @@ export default function PatternExtractView({ currentNovelId }: Props) {
   // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetModels/GetSettings fetch）。
   useEffect(() => {
     if (!selectedModel && models.length > 0 && settingsQuery.data) {
-      const key = settingsQuery.data.selected_model_key || "";
-      setSelectedModel(models.find((m) => m.Key === key) ?? models[0] ?? null);
+      const saved = settingsQuery.data.default_model_selection;
+      const matched = models.find(
+        (m) =>
+          m.AdapterName === saved?.adapter_name &&
+          m.ProviderName === saved?.provider_name &&
+          m.model.id === saved?.model_id,
+      );
+      const model = matched ?? models[0];
+      setSelectedModel(model);
+      const levels = model.model.reasoning_levels;
+      setReasoningEffort(
+        matched && levels?.includes(saved.reasoning_effort)
+          ? saved.reasoning_effort
+          : (levels?.[0] ?? ""),
+      );
     }
   }, [models, settingsQuery.data, selectedModel]);
   const novelOptions = useMemo(
@@ -136,9 +147,12 @@ export default function PatternExtractView({ currentNovelId }: Props) {
       taskId,
       novelId: targetNovelId,
       chapterIds: activeChapterIds,
-      providerName: selectedModel.ProviderName,
-      modelId: selectedModel.ModelID,
-      reasoningEffort,
+      modelSelection: {
+        adapter_name: selectedModel.AdapterName,
+        provider_name: selectedModel.ProviderName,
+        model_id: selectedModel.model.id,
+        reasoning_effort: reasoningEffort,
+      },
       title: targetNovelTitle || t("extract.progress.unknownWork"),
       chapterCount: activeChapterCount,
     });
@@ -160,8 +174,8 @@ export default function PatternExtractView({ currentNovelId }: Props) {
       const m = models.find((item) => item.Key === key);
       if (!m) return;
       setSelectedModel(m);
-      if (m.ReasoningLevels?.length) {
-        setReasoningEffort(m.ReasoningLevels[0]);
+      if (m.model.reasoning_levels?.length) {
+        setReasoningEffort(m.model.reasoning_levels[0]);
       } else {
         setReasoningEffort("");
       }
@@ -179,9 +193,7 @@ export default function PatternExtractView({ currentNovelId }: Props) {
         taskId={sessionParams.taskId}
         novelId={sessionParams.novelId}
         chapterIds={sessionParams.chapterIds}
-        providerName={sessionParams.providerName}
-        modelId={sessionParams.modelId}
-        reasoningEffort={sessionParams.reasoningEffort}
+        modelSelection={sessionParams.modelSelection}
         title={sessionParams.title}
         chapterCount={sessionParams.chapterCount}
         onExit={() => {

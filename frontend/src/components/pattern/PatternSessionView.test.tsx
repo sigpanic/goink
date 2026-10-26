@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { adapter } from "@/lib/wailsjs/go/models";
 import PatternSessionView from "./PatternSessionView";
 
 const { mockExtractPattern, mockGetContent, mockSaveContent } = vi.hoisted(
@@ -25,17 +26,26 @@ vi.mock("@/hooks/usePatternProgress", () => ({
 vi.mock("./PatternProgressView", () => ({ default: () => null }));
 vi.mock("@/components/Markdown", () => ({ default: () => null }));
 
-function renderSession(onExit = vi.fn()) {
+const modelSelection: adapter.ModelSelection = {
+  adapter_name: "anthropic_messages",
+  provider_name: "Relay",
+  model_id: "model",
+  reasoning_effort: "high",
+};
+
+function renderSession(
+  onExit = vi.fn(),
+  chapterIds: number[] = [],
+  selection = modelSelection,
+) {
   const queryClient = new QueryClient();
   render(
     <QueryClientProvider client={queryClient}>
       <PatternSessionView
         taskId="task-1"
         novelId={3}
-        chapterIds={[]}
-        providerName="test"
-        modelId="model"
-        reasoningEffort=""
+        chapterIds={chapterIds}
+        modelSelection={selection}
         title="Novel"
         chapterCount={2}
         onExit={onExit}
@@ -62,6 +72,13 @@ describe("PatternSessionView generated skill save", () => {
     mockGetContent.mockResolvedValue("");
     const onExit = renderSession();
     fireEvent.click(await screen.findByText("extract.saveToUserSkill"));
+
+    expect(mockExtractPattern).toHaveBeenCalledExactlyOnceWith({
+      task_id: "task-1",
+      novel_id: 3,
+      ...modelSelection,
+      chapter_ids: undefined,
+    });
 
     await vi.waitFor(() => {
       expect(mockSaveContent).toHaveBeenCalledWith({
@@ -126,5 +143,27 @@ describe("PatternSessionView generated skill save", () => {
     expect(mockSaveContent).not.toHaveBeenCalled();
     expect(screen.getByText("extract.saveToUserSkill")).toBeInTheDocument();
     expect(onExit).not.toHaveBeenCalled();
+  });
+
+  it("preserves selected chapters and an empty effort in the protocol-aware request", async () => {
+    const selection = {
+      ...modelSelection,
+      adapter_name: "gemini_interactions",
+      reasoning_effort: "",
+    };
+    renderSession(vi.fn(), [2, 5], selection);
+    await screen.findByText("extract.saveToUserSkill");
+    expect(mockExtractPattern).toHaveBeenCalledExactlyOnceWith({
+      task_id: "task-1",
+      novel_id: 3,
+      ...selection,
+      chapter_ids: [2, 5],
+    });
+  });
+
+  it("rejects a selection without a protocol before starting extraction", async () => {
+    renderSession(vi.fn(), [], { ...modelSelection, adapter_name: "" });
+    await screen.findAllByText("extract.extractFailed");
+    expect(mockExtractPattern).not.toHaveBeenCalled();
   });
 });
