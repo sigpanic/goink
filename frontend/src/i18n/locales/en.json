@@ -407,6 +407,8 @@
     "connectionSuccess": "✓ Connection successful",
     "connectionFailed": "Connection failed",
     "creativity": "Creativity",
+    "defaultTemperature": "Default",
+    "resetTemperature": "Reset to default",
     "builtinModels": "Built-in Models",
     "context": "Context",
     "output": "Output",

@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { X } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/lib/wailsjs/go/models";
+import type { adapter } from "@/lib/wailsjs/go/models";
 
 interface Props {
-  model: llm.ModelInfo;
-  onChange: (patch: Partial<llm.ModelInfo>) => void;
+  model: adapter.ModelInfo;
+  onChange: (patch: Partial<adapter.ModelInfo>) => void;
   onSave: () => void;
   onCancel: () => void;
   title?: string;
@@ -42,7 +42,7 @@ export default function ModelEditForm({
     onSave();
   };
 
-  const handleChange = (patch: Partial<llm.ModelInfo>) => {
+  const handleChange = (patch: Partial<adapter.ModelInfo>) => {
     setError("");
     onChange(patch);
   };

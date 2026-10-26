@@ -398,6 +398,8 @@
     "connectionSuccess": "✓ 连通成功",
     "connectionFailed": "连接失败",
     "creativity": "创意度",
+    "defaultTemperature": "默认",
+    "resetTemperature": "恢复默认",
     "builtinModels": "内置模型",
     "context": "上下文",
     "output": "输出",

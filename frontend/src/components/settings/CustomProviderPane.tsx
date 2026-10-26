@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/lib/wailsjs/go/models";
+import { llm, type adapter } from "@/lib/wailsjs/go/models";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderFormFields from "./ProviderFormFields";
 import ProviderDropdown from "./ProviderDropdown";
@@ -13,7 +13,7 @@ interface Props {
   onAdd: (provider: llm.ProviderView) => void;
   onUpdate: (key: string, patch: Partial<llm.ProviderView>) => void;
   onRemove: (key: string) => void;
-  onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
+  onAddCustomModel: (providerKey: string, model: adapter.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
   onTest: (
     providerKey: string,
@@ -82,16 +82,21 @@ export default function CustomProviderPane({
 
   const handleAdd = () => {
     if (!newName.trim() || !newChatURL.trim()) return;
-    onAdd({
-      key: newName.trim().toLowerCase().replace(/\s+/g, "-"),
-      name: newName.trim(),
-      chat_url: newChatURL.trim(),
-      api_key: newApiKey,
-      source: "custom",
-      builtin_models: [],
-      custom_models: [],
-      temperature: 0.7,
-    } as unknown as llm.ProviderView);
+    onAdd(
+      new llm.ProviderView({
+        key: newName.trim().toLowerCase().replace(/\s+/g, "-"),
+        adapter_name: "openai_chat",
+        provider_type: "openai",
+        name: newName.trim(),
+        chat_url: newChatURL.trim(),
+        api_key: newApiKey,
+        source: "custom",
+        platform_url: "",
+        help_text: "",
+        builtin_models: [],
+        custom_models: [],
+      }),
+    );
     setNewName("");
     setNewChatURL("");
     setNewApiKey("");
@@ -242,9 +247,7 @@ export default function CustomProviderPane({
 
           <ModelDiscoveryPanel
             key={selectedKey}
-            providerName={provider.name}
-            chatUrl={provider.chat_url}
-            apiKey={provider.api_key}
+            provider={provider}
             existingIds={
               new Set((provider?.custom_models || []).map((m) => m.id))
             }

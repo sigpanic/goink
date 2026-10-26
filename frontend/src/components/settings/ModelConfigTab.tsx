@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/lib/wailsjs/go/models";
+import { llm, type adapter } from "@/lib/wailsjs/go/models";
 import { toastSuccess } from "@/utils/toast";
 import { useSaveLLMConfig } from "./useSaveLLMConfig";
 import { useLLMConfig } from "./useLLMConfig";
@@ -115,9 +115,7 @@ export default function ModelConfigTab() {
     (key: string, patch: Partial<llm.ProviderView>) => {
       setProviders((prev) =>
         prev.map((p) =>
-          p.key === key
-            ? ({ ...p, ...patch } as unknown as llm.ProviderView)
-            : p,
+          p.key === key ? new llm.ProviderView({ ...p, ...patch }) : p,
         ),
       );
       // api_key 或 chat_url 改动都会使旧的 testResults 失效（dirty 校验：
@@ -157,12 +155,12 @@ export default function ModelConfigTab() {
   }, []);
 
   const handleAddCustomModel = useCallback(
-    (providerKey: string, model: llm.ModelInfo) => {
+    (providerKey: string, model: adapter.ModelInfo) => {
       setProviders((prev) =>
         prev.map((p) => {
           if (p.key !== providerKey) return p;
           const models = [...(p.custom_models || []), model];
-          return { ...p, custom_models: models } as unknown as llm.ProviderView;
+          return new llm.ProviderView({ ...p, custom_models: models });
         }),
       );
     },
@@ -177,7 +175,7 @@ export default function ModelConfigTab() {
           const models = (p.custom_models || []).filter(
             (m) => m.id !== modelId,
           );
-          return { ...p, custom_models: models } as unknown as llm.ProviderView;
+          return new llm.ProviderView({ ...p, custom_models: models });
         }),
       );
     },
@@ -219,24 +217,26 @@ export default function ModelConfigTab() {
       try {
         // 后端 expandChatURLCandidates 会补 https:// 和多层 fallback，
         // 前端直接传原值，不再自己 norl。
-        // 后端返回 { url, warning }：url 是验证通过的实际端点，warning 是非致命提示
+        // 后端返回 { URL, Warning }：URL 是验证通过的实际端点，Warning 是非致命提示
         const result = await testConnectionMutation.mutateAsync({
-          provider_name: providerKey,
+          adapter_name: provider.adapter_name,
+          provider_name: provider.name,
+          provider_type: provider.provider_type,
           chat_url: provider.chat_url || "",
           api_key: provider.api_key,
           model_id: modelId,
         });
-        const resolvedUrl = result.url;
-        const warning = result.warning;
+        const resolvedUrl = result.URL;
+        const warning = result.Warning;
         // 回写探测到的正确 URL（多层 fallback 可能和原值不同）
         if (resolvedUrl && resolvedUrl !== provider.chat_url) {
           setProviders((prev) =>
             prev.map((p) =>
               p.key === providerKey
-                ? ({
+                ? new llm.ProviderView({
                     ...p,
                     chat_url: resolvedUrl,
-                  } as unknown as llm.ProviderView)
+                  })
                 : p,
             ),
           );
@@ -278,11 +278,6 @@ export default function ModelConfigTab() {
   const handleSave = useCallback(async () => {
     // 收集有 key 的 provider
     const withKey = providers.filter((p) => p.api_key);
-    if (withKey.length === 0) {
-      // 错误消息不清空（保留到下次成功保存或新错误覆盖），让用户看清错误内容
-      setSaveMsg(t("settings.pleaseConfigureApiKey"));
-      return;
-    }
 
     // 找出需要测试的：从未测过 / key 变了 / 上次失败但用户未知晓
     const needTest = withKey.filter((p) => {
@@ -348,12 +343,14 @@ export default function ModelConfigTab() {
       const providersToSave = providers.map((p) => {
         const resolved = resolvedUrls[p.key];
         return resolved && resolved !== p.chat_url
-          ? ({ ...p, chat_url: resolved } as unknown as llm.ProviderView)
+          ? new llm.ProviderView({ ...p, chat_url: resolved })
           : p;
       });
-      await saveMutation.mutateAsync({
-        providers: providersToSave,
-      } as unknown as llm.LLMConfigView);
+      await saveMutation.mutateAsync(
+        new llm.LLMConfigView({
+          providers: providersToSave,
+        }),
+      );
       const keys: Record<string, string> = {};
       for (const p of providers) {
         if (p.api_key) keys[p.key] = p.api_key;

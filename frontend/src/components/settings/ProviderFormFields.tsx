@@ -56,6 +56,7 @@ export default function ProviderFormFields({
           {t("settings.chatUrl")}
         </label>
         <input
+          aria-label={t("settings.chatUrl")}
           value={provider.chat_url}
           onChange={(e) => onUpdate(selectedKey, { chat_url: e.target.value })}
           className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
@@ -72,6 +73,7 @@ export default function ProviderFormFields({
         </label>
         <input
           type="password"
+          aria-label={t("settings.apiKey")}
           value={provider.api_key}
           onChange={(e) => onUpdate(selectedKey, { api_key: e.target.value })}
           placeholder={t("settings.enterApiKey")}
@@ -101,18 +103,29 @@ export default function ProviderFormFields({
         </label>
         <input
           type="range"
+          aria-label={t("settings.creativity")}
           min="0"
           max="2"
           step="0.1"
-          value={provider.temperature}
+          value={provider.temperature ?? 0.7}
           onChange={(e) =>
             onUpdate(selectedKey, { temperature: parseFloat(e.target.value) })
           }
           className="flex-1 h-8"
         />
-        <span className="text-xs text-muted-foreground w-8 text-right">
-          {(provider.temperature ?? 0.7).toFixed(1)}
+        <span className="text-xs text-muted-foreground min-w-8 text-right">
+          {provider.temperature == null
+            ? t("settings.defaultTemperature")
+            : provider.temperature.toFixed(1)}
         </span>
+        {provider.temperature != null && (
+          <button
+            onClick={() => onUpdate(selectedKey, { temperature: undefined })}
+            className="text-xs text-muted-foreground hover:underline shrink-0"
+          >
+            {t("settings.resetTemperature")}
+          </button>
+        )}
       </div>
 
       {/* 自定义模型列表 */}
