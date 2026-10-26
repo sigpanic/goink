@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"testing"
 
 	"github.com/sigpanic/goink/internal/platform"
 )
@@ -101,11 +102,27 @@ func ModelsDir() string {
 	return filepath.Join(platform.DataDir(), "models")
 }
 
+// processHome 在包初始化时捕获进程启动时的用户目录，早于任何 t.Setenv。
+// 测试用 t.Setenv("HOME", ...) 覆盖 home 后，当前值会与它不同，可据此区分
+// "测试显式隔离了 home" 和 "测试忘了隔离"。
+var processHome = func() string {
+	home, _ := os.UserHomeDir()
+	return home
+}()
+
 // configDir 返回指针文件所在的目录 ~/.goink。
+//
+// 测试兜底：测试二进制且当前 home 仍是进程启动时的 home（说明测试没有显式隔离），
+// 返回进程独立的临时目录，避免任何测试误读写真实 ~/.goink（指针文件、LLM 与 MCP
+// 加密配置、skills、风格素材）。与 platform.DataDir 的测试兜底保持一致的思路：
+// 只保证"不落到真实目录"，遗留的临时目录交由系统清理。
 func configDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("获取用户目录失败: %w", err)
+	}
+	if testing.Testing() && home == processHome {
+		return filepath.Join(os.TempDir(), fmt.Sprintf("goink-test-%d", os.Getpid()), ".goink"), nil
 	}
 	return filepath.Join(home, ".goink"), nil
 }
