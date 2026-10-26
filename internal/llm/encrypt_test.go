@@ -68,7 +68,7 @@ func TestSaveUserConfigFailedAtomicReplacePreservesDestination(t *testing.T) {
 	require.NoError(t, os.Mkdir(path, 0700))
 	marker := filepath.Join(path, "existing")
 	require.NoError(t, os.WriteFile(marker, []byte("preserve"), 0600))
-	state := &UserLLMConfig{Providers: []Provider{{Name: "test", APIKey: "private-test-key"}}}
+	state := testUserConfig(adapter.Provider{Name: "test", ProviderType: "openai", APIKey: "private-test-key", ChatURL: "https://example.com"})
 
 	err := SaveUserConfig(path, state)
 	var renameErr *os.LinkError

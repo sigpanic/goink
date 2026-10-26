@@ -26,6 +26,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/migrate/upgrade/fixture"
 	"github.com/sigpanic/goink/internal/novel"
@@ -75,7 +76,11 @@ func TestUpgradeWorker(t *testing.T) {
 	if err := novels.DB.WithContext(ctx).Create(&novel.Novel{ID: 1001, Title: "升级后新建小说"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	settings.SelectedModelKey = "upgrade-write"
+	settings.DefaultModelSelection = adapter.ModelSelection{
+		AdapterName:  adapter.ProtocolOpenAIChat,
+		ProviderName: "probe-provider",
+		ModelID:      "upgrade-write",
+	}
 	if err := config.SaveSettings(db, settings); err != nil {
 		t.Fatal(err)
 	}
@@ -138,7 +143,7 @@ func TestHistoricalDirectUpgrades(t *testing.T) {
 			}
 			withDB(t, filepath.Join(dir, "novel-agent.db"), func(db *sql.DB) {
 				assertCount(t, db, "new novel", `SELECT COUNT(*) FROM novels WHERE id=1001 AND title='升级后新建小说'`, 1)
-				assertCount(t, db, "updated settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND selected_model_key='upgrade-write'`, 1)
+				assertCount(t, db, "updated settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND default_adapter_name='openai_chat' AND default_provider_name='probe-provider' AND default_model_id='upgrade-write'`, 1)
 				assertCount(t, db, "new writing activity", `SELECT COUNT(*) FROM writing_log WHERE date IN (?, ?) AND novel_id=1 AND word_delta=5 AND words_added=7 AND words_deleted=2`, 1, probeDate, time.Now().Format(time.DateOnly))
 			})
 		})
