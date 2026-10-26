@@ -158,8 +158,8 @@ export function DeleteVolume(arg1, arg2) {
   return window['go']['app']['App']['DeleteVolume'](arg1, arg2);
 }
 
-export function DiscoverModels(arg1, arg2, arg3) {
-  return window['go']['app']['App']['DiscoverModels'](arg1, arg2, arg3);
+export function DiscoverModels(arg1) {
+  return window['go']['app']['App']['DiscoverModels'](arg1);
 }
 
 export function DismissUpdate(arg1) {
@@ -470,12 +470,8 @@ export function SetMCPToolAllowed(arg1, arg2, arg3) {
   return window['go']['app']['App']['SetMCPToolAllowed'](arg1, arg2, arg3);
 }
 
-export function SetReasoningEffort(arg1) {
-  return window['go']['app']['App']['SetReasoningEffort'](arg1);
-}
-
-export function SetSelectedModel(arg1, arg2) {
-  return window['go']['app']['App']['SetSelectedModel'](arg1, arg2);
+export function SetSelectedModel(arg1) {
+  return window['go']['app']['App']['SetSelectedModel'](arg1);
 }
 
 export function TestConnection(arg1) {
