@@ -3,6 +3,8 @@ package session
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"log/slog"
 	"reflect"
 	"strings"
 	"testing"
@@ -152,14 +154,15 @@ func TestLLMMessageTimePrefixAndRawRoundTrip(t *testing.T) {
 	tests := []struct {
 		name string
 		msg  Message
+		want string
 	}{
-		{"real user", Message{Role: "user", Content: "你好", ToFrontend: true, CreatedAt: sentAt}},
-		{"unsaved user", Message{Role: "user", Content: "你好", ToFrontend: true}},
-		{"injected user", Message{Role: "user", Content: "提醒", CreatedAt: sentAt}},
-		{"compressed copy", Message{Role: "user", Content: "[2019-01-02 03:04] 原文", CreatedAt: sentAt}},
-		{"system", Message{Role: "system", Content: "系统提示", ToFrontend: true, CreatedAt: sentAt}},
-		{"assistant", Message{Role: "assistant", Content: "回复", ToFrontend: true, CreatedAt: sentAt}},
-		{"tool", Message{Role: "tool", Content: "结果", ToFrontend: true, CreatedAt: sentAt}},
+		{"real user", Message{Role: "user", Content: "你好", ToFrontend: true, CreatedAt: sentAt}, "[2020-01-02 03:04] 你好"},
+		{"unsaved user", Message{Role: "user", Content: "你好", ToFrontend: true}, "你好"},
+		{"injected user", Message{Role: "user", Content: "提醒", CreatedAt: sentAt}, "提醒"},
+		{"compressed copy", Message{Role: "user", Content: "[2019-01-02 03:04] 原文", CreatedAt: sentAt}, "[2019-01-02 03:04] 原文"},
+		{"system", Message{Role: "system", Content: "系统提示", ToFrontend: true, CreatedAt: sentAt}, "系统提示"},
+		{"assistant", Message{Role: "assistant", Content: "回复", ToFrontend: true, CreatedAt: sentAt}, "回复"},
+		{"tool", Message{Role: "tool", Content: "结果", ToFrontend: true, CreatedAt: sentAt}, "结果"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -172,8 +175,8 @@ func TestLLMMessageTimePrefixAndRawRoundTrip(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := tt.msg.ToAPIFormat(discardLogger())["content"]; request.Content != want {
-				t.Fatalf("time prefix changed: got %q, want %q", request.Content, want)
+			if request.Content != tt.want {
+				t.Fatalf("time prefix changed: got %q, want %q", request.Content, tt.want)
 			}
 			stored, err := tt.msg.WithLLMMessage(raw)
 			if err != nil {
@@ -198,6 +201,42 @@ func TestLLMMessageTimePrefixAndRawRoundTrip(t *testing.T) {
 	again, err := copy.ToLLMRequestMessage()
 	if err != nil || again.Content != "[2020-01-02 03:04] 你好" {
 		t.Fatalf("compressed copy gained its creation time: %+v, %v", again, err)
+	}
+}
+
+// 同一历史反复渲染保持字节稳定，追加消息不改变既有历史前缀。
+func TestLLMRequestHistoryPrefixStaysByteStable(t *testing.T) {
+	render := func(messages []Message) []byte {
+		t.Helper()
+		mapped := make([]adapter.Message, len(messages))
+		for i, message := range messages {
+			var err error
+			mapped[i], err = message.ToLLMRequestMessage()
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
+		data, err := json.Marshal(mapped)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return data
+	}
+	history := []Message{
+		{Role: "system", Content: "你是网文写作助手"},
+		{Role: "user", Content: "帮我看看第一章", CreatedAt: time.Date(2020, 1, 2, 3, 4, 0, 0, time.Local), ToFrontend: true},
+		{Role: "assistant", Content: "好的，我先读一下"},
+	}
+	first := render(history)
+	if second := render(history); !bytes.Equal(first, second) {
+		t.Fatalf("same history rendered differently:\nfirst=%s\nsecond=%s", first, second)
+	}
+	next := append(history, Message{
+		Role: "user", Content: "继续", ToFrontend: true,
+		CreatedAt: time.Date(2020, 1, 2, 3, 5, 0, 0, time.Local),
+	})
+	if nextJSON := render(next); !bytes.HasPrefix(nextJSON, bytes.TrimSuffix(first, []byte("]"))) {
+		t.Fatalf("appending a message changed the history prefix:\nfirst=%s\nnext=%s", first, nextJSON)
 	}
 }
 
@@ -236,6 +275,10 @@ func TestLLMMessageRejectsCorruptMetadataAndStoredDrafts(t *testing.T) {
 	if _, err := (Message{ID: 42}).WithLLMMessage(adapter.Message{Role: "user"}); err == nil {
 		t.Fatal("mapping accepted an existing record for replacement")
 	}
+}
+
+func discardLogger() *slog.Logger {
+	return slog.New(slog.NewTextHandler(io.Discard, nil))
 }
 
 func assertSameLLMJSON(t *testing.T, got, want []byte) {

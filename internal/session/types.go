@@ -1,8 +1,6 @@
 package session
 
 import (
-	"encoding/json"
-	"log/slog"
 	"time"
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
@@ -71,69 +69,3 @@ type Message struct {
 }
 
 func (Message) TableName() string { return "messages" }
-
-// ToAPIFormat 转为 OpenAI Chat Completions 兼容的消息格式。
-// 从 ExtraMetadata 提取 tool_calls、thinking_content、tool_call_id 拼入对应字段。
-func (m *Message) ToAPIFormat(logger *slog.Logger) map[string]any {
-	payload := map[string]any{
-		"role":    m.Role,
-		"content": m.Content,
-	}
-
-	// 用户消息前置发送时间，让模型能感知"这句话是何时说的"。
-	//
-	// 时间取自入库后不再变化的 created_at：历史消息每次回放得到的字符串完全一致，
-	// 因此不会破坏前缀缓存（若改用 time.Now()，每轮请求都会让缓存前缀失效）。
-	//
-	// 门控用 ToFrontend 而非 created_at 零值判断：ToFrontend 为真的 user 消息才是
-	// 用户真实发言，slash 注入 / 审批反馈 / tool reminder / 压缩提醒与摘要等系统注入
-	// 的 user 消息全是 ToFrontend=false，天然不带前缀。
-	//
-	// 关键：压缩时保留的消息会被 cp 一份（apiMsgToMessage，ToFrontend=false），其
-	// Content 已是带上前缀的渲染产物，而 created_at 会被 GORM autoCreateTime 覆盖成
-	// 压缩时刻。因为副本 ToFrontend=false，这里不会再加一层前缀——既避免了 "[压缩时间]
-	// [原始时间] 内容" 的逐次叠加，也让发送时间随 Content 一起保留下来。不要改成用
-	// created_at 判断，否则压缩副本会被重复加前缀。
-	if m.Role == "user" && m.ToFrontend && !m.CreatedAt.IsZero() {
-		payload["content"] = "[" + m.CreatedAt.Local().Format("2006-01-02 15:04") + "] " + m.Content
-	}
-
-	if m.Role == "assistant" {
-		if m.ThinkingContent != "" {
-			payload["reasoning_content"] = m.ThinkingContent
-		}
-		var meta map[string]any
-		if m.ExtraMetadata != "" {
-			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
-				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
-			}
-		}
-		if meta != nil {
-			if tc, ok := meta["tool_calls"]; ok {
-				payload["tool_calls"] = tc
-				if m.ThinkingContent == "" {
-					payload["reasoning_content"] = ""
-				}
-			}
-		}
-	}
-
-	if m.Role == "tool" {
-		var meta map[string]any
-		if m.ExtraMetadata != "" {
-			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
-				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
-			}
-		}
-		if meta != nil {
-			if id, ok := meta["tool_call_id"]; ok {
-				payload["tool_call_id"] = id
-			}
-			if name, ok := meta["tool_name"]; ok {
-				payload["name"] = name
-			}
-		}
-	}
-
-	return payload
-}

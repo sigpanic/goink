@@ -36,7 +36,7 @@ func (m Message) ToLLMMessage() (adapter.Message, error) {
 	}, nil
 }
 
-// ToLLMRequestMessage 生成出站副本，保持既有 ToAPIFormat 的用户时间前缀规则。
+// ToLLMRequestMessage 生成出站副本，为前端可见的真实用户消息添加发送时间前缀。
 // 时间只取原始 CreatedAt；注入消息和已渲染的压缩副本 ToFrontend=false，不重复加前缀。
 // 该结果用于请求，不应作为原始用户正文写回；压缩副本须显式使用 ToFrontend=false。
 func (m Message) ToLLMRequestMessage() (adapter.Message, error) {
