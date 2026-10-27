@@ -5,7 +5,7 @@ import qwenRaw from "@/assets/providers/qwen.svg?raw";
 import zhipuRaw from "@/assets/providers/zhipu.svg?raw";
 import minimaxRaw from "@/assets/providers/minimax.svg?raw";
 import mimoRaw from "@/assets/providers/mimo.svg?raw";
-import moonshotRaw from "@/assets/providers/moonshot.svg?raw";
+import kimiRaw from "@/assets/providers/kimi.svg?raw";
 import opencodeRaw from "@/assets/providers/opencode.svg?raw";
 import openaiRaw from "@/assets/providers/openai.svg?raw";
 import claudeRaw from "@/assets/providers/claude.svg?raw";
@@ -18,7 +18,7 @@ const LOGOS: Record<string, string> = {
   zhipu: zhipuRaw,
   minimax: minimaxRaw,
   mimo: mimoRaw,
-  moonshot: moonshotRaw,
+  moonshot: kimiRaw,
   opencode: opencodeRaw,
   "opencode-go": opencodeRaw,
   openai: openaiRaw,

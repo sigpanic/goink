@@ -13,6 +13,7 @@ import ProviderFormFields from "./ProviderFormFields";
 import ProviderDropdown from "./ProviderDropdown";
 import ProviderStatusBadge from "./ProviderStatusBadge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PopSelect from "@/components/shared/PopSelect";
 
 interface Props {
   providers: llm.ProviderView[];
@@ -202,21 +203,21 @@ export default function CustomProviderPane({
             <label className="text-xs text-muted-foreground w-16 shrink-0">
               {t("settings.protocol")}
             </label>
-            <select
-              aria-label={t("settings.protocol")}
+            <PopSelect
+              ariaLabel={t("settings.protocol")}
               value={newProtocol.adapterName}
-              onChange={(e) => {
-                setNewAdapterName(e.target.value);
+              options={PROVIDER_PROTOCOLS.map((p) => ({
+                value: p.adapterName,
+                label: p.label,
+              }))}
+              onChange={(value) => {
+                setNewAdapterName(value);
                 setNameConflict(false);
               }}
-              className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-            >
-              {PROVIDER_PROTOCOLS.map((p) => (
-                <option key={p.adapterName} value={p.adapterName}>
-                  {p.label}
-                </option>
-              ))}
-            </select>
+              className="flex-1 min-w-0"
+              size="form"
+              dropUp={false}
+            />
           </div>
 
           <div className="flex items-center gap-3">

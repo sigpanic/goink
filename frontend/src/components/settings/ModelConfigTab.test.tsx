@@ -203,11 +203,9 @@ it("creates same-named instances under four protocols and preserves their select
     const form = within(
       screen.getByRole("group", { name: "settings.newCustomProvider" }),
     );
+    await user.click(form.getByRole("button", { name: "settings.protocol" }));
     expect(form.getAllByRole("option")).toHaveLength(4);
-    await user.selectOptions(
-      form.getByRole("combobox", { name: "settings.protocol" }),
-      protocol,
-    );
+    await user.click(form.getByRole("option", { name: label }));
     fireEvent.change(form.getByRole("textbox", { name: "common.name" }), {
       target: { value: name },
     });
@@ -277,10 +275,8 @@ it("rejects names occupied by a builtin or custom instance only within the selec
   expect(screen.getByRole("alert")).toHaveTextContent(
     "settings.providerNameConflict",
   );
-  await user.selectOptions(
-    form.getByRole("combobox", { name: "settings.protocol" }),
-    "anthropic_messages",
-  );
+  await user.click(form.getByRole("button", { name: "settings.protocol" }));
+  await user.click(form.getByRole("option", { name: "Anthropic Messages" }));
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   await user.click(form.getByRole("button", { name: "settings.add" }));
   await user.click(
@@ -289,10 +285,8 @@ it("rejects names occupied by a builtin or custom instance only within the selec
   form = within(
     screen.getByRole("group", { name: "settings.newCustomProvider" }),
   );
-  await user.selectOptions(
-    form.getByRole("combobox", { name: "settings.protocol" }),
-    "anthropic_messages",
-  );
+  await user.click(form.getByRole("button", { name: "settings.protocol" }));
+  await user.click(form.getByRole("option", { name: "Anthropic Messages" }));
   fireEvent.change(form.getByRole("textbox", { name: "common.name" }), {
     target: { value: "Chat" },
   });
