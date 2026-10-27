@@ -73,7 +73,7 @@ func (p Provider) applyOptions(params *types.CreateModelInteraction, policy, con
 		return fmt.Errorf("temperature configuration is not supported by Gemini Interactions v1")
 	}
 	known := policy.ID != ""
-	thinking := known && params.Model != "gemini-2.5-flash-lite"
+	thinking := known
 	effort := ""
 	if known && len(policy.ReasoningLevels) > 0 {
 		effort = policy.ReasoningLevels[0]
@@ -90,7 +90,7 @@ func (p Provider) applyOptions(params *types.CreateModelInteraction, policy, con
 		}
 		if opts.ThinkingEnabled != nil {
 			thinking = *opts.ThinkingEnabled
-			if !thinking && (params.Model != "gemini-2.5-flash-lite" || opts.ReasoningEffort != nil) {
+			if !thinking {
 				return fmt.Errorf("model %q cannot disable thinking through Interactions", params.Model)
 			}
 		}

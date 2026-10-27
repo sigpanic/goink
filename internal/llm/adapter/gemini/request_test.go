@@ -121,11 +121,7 @@ func TestRequestModelDefaultsAndOutputLimits(t *testing.T) {
 			if *config.MaxOutputTokens != model.MaxOutputTokens {
 				t.Fatalf("unexpected output cap: %d", *config.MaxOutputTokens)
 			}
-			if model.ID == "gemini-2.5-flash-lite" {
-				if config.ThinkingLevel != nil || config.ThinkingSummaries != nil {
-					t.Fatal("default-off model was implicitly enabled")
-				}
-			} else if config.ThinkingLevel == nil || string(*config.ThinkingLevel) != model.ReasoningLevels[0] || config.ThinkingSummaries == nil || *config.ThinkingSummaries != types.ThinkingSummariesAuto {
+			if config.ThinkingLevel == nil || string(*config.ThinkingLevel) != model.ReasoningLevels[0] || config.ThinkingSummaries == nil || *config.ThinkingSummaries != types.ThinkingSummariesAuto {
 				t.Fatalf("unexpected thinking defaults: %+v", config)
 			}
 		})
@@ -179,11 +175,7 @@ func TestRequestThinkingAndTemperatureOptions(t *testing.T) {
 		{name: "cannot expand official levels", model: "gemini-3.8-flash", levels: []string{"minimal"}, wantError: true},
 		{name: "configured default", model: "gemini-3.8-flash", levels: []string{"low"}, want: "low"},
 		{name: "cannot disable", model: "gemini-3.8-flash", opts: adapter.CallOptions{ThinkingEnabled: ptr(false)}, wantError: true},
-		{name: "2.5 flash has no disable field", model: "gemini-2.5-flash", opts: adapter.CallOptions{ThinkingEnabled: ptr(false)}, wantError: true},
-		{name: "lite default off", model: "gemini-2.5-flash-lite", opts: adapter.CallOptions{ThinkingEnabled: ptr(false)}},
-		{name: "enable lite", model: "gemini-2.5-flash-lite", opts: adapter.CallOptions{ThinkingEnabled: ptr(true)}, want: "low"},
-		{name: "level enables lite", model: "gemini-2.5-flash-lite", opts: adapter.CallOptions{ReasoningEffort: ptr("medium")}, want: "medium"},
-		{name: "conflicting options", model: "gemini-2.5-flash-lite", opts: adapter.CallOptions{ThinkingEnabled: ptr(false), ReasoningEffort: ptr("low")}, wantError: true},
+		{name: "disable conflicts with level", model: "gemini-3.8-flash", opts: adapter.CallOptions{ThinkingEnabled: ptr(false), ReasoningEffort: ptr("low")}, wantError: true},
 		{name: "unknown capability", model: "relay-gemini-3.8-flash", opts: adapter.CallOptions{ThinkingEnabled: ptr(true)}, wantError: true},
 		{name: "unknown effort", model: "relay-model", opts: adapter.CallOptions{ReasoningEffort: ptr("high")}, wantError: true},
 		{name: "removed temperature", model: "gemini-3.8-flash", opts: adapter.CallOptions{Temperature: ptr(0.7)}, wantError: true},

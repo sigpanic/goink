@@ -74,9 +74,9 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 
 ## 第一单元实现结果
 
-- 新增 ProtocolGeminiInteractions，保留旧 GenerateContent 标识；Adapter 真持有 providers，使用公共 Clone 返回快照。内置 Google 实例尚未注册，预设覆盖 Argon、3.x Flash / Flash-Lite / Pro Preview 及 2.5 三款，共 10 个文本模型；按各模型支持范围分别设置推理等级，Preview 保留明确标识。
-- 模型规格取自[各模型官方页面](https://ai.google.dev/gemini-api/docs/models)，推理等级取自[Interactions thinking](https://ai.google.dev/gemini-api/docs/thinking#controlling-thinking)及[3.1 Flash-Lite 等模型的等级表](https://ai.google.dev/gemini-api/docs/gemini-3#level-of-thinking)。Argon 的 ContextWindow 为输入输出合计，MaxOutputTokens 取前台调用的 65,536；当前不启用后台 long decode。2.5 系列按[官方说明](https://ai.google.dev/gemini-api/docs/deprecations)仍提供给存量用户，不混入已下线型号或自动重定向别名。
-- 3.8 Flash 的默认等级同步为官方 medium；2.5 Pro / Flash 未公布固定默认等级，Goink 显式选择 medium。2.5 Flash-Lite 的 SupportsThinking 表示能力，官方默认仍为关闭；后续请求转换须区分默认行为与显式开启，不能仅凭该字段自动开启推理。
+- 新增 ProtocolGeminiInteractions，保留旧 GenerateContent 标识；Adapter 真持有 providers，使用公共 Clone 返回快照。内置 Google 实例尚未注册，预设覆盖 Argon、3.8 / 3.6 Flash、3.5 / 3.1 Flash-Lite 及 3.1 Pro Preview，共 6 个文本模型；按各模型支持范围分别设置推理等级，Preview 保留明确标识。
+- 模型规格取自[各模型官方页面](https://ai.google.dev/gemini-api/docs/models)，推理等级取自[Interactions thinking](https://ai.google.dev/gemini-api/docs/thinking#controlling-thinking)及[3.1 Flash-Lite 等模型的等级表](https://ai.google.dev/gemini-api/docs/gemini-3#level-of-thinking)。Argon 的 ContextWindow 为输入输出合计，MaxOutputTokens 取前台调用的 65,536；当前不启用后台 long decode。2026-10-27 调整：本版尚未发布，2.5 家族（官方仅对存量用户开放）和 3 Flash Preview（官方推荐换 3.6 Flash）不进入预设，避免新用户误选；3.1 Flash-Lite 已公布 2027-05-07 下线，届时需移除或替换。
+- 3.8 Flash 的默认等级同步为官方 medium；所有预设型号默认开启推理，Interactions 没有关闭字段，显式 `ThinkingEnabled=false` 报错，不通过 minimal 或 thinking_summaries=none 模拟关闭。
 - 默认完整端点为 `https://generativelanguage.googleapis.com/v1/interactions`。SDK 使用明确的 v1 路由和其既有 Api-Revision: 2026-05-20；对照官方 v1 结构完成本地 Create 请求、JSON 响应和 SSE event_type / step 事件解码，未执行真实服务验收。任意 v8 / 代理地址测试只证明透传，不证明相应服务支持该 schema。
 - Provider 组合公共配置，持有 SDK Create 服务及注入的共享 HTTP client；clientForURL 为后续候选构建独立 SDK 服务，正式 SDK client / ChatURL 不变。HTTP 委托仅接受 SDK Create 的 POST 路由，再克隆请求替换完整 URL / Host；不改 SDK、共享 transport、go.mod 或 go.sum。
 - 直接使用 Interactions 子包，显式配置凭据和 retry.Strategy=none。测试覆盖空密钥不回退环境、多个已构建实例交替调用、候选隔离、路径 / 查询 / 转义、JSON / SSE、429 / 5xx / 连接错误不重试，以及请求和流读取时取消。
@@ -89,7 +89,7 @@ SDK 函数参数使用 map，已知 step 类型的再次编码也可能丢扩展
 - 工具 schema 使用复制的 RawMessage；function_call 与已验证的原生 steps 通过 SDK 公开的 NewStepUnknown 原文通道发送，保留大整数、签名和扩展字段。普通文本、工具定义、结果和请求参数仍使用 SDK 类型；不修改 SDK 或公共 Message。测试经过真实 Create 编码与 HTTP 委托验证，后续入站仍须捕获原始 steps，不能只序列化 SDK 解码对象。
 - 原生 payload 为 `{steps, request_hash}`；摘要绑定 system、历史前缀、工具、端点及密钥，payload 不存凭据。完整状态同协议、同实例且公共正文 / 调用一致时才回放；其他情况用公共字段重建。匹配上下文中的损坏或不支持的原生 step 报错。thought summary 可缺省或为空，保留其原文，签名不能为空。
 - 与 Claude 不同，[Google 要求切换模型仍重传原 thought](https://ai.google.dev/gemini-api/docs/thinking#thought-signatures)，由后端处理兼容性。因此摘要不绑定 model、推理等级或输出上限；同一服务实例切 Gemini 模型仍可回放，跨协议或端点 / 密钥变化则丢弃原生状态。摘要只是本地一致性检查，不替代服务端签名验证。
-- 按内置精确 ID 校验推理等级和输出上限，用户配置可进一步收紧范围，不能扩大已验证能力；未知 ID 可发普通请求，但显式推理配置报错。2.5 Flash-Lite 保持默认关闭，显式开启才选 low；其他型号不把 minimal 或 thinking_summaries=none 当成关闭。Interactions 没有 thinking_budget / disabled 字段，不能照搬 GenerateContent 的 budget=0。
+- 按内置精确 ID 校验推理等级和输出上限，用户配置可进一步收紧范围，不能扩大已验证能力；未知 ID 可发普通请求，但显式推理配置报错。预设型号均默认开启推理，不把 minimal 或 thinking_summaries=none 当成关闭。Interactions 没有 thinking_budget / disabled 字段，不能照搬 GenerateContent 的 budget=0。
 - 当前 [v1 GenerationConfig](https://ai.google.dev/api/interactions-api-v1) 不提供 temperature；虽然 SDK 仍保留已弃用字段，显式设置温度会报错，不静默丢弃。MaxTokens 映射 max_output_tokens：已知模型取已配置的更小上限，未知模型默认 4096。ToolChoice 映射 auto / none / required 与指定函数，拒绝未声明函数和未知字段。
 
 ## 第三单元实现结果

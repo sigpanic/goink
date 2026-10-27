@@ -15,8 +15,8 @@ var builtin = adapter.ProviderMap{
 		// 其余规格见 /docs/models/<模型 ID>；支持范围及推理等级另见：
 		// https://ai.google.dev/gemini-api/docs/interactions-overview#supported-models-agents
 		// https://ai.google.dev/gemini-api/docs/thinking#controlling-thinking
-		// 首项为默认推理等级；2.5 Pro / Flash 未公布固定默认等级，Goink 选择 medium。
-		// 2.5 Flash-Lite 默认关闭推理，low 是显式开启后的首选等级，由后续请求层区分。
+		// 首项为默认推理等级。
+		// 2.5 家族无下线日期但官方仅对存量用户开放，3 Flash Preview 已被 3.6 Flash 取代。
 		// Argon 的窗口为输入输出合计，输出上限取当前前台调用的 64K，不启用 long decode。
 		Models: []adapter.ModelInfo{
 			{
@@ -71,42 +71,6 @@ var builtin = adapter.ProviderMap{
 				MaxOutputTokens:  65_536,
 				SupportsThinking: true,
 				ReasoningLevels:  []string{"minimal", "low", "medium", "high"},
-				SupportsVision:   true,
-			},
-			{
-				ID:               "gemini-3-flash-preview",
-				Name:             "Gemini 3 Flash Preview",
-				ContextWindow:    1_048_576,
-				MaxOutputTokens:  65_536,
-				SupportsThinking: true,
-				ReasoningLevels:  []string{"high", "minimal", "low", "medium"},
-				SupportsVision:   true,
-			},
-			{
-				ID:               "gemini-2.5-pro",
-				Name:             "Gemini 2.5 Pro",
-				ContextWindow:    1_048_576,
-				MaxOutputTokens:  65_536,
-				SupportsThinking: true,
-				ReasoningLevels:  []string{"medium", "low", "high"},
-				SupportsVision:   true,
-			},
-			{
-				ID:               "gemini-2.5-flash",
-				Name:             "Gemini 2.5 Flash",
-				ContextWindow:    1_048_576,
-				MaxOutputTokens:  65_536,
-				SupportsThinking: true,
-				ReasoningLevels:  []string{"medium", "low", "high"},
-				SupportsVision:   true,
-			},
-			{
-				ID:               "gemini-2.5-flash-lite",
-				Name:             "Gemini 2.5 Flash-Lite",
-				ContextWindow:    1_048_576,
-				MaxOutputTokens:  65_536,
-				SupportsThinking: true,
-				ReasoningLevels:  []string{"low", "medium", "high"},
 				SupportsVision:   true,
 			},
 		},

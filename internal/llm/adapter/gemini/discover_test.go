@@ -32,7 +32,7 @@ func TestDiscoverModelsPaginationAndMetadata(t *testing.T) {
 		case "":
 			fmt.Fprint(w, `{"models":[
 				{"name":"models/gemini-3.8-flash","displayName":"Server Flash","inputTokenLimit":1234,"outputTokenLimit":456,"supportedGenerationMethods":["generateContent"],"thinking":false},
-				{"name":"models/gemini-2.5-pro"},
+				{"name":"models/gemini-3.6-flash"},
 				{"name":"models/embedding","supportedGenerationMethods":["embedContent"]}
 			],"nextPageToken":"cursor+/="}`)
 		case "cursor+/=":
