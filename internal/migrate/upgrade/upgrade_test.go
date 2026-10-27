@@ -7,6 +7,7 @@
 package upgrade_test
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -41,6 +42,11 @@ func TestUpgradeWorker(t *testing.T) {
 	dir := os.Getenv("GOINK_DATA_DIR")
 	if dir == "" || !filepath.IsAbs(dir) {
 		t.Fatal("worker requires an absolute isolated data directory")
+	}
+	t.Setenv("HOME", dir)
+	t.Setenv("USERPROFILE", dir)
+	if config.LLMConfigPath() != filepath.Join(dir, ".goink", "llm_config.enc") {
+		t.Fatal("worker config directory was not isolated")
 	}
 	log := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelInfo}))
 	config.Set(&config.AppConfig{})
@@ -102,14 +108,37 @@ func TestHistoricalDirectUpgrades(t *testing.T) {
 			original := dumpDatabase(t, filepath.Join(dir, "novel-agent.db"), false)
 			originalSchema := readSchema(t, filepath.Join(dir, "novel-agent.db"))
 			originalFiles := fileHashes(t, filepath.Join(dir, "novels"))
+			configPath := filepath.Join(dir, ".goink", "llm_config.enc")
+			originalConfig, err := os.ReadFile(configPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			plainConfig, err := config.Decrypt(originalConfig)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var configFields map[string]json.RawMessage
+			if err := json.Unmarshal(plainConfig, &configFields); err != nil {
+				t.Fatal(err)
+			}
+			originalConfigFiles := fileHashes(t, filepath.Join(dir, ".goink"))
 			if err := runWorker(t, dir, gitBin, "migrate", "first"); err != nil {
 				t.Fatal(err)
 			}
 			assertContract(t, dir, sample, gitBin)
+			if _, legacy := configFields["providers"]; legacy {
+				backup, err := os.ReadFile(configPath + ".pre-v1.8.0.bak")
+				if err != nil || !bytes.Equal(originalConfig, backup) {
+					t.Fatalf("config backup did not preserve the original ciphertext: %v", err)
+				}
+			} else if after := fileHashes(t, filepath.Join(dir, ".goink")); !reflect.DeepEqual(originalConfigFiles, after) {
+				t.Fatal("already-versioned config or its backup was rewritten")
+			}
 			assertSchema(t, readSchema(t, filepath.Join(dir, "novel-agent.db")), wantSchema)
 			assertBackups(t, dir, sample, original, originalFiles, requiresBackup(originalSchema), gitBin)
 			before := dumpDatabase(t, filepath.Join(dir, "novel-agent.db"), true)
 			files := fileHashes(t, filepath.Join(dir, "novels"))
+			configFiles := fileHashes(t, filepath.Join(dir, ".goink"))
 			heads := gitHeads(t, dir, gitBin)
 			if err := runWorker(t, dir, gitBin, "migrate", "restart"); err != nil {
 				t.Fatal(err)
@@ -119,6 +148,9 @@ func TestHistoricalDirectUpgrades(t *testing.T) {
 			}
 			if after := fileHashes(t, filepath.Join(dir, "novels")); !reflect.DeepEqual(files, after) {
 				t.Fatal("restart changed novel files")
+			}
+			if after := fileHashes(t, filepath.Join(dir, ".goink")); !reflect.DeepEqual(configFiles, after) {
+				t.Fatal("restart changed encrypted config or its backup")
 			}
 			if after := gitHeads(t, dir, gitBin); !reflect.DeepEqual(heads, after) {
 				t.Fatal("restart created additional Git commits")
@@ -131,6 +163,9 @@ func TestHistoricalDirectUpgrades(t *testing.T) {
 				t.Fatal(err)
 			}
 			assertContract(t, dir, sample, gitBin)
+			if after := fileHashes(t, filepath.Join(dir, ".goink")); !reflect.DeepEqual(configFiles, after) {
+				t.Fatal("lost-state restart changed encrypted config or its backup")
+			}
 			if after := dumpDatabase(t, filepath.Join(dir, "novel-agent.db"), false); !reflect.DeepEqual(business, after) {
 				t.Fatal("lost-state restart changed business data")
 			}
@@ -325,6 +360,7 @@ func requireGit(t *testing.T) string {
 
 func assertContract(t *testing.T, dir string, sample fixture.Fixture, gitBin string, contents ...map[string]string) {
 	t.Helper()
+	assertLLMConfig(t, dir)
 	withDB(t, filepath.Join(dir, "novel-agent.db"), func(db *sql.DB) {
 		for name, count := range map[string]int{"novels": 2, "chapters": 3, "time_entries": 2, "story_arcs": 1, "arc_nodes": 1, "reader_perspectives": 2, "characters": 2, "character_relations": 2, "preference_items": 2, "sessions": 1, "messages": 3} {
 			assertCount(t, db, name+" row count", "SELECT COUNT(*) FROM "+quote(name), count)

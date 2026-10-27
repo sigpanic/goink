@@ -67,6 +67,21 @@ func Load(dir string) (*Manifest, error) {
 		if hash != f.SHA256 {
 			return nil, fmt.Errorf("fixture checksum mismatch: %s", f.Archive)
 		}
+		archive, err := zip.OpenReader(filepath.Join(dir, f.Archive))
+		if err != nil {
+			return nil, err
+		}
+		for _, name := range []string{"novel-agent.db", ".goink/llm_config.enc"} {
+			file, err := archive.Open(name)
+			if err != nil {
+				_ = archive.Close()
+				return nil, fmt.Errorf("incomplete fixture %s: %w", f.Archive, err)
+			}
+			_ = file.Close()
+		}
+		if err := archive.Close(); err != nil {
+			return nil, err
+		}
 	}
 	return &m, nil
 }
