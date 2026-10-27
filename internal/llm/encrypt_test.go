@@ -110,14 +110,14 @@ func TestLoadUserConfigRejectsLegacyAndInvalidSchema(t *testing.T) {
 		want string
 	}{
 		{"legacy top level", `{"providers":[{"name":"mimo","api_key":"private-test-key"}]}`, `unknown field "providers"`},
-		{"legacy provider name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","provider_name":"legacy","provider_type":"mimo","chat_url":"https://relay.example"}]}}}`, `unknown field "provider_name"`},
-		{"legacy adapter name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","adapter_name":"openai_chat","provider_type":"mimo","chat_url":"https://relay.example"}]}}}`, `unknown field "adapter_name"`},
+		{"legacy provider name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","provider_name":"legacy","provider_type":"xiaomi","chat_url":"https://relay.example"}]}}}`, `unknown field "provider_name"`},
+		{"legacy adapter name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","adapter_name":"openai_chat","provider_type":"xiaomi","chat_url":"https://relay.example"}]}}}`, `unknown field "adapter_name"`},
 		{"missing version", `{"adapters":{}}`, "version"},
 		{"unknown version", `{"version":3,"adapters":{}}`, "version"},
 		{"missing adapters", `{"version":2}`, "adapters"},
 		{"null adapters", `{"version":2,"adapters":null}`, "adapters"},
 		{"missing custom type", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","chat_url":"https://relay.example","api_key":"private-test-key"}]}}}`, "provider type"},
-		{"builtin type not persisted", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"mimo"}]}}}`, "must omit provider_type"},
+		{"builtin type not persisted", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"xiaomi"}]}}}`, "must omit provider_type"},
 		{"duplicate name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo"},{"name":"MiMo"}]}}}`, "duplicate provider"},
 		{"unknown nested field", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","extra":"value"}]}}}`, `unknown field "extra"`},
 		{"multiple documents", `{"version":2,"adapters":{}} {"version":2,"adapters":{}}`, "parse config failed"},
@@ -160,7 +160,7 @@ func TestSaveUserConfigRejectsInvalidWithoutChangingFile(t *testing.T) {
 
 func TestSaveUserConfigPersistsExplicitRecordsWithoutKey(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.enc")
-	state := testUserConfig(adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "https://relay.example", Temperature: floatPtr(0)})
+	state := testUserConfig(adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example", Temperature: floatPtr(0)})
 	require.NoError(t, SaveUserConfig(path, state))
 	loaded, err := LoadUserConfig(path)
 	require.NoError(t, err)
@@ -174,7 +174,7 @@ func TestBuiltinOverridesRoundTripWithoutPersistingDefaults(t *testing.T) {
 	user := testUserConfig(
 		adapter.Provider{Name: "DeepSeek", ChatURL: "https://override.example", Temperature: floatPtr(0)},
 		adapter.Provider{Name: "MiMo", APIKey: "official-key"},
-		adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "https://relay.example"},
+		adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example"},
 	)
 	view, err := BuildConfigView(user)
 	require.NoError(t, err)
@@ -193,7 +193,7 @@ func TestBuiltinOverridesRoundTripWithoutPersistingDefaults(t *testing.T) {
 		"adapters": {"openai_chat": {"providers": [
 			{"name": "DeepSeek", "chat_url": "https://override.example", "models": null, "temperature": 0},
 			{"name": "MiMo", "chat_url": "", "api_key": "official-key", "models": null},
-			{"name": "relay", "provider_type": "mimo", "chat_url": "https://relay.example", "models": null}
+			{"name": "relay", "provider_type": "xiaomi", "chat_url": "https://relay.example", "models": null}
 		]}}
 	}`, string(plain))
 

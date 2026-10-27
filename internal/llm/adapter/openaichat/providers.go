@@ -431,7 +431,7 @@ var builtin = adapter.ProviderMap{
 		},
 	},
 	"Doubao": {
-		ProviderType: "doubao",
+		ProviderType: "bytedance",
 		Name:         "Doubao",
 		ChatURL:      "https://ark.cn-beijing.volces.com/api/v3/chat/completions",
 		PlatformURL:  "https://console.volcengine.com/ark/",
@@ -473,7 +473,7 @@ var builtin = adapter.ProviderMap{
 		},
 	},
 	"Qwen": {
-		ProviderType: "qwen",
+		ProviderType: "alibaba",
 		Name:         "Qwen",
 		ChatURL:      "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 		PlatformURL:  "https://platform.qianwenai.com",
@@ -626,7 +626,7 @@ var builtin = adapter.ProviderMap{
 		},
 	},
 	"MiMo": {
-		ProviderType: "mimo",
+		ProviderType: "xiaomi",
 		Name:         "MiMo",
 		ChatURL:      "https://api.xiaomimimo.com/v1/chat/completions",
 		PlatformURL:  "https://platform.xiaomimimo.com",

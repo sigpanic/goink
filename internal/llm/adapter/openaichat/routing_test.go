@@ -17,7 +17,7 @@ func TestMultipleProvidersRouteAllOperations(t *testing.T) {
 		name, providerType string
 		maxTokens          int
 	}
-	targets := []target{{"relay-a", "mimo", 123}, {"relay-b", "openai", 456}}
+	targets := []target{{"relay-a", "xiaomi", 123}, {"relay-b", "openai", 456}}
 	configs := make(map[string]adapter.Provider)
 	counts := make(map[string]*atomic.Int32)
 	for _, target := range targets {
@@ -25,7 +25,7 @@ func TestMultipleProvidersRouteAllOperations(t *testing.T) {
 		counts[target.name] = count
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			count.Add(1)
-			if target.providerType == "mimo" {
+			if target.providerType == "xiaomi" {
 				if r.Header.Get("api-key") != target.name+"-key" || r.Header.Get("Authorization") != "" {
 					t.Errorf("%s: wrong Mimo authentication: %v", target.name, r.Header)
 				}
@@ -114,7 +114,7 @@ func TestConnectionFallbackDoesNotModifyProvider(t *testing.T) {
 		fmt.Fprint(w, "data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n")
 	}))
 	defer server.Close()
-	backend, err := New(map[string]adapter.Provider{"draft": {Name: "draft", ProviderType: "mimo", ChatURL: server.URL, APIKey: "draft-key"}}, server.Client(), nil)
+	backend, err := New(map[string]adapter.Provider{"draft": {Name: "draft", ProviderType: "xiaomi", ChatURL: server.URL, APIKey: "draft-key"}}, server.Client(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

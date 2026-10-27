@@ -26,10 +26,10 @@ func TestBuildAdaptersUsesMergedInstancesAndTypeHooks(t *testing.T) {
 			adapter.ProtocolOpenAIChat: {Providers: []adapter.Provider{
 				{Name: "MiMo", APIKey: "official-key", Temperature: &zero,
 					Models: []adapter.ModelInfo{{ID: "extra-model"}}},
-				{Name: "中转站1", ProviderType: "mimo", ChatURL: "https://relay.example/v1/chat/completions",
+				{Name: "中转站1", ProviderType: "xiaomi", ChatURL: "https://relay.example/v1/chat/completions",
 					APIKey: "relay-key", Temperature: &relayTemperature,
 					Models: []adapter.ModelInfo{{ID: "relay-model"}}},
-				{Name: "未启用", ProviderType: "mimo", ChatURL: "https://disabled.example",
+				{Name: "未启用", ProviderType: "xiaomi", ChatURL: "https://disabled.example",
 					Models: []adapter.ModelInfo{{ID: "disabled-model"}}},
 			}},
 		},

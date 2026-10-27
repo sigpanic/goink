@@ -15,16 +15,16 @@ func TestProviderAssemblyUsesCompleteInstanceConfiguration(t *testing.T) {
 	firstTemperature, secondTemperature := 0.0, 1.2
 	configs := map[string]adapter.Provider{
 		"relay-a": {
-			Name: "relay-a", ProviderType: "mimo", ChatURL: "https://first.invalid/chat", APIKey: "first-key",
+			Name: "relay-a", ProviderType: "xiaomi", ChatURL: "https://first.invalid/chat", APIKey: "first-key",
 			Temperature: &firstTemperature,
 			Models:      []ModelInfo{{ID: "first-model", Name: "First"}},
 		},
 		"relay-b": {
-			Name: "relay-b", ProviderType: "mimo", ChatURL: "https://second.invalid/chat", APIKey: "second-key",
+			Name: "relay-b", ProviderType: "xiaomi", ChatURL: "https://second.invalid/chat", APIKey: "second-key",
 			Temperature: &secondTemperature,
 			Models:      []ModelInfo{{ID: "second-model", Name: "Second"}},
 		},
-		"MiMo": {Name: "MiMo", ProviderType: "mimo"},
+		"MiMo": {Name: "MiMo", ProviderType: "xiaomi"},
 	}
 	backend, err := New(configs, testHTTPClient(), nil)
 	if err != nil {
@@ -58,7 +58,7 @@ func TestProviderHooksUseOnlyExplicitType(t *testing.T) {
 }
 
 func TestProviderTypesAreValidatedIndependentlyFromBuiltins(t *testing.T) {
-	for _, providerType := range []string{"openai", "deepseek", "opencode", "opencode-go", "doubao", "qwen", "zhipu", "minimax", "mimo", "moonshot"} {
+	for _, providerType := range []string{"openai", "deepseek", "opencode", "opencode-go", "bytedance", "alibaba", "zhipu", "minimax", "xiaomi", "moonshot"} {
 		t.Run(providerType, func(t *testing.T) {
 			if err := ValidateProviderType(providerType); err != nil {
 				t.Fatal(err)
@@ -69,7 +69,7 @@ func TestProviderTypesAreValidatedIndependentlyFromBuiltins(t *testing.T) {
 			}
 		})
 	}
-	for _, providerType := range []string{"", "unknown", "MiMo", " mimo "} {
+	for _, providerType := range []string{"", "unknown", "MiMo", " xiaomi ", "doubao", "qwen", "mimo"} {
 		if err := ValidateProviderType(providerType); err == nil {
 			t.Fatalf("invalid provider type %q accepted", providerType)
 		}

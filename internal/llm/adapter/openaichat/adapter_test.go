@@ -163,14 +163,14 @@ func TestBothModesPreserveHTTPErrorClassification(t *testing.T) {
 }
 
 func TestProviderHooksAcrossBothModes(t *testing.T) {
-	for _, provider := range []string{"qwen", "minimax", "moonshot", "mimo", "opencode"} {
+	for _, provider := range []string{"alibaba", "minimax", "moonshot", "xiaomi", "opencode"} {
 		for _, stream := range []bool{false, true} {
 			t.Run(fmt.Sprintf("%s/stream=%v", provider, stream), func(t *testing.T) {
 				server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 					var payload map[string]any
 					json.NewDecoder(r.Body).Decode(&payload)
 					switch provider {
-					case "qwen":
+					case "alibaba":
 						if payload["enable_thinking"] != stream || payload["thinking"] != nil || payload["reasoning_effort"] != nil {
 							t.Errorf("qwen payload: %v", payload)
 						}
@@ -183,7 +183,7 @@ func TestProviderHooksAcrossBothModes(t *testing.T) {
 						if payload["temperature"] != nil || payload["thinking"] != nil || payload["max_tokens"] != nil || payload["max_completion_tokens"] != float64(128) || payload["reasoning_effort"] != "max" {
 							t.Errorf("moonshot payload: %v", payload)
 						}
-					case "mimo":
+					case "xiaomi":
 						if r.Header.Get("api-key") != "secret" || r.Header.Get("Authorization") != "" {
 							t.Errorf("mimo headers: %v", r.Header)
 						}

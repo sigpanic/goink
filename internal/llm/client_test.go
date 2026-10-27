@@ -243,7 +243,7 @@ func TestDiscoverModelsUsesProviderAuthentication(t *testing.T) {
 	}))
 	defer server.Close()
 	models, err := DiscoverModels(context.Background(), ProviderProbeInput{
-		AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "my relay", ProviderType: "mimo",
+		AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "my relay", ProviderType: "xiaomi",
 		ChatURL: server.URL + "/proxy/v1/chat/completions", APIKey: "secret",
 	})
 	if err != nil || len(models) != 1 || models[0].ContextWindow != 1000 || !models[0].SupportsThinking {

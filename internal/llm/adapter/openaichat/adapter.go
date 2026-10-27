@@ -73,11 +73,11 @@ func presetHooks(providerType string) Hooks {
 		return Hooks{BuildHeaders: opencodeBuildHeaders}
 	case "minimax":
 		return Hooks{BuildRequest: minimaxBuildRequest}
-	case "qwen":
+	case "alibaba":
 		return Hooks{BuildRequest: qwenBuildRequest}
 	case "moonshot":
 		return Hooks{BuildRequest: moonshotBuildRequest}
-	case "mimo":
+	case "xiaomi":
 		return Hooks{BuildHeaders: mimoBuildHeaders}
 	default:
 		return Hooks{}

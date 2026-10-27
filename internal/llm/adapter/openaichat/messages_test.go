@@ -126,7 +126,7 @@ func TestBothModesPrepareHistoryBeforeProviderHooks(t *testing.T) {
 		providerType string
 		model        string
 	}{
-		{"openai", "model"}, {"mimo", "model"}, {"qwen", "model"},
+		{"openai", "model"}, {"xiaomi", "model"}, {"alibaba", "model"},
 		{"minimax", "model"}, {"moonshot", "kimi-k3-test"},
 	}
 	for _, tt := range tests {
@@ -139,7 +139,7 @@ func TestBothModesPrepareHistoryBeforeProviderHooks(t *testing.T) {
 					w.WriteHeader(http.StatusBadRequest)
 					return
 				}
-				if tt.providerType == "mimo" && (r.Header.Get("api-key") != "test-key" || r.Header.Get("Authorization") != "") {
+				if tt.providerType == "xiaomi" && (r.Header.Get("api-key") != "test-key" || r.Header.Get("Authorization") != "") {
 					t.Errorf("Mimo headers changed: %v", r.Header)
 				}
 				requests <- payload
@@ -184,7 +184,7 @@ func TestBothModesPrepareHistoryBeforeProviderHooks(t *testing.T) {
 				t.Fatalf("outbound history was not prepared: %v", messages)
 			}
 			switch tt.providerType {
-			case "qwen":
+			case "alibaba":
 				if nonStream["enable_thinking"] != false || stream["enable_thinking"] != true {
 					t.Fatal("Qwen stream-specific thinking hook changed")
 				}

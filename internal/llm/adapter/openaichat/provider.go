@@ -27,7 +27,7 @@ func assembleProvider(config adapter.Provider) (Provider, error) {
 // ValidateProviderType 校验厂商规则类型，独立于内置实例集合；无专属 hook 的类型也合法。
 func ValidateProviderType(providerType string) error {
 	switch providerType {
-	case "openai", "deepseek", "opencode", "opencode-go", "doubao", "qwen", "zhipu", "minimax", "mimo", "moonshot":
+	case "openai", "deepseek", "opencode", "opencode-go", "bytedance", "alibaba", "zhipu", "minimax", "xiaomi", "moonshot":
 		return nil
 	default:
 		return fmt.Errorf("unknown OpenAI Chat provider type %q", providerType)

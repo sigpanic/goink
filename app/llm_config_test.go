@@ -121,7 +121,7 @@ func TestProviderProbesUseExplicitProtocolAndType(t *testing.T) {
 		models       string
 		header       string
 	}{
-		{adapter.ProtocolOpenAIChat, "mimo", "/chat/v1/chat/completions", "/chat/v1/models", "api-key"},
+		{adapter.ProtocolOpenAIChat, "xiaomi", "/chat/v1/chat/completions", "/chat/v1/models", "api-key"},
 		{adapter.ProtocolAnthropicMessages, "anthropic", "/claude/v8/messages", "/claude/v8/models", "x-api-key"},
 	} {
 		t.Run(string(tt.protocol), func(t *testing.T) {

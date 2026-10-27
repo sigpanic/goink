@@ -20,7 +20,7 @@ func testBuiltinConfig() map[adapter.Protocol]ProviderMap {
 	return map[adapter.Protocol]ProviderMap{
 		adapter.ProtocolOpenAIChat: {
 			"MiMo": {
-				Name: "MiMo", ProviderType: "mimo", ChatURL: "https://official.example/v1/chat/completions",
+				Name: "MiMo", ProviderType: "xiaomi", ChatURL: "https://official.example/v1/chat/completions",
 				Temperature: floatPtr(1), PlatformURL: "https://official.example", HelpText: "help",
 				Models: []adapter.ModelInfo{{ID: "model-a", Name: "Official", ReasoningLevels: []string{"high"}}},
 			},
@@ -34,7 +34,7 @@ func TestMerge_InstancesShareOnlyType(t *testing.T) {
 	user := testUserConfig(
 		adapter.Provider{Name: "MiMo", APIKey: "official-key", Temperature: floatPtr(0),
 			Models: []adapter.ModelInfo{{ID: "model-b"}, {ID: "model-a", Name: "Cannot override official"}}},
-		adapter.Provider{Name: "中转站1", ProviderType: "mimo", ChatURL: "https://relay.example/v1/chat/completions",
+		adapter.Provider{Name: "中转站1", ProviderType: "xiaomi", ChatURL: "https://relay.example/v1/chat/completions",
 			APIKey: "relay-key", Models: []adapter.ModelInfo{{ID: "model-c"}}},
 	)
 	merged, err := mergeConfig(user, defaults)
@@ -43,7 +43,7 @@ func TestMerge_InstancesShareOnlyType(t *testing.T) {
 	require.Len(t, group, 3, "全量合并保留未配置的内置项")
 	require.Equal(t, defaults[adapter.ProtocolOpenAIChat]["未配置"], group["未配置"])
 	official := group["MiMo"]
-	require.Equal(t, "mimo", official.ProviderType)
+	require.Equal(t, "xiaomi", official.ProviderType)
 	require.Equal(t, defaults[adapter.ProtocolOpenAIChat]["MiMo"].ChatURL, official.ChatURL)
 	require.Equal(t, 0.0, *official.Temperature)
 	require.Equal(t, "official-key", official.APIKey)
@@ -84,7 +84,7 @@ func TestMerge_DeepCopiesAllMutableFields(t *testing.T) {
 	defaults := testBuiltinConfig()
 	user := testUserConfig(
 		adapter.Provider{Name: "MiMo", Models: []adapter.ModelInfo{{ID: "extra", ReasoningLevels: []string{"low"}}}},
-		adapter.Provider{Name: "custom", ProviderType: "mimo", ChatURL: "https://relay.example", Temperature: floatPtr(0.5),
+		adapter.Provider{Name: "custom", ProviderType: "xiaomi", ChatURL: "https://relay.example", Temperature: floatPtr(0.5),
 			Models: []adapter.ModelInfo{{ID: "custom", ReasoningLevels: []string{"max"}}}},
 	)
 	merged, err := mergeConfig(user, defaults)
@@ -117,7 +117,7 @@ func TestMerge_EmptyConfigDoesNotEnableBuiltins(t *testing.T) {
 }
 
 func TestValidateUserConfig_RejectsInvalidNewConfig(t *testing.T) {
-	valid := adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "https://relay.example"}
+	valid := adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example"}
 	tests := []struct {
 		name string
 		cfg  *UserLLMConfig
@@ -128,15 +128,15 @@ func TestValidateUserConfig_RejectsInvalidNewConfig(t *testing.T) {
 		{"unknown version", &UserLLMConfig{Version: 3}, "version"},
 		{"no adapters", &UserLLMConfig{Version: ConfigVersion}, "adapters"},
 		{"unsupported adapter", &UserLLMConfig{Version: ConfigVersion, Adapters: map[adapter.Protocol]AdapterConfig{"unknown": {}}}, "unsupported adapter"},
-		{"empty name", testUserConfig(adapter.Provider{ProviderType: "mimo", ChatURL: valid.ChatURL}), "name"},
-		{"whitespace name", testUserConfig(adapter.Provider{Name: " relay", ProviderType: "mimo", ChatURL: valid.ChatURL}), "name"},
+		{"empty name", testUserConfig(adapter.Provider{ProviderType: "xiaomi", ChatURL: valid.ChatURL}), "name"},
+		{"whitespace name", testUserConfig(adapter.Provider{Name: " relay", ProviderType: "xiaomi", ChatURL: valid.ChatURL}), "name"},
 		{"duplicate name", testUserConfig(valid, valid), "duplicate provider"},
 		{"custom type required", testUserConfig(adapter.Provider{Name: "relay", APIKey: "key", ChatURL: valid.ChatURL}), "provider type"},
 		{"unknown type", testUserConfig(adapter.Provider{Name: "relay", ProviderType: "unknown", ChatURL: valid.ChatURL}), "provider type"},
-		{"builtin type not persisted", testUserConfig(adapter.Provider{Name: "MiMo", ProviderType: "mimo"}), "must omit provider_type"},
+		{"builtin type not persisted", testUserConfig(adapter.Provider{Name: "MiMo", ProviderType: "xiaomi"}), "must omit provider_type"},
 		{"builtin type cannot change", testUserConfig(adapter.Provider{Name: "MiMo", ProviderType: "openai"}), "must omit provider_type"},
-		{"custom URL required", testUserConfig(adapter.Provider{Name: "relay", ProviderType: "mimo"}), "chat_url"},
-		{"relative URL", testUserConfig(adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "/v1/chat/completions"}), "chat_url"},
+		{"custom URL required", testUserConfig(adapter.Provider{Name: "relay", ProviderType: "xiaomi"}), "chat_url"},
+		{"relative URL", testUserConfig(adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "/v1/chat/completions"}), "chat_url"},
 		{"empty model id", testUserConfig(adapter.Provider{Name: "MiMo", Models: []adapter.ModelInfo{{}}}), "model id"},
 		{"duplicate models", testUserConfig(adapter.Provider{Name: "MiMo", Models: []adapter.ModelInfo{{ID: "x"}, {ID: "x"}}}), "duplicate model"},
 	}
@@ -149,7 +149,7 @@ func TestBuildConfigView_ToUserConfigPreservesOverrides(t *testing.T) {
 	user := testUserConfig(
 		adapter.Provider{Name: "MiMo", APIKey: "official-key", Temperature: floatPtr(0),
 			Models: []adapter.ModelInfo{{ID: "extra", ReasoningLevels: []string{"high"}}}},
-		adapter.Provider{Name: "中转站1", ProviderType: "mimo", ChatURL: "https://relay.example", APIKey: "relay-key",
+		adapter.Provider{Name: "中转站1", ProviderType: "xiaomi", ChatURL: "https://relay.example", APIKey: "relay-key",
 			Models: []adapter.ModelInfo{{ID: "relay-only"}}},
 	)
 	view, err := BuildConfigView(user)
@@ -165,7 +165,7 @@ func TestBuildConfigView_ToUserConfigPreservesOverrides(t *testing.T) {
 		}
 		if pv.Name == "MiMo" {
 			require.Equal(t, "builtin", pv.Source)
-			require.Equal(t, "mimo", pv.ProviderType)
+			require.Equal(t, "xiaomi", pv.ProviderType)
 			require.NotEmpty(t, pv.ChatURL)
 			require.NotEmpty(t, pv.BuiltinModels)
 			require.Len(t, pv.CustomModels, 1)
@@ -207,7 +207,7 @@ func TestToUserConfig_PreservesOverridesWithoutAPIKey(t *testing.T) {
 	user := testUserConfig(
 		adapter.Provider{Name: "MiMo", ChatURL: "https://override.example", Temperature: floatPtr(0),
 			Models: []adapter.ModelInfo{{ID: "extra"}}},
-		adapter.Provider{Name: "relay", ProviderType: "mimo", ChatURL: "https://relay.example",
+		adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example",
 			Models: []adapter.ModelInfo{{ID: "relay-model"}}},
 	)
 	view, err := BuildConfigView(user)
@@ -295,10 +295,10 @@ func TestToUserConfig_RejectsConflictsForEmptyOverrides(t *testing.T) {
 	view.Providers = append(view.Providers, view.Providers[0])
 	_, err = view.ToUserConfig()
 	require.ErrorContains(t, err, "duplicate provider")
-	view = &LLMConfigView{Providers: []ProviderView{{AdapterName: adapter.ProtocolOpenAIChat, Name: "MiMo", ProviderType: "mimo", Source: "custom"}}}
+	view = &LLMConfigView{Providers: []ProviderView{{AdapterName: adapter.ProtocolOpenAIChat, Name: "MiMo", ProviderType: "xiaomi", Source: "custom"}}}
 	_, err = view.ToUserConfig()
 	require.ErrorContains(t, err, "source")
-	view = &LLMConfigView{Providers: []ProviderView{{AdapterName: adapter.ProtocolOpenAIChat, Name: "renamed builtin", ProviderType: "mimo", Source: "builtin"}}}
+	view = &LLMConfigView{Providers: []ProviderView{{AdapterName: adapter.ProtocolOpenAIChat, Name: "renamed builtin", ProviderType: "xiaomi", Source: "builtin"}}}
 	_, err = view.ToUserConfig()
 	require.ErrorContains(t, err, "source")
 }
@@ -306,7 +306,7 @@ func TestToUserConfig_RejectsConflictsForEmptyOverrides(t *testing.T) {
 func TestModels_UsesProtocolAndInstanceName(t *testing.T) {
 	providers := map[adapter.Protocol]ProviderMap{
 		adapter.ProtocolOpenAIChat: {
-			"中转站1": {Name: "中转站1", ProviderType: "mimo", Models: []adapter.ModelInfo{{ID: "m", Name: "Model", ReasoningLevels: []string{"high"}}}},
+			"中转站1": {Name: "中转站1", ProviderType: "xiaomi", Models: []adapter.ModelInfo{{ID: "m", Name: "Model", ReasoningLevels: []string{"high"}}}},
 		},
 		adapter.ProtocolAnthropicMessages: {
 			"中转站1": {Name: "中转站1", ProviderType: "anthropic", Models: []adapter.ModelInfo{{ID: "m", Name: "Model"}}},
@@ -317,7 +317,7 @@ func TestModels_UsesProtocolAndInstanceName(t *testing.T) {
 	require.Equal(t, "anthropic_messages/%E4%B8%AD%E8%BD%AC%E7%AB%991/m", list[0].Key)
 	require.Equal(t, "openai_chat/%E4%B8%AD%E8%BD%AC%E7%AB%991/m", list[1].Key)
 	require.Equal(t, "中转站1", list[1].ProviderName)
-	require.Equal(t, "mimo", list[1].ProviderType)
+	require.Equal(t, "xiaomi", list[1].ProviderType)
 	require.Equal(t, providers[adapter.ProtocolOpenAIChat]["中转站1"].Models[0], list[1].Model)
 	list[1].Model.ReasoningLevels[0] = "changed"
 	require.Equal(t, "high", providers[adapter.ProtocolOpenAIChat]["中转站1"].Models[0].ReasoningLevels[0])

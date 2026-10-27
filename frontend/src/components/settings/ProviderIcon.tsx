@@ -13,11 +13,11 @@ import geminiRaw from "@/assets/providers/gemini.svg?raw";
 
 const LOGOS: Record<string, string> = {
   deepseek: deepseekRaw,
-  doubao: doubaoRaw,
-  qwen: qwenRaw,
+  bytedance: doubaoRaw,
+  alibaba: qwenRaw,
   zhipu: zhipuRaw,
   minimax: minimaxRaw,
-  mimo: mimoRaw,
+  xiaomi: mimoRaw,
   moonshot: kimiRaw,
   opencode: opencodeRaw,
   "opencode-go": opencodeRaw,

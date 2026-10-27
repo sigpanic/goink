@@ -47,6 +47,12 @@ func TestLLMConfigMigrationPreservesOverrides(t *testing.T) {
 		}
 		require.Equal(t, want, providers[i], "除名称和类型外，密钥、完整 URL、温度及模型字段应逐项保留")
 	}
+	resolved, err := llm.Merge(loaded)
+	require.NoError(t, err)
+	for name, providerType := range map[string]string{"Doubao": "bytedance", "Qwen": "alibaba", "MiMo": "xiaomi"} {
+		require.Equal(t, providerType, resolved[adapter.ProtocolOpenAIChat][name].ProviderType,
+			"历史实例索引照常迁移，运行时从内置配置补齐公司类型")
+	}
 	backup, err := os.ReadFile(path + llmConfigBackup)
 	require.NoError(t, err)
 	require.Equal(t, original, backup, "备份保留原始密文，不能重新加密或输出明文")

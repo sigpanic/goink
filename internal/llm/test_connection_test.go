@@ -278,7 +278,7 @@ func TestTestConnectionUsesProviderTypeAuthentication(t *testing.T) {
 	defer server.Close()
 	input := TestConnectionInput{
 		ProviderProbeInput: ProviderProbeInput{
-			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "my relay", ProviderType: "mimo",
+			AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "my relay", ProviderType: "xiaomi",
 			ChatURL: server.URL + "/v1/chat/completions", APIKey: "secret",
 		},
 		ModelID: "mimo-model",
