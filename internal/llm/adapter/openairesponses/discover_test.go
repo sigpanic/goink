@@ -47,7 +47,7 @@ func TestDiscoverModelsUsesSDKCredentialsAndExactModelMetadata(t *testing.T) {
 	}
 	models[0].ReasoningLevels[0] = "changed"
 	models[1].ReasoningLevels[0] = "changed"
-	if !reflect.DeepEqual(before, backend.Providers()) || BuiltinProviders()["OpenAI"].Models[1].ReasoningLevels[0] == "changed" {
+	if !reflect.DeepEqual(before, backend.Providers()) || BuiltinProviders()["ChatGPT"].Models[1].ReasoningLevels[0] == "changed" {
 		t.Fatal("discovery shared mutable model or provider configuration")
 	}
 }

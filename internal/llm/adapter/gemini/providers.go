@@ -4,8 +4,8 @@ import "github.com/sigpanic/goink/internal/llm/adapter"
 
 // builtin 是内置实例而非类型模板；配置层按 Name 合并覆盖，密钥和温度默认留空。
 var builtin = adapter.ProviderMap{
-	"Google": {
-		Name:         "Google",
+	"Gemini": {
+		Name:         "Gemini",
 		ProviderType: "google",
 		ChatURL:      "https://generativelanguage.googleapis.com/v1/interactions",
 		PlatformURL:  "https://aistudio.google.com/apikey",

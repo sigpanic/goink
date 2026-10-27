@@ -74,7 +74,7 @@ func (c *Adapter) DiscoverModels(ctx context.Context, providerName string) ([]ad
 
 func (p Provider) modelInfo(id string) adapter.ModelInfo {
 	// 官方目录没有能力字段；只采用精确 ID 的实例配置或已核实预设，不按前缀猜测。
-	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["OpenAI"].Models} {
+	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["ChatGPT"].Models} {
 		for _, model := range candidates {
 			if model.ID == id {
 				return model.Clone()

@@ -119,7 +119,7 @@ func (p Provider) listModels(ctx context.Context, endpoint *url.URL, token strin
 
 func (p Provider) catalogModelInfo(id string, model catalogModel) adapter.ModelInfo {
 	info := adapter.ModelInfo{ID: id, Name: id}
-	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["Google"].Models} {
+	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["Gemini"].Models} {
 		found := false
 		for _, preset := range candidates {
 			if preset.ID == id {

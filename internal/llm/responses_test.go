@@ -62,11 +62,11 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	defer server.Close()
 	config := emptyUserConfig()
 	config.Adapters[adapter.ProtocolOpenAIResponses] = AdapterConfig{Providers: []adapter.Provider{
-		{Name: "OpenAI", ChatURL: server.URL + "/proxy/v8/responses?route=responses", APIKey: "responses-key"},
+		{Name: "ChatGPT", ChatURL: server.URL + "/proxy/v8/responses?route=responses", APIKey: "responses-key"},
 		{Name: "chat-only", ProviderType: "openai", ChatURL: server.URL + "/responses"},
 	}}
 	config.Adapters[adapter.ProtocolOpenAIChat] = AdapterConfig{Providers: []adapter.Provider{
-		{Name: "OpenAI", ProviderType: "openai", ChatURL: server.URL + "/chat", APIKey: "chat-key", Models: []adapter.ModelInfo{{ID: "gpt-6.1-sol", Name: "Chat model"}}},
+		{Name: "ChatGPT", ProviderType: "openai", ChatURL: server.URL + "/chat", APIKey: "chat-key", Models: []adapter.ModelInfo{{ID: "gpt-6.1-sol", Name: "Chat model"}}},
 		{Name: "chat-only", ProviderType: "openai", ChatURL: server.URL + "/chat", APIKey: "chat-key"},
 	}}
 	client, err := NewClient(config, nil)
@@ -75,16 +75,16 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	}
 	defer client.http.CloseIdleConnections()
 	providers := client.Providers()
-	if len(providers) != 2 || len(providers[adapter.ProtocolOpenAIResponses]) != 1 || providers[adapter.ProtocolOpenAIResponses]["OpenAI"].ProviderType != "openai" || len(providers[adapter.ProtocolOpenAIChat]) != 2 {
+	if len(providers) != 2 || len(providers[adapter.ProtocolOpenAIResponses]) != 1 || providers[adapter.ProtocolOpenAIResponses]["ChatGPT"].ProviderType != "openai" || len(providers[adapter.ProtocolOpenAIChat]) != 2 {
 		t.Fatalf("protocol registration or key filtering failed: %+v", providers)
 	}
-	model, ok := client.ProviderModel(adapter.ProtocolOpenAIResponses, "OpenAI", "gpt-6.1-sol")
+	model, ok := client.ProviderModel(adapter.ProtocolOpenAIResponses, "ChatGPT", "gpt-6.1-sol")
 	if !ok || !model.SupportsThinking || !model.SupportsVision || model.ContextWindow == 0 {
 		t.Fatal("registered provider lost preset capabilities")
 	}
 	selectionKeys := make(map[string]bool)
 	for _, option := range Models(providers) {
-		if option.ProviderName == "OpenAI" && option.Model.ID == "gpt-6.1-sol" {
+		if option.ProviderName == "ChatGPT" && option.Model.ID == "gpt-6.1-sol" {
 			selectionKeys[option.Key] = true
 		}
 	}
@@ -93,14 +93,14 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
 	for protocol, want := range map[adapter.Protocol]string{adapter.ProtocolOpenAIResponses: "responses", adapter.ProtocolOpenAIChat: "chat"} {
-		text, err := client.GenerateText(context.Background(), protocol, "OpenAI", "gpt-6.1-sol", messages, nil)
+		text, err := client.GenerateText(context.Background(), protocol, "ChatGPT", "gpt-6.1-sol", messages, nil)
 		if err != nil || text != want {
 			t.Fatalf("registered generation for %s: %q %v", protocol, text, err)
 		}
 	}
 	var text string
 	var state *ResponseState
-	for event := range client.ChatStream(context.Background(), adapter.ProtocolOpenAIResponses, "OpenAI", "gpt-6.1-sol", messages, nil, nil) {
+	for event := range client.ChatStream(context.Background(), adapter.ProtocolOpenAIResponses, "ChatGPT", "gpt-6.1-sol", messages, nil, nil) {
 		switch event.Type {
 		case EventError:
 			t.Fatal(event.Error)
@@ -110,7 +110,7 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 			state = event.State
 		}
 	}
-	if text != "responses" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolOpenAIResponses || state.Origin.ProviderName != "OpenAI" || requests.Load() != 3 {
+	if text != "responses" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolOpenAIResponses || state.Origin.ProviderName != "ChatGPT" || requests.Load() != 3 {
 		t.Fatalf("registered stream did not finish correctly: %q %+v", text, state)
 	}
 	if _, err := client.GenerateText(context.Background(), adapter.ProtocolOpenAIResponses, "chat-only", "gpt-6.1-sol", messages, nil); err == nil || requests.Load() != 3 {
@@ -136,7 +136,7 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	if err := client.Reload(loaded); err != nil {
 		t.Fatal(err)
 	}
-	if _, active := client.adapters[adapter.ProtocolOpenAIResponses]; active || oldBackend.Providers()["OpenAI"].APIKey != "responses-key" {
+	if _, active := client.adapters[adapter.ProtocolOpenAIResponses]; active || oldBackend.Providers()["ChatGPT"].APIKey != "responses-key" {
 		t.Fatal("reload retained a keyless adapter or changed an old snapshot")
 	}
 	view, err := BuildConfigView(loaded)
@@ -147,12 +147,12 @@ func TestResponsesRegistrationConfigurationAndProtocolIsolation(t *testing.T) {
 	for _, provider := range view.Providers {
 		if provider.AdapterName == adapter.ProtocolOpenAIResponses {
 			found[provider.Name] = true
-			if provider.Name == "OpenAI" && (provider.APIKey != "" || len(provider.BuiltinModels) == 0 || provider.Source != "builtin") {
+			if provider.Name == "ChatGPT" && (provider.APIKey != "" || len(provider.BuiltinModels) == 0 || provider.Source != "builtin") {
 				t.Fatal("settings view lost the unconfigured Responses builtin")
 			}
 		}
 	}
-	if !found["OpenAI"] || !found["chat-only"] {
+	if !found["ChatGPT"] || !found["chat-only"] {
 		t.Fatal("settings view hid keyless builtin or custom Responses providers")
 	}
 }

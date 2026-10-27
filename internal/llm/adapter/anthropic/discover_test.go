@@ -57,7 +57,7 @@ func TestDiscoverModelsPreservesRouteCredentialsAndPagination(t *testing.T) {
 		t.Fatalf("incorrect server metadata or exact-ID fallback: %+v", models)
 	}
 	models[2].ReasoningLevels[0] = "mutated"
-	if BuiltinProviders()["Anthropic"].Models[0].ReasoningLevels[0] != "medium" || backend.Providers()["relay"].ChatURL != p.ChatURL {
+	if BuiltinProviders()["Claude"].Models[0].ReasoningLevels[0] != "medium" || backend.Providers()["relay"].ChatURL != p.ChatURL {
 		t.Fatal("discovery mutated the instance or builtin data")
 	}
 }

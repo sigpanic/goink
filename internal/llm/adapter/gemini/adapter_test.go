@@ -57,7 +57,7 @@ func TestProviderConstructionRejectsInvalidInstances(t *testing.T) {
 		{"whitespace name", func(p *adapter.Provider) { p.Name = " relay " }},
 		{"missing type", func(p *adapter.Provider) { p.ProviderType = "" }},
 		{"wrong protocol type", func(p *adapter.Provider) { p.ProviderType = "openai" }},
-		{"builtin name as type", func(p *adapter.Provider) { p.ProviderType = "Google" }},
+		{"builtin name as type", func(p *adapter.Provider) { p.ProviderType = "Gemini" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			p := valid
@@ -78,8 +78,8 @@ func TestProviderConstructionRejectsInvalidInstances(t *testing.T) {
 
 func TestBuiltinProvidersAreNamedIndependentInstances(t *testing.T) {
 	first, second := BuiltinProviders(), BuiltinProviders()
-	p, ok := first["Google"]
-	if !ok || p.Name != "Google" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
+	p, ok := first["Gemini"]
+	if !ok || p.Name != "Gemini" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
 		t.Fatal("builtin must be a named instance with model metadata and no credentials")
 	}
 	if p.ChatURL != "https://generativelanguage.googleapis.com/v1/interactions" || ValidateProviderType(p.ProviderType) != nil {
@@ -89,7 +89,7 @@ func TestBuiltinProvidersAreNamedIndependentInstances(t *testing.T) {
 		p.Models[i].ID = "changed"
 		p.Models[i].ReasoningLevels[0] = "changed"
 	}
-	delete(first, "Google")
+	delete(first, "Gemini")
 	if !reflect.DeepEqual(second, BuiltinProviders()) {
 		t.Fatal("builtin snapshots share mutable model metadata")
 	}

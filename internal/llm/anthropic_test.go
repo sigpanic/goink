@@ -38,7 +38,7 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 	defer server.Close()
 	config := emptyUserConfig()
 	config.Adapters[adapter.ProtocolAnthropicMessages] = AdapterConfig{Providers: []adapter.Provider{
-		{Name: "Anthropic", APIKey: "claude-key", ChatURL: server.URL + "/proxy/v8/messages?route=claude"},
+		{Name: "Claude", APIKey: "claude-key", ChatURL: server.URL + "/proxy/v8/messages?route=claude"},
 		{Name: "shared", ProviderType: "anthropic", ChatURL: server.URL + "/custom/messages"},
 	}}
 	config.Adapters[adapter.ProtocolOpenAIChat] = AdapterConfig{Providers: []adapter.Provider{{Name: "shared", ProviderType: "openai", ChatURL: "https://unused.invalid", APIKey: "openai-key"}}}
@@ -48,17 +48,17 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 	}
 	defer client.http.CloseIdleConnections()
 	providers := client.Providers()
-	if len(providers) != 2 || len(providers[adapter.ProtocolAnthropicMessages]) != 1 || providers[adapter.ProtocolAnthropicMessages]["Anthropic"].ProviderType != "anthropic" || providers[adapter.ProtocolOpenAIChat]["shared"].ProviderType != "openai" {
+	if len(providers) != 2 || len(providers[adapter.ProtocolAnthropicMessages]) != 1 || providers[adapter.ProtocolAnthropicMessages]["Claude"].ProviderType != "anthropic" || providers[adapter.ProtocolOpenAIChat]["shared"].ProviderType != "openai" {
 		t.Fatalf("configuration filtering or namespace isolation failed: %+v", providers)
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
-	text, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "Anthropic", "relay-model", messages, nil)
+	text, err := client.GenerateText(context.Background(), adapter.ProtocolAnthropicMessages, "Claude", "relay-model", messages, nil)
 	if err != nil || text != "claude" {
 		t.Fatalf("registered Generate: %s %v", text, err)
 	}
 	var streamed string
 	var state *ResponseState
-	for event := range client.ChatStream(context.Background(), adapter.ProtocolAnthropicMessages, "Anthropic", "relay-model", messages, nil, nil) {
+	for event := range client.ChatStream(context.Background(), adapter.ProtocolAnthropicMessages, "Claude", "relay-model", messages, nil, nil) {
 		if event.Type == EventError {
 			t.Fatal(event.Error)
 		}
@@ -91,7 +91,7 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 	if err := client.Reload(loaded); err != nil {
 		t.Fatal(err)
 	}
-	if _, active := client.adapters[adapter.ProtocolAnthropicMessages]; active || oldBackend.Providers()["Anthropic"].APIKey != "claude-key" {
+	if _, active := client.adapters[adapter.ProtocolAnthropicMessages]; active || oldBackend.Providers()["Claude"].APIKey != "claude-key" {
 		t.Fatal("reload did not deactivate keyless protocol or changed old snapshot")
 	}
 	view, err := BuildConfigView(loaded)
@@ -99,7 +99,7 @@ func TestAnthropicRegistrationConfigurationAndReload(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, p := range view.Providers {
-		if p.AdapterName == adapter.ProtocolAnthropicMessages && p.Name == "Anthropic" && p.APIKey == "" && len(p.BuiltinModels) > 0 {
+		if p.AdapterName == adapter.ProtocolAnthropicMessages && p.Name == "Claude" && p.APIKey == "" && len(p.BuiltinModels) > 0 {
 			return
 		}
 	}

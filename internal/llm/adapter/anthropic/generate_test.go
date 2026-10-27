@@ -40,7 +40,7 @@ func generateAdapter(t *testing.T, handler http.HandlerFunc) *Adapter {
 	t.Cleanup(server.Close)
 	p, _ := testRequest()
 	p.ChatURL = server.URL + "/relay/v8/messages?route=claude"
-	p.Models = BuiltinProviders()["Anthropic"].Models
+	p.Models = BuiltinProviders()["Claude"].Models
 	backend, err := New(adapter.ProviderMap{p.Name: p.Provider}, server.Client(), nil)
 	if err != nil {
 		t.Fatal(err)

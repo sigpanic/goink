@@ -40,7 +40,7 @@ func TestProviderSnapshotsAreIndependent(t *testing.T) {
 		p.Models[0].ReasoningLevels[0] = "changed through snapshot"
 		delete(got, "official")
 	}
-	for _, name := range []string{"", "missing", "openai", "OpenAI"} {
+	for _, name := range []string{"", "missing", "openai", "ChatGPT"} {
 		if _, err := backend.provider(name); err == nil {
 			t.Fatalf("unknown instance %q fell back to a type or builtin", name)
 		}
@@ -58,7 +58,7 @@ func TestProviderConstructionRejectsInvalidInstances(t *testing.T) {
 		{"whitespace name", func(p *adapter.Provider) { p.Name = " relay " }},
 		{"missing type", func(p *adapter.Provider) { p.ProviderType = "" }},
 		{"wrong protocol type", func(p *adapter.Provider) { p.ProviderType = "anthropic" }},
-		{"builtin name as type", func(p *adapter.Provider) { p.ProviderType = "OpenAI" }},
+		{"builtin name as type", func(p *adapter.Provider) { p.ProviderType = "ChatGPT" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			p := valid
@@ -79,8 +79,8 @@ func TestProviderConstructionRejectsInvalidInstances(t *testing.T) {
 
 func TestBuiltinProvidersAreIndependentNamedInstances(t *testing.T) {
 	first, second := BuiltinProviders(), BuiltinProviders()
-	p, ok := first["OpenAI"]
-	if !ok || p.Name != "OpenAI" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
+	p, ok := first["ChatGPT"]
+	if !ok || p.Name != "ChatGPT" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
 		t.Fatal("builtin must be a named instance with model metadata and no credentials")
 	}
 	if p.ChatURL != "https://api.openai.com/v1/responses" || ValidateProviderType(p.ProviderType) != nil {
@@ -92,7 +92,7 @@ func TestBuiltinProvidersAreIndependentNamedInstances(t *testing.T) {
 			p.Models[i].ReasoningLevels[0] = "changed"
 		}
 	}
-	delete(first, "OpenAI")
+	delete(first, "ChatGPT")
 	if !reflect.DeepEqual(second, BuiltinProviders()) {
 		t.Fatal("builtin snapshots share mutable model metadata")
 	}

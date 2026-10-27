@@ -18,7 +18,7 @@ func (p Provider) buildRequest(req adapter.Request) (types.CreateModelInteractio
 		return params, fmt.Errorf("gemini model must not be empty")
 	}
 	var policy, configured adapter.ModelInfo
-	for _, model := range builtin["Google"].Models {
+	for _, model := range builtin["Gemini"].Models {
 		if model.ID == req.Model {
 			policy = model
 			break

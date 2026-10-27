@@ -86,7 +86,7 @@ func modelsURLOption(endpoint *url.URL) option.RequestOption {
 func (p Provider) modelInfo(model sdk.ModelInfo) adapter.ModelInfo {
 	info := adapter.ModelInfo{ID: model.ID, Name: model.ID}
 	// 缺少能力字段的中转只采用精确 ID 的配置或已验证预设，不按名称猜测。
-	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["Anthropic"].Models} {
+	for _, candidates := range [][]adapter.ModelInfo{p.Models, builtin["Claude"].Models} {
 		found := false
 		for _, preset := range candidates {
 			if preset.ID == model.ID {

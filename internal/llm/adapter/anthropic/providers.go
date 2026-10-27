@@ -4,8 +4,8 @@ import "github.com/sigpanic/goink/internal/llm/adapter"
 
 // builtin 是内置实例而非类型模板；配置层按 Name 合并用户覆盖，APIKey 默认留空。
 var builtin = adapter.ProviderMap{
-	"Anthropic": {
-		Name:         "Anthropic",
+	"Claude": {
+		Name:         "Claude",
 		ProviderType: "anthropic",
 		ChatURL:      "https://api.anthropic.com/v1/messages",
 		PlatformURL:  "https://platform.claude.com",

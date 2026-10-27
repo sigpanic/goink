@@ -15,7 +15,7 @@ import (
 )
 
 func requestProvider() Provider {
-	config := builtin["Google"].Clone()
+	config := builtin["Gemini"].Clone()
 	config.Name, config.APIKey, config.ChatURL = "relay", "private-key", "https://relay.invalid/v8/interactions?tenant=a"
 	return Provider{Provider: config}
 }
@@ -109,7 +109,7 @@ func TestRequestSDKBodyPreservesHistorySchemasAndNumbers(t *testing.T) {
 
 func TestRequestModelDefaultsAndOutputLimits(t *testing.T) {
 	p := requestProvider()
-	for _, model := range builtin["Google"].Models {
+	for _, model := range builtin["Gemini"].Models {
 		t.Run(model.ID, func(t *testing.T) {
 			req := requestFixture()
 			req.Model = model.ID

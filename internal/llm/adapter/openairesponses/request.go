@@ -28,7 +28,7 @@ func (p Provider) buildRequest(req adapter.Request) (responses.ResponseNewParams
 	if modelID == "gpt-5.6" {
 		modelID = "gpt-5.6-sol"
 	}
-	for _, model := range builtin["OpenAI"].Models {
+	for _, model := range builtin["ChatGPT"].Models {
 		if model.ID == modelID {
 			policy = model
 			break

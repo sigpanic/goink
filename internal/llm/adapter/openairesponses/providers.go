@@ -4,8 +4,8 @@ import "github.com/sigpanic/goink/internal/llm/adapter"
 
 // builtin 是内置实例，按 Name 合并用户覆盖；行为类型不充当实例索引。
 var builtin = adapter.ProviderMap{
-	"OpenAI": {
-		Name:         "OpenAI",
+	"ChatGPT": {
+		Name:         "ChatGPT",
 		ProviderType: "openai",
 		ChatURL:      "https://api.openai.com/v1/responses",
 		PlatformURL:  "https://platform.openai.com",

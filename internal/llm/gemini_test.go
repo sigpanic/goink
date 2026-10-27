@@ -44,7 +44,7 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 	defer server.Close()
 	config := emptyUserConfig()
 	config.Adapters[adapter.ProtocolGeminiInteractions] = AdapterConfig{Providers: []adapter.Provider{
-		{Name: "Google", APIKey: "gemini-key", ChatURL: server.URL + "/proxy/v8/interactions?route=gemini"},
+		{Name: "Gemini", APIKey: "gemini-key", ChatURL: server.URL + "/proxy/v8/interactions?route=gemini"},
 		{Name: "shared", ProviderType: "google", ChatURL: server.URL + "/custom/interactions"},
 	}}
 	config.Adapters[adapter.ProtocolOpenAIChat] = AdapterConfig{Providers: []adapter.Provider{
@@ -56,20 +56,20 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 	}
 	defer client.http.CloseIdleConnections()
 	providers := client.Providers()
-	if len(providers) != 2 || len(providers[adapter.ProtocolGeminiInteractions]) != 1 || providers[adapter.ProtocolGeminiInteractions]["Google"].ProviderType != "google" || providers[adapter.ProtocolOpenAIChat]["shared"].ProviderType != "openai" {
+	if len(providers) != 2 || len(providers[adapter.ProtocolGeminiInteractions]) != 1 || providers[adapter.ProtocolGeminiInteractions]["Gemini"].ProviderType != "google" || providers[adapter.ProtocolOpenAIChat]["shared"].ProviderType != "openai" {
 		t.Fatalf("key filtering or protocol namespace isolation failed: %+v", providers)
 	}
-	if model, ok := client.ProviderModel(adapter.ProtocolGeminiInteractions, "Google", "gemini-3.8-flash"); !ok || !model.SupportsThinking || len(Models(providers)) == 0 {
+	if model, ok := client.ProviderModel(adapter.ProtocolGeminiInteractions, "Gemini", "gemini-3.8-flash"); !ok || !model.SupportsThinking || len(Models(providers)) == 0 {
 		t.Fatal("registered provider lost preset model metadata")
 	}
 	messages := []Message{{Role: "user", Content: "hi"}}
-	text, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "Google", "gemini-3.8-flash", messages, nil)
+	text, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "Gemini", "gemini-3.8-flash", messages, nil)
 	if err != nil || text != "gemini" {
 		t.Fatalf("registered Generate: %q %v", text, err)
 	}
 	var streamed string
 	var state *ResponseState
-	for event := range client.ChatStream(context.Background(), adapter.ProtocolGeminiInteractions, "Google", "gemini-3.8-flash", messages, nil, nil) {
+	for event := range client.ChatStream(context.Background(), adapter.ProtocolGeminiInteractions, "Gemini", "gemini-3.8-flash", messages, nil, nil) {
 		if event.Type == EventError {
 			t.Fatal(event.Error)
 		}
@@ -80,7 +80,7 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 			state = event.State
 		}
 	}
-	if streamed != "gemini" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolGeminiInteractions || state.Origin.ProviderName != "Google" {
+	if streamed != "gemini" || state == nil || !state.Complete || !state.TurnComplete || state.Origin.AdapterName != adapter.ProtocolGeminiInteractions || state.Origin.ProviderName != "Gemini" {
 		t.Fatalf("registered Stream: %q %+v", streamed, state)
 	}
 	if _, err := client.GenerateText(context.Background(), adapter.ProtocolGeminiInteractions, "shared", "relay-model", messages, nil); err == nil {
@@ -105,14 +105,14 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 	invalid.Adapters[adapter.ProtocolGeminiInteractions] = AdapterConfig{Providers: []adapter.Provider{
 		{Name: "invalid", ProviderType: "anthropic", ChatURL: server.URL, APIKey: "key"},
 	}}
-	if err := client.Reload(invalid); err == nil || client.adapters[adapter.ProtocolGeminiInteractions].Providers()["Google"].APIKey != "gemini-key" {
+	if err := client.Reload(invalid); err == nil || client.adapters[adapter.ProtocolGeminiInteractions].Providers()["Gemini"].APIKey != "gemini-key" {
 		t.Fatal("invalid reload replaced the active snapshot")
 	}
 	loaded.Adapters[adapter.ProtocolGeminiInteractions].Providers[0].APIKey = ""
 	if err := client.Reload(loaded); err != nil {
 		t.Fatal(err)
 	}
-	if _, active := client.adapters[adapter.ProtocolGeminiInteractions]; active || oldBackend.Providers()["Google"].APIKey != "gemini-key" {
+	if _, active := client.adapters[adapter.ProtocolGeminiInteractions]; active || oldBackend.Providers()["Gemini"].APIKey != "gemini-key" {
 		t.Fatal("reload did not deactivate keyless protocol or modified an old snapshot")
 	}
 	view, err := BuildConfigView(loaded)
@@ -123,12 +123,12 @@ func TestGeminiRegistrationConfigurationAndReload(t *testing.T) {
 	for _, provider := range view.Providers {
 		if provider.AdapterName == adapter.ProtocolGeminiInteractions {
 			found[provider.Name] = true
-			if provider.Name == "Google" && (provider.APIKey != "" || len(provider.BuiltinModels) == 0) {
+			if provider.Name == "Gemini" && (provider.APIKey != "" || len(provider.BuiltinModels) == 0) {
 				t.Fatal("settings view lost the unconfigured Google preset")
 			}
 		}
 	}
-	if !found["Google"] || !found["shared"] {
+	if !found["Gemini"] || !found["shared"] {
 		t.Fatal("settings view hid keyless builtin or custom instances")
 	}
 }

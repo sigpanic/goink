@@ -58,7 +58,7 @@ func TestProviderConstructionRejectsInvalidConfiguration(t *testing.T) {
 		{"mismatched name", func(p *adapter.Provider) { p.Name = "other" }},
 		{"missing type", func(p *adapter.Provider) { p.ProviderType = "" }},
 		{"wrong protocol type", func(p *adapter.Provider) { p.ProviderType = "openai" }},
-		{"instance name as type", func(p *adapter.Provider) { p.ProviderType = "Anthropic" }},
+		{"instance name as type", func(p *adapter.Provider) { p.ProviderType = "Claude" }},
 		{"missing URL", func(p *adapter.Provider) { p.ChatURL = "" }},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
@@ -88,8 +88,8 @@ func TestProviderConstructionRejectsInvalidConfiguration(t *testing.T) {
 func TestBuiltinProvidersAreIndependentNamedInstances(t *testing.T) {
 	first := BuiltinProviders()
 	second := BuiltinProviders()
-	p, ok := first["Anthropic"]
-	if !ok || p.Name != "Anthropic" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
+	p, ok := first["Claude"]
+	if !ok || p.Name != "Claude" || p.APIKey != "" || p.Temperature != nil || len(p.Models) == 0 {
 		t.Fatal("builtin should be a named instance with explicit models and no credentials or temperature override")
 	}
 	if err := ValidateProviderType(p.ProviderType); err != nil {
@@ -100,7 +100,7 @@ func TestBuiltinProvidersAreIndependentNamedInstances(t *testing.T) {
 	}
 	p.Models[0].ID = "changed"
 	p.Models[0].ReasoningLevels[0] = "changed"
-	delete(first, "Anthropic")
+	delete(first, "Claude")
 	if !reflect.DeepEqual(BuiltinProviders(), second) {
 		t.Fatal("builtin snapshots share mutable model data")
 	}
