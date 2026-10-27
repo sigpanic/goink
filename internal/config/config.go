@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sigpanic/goink/internal/platform"
+	"github.com/sigpanic/goink/internal/utils"
 )
 
 // ErrNotInitialized 表示指针文件不存在，应用尚未完成首次初始化。没初始化弹出来初始化界面，如果初始化了但是还是出错就谈配置错误恢复
@@ -202,7 +203,7 @@ func Save(dataDir string) error {
 	if err != nil {
 		return fmt.Errorf("序列化配置失败: %w", err)
 	}
-	if err := os.WriteFile(path, raw, 0600); err != nil {
+	if err := utils.AtomicWrite(path, raw); err != nil {
 		return fmt.Errorf("写入配置文件失败: %w", err)
 	}
 	return nil
