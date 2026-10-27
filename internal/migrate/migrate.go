@@ -11,6 +11,7 @@ import (
 	"github.com/sigpanic/goink/internal/migrate/v120"
 	"github.com/sigpanic/goink/internal/migrate/v160"
 	"github.com/sigpanic/goink/internal/migrate/v161"
+	"github.com/sigpanic/goink/internal/migrate/v180"
 )
 
 // 必须显式固定版本顺序；包的 init 顺序会受依赖关系影响，不能用来决定迁移顺序。
@@ -18,6 +19,7 @@ func init() {
 	v120.Register()
 	v160.Register()
 	v161.Register()
+	v180.Register()
 }
 
 // Run 自动创建/更新全部数据表，幂等安全。作为外部入口，遍历 engine.Registry

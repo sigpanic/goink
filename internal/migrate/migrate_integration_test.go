@@ -3,6 +3,7 @@
 package migrate_test
 
 import (
+	"bytes"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,12 +14,15 @@ import (
 
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/testsupport"
 )
 
 func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 	setupMigrationIntegrationEnv(t)
+	originalConfig := writeLegacyLLMConfig(t)
 	db := openMigrationIntegrationDB(t)
 
 	if err := migrate.Run(db, slog.Default()); err != nil {
@@ -28,6 +32,7 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 		t.Fatal("新库应创建当前 chapters schema")
 	}
 	assertActivitySchema(t, db)
+	assertMigratedLLMConfig(t, originalConfig)
 	for _, migration := range []struct {
 		name string
 		want int64
@@ -35,6 +40,7 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 		{"v1.2.0-chapter-number-column-names", 3},
 		{"v1.6.0-chapter-id-refactor", 6},
 		{"v1.6.1-writing-daily", 2},
+		{"v1.8.0-llm-config", 1},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -71,6 +77,7 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 		{"v1.2.0-chapter-number-column-names", 3},
 		{"v1.6.0-chapter-id-refactor", 6},
 		{"v1.6.1-writing-daily", 2},
+		{"v1.8.0-llm-config", 1},
 	} {
 		var done int64
 		if err := db.Table("migrate_state").Where("migration = ? AND status = ?", migration.name, "done").Count(&done).Error; err != nil {
@@ -90,6 +97,7 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 // 最早受支持旧库升级到当前版本。各版本包内的测试则保留为定位具体步骤边界的白盒测试。
 func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	dataDir := setupMigrationIntegrationEnv(t)
+	originalConfig := writeLegacyLLMConfig(t)
 	db := openMigrationIntegrationDB(t)
 	execSQL := func(query string) {
 		t.Helper()
@@ -211,6 +219,7 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		t.Fatalf("v120 迁移步骤完成数 = %d, want 3", n)
 	}
 
+	assertMigratedLLMConfig(t, originalConfig)
 	if err := migrate.Run(db, slog.Default()); err != nil {
 		t.Fatalf("幂等 migrate.Run: %v", err)
 	}
@@ -229,8 +238,49 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM writing_log`); n != 1 {
 		t.Fatalf("重复迁移后应只有一条写作日汇总: got %d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 12 {
-		t.Fatalf("状态丢失后应重建全部迁移状态和调度标记: got %d, want 12", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 13 {
+		t.Fatalf("状态丢失后应重建全部迁移状态和调度标记: got %d, want 13", n)
+	}
+	assertMigratedLLMConfig(t, originalConfig)
+}
+
+func writeLegacyLLMConfig(t *testing.T) []byte {
+	t.Helper()
+	plain, err := os.ReadFile("v180/testdata/llm-config-v1.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc, err := config.Encrypt(plain)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := config.LLMConfigPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, enc, 0600); err != nil {
+		t.Fatal(err)
+	}
+	return enc
+}
+
+func assertMigratedLLMConfig(t *testing.T, original []byte) {
+	t.Helper()
+	path := config.LLMConfigPath()
+	cfg, err := llm.LoadUserConfig(path)
+	if err != nil {
+		t.Fatalf("完整迁移后应能直接加载 LLM 配置: %v", err)
+	}
+	providers := cfg.Adapters[adapter.ProtocolOpenAIChat].Providers
+	if len(providers) != 12 || providers[8].Name != "Kimi" || providers[8].APIKey != "test-moonshot" {
+		t.Fatal("历史链必须保留 LLM 实例，并将内置索引转换为实例名称")
+	}
+	backup, err := os.ReadFile(path + ".pre-v1.8.0.bak")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(backup, original) {
+		t.Fatal("重跑整条迁移链也必须保留最初的配置密文备份")
 	}
 }
 
