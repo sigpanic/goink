@@ -15,7 +15,7 @@ import (
 // convertResponse 校验终态、整组工具及原文后，才交付可执行调用和回放状态。
 func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.RawMessage) (adapter.Response, error) {
 	var interaction struct {
-		ID     string          `json:"id"`
+		ID     json.RawMessage `json:"id"`
 		Object string          `json:"object"`
 		Agent  *string         `json:"agent"`
 		Status string          `json:"status"`
@@ -23,9 +23,12 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 		Usage  json.RawMessage `json:"usage"`
 		Errors []types.Error   `json:"errors"`
 	}
-	if err := json.Unmarshal(raw, &interaction); err != nil || strings.TrimSpace(interaction.ID) == "" ||
+	if err := json.Unmarshal(raw, &interaction); err != nil ||
 		(interaction.Object != "" && interaction.Object != "interaction") || interaction.Agent != nil {
 		return adapter.Response{}, invalidResponse("missing or invalid interaction envelope")
+	}
+	if _, err := parseInteractionID(interaction.ID, params.Store != nil && !*params.Store); err != nil {
+		return adapter.Response{}, err
 	}
 	if len(interaction.Errors) > 0 {
 		fault := interaction.Errors[0]
@@ -116,6 +119,18 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 
 func invalidResponse(message string) error {
 	return &adapter.APIError{Kind: "invalid_response", Message: "invalid Gemini response: " + message}
+}
+
+// 显式 store=false 的官方响应实测会省略 ID；字段存在时仍须是非空字符串。
+func parseInteractionID(raw json.RawMessage, optional bool) (string, error) {
+	if len(raw) == 0 && optional {
+		return "", nil
+	}
+	var id string
+	if json.Unmarshal(raw, &id) != nil || strings.TrimSpace(id) == "" {
+		return "", invalidResponse("missing or invalid interaction ID")
+	}
+	return id, nil
 }
 
 // normalizeUsage 的 output 不包含 thought；cache 和 tool-use 只是明细，不能重复累加。

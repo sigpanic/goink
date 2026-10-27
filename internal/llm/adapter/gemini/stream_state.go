@@ -13,6 +13,8 @@ import (
 )
 
 type streamState struct {
+	stateless   bool
+	id          string
 	interaction map[string]json.RawMessage
 	usage       map[string]json.RawMessage
 	steps       []*streamStep
@@ -27,7 +29,7 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 	var event struct {
 		Type          string          `json:"event_type"`
 		Interaction   json.RawMessage `json:"interaction"`
-		InteractionID string          `json:"interaction_id"`
+		InteractionID json.RawMessage `json:"interaction_id"`
 		Status        string          `json:"status"`
 		Index         *int            `json:"index"`
 		Step          json.RawMessage `json:"step"`
@@ -60,13 +62,17 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		if s.interaction != nil {
 			return invalidResponse("duplicate interaction.created")
 		}
-		if err := json.Unmarshal(event.Interaction, &s.interaction); err != nil || s.interaction == nil {
+		if err := json.Unmarshal(event.Interaction, &s.interaction); err != nil || len(s.interaction) == 0 {
 			return invalidResponse("missing created interaction")
 		}
-		var id, status string
-		if json.Unmarshal(s.interaction["id"], &id) != nil || strings.TrimSpace(id) == "" ||
-			json.Unmarshal(s.interaction["status"], &status) != nil || status != "in_progress" {
-			return invalidResponse("invalid created interaction identity or status")
+		if err := s.setInteractionID(s.interaction["id"]); err != nil {
+			return err
+		}
+		if rawStatus := s.interaction["status"]; len(rawStatus) != 0 || !s.stateless {
+			var status string
+			if json.Unmarshal(rawStatus, &status) != nil || status != "in_progress" {
+				return invalidResponse("invalid created interaction status")
+			}
 		}
 		return s.updateUsage(s.interaction["usage"])
 	}
@@ -96,11 +102,11 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		if err := json.Unmarshal(event.Interaction, &terminal); err != nil || terminal == nil {
 			return invalidResponse("missing terminal interaction")
 		}
-		var id, status string
-		if json.Unmarshal(terminal["id"], &id) != nil || json.Unmarshal(terminal["status"], &status) != nil {
-			return invalidResponse("invalid terminal interaction identity or status")
+		var status string
+		if json.Unmarshal(terminal["status"], &status) != nil {
+			return invalidResponse("invalid terminal interaction status")
 		}
-		if err := s.setStatus(id, status); err != nil {
+		if err := s.setStatus(terminal["id"], status); err != nil {
 			return err
 		}
 		if !s.terminal {
@@ -143,10 +149,24 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 	}
 }
 
-func (s *streamState) setStatus(id, status string) error {
-	var expected string
-	if json.Unmarshal(s.interaction["id"], &expected) != nil || expected != id {
+func (s *streamState) setInteractionID(raw json.RawMessage) error {
+	id, err := parseInteractionID(raw, s.stateless)
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return nil
+	}
+	if s.id != "" && s.id != id {
 		return invalidResponse("interaction ID changed during streaming")
+	}
+	s.id = id
+	return nil
+}
+
+func (s *streamState) setStatus(id json.RawMessage, status string) error {
+	if err := s.setInteractionID(id); err != nil {
+		return err
 	}
 	if s.terminal {
 		var previous string

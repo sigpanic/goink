@@ -114,32 +114,33 @@ func (p Provider) probeInteraction(ctx context.Context, candidate, model string)
 	}
 	stream := result.InteractionSSEStreamEvent
 	defer stream.Close()
-	if result.HTTPMeta.Response == nil {
+	if result.HTTPMeta.Response == nil || result.HTTPMeta.Response.Body == nil {
 		return "", fmt.Errorf("missing Interactions response")
 	}
 	mediaType, _, err := mime.ParseMediaType(result.HTTPMeta.Response.Header.Get("Content-Type"))
 	if err != nil || mediaType != "text/event-stream" {
 		return "", fmt.Errorf("interaction response is not an SSE stream")
 	}
-	if stream.Next() {
-		event := stream.Value()
-		raw, err := json.Marshal(event.Data)
-		if err != nil {
+	events := newInteractionEventStream(ctx, result.HTTPMeta.Response.Body)
+	defer events.Close()
+	if events.Next() {
+		event := events.Value()
+		state := streamState{stateless: true}
+		if err := state.consume(event.Data, func(adapter.StreamEvent) bool { return true }); err != nil {
 			return "", err
 		}
-		var state streamState
-		if err := state.consume(raw, func(adapter.StreamEvent) bool { return true }); err != nil {
-			return "", err
+		var created types.InteractionCreatedEvent
+		if err := json.Unmarshal(event.Data, &created); err != nil {
+			return "", invalidResponse("invalid created interaction")
 		}
-		created := event.GetDataInteractionCreated()
-		if created == nil || (created.Interaction.Agent != nil && *created.Interaction.Agent != "") ||
+		if (created.Interaction.Agent != nil && *created.Interaction.Agent != "") ||
 			(created.Interaction.Object != nil && *created.Interaction.Object != "interaction") {
 			return "", fmt.Errorf("SSE stream did not begin with a model interaction.created")
 		}
 		// 握手成立后立即关闭，不等待生成，也不把握手当作完整生成验证。
 		return "", nil
 	}
-	if err := stream.Err(); err != nil {
+	if err := events.Err(); err != nil {
 		return "", convertSDKError(err)
 	}
 	return "", fmt.Errorf("SSE stream contains no valid interaction.created")

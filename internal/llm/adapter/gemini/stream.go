@@ -51,13 +51,9 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 		}
 		// 生成的 SDK 事件类型会丢原文；用 SDK 公开读取器解帧，保留 Data 的原始 JSON。
 		// 原 Create stream 持有网络 Body；借用读取器不再次关闭底层连接或发出请求。
-		events := sse.NewEventStream(ctx, io.NopCloser(result.HTTPMeta.Response.Body), func(raw []byte) (sse.ServerEvent, error) {
-			var event sse.ServerEvent
-			err := json.Unmarshal(raw, &event)
-			return event, err
-		}, "")
+		events := newInteractionEventStream(ctx, result.HTTPMeta.Response.Body)
 		defer events.Close()
-		var state streamState
+		state := streamState{stateless: params.Store != nil && !*params.Store}
 		for events.Next() {
 			event := events.Value()
 			if string(event.Data) == `"[DONE]"` {
@@ -95,4 +91,12 @@ func (c *Adapter) Stream(ctx context.Context, req adapter.Request) <-chan adapte
 		}
 	}()
 	return ch
+}
+
+func newInteractionEventStream(ctx context.Context, body io.Reader) *sse.EventStream[sse.ServerEvent] {
+	return sse.NewEventStream(ctx, io.NopCloser(body), func(raw []byte) (sse.ServerEvent, error) {
+		var event sse.ServerEvent
+		err := json.Unmarshal(raw, &event)
+		return event, err
+	}, "")
 }
