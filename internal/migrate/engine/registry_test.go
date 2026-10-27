@@ -3,6 +3,7 @@ package engine
 import (
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -204,6 +205,66 @@ func TestPrepareSequentialPreservesNewInterruptionBeforeAuto(t *testing.T) {
 	}
 	if preCalls != 1 || autoCalls != 1 {
 		t.Fatalf("恢复调用次数: pre=%d auto=%d", preCalls, autoCalls)
+	}
+}
+
+func TestDatabasePlanningSeparatesPostDBState(t *testing.T) {
+	for _, databaseDone := range []bool{false, true} {
+		t.Run(map[bool]string{false: "only-post-db-state", true: "database-done"}[databaseDone], func(t *testing.T) {
+			db := openEngineTestDB(t)
+			detected := 0
+			migration := Migration{
+				Name: "mixed",
+				NeedsMigration: func(_ *gorm.DB) (bool, error) {
+					detected++
+					return false, nil
+				},
+				PreSchemaSteps:       []Step{testStep("pre")},
+				SchemaStep:           testStep("auto"),
+				PostDBMigrationSteps: []Step{testStep("config")},
+			}
+			if err := db.Create(&MigrateState{Migration: "mixed", Step: "config", Status: "failed"}).Error; err != nil {
+				t.Fatal(err)
+			}
+			if databaseDone {
+				if err := MarkStepsDone(db, slog.Default(), "mixed", migration.PreSchemaSteps); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := PrepareSequential(db, slog.Default(), []Migration{migration}); err != nil {
+				t.Fatalf("后置步骤失败不应阻断旧数据库记录接纳: %v", err)
+			}
+			plans, err := BuildPlans(db, slog.Default(), false, []Migration{migration})
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantAction, wantDetected := PlanMarkDone, 1
+			if databaseDone {
+				wantAction, wantDetected = PlanSkip, 0
+				assertStepState(t, db, "mixed", "auto", "done", "")
+			} else if status, err := stepStatus(db, "mixed", "auto"); err != nil || status != "" {
+				t.Fatalf("仅后置记录不能导致数据库步骤被补记完成: status=%q err=%v", status, err)
+			}
+			if plans[0].Action != wantAction || detected != wantDetected {
+				t.Fatalf("action=%v detected=%d, want action=%v detected=%d", plans[0].Action, detected, wantAction, wantDetected)
+			}
+			assertStepState(t, db, "mixed", "config", "failed", "")
+		})
+	}
+}
+
+func TestMigrationRejectsDuplicateKeysAcrossPhases(t *testing.T) {
+	db := openEngineTestDB(t)
+	registry := []Migration{{
+		Name:                 "duplicate",
+		PreSchemaSteps:       []Step{testStep("same")},
+		PostDBMigrationSteps: []Step{testStep("same")},
+	}}
+	if err := PrepareSequential(db, slog.Default(), registry); err == nil || !strings.Contains(err.Error(), "duplicate step key") {
+		t.Fatalf("接纳旧状态前必须拒绝跨阶段重复 key: %v", err)
+	}
+	if _, err := BuildPlans(db, slog.Default(), true, registry); err == nil || !strings.Contains(err.Error(), "duplicate step key") {
+		t.Fatalf("新库也必须拒绝跨阶段重复 key: %v", err)
 	}
 }
 

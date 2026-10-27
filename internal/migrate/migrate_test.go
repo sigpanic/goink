@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -235,6 +236,119 @@ func TestRunReevaluatesEachGroupAfterPreviousSchema(t *testing.T) {
 		if row.Value != "seed-pre" || db.Migrator().HasColumn(&sequentialFirstModel{}, "legacy") {
 			t.Fatalf("必须按组完成 pre/auto/post 且重启不重放历史 schema: %+v", row)
 		}
+	}
+}
+
+func TestRunPostDBStepsInOrderAndResume(t *testing.T) {
+	for _, newDatabase := range []bool{true, false} {
+		t.Run(map[bool]string{true: "new-database", false: "existing-database"}[newDatabase], func(t *testing.T) {
+			db := openSequentialTestDB(t)
+			if newDatabase {
+				if err := db.Exec("DROP TABLE existing_business").Error; err != nil {
+					t.Fatal(err)
+				}
+			}
+			original := engine.Registry
+			t.Cleanup(func() { engine.Registry = original })
+			var calls []string
+			interrupted := errors.New("post-db interrupted")
+			attempts := 0
+			step := func(key string, postDB bool) engine.Step {
+				return sequentialTestStep{key: key, run: func(db *gorm.DB) error {
+					calls = append(calls, key)
+					if postDB && !db.Migrator().HasTable("sessions") {
+						t.Fatal("全部数据库迁移及当前模型对齐之前不得执行后置步骤")
+					}
+					if key == "second-config" {
+						attempts++
+						if attempts == 1 {
+							return interrupted
+						}
+					}
+					return nil
+				}}
+			}
+			engine.Registry = []engine.Migration{
+				{
+					Name:                 "first",
+					NeedsMigration:       func(_ *gorm.DB) (bool, error) { return true, nil },
+					PreSchemaSteps:       []engine.Step{step("first-db", false)},
+					PostDBMigrationSteps: []engine.Step{step("first-config", true)},
+				},
+				{
+					Name:                 "second",
+					NeedsMigration:       func(_ *gorm.DB) (bool, error) { return true, nil },
+					PreSchemaSteps:       []engine.Step{step("second-db", false)},
+					PostDBMigrationSteps: []engine.Step{step("second-config", true)},
+				},
+				{Name: "config-only", PostDBMigrationSteps: []engine.Step{step("third-config", true)}},
+			}
+			if err := Run(db, slog.Default()); !errors.Is(err, interrupted) {
+				t.Fatalf("首次运行应在第二组后置步骤中断: %v", err)
+			}
+			want := []string{"first-config", "second-config"}
+			if !newDatabase {
+				want = append([]string{"first-db", "second-db"}, want...)
+			}
+			if !slices.Equal(calls, want) {
+				t.Fatalf("首次顺序=%v, want %v", calls, want)
+			}
+			var failed engine.MigrateState
+			if err := db.Where("migration = ? AND step = ?", "second", "second-config").First(&failed).Error; err != nil {
+				t.Fatal(err)
+			}
+			if failed.Status != "failed" || !strings.Contains(failed.Error, interrupted.Error()) {
+				t.Fatalf("后置失败应由状态表记录: %+v", failed)
+			}
+			if err := Run(db, slog.Default()); err != nil {
+				t.Fatalf("后置步骤中断后应恢复: %v", err)
+			}
+			want = append(want, "second-config", "third-config")
+			if err := Run(db, slog.Default()); err != nil {
+				t.Fatalf("全部完成后再次启动: %v", err)
+			}
+			if !slices.Equal(calls, want) {
+				t.Fatalf("恢复应只执行未完成步骤且完成后不再调用: got %v, want %v", calls, want)
+			}
+		})
+	}
+}
+
+func TestRunDatabaseFailurePreventsPostDBSteps(t *testing.T) {
+	for _, stage := range []string{"database-step", "final-schema"} {
+		t.Run(stage, func(t *testing.T) {
+			db := openSequentialTestDB(t)
+			original := engine.Registry
+			t.Cleanup(func() { engine.Registry = original })
+			blocked := errors.New("database blocked")
+			postDBCalls := 0
+			engine.Registry = []engine.Migration{{
+				Name:           "test",
+				NeedsMigration: func(_ *gorm.DB) (bool, error) { return true, nil },
+				PreSchemaSteps: []engine.Step{sequentialTestStep{key: "db", run: func(_ *gorm.DB) error {
+					if stage == "database-step" {
+						return blocked
+					}
+					return nil
+				}}},
+				PostDBMigrationSteps: []engine.Step{sequentialTestStep{key: "config", run: func(_ *gorm.DB) error {
+					postDBCalls++
+					return nil
+				}}},
+			}}
+			if stage == "final-schema" {
+				if err := db.Callback().Raw().Before("gorm:raw").Register("test:block-final-schema", func(tx *gorm.DB) {
+					if strings.Contains(tx.Statement.SQL.String(), "CREATE TABLE `sessions`") {
+						tx.AddError(blocked)
+					}
+				}); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if err := Run(db, slog.Default()); !errors.Is(err, blocked) || postDBCalls != 0 {
+				t.Fatalf("数据库阶段失败必须阻止后置迁移: err=%v postDBCalls=%d", err, postDBCalls)
+			}
+		})
 	}
 }
 

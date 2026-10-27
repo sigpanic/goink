@@ -55,12 +55,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 			continue
 		case engine.PlanMarkDone:
 			// 先持久化无需迁移的判定，后续组的 AutoMigrate 才不会让重启误判。
-			if err := engine.MarkStepsDone(db, log, migration.Name, migration.AllSteps()); err != nil {
+			if err := engine.MarkStepsDone(db, log, migration.Name, migration.DatabaseSteps()); err != nil {
 				return err
 			}
 		case engine.PlanRun:
 			log.Info("执行迁移", "migration", migration.Name, "description", migration.Description)
-			if err := engine.RunSteps(db, log, migration.Name, migration.AllSteps()); err != nil {
+			if err := engine.RunSteps(db, log, migration.Name, migration.DatabaseSteps()); err != nil {
 				return err
 			}
 		}
@@ -70,12 +70,17 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	// SQLite 的 RENAME COLUMN 会保留旧索引名。例如历史 writing_log.chapter_id
 	// 改为 chapter_number 后，旧索引仍叫 idx_writing_log_chapter_id；首次 AutoMigrate
 	// 因同名不补建当前 chapter_id 的索引，drop-legacy 删除旧列时便会一并删掉它。
-	// 所有迁移步骤完成后再次按当前 model 对齐，补回这类被历史 DDL 遮蔽或删除的索引。
+	// 所有数据库迁移步骤完成后再次按当前 model 对齐，补回这类被历史 DDL 遮蔽或删除的索引。
 	if err := db.AutoMigrate(models...); err != nil {
 		return fmt.Errorf("migrate: 迁移后 schema 对齐: %w", err)
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
+	for _, migration := range engine.Registry {
+		if err := engine.RunSteps(db, log, migration.Name, migration.PostDBMigrationSteps); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
