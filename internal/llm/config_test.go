@@ -161,7 +161,12 @@ func TestBuildConfigView_ToUserConfigPreservesOverrides(t *testing.T) {
 	require.Len(t, view.Providers, count+1)
 	for i, pv := range view.Providers {
 		if i > 0 {
-			require.Less(t, view.Providers[i-1].Key, pv.Key)
+			previous := view.Providers[i-1]
+			if previous.Name == pv.Name {
+				require.Less(t, previous.AdapterName, pv.AdapterName)
+			} else {
+				require.Less(t, previous.Name, pv.Name)
+			}
 		}
 		if pv.Name == "MiMo" {
 			require.Equal(t, "builtin", pv.Source)

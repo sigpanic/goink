@@ -222,7 +222,12 @@ func BuildConfigView(user *UserLLMConfig) (*LLMConfigView, error) {
 			view.Providers = append(view.Providers, providerView(protocol, p, preset, saved[protocol][name].Models, source))
 		}
 	}
-	sort.Slice(view.Providers, func(i, j int) bool { return view.Providers[i].Key < view.Providers[j].Key })
+	sort.Slice(view.Providers, func(i, j int) bool {
+		if view.Providers[i].Name != view.Providers[j].Name {
+			return view.Providers[i].Name < view.Providers[j].Name
+		}
+		return view.Providers[i].AdapterName < view.Providers[j].AdapterName
+	})
 	return view, nil
 }
 
