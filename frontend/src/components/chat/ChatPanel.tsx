@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Loader2, History, Plus } from "lucide-react";
+import { MessageSquare, Loader2 } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
@@ -21,6 +21,7 @@ import {
   rebuildTurns,
 } from "./types";
 import ChatInput from "./ChatInput";
+import ChatHeader from "./ChatHeader";
 import ChatControls from "./ChatControls";
 import DeleteSessionDialog from "./DeleteSessionDialog";
 import ChatTurn from "./ChatTurn";
@@ -1212,25 +1213,7 @@ export default function ChatPanel({
         onMouseDown={handleMouseDown}
       />
 
-      <div className="px-4 py-2.5 border-b shrink-0 flex items-center justify-between select-none">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {t("chat.aiChat")}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleOpenHistory}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <History className="w-3.5 h-3.5" /> {t("chat.history")}
-          </button>
-          <button
-            onClick={handleNewChat}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("chat.newChat")}
-          </button>
-        </div>
-      </div>
+      <ChatHeader onOpenHistory={handleOpenHistory} onNewChat={handleNewChat} />
 
       <div className="absolute left-0 right-0 top-[41px] bottom-0 pointer-events-none z-30">
         <SessionHistory
