@@ -2,6 +2,7 @@
 
 本目录沿用仓库根目录协作规则，并遵守以下命名和路由约定。
 
+- 开发过程中遇到 LLM 问题时，必须在启动 Goink 前设置 `GOINK_DEBUG=1`，通过落盘的 HTTP 请求、响应及元信息排查原因。
 - `Provider.Name` 是面向用户的实例名称。内置实例优先使用用户熟悉的模型品牌或产品名称，例如 Claude、Gemini、ChatGPT；自定义实例使用用户填写的名称。
 - Name 在所属协议内唯一，`ProviderMap` 的 key 必须与实例 Name 一致。Name 同时用于配置合并、实例查找和模型选择引用，不能当成仅影响显示的字段随意改名。
 - `ProviderType` 是厂商适配规则的稳定标识，命名优先使用小写公司名称，例如 `anthropic`、`google`、`openai`、`bytedance`、`alibaba`、`xiaomi`。它用于校验及 hooks 选择，不作为实例索引；同一 Type 可以有多个实例。
