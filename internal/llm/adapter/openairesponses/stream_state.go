@@ -264,7 +264,14 @@ func sameCompletedItem(done, terminal json.RawMessage) bool {
 	if json.Unmarshal(done, &left) != nil || json.Unmarshal(terminal, &right) != nil || left == nil || right == nil {
 		return false
 	}
-	if string(left["type"]) == `"reasoning"` && (len(right["encrypted_content"]) == 0 || string(right["encrypted_content"]) == "null") {
+	if string(left["type"]) == `"reasoning"` {
+		if raw := right["encrypted_content"]; len(raw) > 0 && strings.TrimSpace(string(raw)) != "null" {
+			var encrypted string
+			if json.Unmarshal(raw, &encrypted) != nil {
+				return false
+			}
+		}
+		// 同一 reasoning 的终态密文可与 item.done 不同；回放始终保留 item.done 原文。
 		right["encrypted_content"] = left["encrypted_content"]
 	}
 	raw, err := json.Marshal(right)

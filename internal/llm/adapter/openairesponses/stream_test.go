@@ -252,7 +252,7 @@ func TestStreamRejectsTruncationContradictionsAndUnsupportedItems(t *testing.T) 
 		{"unsupported item", mutate(10, `"type":"function_call"`, `"type":"web_search_call"`), "invalid_response"},
 		{"terminal identity", mutate(15, `"id":"resp_1"`, `"id":"resp_other"`), "invalid_response"},
 		{"terminal text", mutate(15, `"text":"ok"`, `"text":"changed"`), "invalid_response"},
-		{"terminal ciphertext", mutate(15, `"opaque-test-state"`, `"changed-ciphertext"`), "invalid_response"},
+		{"terminal ciphertext type", mutate(15, `"opaque-test-state"`, `123`), "invalid_response"},
 		{"terminal summary", mutate(15, `"text":"plan"`, `"text":"changed"`), "invalid_response"},
 		{"missing item done", sseEvents(base[:14]) + sseEvents(base[15:]), "invalid_response"},
 		{"empty terminal output", withTerminal(`{"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[]}}`), "invalid_response"},

@@ -77,6 +77,9 @@ func TestBuildRequestUsesStatelessSDKEncodingWithoutMutatingInput(t *testing.T) 
 	if string(body["store"]) != "false" || string(body["background"]) != "false" || string(body["model"]) != `"gpt-6.1-sol"` {
 		t.Fatal("stateless settings were not encoded explicitly")
 	}
+	if string(body["include"]) != `["reasoning.encrypted_content"]` {
+		t.Fatal("stateless requests must ask for replayable reasoning ciphertext")
+	}
 	for _, field := range []string{"previous_response_id", "conversation", "user", "safety_identifier", "prompt_cache_key"} {
 		if _, exists := body[field]; exists {
 			t.Errorf("local session was used as server state or identity: %s", field)

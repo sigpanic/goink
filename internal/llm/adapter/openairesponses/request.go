@@ -19,6 +19,7 @@ func (p Provider) buildRequest(req adapter.Request) (responses.ResponseNewParams
 		Model:      req.Model,
 		Store:      param.NewOpt(false),
 		Background: param.NewOpt(false),
+		Include:    []responses.ResponseIncludable{responses.ResponseIncludableReasoningEncryptedContent},
 	}
 	if strings.TrimSpace(req.Model) == "" {
 		return params, fmt.Errorf("OpenAI Responses model must not be empty")
