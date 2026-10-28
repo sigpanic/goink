@@ -15,6 +15,30 @@ describe("emptySegment", () => {
 });
 
 describe("rebuildTurns", () => {
+  it.each([
+    ["error", "对话出错：unexpected EOF"],
+    ["system_interrupted", "检测到重复调用循环，已中断对话"],
+    ["user_stopped", "用户停止了本轮对话"],
+  ])(
+    "restores %s and its reason directly from history",
+    (eventType, reason) => {
+      const messages = [
+        { role: "user", content: "继续", turn_id: 1, agent_type: "main" },
+        {
+          role: "system",
+          content: reason,
+          turn_id: 1,
+          event_type: eventType,
+          agent_type: "main",
+        },
+      ] as unknown as session.Message[];
+      const turns = rebuildTurns(messages);
+      expect(turns).toHaveLength(1);
+      expect(turns[0].status).toBe(eventType);
+      expect(turns[0].errorMessage).toBe(reason);
+    },
+  );
+
   it("creates segments with firstSeq=0 (historical, never cleared)", () => {
     const messages = [
       {

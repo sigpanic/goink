@@ -30,6 +30,7 @@ import WebSearchCard from "./WebSearchCard";
 import WebFetchCard from "./WebFetchCard";
 import SubagentCard from "./SubagentCard";
 import CompressionBlock from "./CompressionBlock";
+import TurnOutcome from "./TurnOutcome";
 import type { UsageInfo } from "./ContextRing";
 import SettingsDialog from "@/components/settings/SettingsDialog";
 import RecentSessions from "./RecentSessions";
@@ -104,6 +105,7 @@ export default function ChatPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   // selectedModel/reasoningEffort/approvalMode 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。
   const approvalMode = useChatStore((s) => s.approvalMode);
   const setApprovalMode = useChatStore((s) => s.setApprovalMode);
@@ -272,12 +274,16 @@ export default function ChatPanel({
     const cleanup = EventsOn(
       "chat:turn_outcome",
       (data: { turn_id: number; event_type: string; reason: string }) => {
+        const status = data.event_type;
+        if (
+          status !== "error" &&
+          status !== "system_interrupted" &&
+          status !== "user_stopped"
+        )
+          return;
         setTurns((prev) =>
           prev.map((turn) => {
             if (turn.turnId !== data.turn_id) return turn;
-            let status: Turn["status"] = "interrupted";
-            if (data.event_type === "error") status = "failed";
-            else if (data.event_type === "user_stopped") status = "stopped";
             return {
               ...turn,
               status,
@@ -444,10 +450,10 @@ export default function ChatPanel({
           // 主 turn 失败
           setTurns((prev) =>
             prev.map((turn) =>
-              turn.turnId === turnId
+              turn.turnId === turnId && turn.status === "streaming"
                 ? {
                     ...turn,
-                    status: "failed" as const,
+                    status: "error" as const,
                     errorMessage: event.error || t("chat.chatError"),
                     retrying: null,
                   }
@@ -492,7 +498,7 @@ export default function ChatPanel({
           }
           setTurns((prev) =>
             prev.map((turn) =>
-              turn.turnId === turnId
+              turn.turnId === turnId && turn.status === "streaming"
                 ? {
                     ...turn,
                     status: "streaming" as const,
@@ -1115,19 +1121,21 @@ export default function ChatPanel({
         // 刷新会话列表（invalidate 触发 useSessions refetch）
         qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
       } catch (err) {
+        const reason = toErrorMessage(err, t("chat.chatError"));
         setTurns((prev) =>
           prev.map((t) => {
             if (t.id !== turnId) return t;
             if (
-              t.status === "stopped" ||
-              t.status === "failed" ||
-              t.status === "interrupted"
+              t.status === "user_stopped" ||
+              t.status === "error" ||
+              t.status === "system_interrupted"
             )
               return t;
             return {
               ...t,
-              status: "interrupted" as const,
-              errorMessage: String(err),
+              status: "error" as const,
+              errorMessage: reason,
+              retrying: null,
             };
           }),
         );
@@ -1148,10 +1156,11 @@ export default function ChatPanel({
         eventQueuesRef.current.clear();
         setTurns((prev) =>
           prev.map((t) =>
-            t.id === turnId && t.status === "streaming"
+            t.id === turnId
               ? {
                   ...t,
-                  status: "done" as const,
+                  status:
+                    t.status === "streaming" ? ("done" as const) : t.status,
                   segments: t.segments.map((seg) =>
                     seg.type === "text" ? { ...seg, isStreaming: false } : seg,
                   ),
@@ -1162,6 +1171,7 @@ export default function ChatPanel({
         activeCountRef.current--;
         if (activeCountRef.current === 0) {
           setIsLoading(false);
+          setCancelRequested(false);
         }
         startedUnsubRef.current?.();
         startedUnsubRef.current = null;
@@ -1396,45 +1406,11 @@ export default function ChatPanel({
                       );
                     })}
 
-                    {turn.status === "failed" && turn.errorMessage && (
-                      <div className="flex justify-start">
-                        <div className="bg-danger-bg border border-danger-border rounded-lg px-3 py-2 text-xs text-red-600 max-w-[80%]">
-                          {turn.errorMessage}
-                        </div>
-                      </div>
-                    )}
-                    {turn.status === "interrupted" && (
-                      <div className="flex justify-center">
-                        <div className="bg-danger-bg border border-danger-border rounded-lg px-3 py-2 text-xs text-red-500 max-w-[80%]">
-                          {turn.errorMessage || t("chat.chatInterrupted")}
-                        </div>
-                      </div>
-                    )}
-                    {turn.status === "stopped" && (
-                      <div className="flex justify-center">
-                        <div className="bg-muted/50 border rounded-lg px-3 py-2 text-xs text-muted-foreground max-w-[80%]">
-                          {t("chat.chatStopped")}
-                        </div>
-                      </div>
-                    )}
-                    {turn.retrying && (
-                      <div className="flex justify-center">
-                        <div className="bg-warning border border-warning-border rounded-lg px-3 py-2 text-xs text-warning-foreground max-w-[80%] flex items-center gap-2">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>
-                            {t("chat.retrying", {
-                              attempt: turn.retrying.attempt,
-                              max: turn.retrying.maxRetries,
-                            })}
-                          </span>
-                          {turn.retrying.errorMessage && (
-                            <span className="opacity-70">
-                              · {turn.retrying.errorMessage}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
+                    <TurnOutcome
+                      status={turn.status}
+                      errorMessage={turn.errorMessage}
+                      retrying={turn.retrying}
+                    />
                     {turn.status === "streaming" &&
                       turn.segments.length === 0 &&
                       !turn.retrying && (
@@ -1457,25 +1433,18 @@ export default function ChatPanel({
       <ChatInput
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading}
-        isCancelling={cancelChatMutation.isPending}
+        isCancelling={cancelRequested || cancelChatMutation.isPending}
         placeholder={inputPlaceholder}
         draftKey={draftKey}
         slashItems={slashCommandsQuery.data ?? []}
         onSend={handleSend}
         onListSlash={refreshSlashCommands}
         onStop={() => {
-          setTurns((prev) =>
-            prev.map((t) =>
-              t.status === "streaming"
-                ? { ...t, status: "stopped" as const }
-                : t,
-            ),
-          );
-          cancelChatMutation
-            .mutateAsync(sessionId)
-            .catch((err) =>
-              toastError(toErrorMessage(err, t("chat.cancelFailed"))),
-            );
+          setCancelRequested(true);
+          cancelChatMutation.mutateAsync(sessionId).catch((err) => {
+            setCancelRequested(false);
+            toastError(toErrorMessage(err, t("chat.cancelFailed")));
+          });
         }}
       />
 

@@ -117,7 +117,8 @@ export interface Turn {
   turnId: number;
   userMessage: string;
   segments: TurnSegment[];
-  status: "streaming" | "done" | "failed" | "interrupted" | "stopped";
+  status:
+    "streaming" | "done" | "error" | "system_interrupted" | "user_stopped";
   errorMessage?: string;
   compressionOnly?: boolean; // 纯压缩 turn（手动压缩），无用户消息
   retrying?: {
@@ -143,15 +144,8 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
     ) {
       const target = turns.find((t) => t.turnId === msg.turn_id);
       if (target) {
-        if (msg.event_type === "user_stopped") {
-          target.status = "stopped";
-        } else if (msg.event_type === "error") {
-          target.status = "failed";
-          target.errorMessage = msg.content;
-        } else {
-          target.status = "interrupted";
-          target.errorMessage = msg.content;
-        }
+        target.status = msg.event_type;
+        target.errorMessage = msg.content;
       }
       continue;
     }
