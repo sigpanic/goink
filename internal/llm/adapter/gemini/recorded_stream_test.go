@@ -249,7 +249,7 @@ func TestRecordedFixturesMatchPinnedSources(t *testing.T) {
 			File, SHA256 string
 		}
 	}
-	if err := json.Unmarshal(raw, &manifest); err != nil || len(manifest.Files) != 3 {
+	if err := json.Unmarshal(raw, &manifest); err != nil || len(manifest.Files) != 4 {
 		t.Fatalf("invalid recorded fixture manifest: %v", err)
 	}
 	for _, file := range manifest.Files {

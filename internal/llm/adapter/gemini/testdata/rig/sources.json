@@ -23,6 +23,14 @@
       "sha256": "69bc1cf981423ba76a062147b4a72cdab064f1e9229da6b4e969b2817d1c1ecf"
     },
     {
+      "file": "interactions-stateless-unary.yaml",
+      "commit": "96e53f41eb8a489b58bd00fb6212dbb75a0750c1",
+      "retrieval_date": "2026-10-28",
+      "upstream_path": "crates/rig-cassette/fixtures/cassettes/gemini/text_signature_matrix/interactions_unary.yaml",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/96e53f41eb8a489b58bd00fb6212dbb75a0750c1/crates/rig-cassette/fixtures/cassettes/gemini/text_signature_matrix/interactions_unary.yaml",
+      "sha256": "9b38fa38e34806969619241a26c490da3693c824b62bbc56c01aa674f1eedc38"
+    },
+    {
       "file": "LICENSE.txt",
       "upstream_path": "LICENSE",
       "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/6eff50a2fd95de3a505000a0e39d2893d83c6f4d/LICENSE",
