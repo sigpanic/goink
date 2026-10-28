@@ -37,7 +37,7 @@ func NewClient(config *UserLLMConfig, log *slog.Logger) (*Client, error) {
 //
 // 注意：绝不能用 http.Client.Timeout，会切断 DeepSeek 思考模型长输出
 func newHTTPClient() *http.Client {
-	return &http.Client{
+	client := &http.Client{
 		Timeout: 0,
 		Transport: &http.Transport{
 			Proxy: http.ProxyFromEnvironment,
@@ -47,6 +47,8 @@ func newHTTPClient() *http.Client {
 			ResponseHeaderTimeout: 10 * time.Minute,
 		},
 	}
+	client.Transport = withHTTPDebug(client.Transport)
+	return client
 }
 
 // Reload 热更新配置，构建失败时保留现有适配器；进行中的请求继续使用旧实例。
