@@ -26,5 +26,8 @@ func TestSDKErrorKeepsWrappedHTTPMetadata(t *testing.T) {
 		if !errors.As(converted, &apiErr) || apiErr.StatusCode != 503 || apiErr.Kind != "unavailable" || apiErr.Message != "overloaded" || !apiErr.Retryable || apiErr.RetryAfter != 5*time.Second {
 			t.Fatalf("SDK error metadata lost: %+v", converted)
 		}
+		if !errors.Is(converted, err) {
+			t.Fatalf("original SDK error was lost: %v", converted)
+		}
 	}
 }

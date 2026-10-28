@@ -16,7 +16,12 @@ import (
 func convertSDKError(err error, response *http.Response) error {
 	var streamed *ssestream.StreamError
 	if errors.As(err, &streamed) {
-		return streamError(streamed.Event.Data)
+		converted := streamError(streamed.Event.Data)
+		var apiErr *adapter.APIError
+		if errors.As(converted, &apiErr) {
+			apiErr.Cause = err
+		}
+		return converted
 	}
 	var fault *sdk.Error
 	if errors.As(err, &fault) && fault.Response != nil {
@@ -42,6 +47,7 @@ func convertSDKError(err error, response *http.Response) error {
 		Kind:       kind,
 		Retryable:  adapter.StatusRetryable(response.StatusCode),
 		RetryAfter: adapter.ParseRetryAfter(response.Header.Get("Retry-After")),
+		Cause:      err,
 	}
 }
 

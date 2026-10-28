@@ -42,5 +42,6 @@ func convertSDKError(err error) error {
 		StatusCode: apiErr.StatusCode, Message: message, Kind: kind,
 		Retryable: adapter.StatusRetryable(apiErr.StatusCode) || (apiErr.StatusCode == http.StatusOK &&
 			(kind == "overloaded_error" || kind == "rate_limit_error" || kind == "api_error")), RetryAfter: retryAfter,
+		Cause: err,
 	}
 }

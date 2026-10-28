@@ -98,6 +98,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 				StatusCode: 0,
 				Message:    msg,
 				Retryable:  retryable,
+				Cause:      err,
 			}}) {
 				return
 			}
@@ -117,10 +118,11 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 				"status", resp.StatusCode,
 				"body", bodyStr,
 				"url", req.URL.String())
-			msg := parseDefaultError(errBody).Error()
+			responseErr := parseDefaultError(errBody)
 			if p.ParseError != nil {
-				msg = p.ParseError(errBody).Error()
+				responseErr = p.ParseError(errBody)
 			}
+			msg := responseErr.Error()
 			// 解析 Retry-After header（HTTP 429/503 等场景）
 			// 支持两种格式：秒数（"120"）或 HTTP-date（"Wed, 21 Oct 2026 07:28:00 GMT"）
 			retryAfter := adapter.ParseRetryAfter(resp.Header.Get("Retry-After"))
@@ -129,6 +131,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 				Message:    msg,
 				Retryable:  adapter.StatusRetryable(resp.StatusCode),
 				RetryAfter: retryAfter,
+				Cause:      responseErr,
 			}}) {
 				return
 			}
@@ -398,6 +401,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			StatusCode: 0,
 			Message:    fmt.Sprintf("SSE stream read error: %s", err),
 			Retryable:  true,
+			Cause:      err,
 		}}) {
 			return
 		}

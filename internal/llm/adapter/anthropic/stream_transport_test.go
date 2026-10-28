@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	sdk "github.com/anthropics/anthropic-sdk-go"
+
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
@@ -166,6 +168,12 @@ func TestStreamPreservesHTTPErrorsAndRejectsNonSSE(t *testing.T) {
 			}
 			if tt.status == 429 && (apiErr.StatusCode != 429 || apiErr.RetryAfter != 12*time.Second || !apiErr.Retryable) {
 				t.Fatal("HTTP retry metadata was lost")
+			}
+			if tt.status == 429 {
+				var cause *sdk.Error
+				if !errors.As(events[0].Error, &cause) || cause.StatusCode != 429 || cause.Response == nil {
+					t.Fatal("original SDK HTTP error was lost")
+				}
 			}
 		})
 	}

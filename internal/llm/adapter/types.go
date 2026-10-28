@@ -42,10 +42,15 @@ type APIError struct {
 	Retryable  bool
 	RetryAfter time.Duration // 服务商指定的重试等待时间（来自 Retry-After header），0 表示无指定
 	Kind       string        // 错误类型标记，用于 agent 层区分处理路径（如 "tool_args_invalid"）；空字符串=普通错误
+	Cause      error         // 转换前的错误，供 errors.Is / errors.As 检查底层原因。
 }
 
 func (e *APIError) Error() string {
 	return fmt.Sprintf("[%d] %s", e.StatusCode, e.Message)
+}
+
+func (e *APIError) Unwrap() error {
+	return e.Cause
 }
 
 // Code 实现 apperr.Coder 接口，将 StatusCode 映射为 apperr.Code 供 apperr.CodeFromError 提取。

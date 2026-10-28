@@ -75,5 +75,5 @@ func convertSDKError(err error) error {
 	if response != nil {
 		retryAfter = adapter.ParseRetryAfter(response.Header.Get("Retry-After"))
 	}
-	return &adapter.APIError{StatusCode: status, Message: message, Kind: kind, Retryable: adapter.StatusRetryable(status), RetryAfter: retryAfter}
+	return &adapter.APIError{StatusCode: status, Message: message, Kind: kind, Retryable: adapter.StatusRetryable(status), RetryAfter: retryAfter, Cause: err}
 }

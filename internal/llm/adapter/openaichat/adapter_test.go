@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"testing/iotest"
 	"time"
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
@@ -139,7 +141,8 @@ func TestBothModesPreserveHTTPErrorClassification(t *testing.T) {
 	defer server.Close()
 	backend := newTestAdapter(t, adapter.Provider{ChatURL: server.URL}, server.Client())
 	p := backend.providers["test"]
-	p.ParseError = func([]byte) error { return errors.New("custom error") }
+	responseErr := errors.New("custom error")
+	p.ParseError = func([]byte) error { return responseErr }
 	backend.providers["test"] = p
 	_, err := backend.Generate(context.Background(), adapter.Request{ProviderName: "test", Model: "model"})
 	check := func(err error) {
@@ -147,6 +150,9 @@ func TestBothModesPreserveHTTPErrorClassification(t *testing.T) {
 		var apiErr *adapter.APIError
 		if !errors.As(err, &apiErr) || apiErr.StatusCode != 429 || !apiErr.Retryable || apiErr.RetryAfter != 120*time.Second || apiErr.Message != "custom error" {
 			t.Fatalf("error classification changed: %v", err)
+		}
+		if !errors.Is(err, responseErr) {
+			t.Fatalf("provider error cause was lost: %v", err)
 		}
 	}
 	check(err)
@@ -159,6 +165,67 @@ func TestBothModesPreserveHTTPErrorClassification(t *testing.T) {
 	}
 	if errorsSeen != 1 {
 		t.Fatalf("stream errors = %d", errorsSeen)
+	}
+}
+
+func TestBothModesPreserveTransportErrorCause(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		cause     error
+		retryable bool
+	}{
+		{"connection interrupted", io.ErrUnexpectedEOF, true},
+		{"domain not found", &net.DNSError{Err: "no such host", Name: "provider.invalid", IsNotFound: true}, false},
+		{"cancelled", context.Canceled, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+				return nil, tc.cause
+			})}
+			backend := newTestAdapter(t, adapter.Provider{ChatURL: "https://provider.invalid"}, client)
+			req := adapter.Request{ProviderName: "test", Model: "model"}
+			_, err := backend.Generate(context.Background(), req)
+			if !errors.Is(err, tc.cause) {
+				t.Fatalf("Generate lost transport cause: %v", err)
+			}
+			var events []StreamEvent
+			for event := range backend.Stream(context.Background(), req) {
+				events = append(events, event)
+			}
+			if len(events) != 1 || events[0].Type != EventError || !errors.Is(events[0].Error, tc.cause) {
+				t.Fatalf("Stream lost transport cause: %+v", events)
+			}
+			var apiErr *adapter.APIError
+			if !errors.As(events[0].Error, &apiErr) || apiErr.StatusCode != 0 || apiErr.Retryable != tc.retryable {
+				t.Fatalf("transport classification changed: %v", events[0].Error)
+			}
+			if dnsErr, ok := tc.cause.(*net.DNSError); ok {
+				var original *net.DNSError
+				if !errors.As(events[0].Error, &original) || original != dnsErr {
+					t.Fatal("Stream lost the original DNS error type")
+				}
+			}
+		})
+	}
+}
+
+func TestBothModesPreserveBodyReadErrorCause(t *testing.T) {
+	cause := errors.New("upstream read failed")
+	client := &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(iotest.ErrReader(cause))}, nil
+	})}
+	backend := newTestAdapter(t, adapter.Provider{ChatURL: "https://provider.invalid"}, client)
+	req := adapter.Request{ProviderName: "test", Model: "model"}
+	_, err := backend.Generate(context.Background(), req)
+	if !errors.Is(err, cause) {
+		t.Fatalf("Generate lost body read cause: %v", err)
+	}
+	var events []StreamEvent
+	for event := range backend.Stream(context.Background(), req) {
+		events = append(events, event)
+	}
+	if len(events) != 1 || events[0].Type != EventError || !errors.Is(events[0].Error, cause) {
+		t.Fatalf("Stream lost body read cause: %+v", events)
 	}
 }
 
