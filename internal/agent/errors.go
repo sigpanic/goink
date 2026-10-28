@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"net"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/llm"
@@ -35,8 +37,22 @@ func FriendlyError(err error) string {
 		// 网络错误/首字节超时：StatusCode=0，无 HTTP 状态码
 		// base 用"网络错误"区分网络场景与其他对话错误
 		if apiErr.StatusCode == 0 {
-			const base = "网络错误"
-			if msg := strings.TrimSpace(apiErr.Message); msg != "" {
+			base := "对话出错"
+			var netErr net.Error
+			if errors.As(err, &netErr) || errors.Is(err, io.EOF) || errors.Is(err, io.ErrUnexpectedEOF) {
+				base = "网络错误"
+			}
+			msg := strings.TrimSpace(apiErr.Message)
+			if apiErr.Cause != nil {
+				cause := strings.TrimSpace(apiErr.Cause.Error())
+				if cause != "" && !strings.Contains(msg, cause) {
+					if msg != "" {
+						msg += "："
+					}
+					msg += cause
+				}
+			}
+			if msg != "" {
 				return fmt.Sprintf("%s：%s", base, msg)
 			}
 			return base
@@ -61,5 +77,5 @@ func FriendlyError(err error) string {
 		}
 		return base
 	}
-	return "对话出错，请重试"
+	return fmt.Sprintf("对话出错：%s", err)
 }

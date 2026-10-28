@@ -180,36 +180,21 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	// 10. 最终回复已由 agent.Run() 内部 appendMsg 持久化，此处不重复存储
 	if runErr != nil {
 		a.logger.Error("对话失败", "err", runErr)
-		eventType := session.EventSystemInterrupted
-		if errors.Is(runErr, context.Canceled) {
-			eventType = session.EventUserStopped
-		} else {
-			var apiErr *llm.APIError
-			if errors.As(runErr, &apiErr) {
-				eventType = session.EventError
-			}
+		outcome, saveErr := a.saveChatOutcome(sess.SessionID, turnID, runErr)
+		if saveErr != nil {
+			a.logger.Error("保存对话结局失败", "session_id", sess.SessionID, "turn_id", turnID, "err", saveErr)
 		}
-		a.session.DB.Create(&session.Message{
-			SessionID:  sess.SessionID,
-			TurnID:     turnID,
-			Role:       "system",
-			EventType:  eventType,
-			Content:    agent.FriendlyError(runErr),
-			ToFrontend: true,
-			ToAPI:      false,
-			AgentType:  "main",
-		})
 		// 统一 emit 结局事件：session.EventType 既是 DB 标记又是实时载荷，前端按同一套映射设 status
 		wails.EventsEmit(ctx, "chat:turn_outcome", map[string]any{
 			"turn_id":    turnID,
-			"event_type": string(eventType),
-			"reason":     agent.FriendlyError(runErr),
+			"event_type": string(outcome.EventType),
+			"reason":     outcome.Content,
 		})
 		return &ChatResult{
 			SessionID: sess.SessionID,
 			TurnID:    turnID,
 			FinalText: result.FinalText,
-		}, fmt.Errorf("%s", agent.FriendlyError(runErr))
+		}, fmt.Errorf("%s", outcome.Content)
 	}
 
 	return &ChatResult{
@@ -217,6 +202,24 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		TurnID:    turnID,
 		FinalText: result.FinalText,
 	}, nil
+}
+
+func (a *App) saveChatOutcome(sessionID string, turnID int, runErr error) (session.Message, error) {
+	eventType := session.EventError
+	var interruption agent.InterruptError
+	switch {
+	case errors.Is(runErr, context.Canceled):
+		eventType = session.EventUserStopped
+	case errors.As(runErr, &interruption):
+		eventType = session.EventSystemInterrupted
+	}
+	outcome := session.Message{
+		SessionID: sessionID, TurnID: turnID,
+		Role: "system", EventType: eventType, Content: agent.FriendlyError(runErr),
+		ToFrontend: true, ToAPI: false, AgentType: "main",
+	}
+	err := a.session.DB.Create(&outcome).Error
+	return outcome, err
 }
 
 // loadOrCreateSession 加载已有 session 或创建新 session。

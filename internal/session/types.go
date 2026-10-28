@@ -33,7 +33,7 @@ func (Session) TableName() string { return "sessions" }
 // - EventCompression:       上下文压缩边界
 // - EventUserStopped:       用户手动停止（context.Canceled）
 // - EventSystemInterrupted: 后端主动中断（MaxTurns/死循环检测/工具连续失败）
-// - EventError:             服务商错误（HTTP 4xx/5xx/网络/超时）
+// - EventError:             对话执行失败（服务商/网络/协议/解析/存储等错误）
 type EventType string
 
 const (
