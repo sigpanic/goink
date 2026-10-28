@@ -1,6 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Loader2 } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
@@ -24,10 +23,9 @@ import ChatInput from "./ChatInput";
 import ChatHeader from "./ChatHeader";
 import ChatControls from "./ChatControls";
 import DeleteSessionDialog from "./DeleteSessionDialog";
-import ChatTurn from "./ChatTurn";
+import ChatMessageList from "./ChatMessageList";
 import type { UsageInfo } from "./ContextRing";
 import SettingsDialog from "@/components/settings/SettingsDialog";
-import RecentSessions from "./RecentSessions";
 import SessionHistory from "./SessionHistory";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -1229,66 +1227,19 @@ export default function ChatPanel({
         onScroll={handleMessagesScroll}
         className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 relative"
       >
-        {!hasNovel ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <MessageSquare className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {t("chat.selectNovel")}
-              </p>
-            </div>
-          </div>
-        ) : showRecent ? (
-          <RecentSessions
-            sessions={sessionsQuery.data?.items ?? []}
-            total={sessionsQuery.data?.total ?? 0}
-            onSelectSession={handleSelectSession}
-            onViewAll={handleOpenHistory}
-          />
-        ) : messagesQuery.isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <>
-            {/* 消息列表 */}
-            {messagesQuery.isError ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <p className="text-sm text-red-500 mb-2">
-                    {t("chat.loadMessagesFailed")}
-                  </p>
-                  <button
-                    onClick={() => messagesQuery.refetch()}
-                    className="text-xs text-primary underline cursor-pointer"
-                  >
-                    {t("chat.retry")}
-                  </button>
-                </div>
-              </div>
-            ) : !hasTurns && !isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <MessageSquare className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {t("chat.startConversation")}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {turns.map((turn) => (
-                  <ChatTurn
-                    key={turn.id}
-                    turn={turn}
-                    onApprove={onApprove}
-                    onReject={onReject}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        <ChatMessageList
+          hasNovel={hasNovel}
+          hasTurns={hasTurns}
+          showRecent={showRecent}
+          isLoading={isLoading}
+          turns={turns}
+          sessionsQuery={sessionsQuery}
+          messagesQuery={messagesQuery}
+          onSelectSession={handleSelectSession}
+          onViewAll={handleOpenHistory}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
 
         <div ref={messagesEndRef} />
       </div>
