@@ -13,7 +13,9 @@ import (
 type Migration struct {
 	Name        string // 迁移标识，如 "v1.6.0-chapter-id-refactor"，写入 migrate_state.migration
 	Description string // 迁移目的简述（本次迁移为了什么、主要做什么），打印进日志便于排查
-	Destructive bool   // 是否破坏性数据库迁移（删列/rename/数据重写等）：true 时 migrate.Run 会在执行前自动备份全量数据
+	// RequiresBackup 当且仅当迁移会大规模改写重要数据时启用，不能仅因删列或改写数据就启用。
+	// true 时框架在升级前备份整个数据库和小说目录（含 Git 仓库），时间和磁盘代价很高。
+	RequiresBackup bool
 
 	// NeedsMigration 仅在既有数据库缺少本 migration 的数据库步骤状态时调用，识别
 	// 是否仍处于该 migration 的旧 schema。应返回 error 拒绝无法安全识别的混合 schema。

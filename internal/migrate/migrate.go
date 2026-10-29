@@ -42,7 +42,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		return fmt.Errorf("migrate: 初始化逐组迁移: %w", err)
 	}
 
-	// 本轮若可能执行破坏性迁移，在任何业务变化前准备唯一的起始快照。
+	// 本轮若有迁移声明需要备份，在任何业务变化前准备唯一的起始快照。
 	if err := prepareUpgradeBackup(db, log, isNewDatabase, engine.Registry); err != nil {
 		return fmt.Errorf("migrate: 升级前备份准备失败，迁移未执行: %w", err)
 	}

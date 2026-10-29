@@ -26,7 +26,7 @@ const (
 )
 
 // prepareUpgradeBackup 仅预检备份需求，不固定后续逐组执行的计划或登记完成状态。
-// 从首个待执行组开始，只要后续存在破坏性组就保守提前备份，不再区分后续组的计划状态。
+// 从首个待执行组开始，只要后续有组声明需要备份就保守提前备份，不再区分后续组的计划状态。
 // 起点使用首个待执行组之前最后完成的迁移版本；缺少记录时使用 legacy。
 func prepareUpgradeBackup(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []engine.Migration) error {
 	if isNewDatabase {
@@ -43,7 +43,7 @@ func prepareUpgradeBackup(db *gorm.DB, log *slog.Logger, isNewDatabase bool, reg
 			from = migrationVersion(plan.Migration.Name)
 		}
 		mayRun = mayRun || plan.Action == engine.PlanRun
-		if mayRun && plan.Migration.Destructive {
+		if mayRun && plan.Migration.RequiresBackup {
 			needsBackup = true
 			break
 		}

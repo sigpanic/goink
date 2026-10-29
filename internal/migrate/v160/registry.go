@@ -46,12 +46,12 @@ func needsMigration(db *gorm.DB) (bool, error) {
 }
 
 // Register 注册章节 id 化迁移，由 migrate 包按版本顺序调用。
-// Destructive：本次迁移含数据重写 + 文件 rename + 删旧列，属破坏性迁移，需自动备份。
+// RequiresBackup：本次迁移大规模重写章节引用及小说文件，涉及重要数据，需自动备份。
 func Register() {
 	engine.Register(engine.Migration{
 		Name:            migration,
 		Description:     "v1.6.0 章节 id 化：交叉引用数据 chapter_number→chapter_id 重写、章节文件改名 chapters/id_{id}.md、删除旧 num 列",
-		Destructive:     true,
+		RequiresBackup:  true,
 		NeedsMigration:  needsMigration,
 		PreSchemaSteps:  preSchemaRegistry,
 		SchemaStep:      engine.AutoMigrateStep{Models: FrozenModels},
