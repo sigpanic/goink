@@ -83,9 +83,10 @@ func TestUpgradeWorker(t *testing.T) {
 		t.Fatal(err)
 	}
 	settings.DefaultModelSelection = adapter.ModelSelection{
-		AdapterName:  adapter.ProtocolOpenAIChat,
-		ProviderName: "probe-provider",
-		ModelID:      "upgrade-write",
+		AdapterName:     adapter.ProtocolOpenAIChat,
+		ProviderName:    "probe-provider",
+		ModelID:         "upgrade-write",
+		ReasoningEffort: "high",
 	}
 	if err := config.SaveSettings(db, settings); err != nil {
 		t.Fatal(err)
@@ -178,7 +179,7 @@ func TestHistoricalDirectUpgrades(t *testing.T) {
 			}
 			withDB(t, filepath.Join(dir, "novel-agent.db"), func(db *sql.DB) {
 				assertCount(t, db, "new novel", `SELECT COUNT(*) FROM novels WHERE id=1001 AND title='升级后新建小说'`, 1)
-				assertCount(t, db, "updated settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND default_adapter_name='openai_chat' AND default_provider_name='probe-provider' AND default_model_id='upgrade-write'`, 1)
+				assertCount(t, db, "updated settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND default_adapter_name='openai_chat' AND default_provider_name='probe-provider' AND default_model_id='upgrade-write' AND default_reasoning_effort='high'`, 1)
 				assertCount(t, db, "new writing activity", `SELECT COUNT(*) FROM writing_log WHERE date IN (?, ?) AND novel_id=1 AND word_delta=5 AND words_added=7 AND words_deleted=2`, 1, probeDate, time.Now().Format(time.DateOnly))
 			})
 		})
@@ -372,8 +373,8 @@ func assertContract(t *testing.T, dir string, sample fixture.Fixture, gitBin str
 		assertCount(t, db, "reader references and orphan", `SELECT COUNT(*) FROM reader_perspectives WHERE (id=1 AND planted_chapter_id=11 AND revealed_chapter_id IS NULL) OR (id=2 AND planted_chapter_id IS NULL AND revealed_chapter_id=21)`, 2)
 		assertCount(t, db, "append-only relationship history", `SELECT COUNT(*) FROM character_relations WHERE source_character_id=31 AND target_character_id=32 AND relation_describe='关系历史' AND ((id=1 AND is_current=1 AND chapter_id=12) OR (id=2 AND is_current=0 AND chapter_id IS NULL))`, 2)
 		assertCount(t, db, "global and novel preferences", `SELECT COUNT(*) FROM preference_items WHERE content='使用短句' AND ((id=1 AND is_global=1 AND novel_id=0) OR (id=2 AND is_global=0 AND novel_id=1))`, 2)
-		assertCount(t, db, "settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND last_novel_id=2 AND selected_model_key='fixture-model' AND approval_mode='manual'`, 1)
-		assertCount(t, db, "session", `SELECT COUNT(*) FROM sessions WHERE session_id='upgrade-session' AND title='历史对话' AND active_version=2`, 1)
+		assertCount(t, db, "settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND last_novel_id=2 AND approval_mode='manual' AND COALESCE(default_adapter_name,'')='' AND COALESCE(default_provider_name,'')='' AND COALESCE(default_model_id,'')='' AND COALESCE(default_reasoning_effort,'')=''`, 1)
+		assertCount(t, db, "session", `SELECT COUNT(*) FROM sessions WHERE session_id='upgrade-session' AND title='历史对话' AND active_version=2 AND adapter_name='' AND provider_name='' AND model_id='' AND reasoning_effort=''`, 1)
 		assertCount(t, db, "append-only audit messages", `SELECT COUNT(*) FROM messages WHERE session_id='upgrade-session' AND role='user' AND ((id=1 AND content='消息1' AND version=2 AND to_api=1 AND to_frontend=0) OR (id=2 AND content='消息2' AND version=1 AND to_api=0 AND to_frontend=1) OR (id=3 AND content='消息3' AND version=2 AND to_api=0 AND to_frontend=0))`, 3)
 		assertCount(t, db, "daily writing counts", `SELECT COUNT(*) FROM writing_log WHERE date='2026-01-01' AND novel_id=1 AND word_delta=50 AND words_added=? AND words_deleted=?`, 1, sample.WritingAdded, sample.WritingDeleted)
 		assertCount(t, db, "daily writing row count", `SELECT COUNT(*) FROM writing_log`, 1)
@@ -579,6 +580,11 @@ func assertSchema(t *testing.T, got, want map[string]table) {
 	for _, retired := range [][2]string{{"novels", "dir_path"}, {"chapters", "chapter_number"}, {"time_entries", "source_chapter"}, {"time_entries", "resolved_chapter"}, {"time_entries", "target_chapter"}, {"arc_nodes", "target_chapter"}, {"arc_nodes", "actual_chapter"}, {"reader_perspectives", "planted_chapter"}, {"reader_perspectives", "revealed_chapter"}, {"writing_log", "chapter_id"}, {"writing_log", "chapter_number"}, {"character_relations", "chapter_number"}} {
 		if _, exists := got[retired[0]].Columns[retired[1]]; exists {
 			t.Errorf("retired column remains: %s.%s", retired[0], retired[1])
+		}
+	}
+	for _, retired := range [][2]string{{"sessions", "model"}, {"app_config", "selected_model_key"}, {"app_config", "reasoning_effort"}} {
+		if _, exists := got[retired[0]].Columns[retired[1]]; exists {
+			t.Errorf("retired model selection column remains: %s.%s", retired[0], retired[1])
 		}
 	}
 	if t.Failed() {

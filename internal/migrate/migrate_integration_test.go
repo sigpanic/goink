@@ -40,6 +40,7 @@ func TestRunInitializesNewDatabaseAndMarksAllMigrationsDone(t *testing.T) {
 		{"v1.2.0-chapter-number-column-names", 3},
 		{"v1.6.0-chapter-id-refactor", 6},
 		{"v1.6.1-writing-daily", 2},
+		{"v1.8.0-model-selection", 2},
 		{"v1.8.0-llm-config", 1},
 	} {
 		var done int64
@@ -77,6 +78,7 @@ func TestRunDropsResidualDirPathWhenMigrationStateIsMissing(t *testing.T) {
 		{"v1.2.0-chapter-number-column-names", 3},
 		{"v1.6.0-chapter-id-refactor", 6},
 		{"v1.6.1-writing-daily", 2},
+		{"v1.8.0-model-selection", 2},
 		{"v1.8.0-llm-config", 1},
 	} {
 		var done int64
@@ -119,6 +121,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		`CREATE TABLE writing_log (id INTEGER PRIMARY KEY, date TEXT NOT NULL, novel_id INTEGER NOT NULL DEFAULT 0, chapter_id INTEGER NOT NULL DEFAULT 0, word_delta INTEGER NOT NULL, created_at DATETIME)`,
 		`CREATE INDEX idx_writing_log_chapter_id ON writing_log(chapter_id)`,
 		`CREATE TABLE character_relations (id INTEGER PRIMARY KEY, novel_id INTEGER NOT NULL, source_character_id INTEGER NOT NULL, target_character_id INTEGER NOT NULL, relation_describe TEXT NOT NULL, description TEXT, chapter_id INTEGER, is_current BOOLEAN NOT NULL, created_at DATETIME)`,
+		`CREATE TABLE app_config (id INTEGER PRIMARY KEY, selected_model_key TEXT, reasoning_effort TEXT)`,
+		`CREATE TABLE sessions (session_id TEXT PRIMARY KEY, novel_id INTEGER NOT NULL, title TEXT NOT NULL, model TEXT, reasoning_effort TEXT)`,
 	} {
 		execSQL(query)
 	}
@@ -131,6 +135,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	execSQL(`INSERT INTO reader_perspectives (id, novel_id, type, content, planted_chapter, revealed_chapter) VALUES (1, 1, 'known', 'p1', 1, 0), (2, 2, 'suspense', 'p2', 99, 1)`)
 	execSQL(`INSERT INTO writing_log (id, date, novel_id, chapter_id, word_delta) VALUES (1, '2026-01-01', 1, 2, 100), (2, '2026-01-01', 1, 0, -50)`)
 	execSQL(`INSERT INTO character_relations (id, novel_id, source_character_id, target_character_id, relation_describe, chapter_id, is_current) VALUES (1, 1, 1, 2, '朋友', 3, 1), (2, 1, 1, 2, '旧识', 0, 0)`)
+	execSQL(`INSERT INTO app_config (id, selected_model_key, reasoning_effort) VALUES (1, 'my/relay/vendor/model', 'high')`)
+	execSQL(`INSERT INTO sessions (session_id, novel_id, title, model, reasoning_effort) VALUES ('old-session', 1, '保留标题', 'vendor/model', 'high')`)
 
 	novelDir := filepath.Join(dataDir, "novels", "1")
 	writeLegacyFile(t, novelDir, "chapters/001.md", "chapter one")
@@ -164,6 +170,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		{"writing daily legacy counts", `SELECT COUNT(*) FROM writing_log WHERE date = '2026-01-01' AND novel_id = 1 AND word_delta = 50 AND words_added = 100 AND words_deleted = 50`},
 		{"character relation ID", `SELECT COUNT(*) FROM character_relations WHERE id = 1 AND chapter_id = 3`},
 		{"character relation zero", `SELECT COUNT(*) FROM character_relations WHERE id = 2 AND chapter_id IS NULL`},
+		{"default model selection", `SELECT COUNT(*) FROM app_config WHERE id=1 AND default_adapter_name='openai_chat' AND default_provider_name='my/relay' AND default_model_id='vendor/model' AND default_reasoning_effort='high'`},
+		{"legacy session selection reset", `SELECT COUNT(*) FROM sessions WHERE session_id='old-session' AND title='保留标题' AND adapter_name='' AND provider_name='' AND model_id='' AND reasoning_effort=''`},
 	} {
 		if n := count(assertion.query); n == 0 {
 			t.Fatalf("迁移数据断言失败: %s", assertion.name)
@@ -196,6 +204,7 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 		{"arc_nodes", "target_chapter"}, {"arc_nodes", "actual_chapter"},
 		{"reader_perspectives", "planted_chapter"}, {"reader_perspectives", "revealed_chapter"},
 		{"writing_log", "chapter_number"}, {"writing_log", "chapter_id"}, {"character_relations", "chapter_number"},
+		{"sessions", "model"}, {"app_config", "selected_model_key"}, {"app_config", "reasoning_effort"},
 	} {
 		if db.Migrator().HasColumn(legacy.table, legacy.column) {
 			t.Fatalf("旧列仍存在: %s.%s", legacy.table, legacy.column)
@@ -238,8 +247,8 @@ func TestRunMigratesOldestSupportedDatabaseEndToEnd(t *testing.T) {
 	if n := count(`SELECT COUNT(*) FROM writing_log`); n != 1 {
 		t.Fatalf("重复迁移后应只有一条写作日汇总: got %d", n)
 	}
-	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 13 {
-		t.Fatalf("状态丢失后应重建全部迁移状态和调度标记: got %d, want 13", n)
+	if n := count(`SELECT COUNT(*) FROM migrate_state WHERE status = 'done'`); n != 15 {
+		t.Fatalf("状态丢失后应重建全部迁移状态和调度标记: got %d, want 15", n)
 	}
 	assertMigratedLLMConfig(t, originalConfig)
 }

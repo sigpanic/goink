@@ -212,6 +212,7 @@ func validateLegacyProvider(p legacyProvider) error {
 
 // Register 注册独立于数据库历史 schema 的配置文件迁移。
 func Register() {
+	registerModelSelection()
 	engine.Register(engine.Migration{
 		Name:                 llmConfigMigration,
 		Description:          "将旧 LLM 服务商配置转换为协议分组格式，保留原始加密文件备份",
