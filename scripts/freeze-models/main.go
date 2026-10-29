@@ -378,6 +378,18 @@ func (f *freezer) rewrite(node ast.Node, path string, file *sourceFile) error {
 			return false
 		}
 		if field, ok := n.(*ast.Field); ok {
+			if selector, ok := field.Type.(*ast.SelectorExpr); ok {
+				if id, ok := selector.X.(*ast.Ident); ok {
+					if imported := file.imports[id.Name]; strings.HasPrefix(imported, f.module+"/") {
+						m := model{imported, selector.Sel.Name}
+						rewriteErr = f.emit(m)
+						if rewriteErr == nil {
+							field.Type = ast.NewIdent(frozenName(m))
+						}
+						return false
+					}
+				}
+			}
 			rewriteErr = f.rewrite(field.Type, path, file)
 			return false
 		}
