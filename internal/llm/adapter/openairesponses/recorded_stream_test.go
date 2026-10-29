@@ -219,6 +219,7 @@ func TestRecordedStatelessStreamReplaysEncryptedParallelToolHistory(t *testing.T
 	for i, exchange := range exchanges {
 		message := adapter.Message{Role: "assistant"}
 		var usage map[string]any
+		thinking := false
 		for _, event := range collectStream(t, backend, req) {
 			switch event.Type {
 			case adapter.EventError:
@@ -226,7 +227,10 @@ func TestRecordedStatelessStreamReplaysEncryptedParallelToolHistory(t *testing.T
 			case adapter.EventContent:
 				message.Content += event.Data
 			case adapter.EventThinking:
+				message.HasThinking, thinking = true, true
 				message.ThinkingContent += event.Data
+			case adapter.EventThinkingDone:
+				thinking = false
 			case adapter.EventResponseState:
 				message.State = event.State
 			case adapter.EventUsage:
@@ -236,7 +240,7 @@ func TestRecordedStatelessStreamReplaysEncryptedParallelToolHistory(t *testing.T
 			}
 		}
 		wantText := []string{"", "The labels are crimson-harbor and silver-orchard."}[i]
-		if requests.Load() != int32(i+1) || message.Content != wantText || message.ThinkingContent != "" || len(message.ToolCalls) != []int{2, 0}[i] ||
+		if requests.Load() != int32(i+1) || message.Content != wantText || message.ThinkingContent != "" || !message.HasThinking || thinking || len(message.ToolCalls) != []int{2, 0}[i] ||
 			message.State == nil || !message.State.Complete || message.State.TurnComplete != (i == 1) || message.State.StopReason != "completed" {
 			t.Fatalf("recorded round %d lost text, tools or completion", i+1)
 		}

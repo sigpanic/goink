@@ -56,6 +56,7 @@ type Message struct {
 	Role            string `gorm:"column:role;not null"                                          json:"role"`   // "system" | "user" | "assistant" | "tool"
 	Content         string `gorm:"column:content;not null"                                       json:"content"`
 	ThinkingContent string `gorm:"column:thinking_content"                                     json:"thinking_content,omitempty"`
+	HasThinking     bool   `gorm:"column:has_thinking;not null;default:0"                        json:"has_thinking"` // 发生过思考，不表示仍在思考。
 	TokenCount      int    `gorm:"column:token_count;not null;default:0"                        json:"token_count"`
 	ExtraMetadata   string `gorm:"column:extra_metadata"                                         json:"extra_metadata,omitempty"` // JSON：tool_calls / tool_call_id / display_text 等
 	Version         int    `gorm:"column:version;not null;default:1;index"                      json:"version"`                   // 压缩代数，查询时 = session.active_version

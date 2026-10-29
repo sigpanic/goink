@@ -49,6 +49,7 @@ func newStreamStep(raw json.RawMessage, emit func(adapter.StreamEvent) bool) (*s
 			emit(adapter.StreamEvent{Type: adapter.EventContent, Data: text.String()})
 		}
 	case "thought":
+		emit(adapter.StreamEvent{Type: adapter.EventThinking})
 		if data := step.raw["signature"]; len(data) > 0 {
 			var signature string
 			_ = json.Unmarshal(data, &signature)

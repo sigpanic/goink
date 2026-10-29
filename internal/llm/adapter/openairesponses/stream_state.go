@@ -103,6 +103,7 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 				return invalidResponse("streamed message must start with empty assistant content")
 			}
 		case "reasoning":
+			emit(adapter.StreamEvent{Type: adapter.EventThinking})
 			text, err := reasoningSummary([]responses.ResponseOutputItemUnion{item})
 			if err != nil {
 				return err
@@ -138,6 +139,9 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 			return invalidStreamArguments(item.callID)
 		}
 		item.done = json.RawMessage(event.Item.RawJSON())
+		if item.kind == "reasoning" {
+			emit(adapter.StreamEvent{Type: adapter.EventThinkingDone})
+		}
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
 		if item.kind != "function_call" {
 			return invalidResponse("function arguments on a non-function item")

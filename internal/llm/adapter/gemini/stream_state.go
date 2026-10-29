@@ -151,7 +151,13 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		if event.Type == "step.delta" {
 			return step.delta(event.Delta, publish)
 		}
-		return step.stop()
+		if err := step.stop(); err != nil {
+			return err
+		}
+		if step.kind == "thought" {
+			publish(adapter.StreamEvent{Type: adapter.EventThinkingDone})
+		}
+		return nil
 	default:
 		return nil
 	}

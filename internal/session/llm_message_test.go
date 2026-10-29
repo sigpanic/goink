@@ -13,6 +13,21 @@ import (
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
+func TestLLMMessagePreservesThinkingPresenceWithoutContent(t *testing.T) {
+	input := adapter.Message{Role: "assistant", HasThinking: true}
+	stored, err := (Message{SessionID: "session", ToFrontend: true}).WithLLMMessage(input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored.HasThinking || stored.ThinkingContent != "" || stored.ExtraMetadata != "" {
+		t.Fatalf("thinking presence should use its own column: %+v", stored)
+	}
+	restored, err := stored.ToLLMMessage()
+	if err != nil || !reflect.DeepEqual(restored, input) {
+		t.Fatalf("thinking presence did not round trip: %+v, %v", restored, err)
+	}
+}
+
 func TestLLMMessageMapsExistingToolMetadata(t *testing.T) {
 	assistant := Message{
 		ID: 42, Role: "assistant", Content: "读取章节", ThinkingContent: "先获取原文",

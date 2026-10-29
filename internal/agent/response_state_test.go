@@ -174,7 +174,7 @@ func TestRunRetryDoesNotReuseResponseState(t *testing.T) {
 				next = append(next, llm.StreamEvent{Type: llm.EventResponseState, State: final})
 			}
 			script := responseStateScript{t: t, streams: [][]llm.StreamEvent{
-				{{Type: llm.EventContent, Data: "丢弃的 partial"}, {Type: llm.EventResponseState, State: stateFixture("private-discarded", true)},
+				{{Type: llm.EventThinking}, {Type: llm.EventContent, Data: "丢弃的 partial"}, {Type: llm.EventResponseState, State: stateFixture("private-discarded", true)},
 					{Type: llm.EventError, Error: &llm.APIError{StatusCode: 429, Message: "retry", Retryable: true, RetryAfter: time.Millisecond}}},
 				next,
 			}}
@@ -197,6 +197,7 @@ func TestRunRetryDoesNotReuseResponseState(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, final, message.State)
 			require.Equal(t, "完成", message.Content)
+			require.False(t, message.HasThinking, "重试不能沿用失败请求的思考标记")
 		})
 	}
 }

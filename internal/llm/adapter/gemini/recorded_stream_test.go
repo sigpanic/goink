@@ -145,6 +145,7 @@ func recordedStreamMessage(t *testing.T, events []adapter.StreamEvent) (adapter.
 	t.Helper()
 	message := adapter.Message{Role: "assistant"}
 	var usage map[string]any
+	thinking := false
 	for _, event := range events {
 		switch event.Type {
 		case adapter.EventError:
@@ -152,7 +153,10 @@ func recordedStreamMessage(t *testing.T, events []adapter.StreamEvent) (adapter.
 		case adapter.EventContent:
 			message.Content += event.Data
 		case adapter.EventThinking:
+			message.HasThinking, thinking = true, true
 			message.ThinkingContent += event.Data
+		case adapter.EventThinkingDone:
+			thinking = false
 		case adapter.EventToolCallEnd:
 			message.ToolCalls = append(message.ToolCalls, adapter.ToolCall{ID: event.Delta.ToolID, Name: event.Delta.ToolName, Arguments: event.Delta.ArgumentsJSON})
 		case adapter.EventResponseState:
@@ -163,6 +167,9 @@ func recordedStreamMessage(t *testing.T, events []adapter.StreamEvent) (adapter.
 	}
 	if message.State == nil || !message.State.Complete || usage == nil {
 		t.Fatal("recorded stream did not publish complete state and usage")
+	}
+	if thinking {
+		t.Fatal("recorded stream did not close its thinking phase")
 	}
 	return message, usage
 }
@@ -272,7 +279,7 @@ func TestRecordedToolLoopSurvivesMessageStorage(t *testing.T) {
 			req := recordedRequest(t, exchanges[0])
 			message, usage := recordedStreamMessage(t, collectStream(t, backend.Stream(context.Background(), req)))
 			<-captured
-			if message.Content != first.text || message.ThinkingContent != "" || message.State.TurnComplete || message.State.StopReason != first.status || first.status != "requires_action" || len(message.ToolCalls) != 1 {
+			if message.Content != first.text || message.ThinkingContent != "" || !message.HasThinking || message.State.TurnComplete || message.State.StopReason != first.status || first.status != "requires_action" || len(message.ToolCalls) != 1 {
 				t.Fatal("recorded tool response lost its text, call or requires_action status")
 			}
 			call := message.ToolCalls[0]
@@ -294,7 +301,7 @@ func TestRecordedToolLoopSurvivesMessageStorage(t *testing.T) {
 			req.Messages = append(req.Messages, loaded, adapter.Message{Role: "tool", ToolCallID: call.ID, ToolName: call.Name, Content: "42"})
 			answer, usage := recordedStreamMessage(t, collectStream(t, backend.Stream(context.Background(), req)))
 			sent := <-captured
-			if answer.Content != second.text || answer.Content != "42" || answer.ThinkingContent != "" || len(answer.ToolCalls) != 0 || !answer.State.TurnComplete || answer.State.StopReason != "completed" {
+			if answer.Content != second.text || answer.Content != "42" || answer.ThinkingContent != "" || !answer.HasThinking || len(answer.ToolCalls) != 0 || !answer.State.TurnComplete || answer.State.StopReason != "completed" {
 				t.Fatal("recorded tool continuation did not complete with the original answer")
 			}
 			if usage["prompt_tokens"] != float64(211) || usage["completion_tokens"] != float64(2) || usage["total_tokens"] != float64(213) {

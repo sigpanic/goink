@@ -18,6 +18,7 @@ type ResponseState = adapter.ResponseState
 
 const (
 	EventThinking          = adapter.EventThinking
+	EventThinkingDone      = adapter.EventThinkingDone
 	EventContent           = adapter.EventContent
 	EventToolCallStart     = adapter.EventToolCallStart
 	EventToolCallArguments = adapter.EventToolCallArguments

@@ -29,6 +29,7 @@ func (m Message) ToLLMMessage() (adapter.Message, error) {
 		Role:            m.Role,
 		Content:         m.Content,
 		ThinkingContent: m.ThinkingContent,
+		HasThinking:     m.HasThinking,
 		ToolCalls:       metadata.ToolCalls,
 		ToolCallID:      metadata.ToolCallID,
 		ToolName:        metadata.ToolName,
@@ -98,5 +99,6 @@ func (m Message) WithLLMMessage(message adapter.Message) (Message, error) {
 	m.Role = message.Role
 	m.Content = message.Content
 	m.ThinkingContent = message.ThinkingContent
+	m.HasThinking = message.HasThinking
 	return m, nil
 }

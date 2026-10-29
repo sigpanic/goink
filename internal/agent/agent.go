@@ -246,6 +246,8 @@ func (a *Agent) run(
 		}
 	RETRY_STREAM:
 		var responseState *llm.ResponseState
+		hasThinking := false
+		isThinking = false
 		// 记录本轮 streamLoop 第一个事件 seq（前端据此清空本轮 partial segments）
 		// +1 是因为 emit 闭包是 `*eventSeq++; event.Seq = *eventSeq`（先自增再赋值）
 		streamStartSeq := *eventSeq + 1
@@ -275,12 +277,19 @@ func (a *Agent) run(
 					}
 
 				case llm.EventThinking:
+					hasThinking = true
 					isThinking = true
 					thinkingBuffer.WriteString(event.Data)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventThinking,
 						Data: event.Data, Timestamp: time.Now(),
 					})
+
+				case llm.EventThinkingDone:
+					if isThinking {
+						emit(AgentEvent{TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now()})
+						isThinking = false
+					}
 
 				case llm.EventContent:
 					if isThinking {
@@ -313,6 +322,10 @@ func (a *Agent) run(
 					})
 
 				case llm.EventToolCallEnd:
+					if isThinking {
+						emit(AgentEvent{TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now()})
+						isThinking = false
+					}
 					name := event.Delta.ToolName
 					id := event.Delta.ToolID
 					rawArgs := event.Delta.ArgumentsJSON
@@ -535,8 +548,8 @@ func (a *Agent) run(
 					}
 					finalText := responseBuffer.String()
 					thinkingContent := thinkingBuffer.String()
-					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-						if err := a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent},
+					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 || hasThinking {
+						if err := a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent, HasThinking: hasThinking},
 							nil, &opts, runningTokens); err != nil {
 							return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, errors.Join(event.Error, err)
 						}
@@ -556,7 +569,8 @@ func (a *Agent) run(
 		}
 		message := llm.Message{
 			Role: "assistant", Content: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(),
-			ToolCalls: buildToolCalls(toolOutputs), State: responseState,
+			HasThinking: hasThinking,
+			ToolCalls:   buildToolCalls(toolOutputs), State: responseState,
 		}
 
 		// ---- 流结束，判断是否有工具调用 ----
@@ -566,7 +580,7 @@ func (a *Agent) run(
 					TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now(),
 				})
 			}
-			if message.Content != "" || message.ThinkingContent != "" || message.State != nil {
+			if message.Content != "" || message.ThinkingContent != "" || message.HasThinking || message.State != nil {
 				if err := a.appendMsg(message, nil, &opts, runningTokens); err != nil {
 					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
 				}

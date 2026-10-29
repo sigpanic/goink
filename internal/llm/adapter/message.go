@@ -12,6 +12,7 @@ type Message struct {
 	Role            string         `json:"role"`
 	Content         string         `json:"content"`
 	ThinkingContent string         `json:"thinking_content,omitempty"`
+	HasThinking     bool           `json:"has_thinking,omitempty"` // 发生过思考，允许没有可展示文本。
 	ToolCalls       []ToolCall     `json:"tool_calls,omitempty"`
 	ToolCallID      string         `json:"tool_call_id,omitempty"`
 	ToolName        string         `json:"tool_name,omitempty"`

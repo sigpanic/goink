@@ -64,9 +64,13 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 			if raw := block.JSON.Signature.Raw(); raw != "" && raw != "null" && !stringField(block.JSON.Signature) {
 				s.discardNative = true
 			}
-			out = adapter.StreamEvent{Type: adapter.EventThinking, Data: block.Thinking}
-			publish = stringField(block.JSON.Thinking) && block.Thinking != ""
+			out = adapter.StreamEvent{Type: adapter.EventThinking}
+			if stringField(block.JSON.Thinking) {
+				out.Data = block.Thinking
+			}
+			publish = true
 		case "redacted_thinking":
+			out, publish = adapter.StreamEvent{Type: adapter.EventThinking}, true
 		case "tool_use":
 			if !stringField(block.JSON.ID) || !stringField(block.JSON.Name) || block.ID == "" || block.Name == "" {
 				return out, false, invalidResponse("tool block requires an ID and name")
@@ -108,6 +112,9 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 				}
 			}
 			block.closed = true
+			if block.kind == "thinking" || block.kind == "redacted_thinking" {
+				out, publish = adapter.StreamEvent{Type: adapter.EventThinkingDone}, true
+			}
 			break
 		}
 		delta := event.Delta

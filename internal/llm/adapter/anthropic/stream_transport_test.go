@@ -210,7 +210,9 @@ func TestStreamPreservesEmptyThinkingAndSignature(t *testing.T) {
 			t.Fatal(event.Error)
 		}
 		if event.Type == adapter.EventThinking {
-			t.Fatal("signature or redacted thinking was emitted as visible text")
+			if event.Data != "" {
+				t.Fatal("signature or redacted thinking was emitted as visible text")
+			}
 		}
 		if event.Type == adapter.EventResponseState {
 			state = event.State

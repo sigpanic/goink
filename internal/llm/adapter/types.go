@@ -93,6 +93,7 @@ const (
 	EventUsage                                    // 本次调用 token 用量
 	EventError                                    // 错误（HTTP 错误或网络异常）
 	EventResponseState                            // 响应收尾及原生回放状态，不代表业务 turn 一定结束
+	EventThinkingDone                             // 原生思考阶段结束，允许此前只有无文本的 EventThinking。
 )
 
 // StreamEvent 流式对话过程中产出的单个事件。
