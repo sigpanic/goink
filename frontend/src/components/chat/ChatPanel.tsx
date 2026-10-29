@@ -632,11 +632,13 @@ export default function ChatPanel({
                   subSegs[subSegs.length - 1] = {
                     ...last,
                     thinkingContent: last.thinkingContent + chunk,
+                    hasThinking: true,
                   };
                 } else {
                   subSegs.push({
                     ...emptySegment(subSegId),
                     thinkingContent: chunk,
+                    hasThinking: true,
                     thinkingDone: false,
                     isStreaming: true,
                     firstSeq: event.seq ?? 0,
@@ -731,11 +733,13 @@ export default function ChatPanel({
                 segments[segments.length - 1] = {
                   ...lastSeg,
                   thinkingContent: lastSeg.thinkingContent + chunk,
+                  hasThinking: true,
                 };
               } else {
                 segments.push({
                   ...emptySegment(segId),
                   thinkingContent: chunk,
+                  hasThinking: true,
                   thinkingDone: false,
                   isStreaming: true,
                   firstSeq: event.seq ?? 0,

@@ -44,6 +44,7 @@ export interface TurnSegment {
   type: "text" | "tool" | "subagent" | "compression";
   content: string;
   thinkingContent: string;
+  hasThinking: boolean;
   thinkingDone: boolean;
   isStreaming: boolean;
   // tool
@@ -87,6 +88,7 @@ export function emptySegment(id: string): TurnSegment {
     type: "text",
     content: "",
     thinkingContent: "",
+    hasThinking: false,
     thinkingDone: false,
     isStreaming: false,
     toolName: "",
@@ -220,12 +222,16 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
           })();
 
         // 追加子 agent 的文本内容
-        if ((msg.content || msg.thinking_content) && subSeg.segments) {
+        if (
+          (msg.content || msg.thinking_content || msg.has_thinking) &&
+          subSeg.segments
+        ) {
           subSeg.segments.push({
             ...emptySegment(`seg_${segCounter++}`),
             type: "text",
             content: msg.content || "",
             thinkingContent: msg.thinking_content || "",
+            hasThinking: msg.has_thinking || !!msg.thinking_content,
             thinkingDone: true,
             isStreaming: false,
           });
@@ -270,12 +276,13 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
       const thinkingContent = msg.thinking_content || "";
 
       // 文本内容
-      if (msg.content || thinkingContent) {
+      if (msg.content || thinkingContent || msg.has_thinking) {
         current.segments.push({
           ...emptySegment(`seg_${segCounter++}`),
           type: "text",
           content: msg.content || "",
           thinkingContent,
+          hasThinking: msg.has_thinking || !!thinkingContent,
           thinkingDone: true,
           isStreaming: false,
         });

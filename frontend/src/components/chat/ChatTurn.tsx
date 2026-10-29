@@ -97,11 +97,16 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
 
         return (
           <div key={seg.id}>
-            {seg.thinkingContent && (
+            {(seg.thinkingContent || seg.hasThinking) && (
               <div className="max-w-[85%]">
                 <ThinkingBlock
                   content={seg.thinkingContent}
-                  isStreaming={!seg.thinkingDone && seg.isStreaming}
+                  hasThinking={seg.hasThinking}
+                  isStreaming={
+                    turn.status === "streaming" &&
+                    !seg.thinkingDone &&
+                    seg.isStreaming
+                  }
                 />
               </div>
             )}

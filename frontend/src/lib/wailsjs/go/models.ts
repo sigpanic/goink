@@ -2693,6 +2693,7 @@ export namespace session {
 	    role: string;
 	    content: string;
 	    thinking_content?: string;
+	    has_thinking: boolean;
 	    token_count: number;
 	    extra_metadata?: string;
 	    version: number;
@@ -2716,6 +2717,7 @@ export namespace session {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.thinking_content = source["thinking_content"];
+	        this.has_thinking = source["has_thinking"];
 	        this.token_count = source["token_count"];
 	        this.extra_metadata = source["extra_metadata"];
 	        this.version = source["version"];

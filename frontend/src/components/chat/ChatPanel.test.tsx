@@ -157,6 +157,28 @@ beforeEach(() => {
   HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
+it("retains opaque thinking after its end event and subsequent answer", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", { turn_id: 1, type: AgentEventType.Thinking }),
+  );
+  expect(screen.getByRole("status")).toHaveTextContent("chat.thinking");
+  await act(async () =>
+    emit("agent:1", { turn_id: 1, type: AgentEventType.ThinkingDone }),
+  );
+  expect(screen.getByRole("status")).toHaveTextContent("chat.thinkingProcess");
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      type: AgentEventType.Content,
+      data: "最终回答",
+    }),
+  );
+  expect(screen.getByText("最终回答")).toBeInTheDocument();
+  expect(screen.getByRole("status")).toHaveTextContent("chat.thinkingProcess");
+  await act(async () => request.resolve());
+});
+
 it.each(["error", "system_interrupted"])(
   "preserves the %s reason when the Chat promise rejects afterward",
   async (eventType) => {
