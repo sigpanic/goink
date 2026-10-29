@@ -15,18 +15,20 @@ import (
 
 // convertResponse 供完整响应和后续流式收尾复用；所有校验通过后才交付工具和回放状态。
 func (p Provider) convertResponse(params sdk.MessageNewParams, message *sdk.Message) (adapter.Response, error) {
-	if message == nil || message.Type != "message" || message.Role != "assistant" || message.ID == "" || !stringField(message.JSON.ID) ||
-		!message.JSON.Content.Valid() || len(message.Content) == 0 || !message.JSON.StopReason.Valid() {
+	if message == nil || !message.JSON.Content.Valid() || len(message.Content) == 0 {
 		return adapter.Response{}, invalidResponse("missing or invalid message envelope")
 	}
 	stop := string(message.StopReason)
 	switch stop {
 	case "end_turn", "stop_sequence", "max_tokens", "refusal", "model_context_window_exceeded", "tool_use":
-	default:
+	case "pause_turn":
 		return adapter.Response{}, invalidResponse("unsupported stop_reason " + stop)
+	default:
+		stop = ""
 	}
 	var text, thinking strings.Builder
 	var calls []adapter.ToolCallDelta
+	usable := false
 	seen := make(map[string]bool)
 	for _, block := range message.Content {
 		switch block.Type {
@@ -35,15 +37,14 @@ func (p Provider) convertResponse(params sdk.MessageNewParams, message *sdk.Mess
 				return adapter.Response{}, invalidResponse("text block requires text")
 			}
 			text.WriteString(block.Text)
+			usable = true
 		case "thinking":
-			if !stringField(block.JSON.Thinking) || !stringField(block.JSON.Signature) || block.Signature == "" {
-				return adapter.Response{}, invalidResponse("thinking block requires original thinking and signature")
+			if stringField(block.JSON.Thinking) {
+				thinking.WriteString(block.Thinking)
+				usable = true
 			}
-			thinking.WriteString(block.Thinking)
 		case "redacted_thinking":
-			if !stringField(block.JSON.Data) || block.Data == "" {
-				return adapter.Response{}, invalidResponse("redacted thinking block requires original data")
-			}
+			usable = usable || (stringField(block.JSON.Data) && block.Data != "")
 		case "tool_use":
 			if block.ToolsetName != "" {
 				return adapter.Response{}, invalidResponse("toolset member calls are not supported")
@@ -64,12 +65,22 @@ func (p Provider) convertResponse(params sdk.MessageNewParams, message *sdk.Mess
 			calls = append(calls, adapter.ToolCallDelta{
 				ToolID: block.ID, ToolName: block.Name, ArgumentsText: string(block.Input), ArgumentsJSON: slices.Clone(block.Input),
 			})
+			usable = true
 		default:
-			return adapter.Response{}, invalidResponse("unsupported content block " + block.Type)
+			continue
 		}
 	}
-	if (len(calls) > 0) != (stop == "tool_use") {
+	if !usable {
+		return adapter.Response{}, invalidResponse("response has no usable content")
+	}
+	if len(calls) > 0 && (stop == "max_tokens" || stop == "model_context_window_exceeded") {
 		return adapter.Response{}, invalidResponse("tool calls do not match stop_reason " + stop)
+	}
+	if stop == "" || (stop == "tool_use" && len(calls) == 0) {
+		stop = "end_turn"
+		if len(calls) > 0 {
+			stop = "tool_use"
+		}
 	}
 	usage, err := normalizeUsage(message.Usage)
 	if err != nil {
@@ -88,7 +99,7 @@ func (p Provider) convertResponse(params sdk.MessageNewParams, message *sdk.Mess
 		Content: text.String(), ThinkingContent: thinking.String(), ToolCalls: calls, Usage: usage, StopReason: stop,
 		State: &adapter.ResponseState{
 			Origin:   adapter.MessageOrigin{AdapterName: adapter.ProtocolAnthropicMessages, ProviderName: p.Name, ProviderType: p.ProviderType, Model: params.Model},
-			Complete: true, TurnComplete: stop == "end_turn" || stop == "stop_sequence" || stop == "refusal",
+			Complete: true, TurnComplete: len(calls) == 0 && (stop == "end_turn" || stop == "stop_sequence" || stop == "refusal"),
 			StopReason: stop, Payload: payload,
 		},
 	}, nil
@@ -108,7 +119,7 @@ func stringField(field respjson.Field) bool {
 func normalizeUsage(usage sdk.Usage) (map[string]any, error) {
 	if !usage.JSON.InputTokens.Valid() || !usage.JSON.OutputTokens.Valid() || usage.InputTokens < 0 || usage.OutputTokens < 0 ||
 		usage.CacheCreationInputTokens < 0 || usage.CacheReadInputTokens < 0 {
-		return nil, invalidResponse("missing or invalid usage counters")
+		return nil, nil
 	}
 	for _, field := range []respjson.Field{
 		usage.JSON.InputTokens, usage.JSON.OutputTokens,
@@ -117,12 +128,12 @@ func normalizeUsage(usage sdk.Usage) (map[string]any, error) {
 	} {
 		if raw := field.Raw(); raw != "" && raw != "null" {
 			if _, err := strconv.ParseInt(strings.TrimSpace(raw), 10, 64); err != nil || !field.Valid() {
-				return nil, invalidResponse("usage token counters must be integers")
+				return nil, nil
 			}
 		}
 	}
 	if raw := usage.JSON.OutputTokensDetails.Raw(); raw != "" && raw != "null" && !usage.JSON.OutputTokensDetails.Valid() {
-		return nil, invalidResponse("invalid output token details")
+		return nil, nil
 	}
 	uncached := float64(usage.InputTokens)
 	created := float64(usage.CacheCreationInputTokens)
@@ -136,7 +147,7 @@ func normalizeUsage(usage sdk.Usage) (map[string]any, error) {
 	if usage.JSON.OutputTokensDetails.Valid() && usage.OutputTokensDetails.JSON.ThinkingTokens.Valid() {
 		reasoning := usage.OutputTokensDetails.ThinkingTokens
 		if reasoning < 0 || reasoning > usage.OutputTokens {
-			return nil, invalidResponse("invalid thinking token counter")
+			return nil, nil
 		}
 		result["completion_tokens_details"] = map[string]any{"reasoning_tokens": float64(reasoning)}
 	}

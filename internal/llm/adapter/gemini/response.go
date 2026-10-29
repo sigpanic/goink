@@ -16,19 +16,20 @@ import (
 func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.RawMessage) (adapter.Response, error) {
 	var interaction struct {
 		ID     json.RawMessage `json:"id"`
-		Object string          `json:"object"`
-		Agent  *string         `json:"agent"`
+		Object json.RawMessage `json:"object"`
+		Agent  json.RawMessage `json:"agent"`
 		Status string          `json:"status"`
 		Steps  json.RawMessage `json:"steps"`
 		Usage  json.RawMessage `json:"usage"`
 		Errors []types.Error   `json:"errors"`
 	}
-	if err := json.Unmarshal(raw, &interaction); err != nil ||
-		(interaction.Object != "" && interaction.Object != "interaction") || interaction.Agent != nil {
+	if err := json.Unmarshal(raw, &interaction); err != nil {
 		return adapter.Response{}, invalidResponse("missing or invalid interaction envelope")
 	}
-	if _, err := parseInteractionID(interaction.ID, params.Store != nil && !*params.Store); err != nil {
-		return adapter.Response{}, err
+	if params.Store == nil || *params.Store {
+		if _, err := parseInteractionID(interaction.ID, false); err != nil {
+			return adapter.Response{}, err
+		}
 	}
 	if len(interaction.Errors) > 0 {
 		fault := interaction.Errors[0]
@@ -42,7 +43,7 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 		return adapter.Response{}, &adapter.APIError{Kind: kind, Message: message}
 	}
 	switch interaction.Status {
-	case "completed", "requires_action":
+	case "completed", "requires_action", "":
 	case "incomplete", "failed", "cancelled":
 		return adapter.Response{}, &adapter.APIError{Kind: "interaction_" + interaction.Status, Message: "Gemini interaction is " + interaction.Status}
 	default:
@@ -56,8 +57,11 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 		}
 		return adapter.Response{}, invalidResponse(err.Error())
 	}
-	if (len(calls) > 0) != (interaction.Status == "requires_action") {
-		return adapter.Response{}, invalidResponse("function calls do not match status " + interaction.Status)
+	if interaction.Status == "" {
+		interaction.Status = "completed"
+		if len(calls) > 0 {
+			interaction.Status = "requires_action"
+		}
 	}
 	var thinking strings.Builder
 	for _, step := range steps {
@@ -76,19 +80,17 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 			Text *string `json:"text"`
 		}
 		if err := json.Unmarshal(native.Summary, &summary); err != nil {
-			return adapter.Response{}, invalidResponse("invalid thought summary")
+			continue
 		}
 		for _, content := range summary {
 			switch content.Type {
 			case "text":
-				if content.Text == nil {
-					return adapter.Response{}, invalidResponse("thought text requires a string")
+				if content.Text != nil {
+					thinking.WriteString(*content.Text)
 				}
-				thinking.WriteString(*content.Text)
 			case "image":
 				// 当前只显示文本摘要；图片摘要随原生 thought 原样保存和回放。
 			default:
-				return adapter.Response{}, invalidResponse("unsupported thought summary " + content.Type)
 			}
 		}
 	}
@@ -112,7 +114,7 @@ func (p Provider) convertResponse(params types.CreateModelInteraction, raw json.
 	}
 	response.State = &adapter.ResponseState{
 		Origin:   adapter.MessageOrigin{AdapterName: adapter.ProtocolGeminiInteractions, ProviderName: p.Name, ProviderType: p.ProviderType, Model: string(params.Model)},
-		Complete: true, TurnComplete: interaction.Status == "completed", StopReason: interaction.Status, Payload: payload,
+		Complete: true, TurnComplete: len(calls) == 0, StopReason: interaction.Status, Payload: payload,
 	}
 	return response, nil
 }
@@ -142,7 +144,7 @@ func normalizeUsage(raw json.RawMessage) (map[string]any, error) {
 		return nil, nil
 	}
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		return nil, invalidResponse("usage must be an object")
+		return nil, nil
 	}
 	counters = make(map[string]*int64)
 	for _, key := range []string{"total_input_tokens", "total_output_tokens", "total_thought_tokens", "total_cached_tokens", "total_tool_use_tokens", "total_tokens"} {
@@ -152,14 +154,14 @@ func normalizeUsage(raw json.RawMessage) (map[string]any, error) {
 		}
 		var count *int64
 		if err := json.Unmarshal(value, &count); err != nil || count == nil || *count < 0 {
-			return nil, invalidResponse("usage counters must be nonnegative integers")
+			return nil, nil
 		}
 		counters[key] = count
 	}
 	input, output, thought := counters["total_input_tokens"], counters["total_output_tokens"], counters["total_thought_tokens"]
 	cached, total := counters["total_cached_tokens"], counters["total_tokens"]
 	if cached != nil && input != nil && *cached > *input {
-		return nil, invalidResponse("cached tokens exceed input tokens")
+		return nil, nil
 	}
 	result := make(map[string]any)
 	if input != nil {

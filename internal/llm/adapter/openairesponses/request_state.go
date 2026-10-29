@@ -57,7 +57,7 @@ func (p Provider) replayOutput(params responses.ResponseNewParams, message adapt
 	}
 	var payload replayPayload
 	if err := json.Unmarshal(state.Payload, &payload); err != nil {
-		return nil, false, fmt.Errorf("decode OpenAI Responses replay state: %w", err)
+		return nil, false, nil
 	}
 	hash, err := p.requestHash(params)
 	if err != nil {
@@ -68,7 +68,7 @@ func (p Provider) replayOutput(params responses.ResponseNewParams, message adapt
 	}
 	items, content, calls, err := replayProjection(payload.Output)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil
 	}
 	if content != message.Content || len(calls) != len(message.ToolCalls) {
 		return nil, false, nil
@@ -93,15 +93,27 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 	var calls []adapter.ToolCall
 	items := make([]responses.ResponseInputItemUnionParam, 0, len(raw))
 	seen := make(map[string]bool)
-	itemIDs := make(map[string]bool)
+	usable := false
 	for _, data := range raw {
+		var header struct {
+			Type string `json:"type"`
+		}
+		if !jsonObject(data) || json.Unmarshal(data, &header) != nil {
+			continue
+		}
+		switch header.Type {
+		case "reasoning", "message", "function_call":
+		default:
+			items = append(items, param.Override[responses.ResponseInputItemUnionParam](slices.Clone(data)))
+			continue
+		}
 		var item struct {
 			Type             string            `json:"type"`
-			ID               string            `json:"id"`
+			ID               json.RawMessage   `json:"id"`
 			Status           string            `json:"status"`
 			Role             string            `json:"role"`
 			Content          []json.RawMessage `json:"content"`
-			EncryptedContent string            `json:"encrypted_content"`
+			EncryptedContent json.RawMessage   `json:"encrypted_content"`
 			CallID           string            `json:"call_id"`
 			Name             string            `json:"name"`
 			Arguments        string            `json:"arguments"`
@@ -114,19 +126,19 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 		if err := json.Unmarshal(data, &item); err != nil {
 			return nil, "", nil, fmt.Errorf("decode OpenAI Responses replay item: %w", err)
 		}
-		if (item.Status != "" && item.Status != "completed") || (item.ID != "" && itemIDs[item.ID]) {
+		if (item.Type == "message" || item.Type == "function_call") && item.Status != "" && item.Status != "completed" {
 			return nil, "", nil, fmt.Errorf("incomplete or duplicate OpenAI Responses replay item %q", item.ID)
-		}
-		if item.ID != "" {
-			itemIDs[item.ID] = true
 		}
 		switch item.Type {
 		case "reasoning":
-			if item.ID == "" || item.EncryptedContent == "" {
-				return nil, "", nil, fmt.Errorf("OpenAI Responses reasoning replay requires original ID and encrypted content")
+			usable = true
+			var id, encrypted string
+			if json.Unmarshal(item.ID, &id) != nil || id == "" || json.Unmarshal(item.EncryptedContent, &encrypted) != nil || encrypted == "" {
+				continue
 			}
 		case "message":
-			if item.Role != "assistant" || item.Content == nil {
+			usable = true
+			if item.Content == nil {
 				return nil, "", nil, fmt.Errorf("OpenAI Responses replay message requires assistant content")
 			}
 			for _, rawPart := range item.Content {
@@ -144,10 +156,13 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 				case part.Type == "refusal" && part.Refusal != nil:
 					content.WriteString(*part.Refusal)
 				default:
-					return nil, "", nil, fmt.Errorf("unsupported OpenAI Responses replay content %q", part.Type)
+					if part.Type == "output_text" || part.Type == "refusal" {
+						return nil, "", nil, fmt.Errorf("invalid OpenAI Responses text content")
+					}
 				}
 			}
 		case "function_call":
+			usable = true
 			if item.Async || item.Namespace != "" || (item.Caller != nil && item.Caller.Type != "direct") {
 				return nil, "", nil, fmt.Errorf("provider-executed, asynchronous or namespaced OpenAI function calls are not supported")
 			}
@@ -162,9 +177,11 @@ func replayProjection(output json.RawMessage) ([]responses.ResponseInputItemUnio
 			seen[item.CallID] = true
 			calls = append(calls, adapter.ToolCall{ID: item.CallID, Name: item.Name, Arguments: arguments})
 		default:
-			return nil, "", nil, fmt.Errorf("unsupported OpenAI Responses replay item %q", item.Type)
 		}
 		items = append(items, param.Override[responses.ResponseInputItemUnionParam](slices.Clone(data)))
+	}
+	if !usable {
+		return nil, "", nil, fmt.Errorf("OpenAI Responses output has no usable items")
 	}
 	return items, content.String(), calls, nil
 }

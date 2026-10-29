@@ -2,7 +2,6 @@ package gemini
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/llm/adapter"
@@ -35,7 +34,10 @@ func newStreamStep(raw json.RawMessage, emit func(adapter.StreamEvent) bool) (*s
 		for i, block := range step.content {
 			var kind string
 			var value *string
-			if json.Unmarshal(block["type"], &kind) != nil || kind != "text" || json.Unmarshal(block["text"], &value) != nil || value == nil {
+			if json.Unmarshal(block["type"], &kind) != nil || kind != "text" {
+				continue
+			}
+			if json.Unmarshal(block["text"], &value) != nil || value == nil {
 				return nil, invalidResponse("model_output only supports text content")
 			}
 			text.WriteString(*value)
@@ -49,13 +51,11 @@ func newStreamStep(raw json.RawMessage, emit func(adapter.StreamEvent) bool) (*s
 	case "thought":
 		if data := step.raw["signature"]; len(data) > 0 {
 			var signature string
-			if json.Unmarshal(data, &signature) != nil {
-				return nil, invalidResponse("thought signature must be a string")
-			}
+			_ = json.Unmarshal(data, &signature)
 			step.signed = signature != ""
 		}
 		if data := step.raw["summary"]; len(data) > 0 && json.Unmarshal(data, &step.summary) != nil {
-			return nil, invalidResponse("thought summary must be an array")
+			step.summary = nil
 		}
 		for _, content := range step.summary {
 			if err := emitSummary(content, emit); err != nil {
@@ -72,7 +72,6 @@ func newStreamStep(raw json.RawMessage, emit func(adapter.StreamEvent) bool) (*s
 		}
 		emit(adapter.StreamEvent{Type: adapter.EventToolCallStart, Delta: &adapter.ToolCallDelta{ToolID: step.id, ToolName: step.name}})
 	default:
-		return nil, invalidResponse("unsupported streamed step " + step.kind)
 	}
 	return step, nil
 }
@@ -82,7 +81,7 @@ func (s *streamStep) delta(raw json.RawMessage, emit func(adapter.StreamEvent) b
 		Type        string          `json:"type"`
 		Text        *string         `json:"text"`
 		Arguments   *string         `json:"arguments"`
-		Signature   *string         `json:"signature"`
+		Signature   json.RawMessage `json:"signature"`
 		Content     json.RawMessage `json:"content"`
 		Annotations json.RawMessage `json:"annotations"`
 	}
@@ -99,33 +98,31 @@ func (s *streamStep) delta(raw json.RawMessage, emit func(adapter.StreamEvent) b
 			emit(adapter.StreamEvent{Type: adapter.EventContent, Data: *delta.Text})
 		}
 	case s.kind == "model_output" && delta.Type == "text_annotation_delta":
-		if len(s.content) == 0 {
-			s.content = []map[string]json.RawMessage{{"type": json.RawMessage(`"text"`)}}
-		}
 		var annotations, additional []json.RawMessage
-		last := s.content[len(s.content)-1]
+		last := s.textPart()
 		if data := last["annotations"]; len(data) > 0 && json.Unmarshal(data, &annotations) != nil {
-			return invalidResponse("invalid initial text annotations")
+			annotations = nil
 		}
 		if json.Unmarshal(delta.Annotations, &additional) != nil {
-			return invalidResponse("annotation delta requires an array")
+			return nil
 		}
 		encoded, err := json.Marshal(append(annotations, additional...))
 		if err != nil {
 			return err
 		}
 		last["annotations"] = encoded
-	case s.kind == "thought" && delta.Type == "thought_summary" && !s.signed:
+	case s.kind == "thought" && delta.Type == "thought_summary":
 		if err := emitSummary(delta.Content, emit); err != nil {
 			return err
 		}
 		s.summary = append(s.summary, delta.Content)
-	case s.kind == "thought" && delta.Type == "thought_signature" && !s.signed:
-		if delta.Signature == nil || *delta.Signature == "" {
-			return invalidResponse("thought signature delta requires the original signature")
+	case s.kind == "thought" && delta.Type == "thought_signature":
+		var signature string
+		if json.Unmarshal(delta.Signature, &signature) != nil || signature == "" {
+			return nil
 		}
 		// Interactions 在 thought 结束前发送完整签名，不将多次签名当文本分片拼接。
-		encoded, err := json.Marshal(*delta.Signature)
+		encoded, err := json.Marshal(signature)
 		if err != nil {
 			return err
 		}
@@ -149,7 +146,6 @@ func (s *streamStep) delta(raw json.RawMessage, emit func(adapter.StreamEvent) b
 			ToolID: s.id, ToolName: s.name, ArgumentsText: s.arguments.String(),
 		}})
 	default:
-		return invalidResponse(fmt.Sprintf("unsupported delta %q for step %q", delta.Type, s.kind))
 	}
 	return nil
 }
@@ -157,23 +153,18 @@ func (s *streamStep) delta(raw json.RawMessage, emit func(adapter.StreamEvent) b
 func (s *streamStep) stop() error {
 	switch s.kind {
 	case "model_output":
-		if len(s.content) == 0 {
-			s.content = []map[string]json.RawMessage{{"type": json.RawMessage(`"text"`)}}
-		}
+		last := s.textPart()
 		text, err := json.Marshal(s.text.String())
 		if err != nil {
 			return err
 		}
-		s.content[len(s.content)-1]["text"] = text
+		last["text"] = text
 		encoded, err := json.Marshal(s.content)
 		if err != nil {
 			return err
 		}
 		s.raw["content"] = encoded
 	case "thought":
-		if !s.signed {
-			return invalidResponse("thought stopped without its signature")
-		}
 		if len(s.summary) > 0 {
 			encoded, err := json.Marshal(s.summary)
 			if err != nil {
@@ -193,25 +184,32 @@ func (s *streamStep) stop() error {
 	return nil
 }
 
+func (s *streamStep) textPart() map[string]json.RawMessage {
+	var kind string
+	if len(s.content) == 0 || json.Unmarshal(s.content[len(s.content)-1]["type"], &kind) != nil || kind != "text" {
+		s.content = append(s.content, map[string]json.RawMessage{"type": json.RawMessage(`"text"`)})
+	}
+	return s.content[len(s.content)-1]
+}
+
 func emitSummary(raw json.RawMessage, emit func(adapter.StreamEvent) bool) error {
 	var content struct {
 		Type string  `json:"type"`
 		Text *string `json:"text"`
 	}
 	if json.Unmarshal(raw, &content) != nil {
-		return invalidResponse("invalid thought summary content")
+		return nil
 	}
 	switch content.Type {
 	case "text":
 		if content.Text == nil {
-			return invalidResponse("thought summary requires text")
+			return nil
 		}
 		if *content.Text != "" {
 			emit(adapter.StreamEvent{Type: adapter.EventThinking, Data: *content.Text})
 		}
 	case "image":
 	default:
-		return invalidResponse("unsupported thought summary content " + content.Type)
 	}
 	return nil
 }

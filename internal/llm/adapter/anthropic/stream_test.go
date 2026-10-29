@@ -200,9 +200,10 @@ func TestStreamFailureDoesNotPublishExecutableTools(t *testing.T) {
 		{"truncated-input", strings.Replace(fixture, `9007199254740993}`, `9007199254740993`, 1), "tool_args_invalid"},
 		{"array-input", strings.Replace(fixture, `"input":{"ready":true}`, `"input":[]`, 1), "tool_args_invalid"},
 		{"duplicate-tool", strings.Replace(fixture, `"id":"call2"`, `"id":"call1"`, 1), "invalid_response"},
-		{"unknown-block", strings.Replace(fixture, `"type":"redacted_thinking"`, `"type":"future_block"`, 1), "invalid_response"},
-		{"unknown-delta", strings.Replace(fixture, `"type":"thinking_delta"`, `"type":"future_delta"`, 1), "invalid_response"},
-		{"numeric-signature", strings.Replace(fixture, `"signature":""`, `"signature":123`, 1), "invalid_response"},
+		{"unknown-block", strings.Replace(fixture, `"type":"redacted_thinking"`, `"type":"future_block"`, 1), "compatible"},
+		{"unknown-delta", strings.Replace(fixture, `"type":"thinking_delta"`, `"type":"future_delta"`, 1), "compatible"},
+		{"numeric-signature", strings.Replace(fixture, `"signature":""`, `"signature":123`, 1), "compatible"},
+		{"missing-usage", strings.ReplaceAll(fixture, `"usage":`, `"ignored_usage":`), "compatible"},
 		{"negative-index", strings.Replace(fixture, `"index":0`, `"index":-1`, 1), "invalid_response"},
 		{"missing-index", strings.Replace(fixture, `"index":0,`, ``, 1), "invalid_response"},
 		{"open-block", strings.Replace(fixture, streamFrame("content_block_stop", `{"type":"content_block_stop","index":4}`), "", 1), "invalid_response"},
@@ -218,7 +219,15 @@ func TestStreamFailureDoesNotPublishExecutableTools(t *testing.T) {
 			})
 			_, req := testRequest()
 			var finalError error
+			completed := false
 			for _, event := range collectStream(t, backend, req) {
+				if tt.kind == "compatible" {
+					if event.Type == adapter.EventError {
+						t.Fatal(event.Error)
+					}
+					completed = completed || event.Type == adapter.EventToolCallEnd
+					continue
+				}
 				if event.Type == adapter.EventToolCallEnd || event.Type == adapter.EventResponseState || event.Type == adapter.EventUsage {
 					t.Fatal("failed stream exposed complete usage, replay state or executable tools")
 				}
@@ -228,6 +237,12 @@ func TestStreamFailureDoesNotPublishExecutableTools(t *testing.T) {
 					}
 					finalError = event.Error
 				}
+			}
+			if tt.kind == "compatible" {
+				if !completed {
+					t.Fatal("optional metadata blocked tool completion")
+				}
+				return
 			}
 			if finalError == nil {
 				t.Fatal("failed stream completed without an error")

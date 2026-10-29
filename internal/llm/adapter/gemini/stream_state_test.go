@@ -39,13 +39,13 @@ func TestStreamVerifiesCanonicalTerminalSnapshots(t *testing.T) {
 		}},
 		{name: "different signature", edit: func(steps []map[string]json.RawMessage) {
 			steps[0]["signature"] = json.RawMessage(`"changed-signature"`)
-		}, wantError: true},
+		}},
 		{name: "different arguments", edit: func(steps []map[string]json.RawMessage) {
 			steps[2]["arguments"] = json.RawMessage(`{"chapter":9007199254740992}`)
 		}, wantError: true},
 		{name: "different text", edit: func(steps []map[string]json.RawMessage) {
 			steps[1]["content"] = json.RawMessage(`[{"type":"text","text":"changed"}]`)
-		}, wantError: true},
+		}},
 		{name: "different step type", edit: func(steps []map[string]json.RawMessage) { steps[2]["type"] = json.RawMessage(`"google_search_call"`) }, wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -76,8 +76,11 @@ func TestStreamVerifiesCanonicalTerminalSnapshots(t *testing.T) {
 					state = event.State
 				}
 			}
-			if state == nil || !strings.Contains(string(state.Payload), "snapshot_extension") {
+			if state == nil || (tc.name == "original snapshot" && !strings.Contains(string(state.Payload), "snapshot_extension")) {
 				t.Fatal("canonical terminal steps lost their original extensions")
+			}
+			if tc.name != "original snapshot" && strings.Contains(string(state.Payload), "changed") {
+				t.Fatal("divergent terminal metadata replaced the accumulated native state")
 			}
 		})
 	}

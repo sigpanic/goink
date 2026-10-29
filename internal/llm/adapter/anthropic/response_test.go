@@ -38,32 +38,32 @@ func TestResponsePreservesTextStopReasons(t *testing.T) {
 	}
 }
 
-func TestResponseRejectsInvalidEnvelopeAndContent(t *testing.T) {
+func TestResponseToleratesAuxiliaryFieldsAndRejectsUnusableContent(t *testing.T) {
 	for _, tt := range []struct {
 		name, field, replacement, kind string
 	}{
-		{"missing-id", "id", `""`, "invalid_response"},
-		{"wrong-type", "type", `"error"`, "invalid_response"},
-		{"wrong-role", "role", `"user"`, "invalid_response"},
+		{"missing-id", "id", `""`, ""},
+		{"wrong-type", "type", `"error"`, ""},
+		{"wrong-role", "role", `"user"`, ""},
 		{"null-content", "content", `null`, "invalid_response"},
 		{"empty-content", "content", `[]`, "invalid_response"},
 		{"unknown-block", "content", `[{"type":"future_block","data":"opaque"}]`, "invalid_response"},
 		{"server-tool", "content", `[{"type":"server_tool_use","id":"server1","name":"web_search","input":{}}]`, "invalid_response"},
 		{"missing-text", "content", `[{"type":"text"}]`, "invalid_response"},
 		{"invalid-text", "content", `[{"type":"text","text":123}]`, "invalid_response"},
-		{"missing-signature", "content", `[{"type":"thinking","thinking":"summary"}]`, "invalid_response"},
+		{"missing-signature", "content", `[{"type":"thinking","thinking":"summary"}]`, ""},
 		{"missing-thinking", "content", `[{"type":"thinking","signature":"sig"}]`, "invalid_response"},
 		{"missing-redacted-data", "content", `[{"type":"redacted_thinking","data":""}]`, "invalid_response"},
-		{"null-stop", "stop_reason", `null`, "invalid_response"},
-		{"unsupported-stop", "stop_reason", `"future_stop"`, "invalid_response"},
+		{"null-stop", "stop_reason", `null`, ""},
+		{"unsupported-stop", "stop_reason", `"future_stop"`, ""},
 		{"server-continuation", "stop_reason", `"pause_turn"`, "invalid_response"},
-		{"tool-stop-without-call", "stop_reason", `"tool_use"`, "invalid_response"},
-		{"missing-usage", "usage", `null`, "invalid_response"},
-		{"negative-usage", "usage", `{"input_tokens":-1,"output_tokens":3}`, "invalid_response"},
-		{"invalid-cache", "usage", `{"input_tokens":1,"output_tokens":3,"cache_read_input_tokens":"10"}`, "invalid_response"},
-		{"invalid-output", "usage", `{"input_tokens":1,"output_tokens":"3"}`, "invalid_response"},
-		{"invalid-reasoning", "usage", `{"input_tokens":1,"output_tokens":3,"output_tokens_details":{"thinking_tokens":4}}`, "invalid_response"},
-		{"invalid-reasoning-type", "usage", `{"input_tokens":1,"output_tokens":3,"output_tokens_details":{"thinking_tokens":"2"}}`, "invalid_response"},
+		{"tool-stop-without-call", "stop_reason", `"tool_use"`, ""},
+		{"missing-usage", "usage", `null`, ""},
+		{"negative-usage", "usage", `{"input_tokens":-1,"output_tokens":3}`, ""},
+		{"invalid-cache", "usage", `{"input_tokens":1,"output_tokens":3,"cache_read_input_tokens":"10"}`, ""},
+		{"invalid-output", "usage", `{"input_tokens":1,"output_tokens":"3"}`, ""},
+		{"invalid-reasoning", "usage", `{"input_tokens":1,"output_tokens":3,"output_tokens_details":{"thinking_tokens":4}}`, ""},
+		{"invalid-reasoning-type", "usage", `{"input_tokens":1,"output_tokens":3,"output_tokens_details":{"thinking_tokens":"2"}}`, ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var body map[string]json.RawMessage
@@ -86,6 +86,12 @@ func TestResponseRejectsInvalidEnvelopeAndContent(t *testing.T) {
 				t.Fatal(err)
 			}
 			response, err := p.convertResponse(params, &message)
+			if tt.kind == "" {
+				if err != nil || response.State == nil || response.Content+response.ThinkingContent == "" {
+					t.Fatalf("auxiliary fields blocked usable content: %+v, %v", response, err)
+				}
+				return
+			}
 			var apiErr *adapter.APIError
 			if !errors.As(err, &apiErr) || apiErr.Kind != tt.kind || response.State != nil || len(response.ToolCalls) != 0 {
 				t.Fatalf("invalid response produced usable state: %+v, %v", response, err)

@@ -129,12 +129,19 @@ func (p Provider) probeInteraction(ctx context.Context, candidate, model string)
 		if err := state.consume(event.Data, func(adapter.StreamEvent) bool { return true }); err != nil {
 			return "", err
 		}
-		var created types.InteractionCreatedEvent
+		var created struct {
+			Interaction struct {
+				Object string  `json:"object"`
+				Agent  *string `json:"agent"`
+				Status string  `json:"status"`
+			} `json:"interaction"`
+		}
 		if err := json.Unmarshal(event.Data, &created); err != nil {
 			return "", invalidResponse("invalid created interaction")
 		}
-		if (created.Interaction.Agent != nil && *created.Interaction.Agent != "") ||
-			(created.Interaction.Object != nil && *created.Interaction.Object != "interaction") {
+		if state.interaction == nil || (created.Interaction.Status != "" && created.Interaction.Status != "in_progress") ||
+			(created.Interaction.Agent != nil && *created.Interaction.Agent != "") ||
+			(created.Interaction.Object != "" && created.Interaction.Object != "interaction") {
 			return "", fmt.Errorf("SSE stream did not begin with a model interaction.created")
 		}
 		// 握手成立后立即关闭，不等待生成，也不把握手当作完整生成验证。

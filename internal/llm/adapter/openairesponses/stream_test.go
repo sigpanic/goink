@@ -242,20 +242,25 @@ func TestStreamRejectsTruncationContradictionsAndUnsupportedItems(t *testing.T) 
 		{"fractional output index", mutate(6, `"output_index":1`, `"output_index":1.5`), "invalid_response"},
 		{"string output index", mutate(6, `"output_index":1`, `"output_index":"1"`), "invalid_response"},
 		{"orphan delta", mutate(6, `"output_index":1`, `"output_index":99`), "invalid_response"},
-		{"wrong item ID", mutate(6, `"item_id":"msg_1"`, `"item_id":"other"`), "invalid_response"},
+		{"wrong item ID", mutate(6, `"item_id":"msg_1"`, `"item_id":"other"`), "compatible"},
+		{"unknown event", sseEvents([]string{`{"type":"vendor.extension","progress":1}`}) + sseEvents(base), "compatible"},
+		{"missing function item ID", strings.ReplaceAll(sseEvents(base), `"item_id":"fc_1",`, ""), "compatible"},
+		{"one missing function item ID", mutate(11, `"item_id":"fc_1",`, ""), "compatible"},
+		{"terminal function extension", mutate(15, `"extension":null`, `"extension":{"vendor":true}`), "compatible"},
 		{"duplicate item index", mutate(4, `"output_index":1`, `"output_index":0`), "invalid_response"},
 		{"changed function call ID", mutate(14, `"call_id":"call_1"`, `"call_id":"call_2"`), "invalid_response"},
 		{"changed done arguments", mutate(13, `9007199254740993`, `9007199254740995`), "tool_args_invalid"},
+		{"changed terminal arguments", mutate(15, `"arguments":"{\"chapter\":9007199254740993}"`, `"arguments":"{\"chapter\":9007199254740995}"`), "tool_args_invalid"},
 		{"invalid object arguments", mutate(13, `"{\"chapter\":9007199254740993}"`, `"[]"`), "tool_args_invalid"},
-		{"malformed summary delta", mutate(2, `"delta":"plan"`, `"delta":123`), "invalid_response"},
-		{"negative summary index", mutate(2, `"summary_index":0`, `"summary_index":-1`), "invalid_response"},
+		{"malformed summary delta", mutate(2, `"delta":"plan"`, `"delta":123`), "compatible"},
+		{"negative summary index", mutate(2, `"summary_index":0`, `"summary_index":-1`), "compatible"},
 		{"unsupported item", mutate(10, `"type":"function_call"`, `"type":"web_search_call"`), "invalid_response"},
-		{"terminal identity", mutate(15, `"id":"resp_1"`, `"id":"resp_other"`), "invalid_response"},
-		{"terminal text", mutate(15, `"text":"ok"`, `"text":"changed"`), "invalid_response"},
-		{"terminal ciphertext type", mutate(15, `"opaque-test-state"`, `123`), "invalid_response"},
-		{"terminal summary", mutate(15, `"text":"plan"`, `"text":"changed"`), "invalid_response"},
+		{"terminal identity", mutate(15, `"id":"resp_1"`, `"id":"resp_other"`), "compatible"},
+		{"terminal text", mutate(15, `"text":"ok"`, `"text":"changed"`), "compatible"},
+		{"terminal ciphertext type", mutate(15, `"opaque-test-state"`, `123`), "compatible"},
+		{"terminal summary", mutate(15, `"text":"plan"`, `"text":"changed"`), "compatible"},
 		{"missing item done", sseEvents(base[:14]) + sseEvents(base[15:]), "invalid_response"},
-		{"empty terminal output", withTerminal(`{"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[]}}`), "invalid_response"},
+		{"empty terminal output", withTerminal(`{"type":"response.completed","response":{"id":"resp_1","object":"response","status":"completed","output":[]}}`), "compatible"},
 		{"late delta", sseEvents(base) + sseEvents(base[6:7]), "invalid_response"},
 		{"failed", withTerminal(`{"type":"response.failed","response":{"id":"resp_1","object":"response","status":"failed","error":{"code":"server_error","message":"busy"}}}`), "server_error"},
 		{"incomplete", withTerminal(`{"type":"response.incomplete","response":{"id":"resp_1","object":"response","status":"incomplete","incomplete_details":{"reason":"max_output_tokens"}}}`), "response_incomplete"},
@@ -264,6 +269,30 @@ func TestStreamRejectsTruncationContradictionsAndUnsupportedItems(t *testing.T) 
 		{"malformed JSON", sseEvents(base[:1]) + "data: {broken}\n\n", ""},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.kind == "compatible" {
+				complete := false
+				var text strings.Builder
+				calls := 0
+				for _, event := range replayStream(t, tt.wire, nil) {
+					if event.Type == adapter.EventError {
+						t.Fatal(event.Error)
+					}
+					complete = complete || event.Type == adapter.EventResponseState
+					if event.Type == adapter.EventContent {
+						text.WriteString(event.Data)
+					}
+					if event.Type == adapter.EventToolCallEnd {
+						calls++
+						if event.Delta.ToolID != "call_1" || !sameJSON(event.Delta.ArgumentsJSON, json.RawMessage(`{"chapter":9007199254740993}`)) {
+							t.Fatalf("compatibility fallback changed the executable tool: %+v", event.Delta)
+						}
+					}
+				}
+				if !complete || calls != 1 || text.String() != "ok" {
+					t.Fatal("nonessential metadata blocked stream completion")
+				}
+				return
+			}
 			err := streamFailure(t, replayStream(t, tt.wire, nil))
 			if tt.kind != "" {
 				var fault *adapter.APIError

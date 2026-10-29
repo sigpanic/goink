@@ -144,6 +144,12 @@ func TestConnectionRejectsInvalidProtocolAndRetainsAllFailures(t *testing.T) {
 				return result, nil
 			}))
 			result, err := backend.TestConnection(context.Background(), "relay", "test-model")
+			if tt.name == "numeric ID" || tt.name == "missing object" {
+				if err != nil || result.URL == "" || attempts.Load() != 1 {
+					t.Fatalf("auxiliary response metadata blocked the handshake: %+v, %v", result, err)
+				}
+				return
+			}
 			if err == nil || result.URL != "" || attempts.Load() != 3 || !strings.Contains(err.Error(), "/proxy/v8/responses") || !strings.Contains(err.Error(), "/v1/responses") {
 				t.Fatalf("invalid probe accepted or candidate failures lost: %+v %v (%d attempts)", result, err, attempts.Load())
 			}

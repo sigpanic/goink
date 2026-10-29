@@ -18,8 +18,8 @@ func (p Provider) convertResponse(params responses.ResponseNewParams, result *re
 		return adapter.Response{}, invalidResponse("missing SDK response")
 	}
 	var native struct {
-		ID                string          `json:"id"`
-		Object            string          `json:"object"`
+		ID                json.RawMessage `json:"id"`
+		Object            json.RawMessage `json:"object"`
 		Status            string          `json:"status"`
 		Output            json.RawMessage `json:"output"`
 		Usage             json.RawMessage `json:"usage"`
@@ -49,11 +49,8 @@ func (p Provider) convertResponse(params responses.ResponseNewParams, result *re
 			Retryable: fault.Code == "server_error" || fault.Code == "rate_limit_exceeded" || fault.Code == "vector_store_timeout",
 		}
 	}
-	if strings.TrimSpace(native.ID) == "" || native.Object != "response" {
-		return adapter.Response{}, invalidResponse("missing response ID or object")
-	}
 	switch native.Status {
-	case "completed":
+	case "completed", "":
 	case "incomplete", "failed", "cancelled":
 		message := "OpenAI response is " + native.Status
 		if native.IncompleteDetails.Reason != "" {
@@ -124,13 +121,12 @@ func reasoningSummary(output []responses.ResponseOutputItemUnion) (string, error
 			} `json:"summary"`
 		}
 		if err := json.Unmarshal([]byte(item.RawJSON()), &native); err != nil {
-			return "", invalidResponse("invalid reasoning summary")
+			continue
 		}
 		for _, part := range native.Summary {
-			if part.Type != "summary_text" || part.Text == nil {
-				return "", invalidResponse("reasoning summary requires summary_text strings")
+			if part.Type == "summary_text" && part.Text != nil {
+				thinking.WriteString(*part.Text)
 			}
-			thinking.WriteString(*part.Text)
 		}
 	}
 	return thinking.String(), nil
@@ -156,7 +152,7 @@ func normalizeUsage(raw json.RawMessage) (map[string]any, error) {
 	}
 	if err := json.Unmarshal(raw, &usage); err != nil || usage.InputTokens == nil || usage.OutputTokens == nil || usage.TotalTokens == nil ||
 		*usage.InputTokens < 0 || *usage.OutputTokens < 0 || *usage.TotalTokens < 0 {
-		return nil, invalidResponse("usage requires nonnegative integer input, output and total counters")
+		return nil, nil
 	}
 	result := map[string]any{
 		"prompt_tokens":     float64(*usage.InputTokens),
@@ -166,21 +162,21 @@ func normalizeUsage(raw json.RawMessage) (map[string]any, error) {
 	if details := usage.InputTokensDetails; details != nil {
 		if cached := details.CachedTokens; cached != nil {
 			if *cached < 0 || *cached > *usage.InputTokens {
-				return nil, invalidResponse("invalid cached token counter")
+				return nil, nil
 			}
 			result["prompt_cache_hit_tokens"] = float64(*cached)
 			result["prompt_cache_miss_tokens"] = float64(*usage.InputTokens - *cached)
 		}
 		if written := details.CacheWriteTokens; written != nil {
 			if *written < 0 || *written > *usage.InputTokens {
-				return nil, invalidResponse("invalid cache write token counter")
+				return nil, nil
 			}
 			result["cache_creation_input_tokens"] = float64(*written)
 		}
 	}
 	if details := usage.OutputTokensDetails; details != nil && details.ReasoningTokens != nil {
 		if *details.ReasoningTokens < 0 || *details.ReasoningTokens > *usage.OutputTokens {
-			return nil, invalidResponse("invalid reasoning token counter")
+			return nil, nil
 		}
 		result["completion_tokens_details"] = map[string]any{"reasoning_tokens": float64(*details.ReasoningTokens)}
 	}

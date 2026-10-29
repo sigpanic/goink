@@ -107,7 +107,7 @@ func TestConnectionRejectsInvalidProtocolAndReportsFailures(t *testing.T) {
 		{"HTML", "text/html", "<html>SPA</html>", 200},
 		{"empty SSE", "text/event-stream", "", 200},
 		{"OpenAI", "text/event-stream", "data: {\"choices\":[]}\n\n", 200},
-		{"bad start", "text/event-stream", streamFrame("message_start", `{"type":"message_start","message":{"id":123,"type":"message","role":"assistant","content":[]}}`), 200},
+		{"bad start", "text/event-stream", streamFrame("message_start", `{"type":"message_start","message":{"content":[{"type":"text","text":"unexpected initial output"}]}}`), 200},
 		{"wrong first event", "text/event-stream", streamFrame("message_stop", `{"type":"message_stop"}`), 200},
 		{"SSE error", "text/event-stream", streamFrame("error", `{"type":"error","error":{"type":"overloaded_error","message":"busy"}}`), 200},
 		{"unauthorized", "application/json", `{"type":"error","error":{"type":"authentication_error","message":"bad key"}}`, 401},

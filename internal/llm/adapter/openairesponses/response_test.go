@@ -62,9 +62,9 @@ func TestResponseRejectsPartialOrFailedEnvelopes(t *testing.T) {
 		name, raw, kind string
 		retryable       bool
 	}{
-		{"missing ID", strings.Replace(generatedTextResponse, `"id":"resp_final"`, `"id":null`, 1), "invalid_response", false},
-		{"numeric ID", strings.Replace(generatedTextResponse, `"id":"resp_final"`, `"id":123`, 1), "invalid_response", false},
-		{"wrong object", strings.Replace(generatedTextResponse, `"object":"response"`, `"object":"message"`, 1), "invalid_response", false},
+		{"missing ID", strings.Replace(generatedTextResponse, `"id":"resp_final"`, `"id":null`, 1), "", false},
+		{"numeric ID", strings.Replace(generatedTextResponse, `"id":"resp_final"`, `"id":123`, 1), "", false},
+		{"wrong object", strings.Replace(generatedTextResponse, `"object":"response"`, `"object":"message"`, 1), "", false},
 		{"in progress", strings.Replace(generatedTextResponse, `"status":"completed"`, `"status":"in_progress"`, 1), "invalid_response", false},
 		{"queued", strings.Replace(generatedTextResponse, `"status":"completed"`, `"status":"queued"`, 1), "invalid_response", false},
 		{"unknown status", strings.Replace(generatedTextResponse, `"status":"completed"`, `"status":"requires_action"`, 1), "invalid_response", false},
@@ -82,6 +82,12 @@ func TestResponseRejectsPartialOrFailedEnvelopes(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			response, err := convertNativeResponse(t, tt.raw)
+			if tt.kind == "" {
+				if err != nil || response.Content != "done" || response.State == nil {
+					t.Fatalf("response metadata blocked text: %+v, %v", response, err)
+				}
+				return
+			}
 			var fault *adapter.APIError
 			if !errors.As(err, &fault) || fault.Kind != tt.kind || fault.Retryable != tt.retryable {
 				t.Fatalf("unexpected response failure: %v", err)
@@ -137,6 +143,13 @@ func TestResponseRejectsUnsupportedOrMalformedNativeItems(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			response, err := convertNativeResponse(t, responseWithOutput(`[`+tt.item+`]`))
+			switch tt.name {
+			case "missing ciphertext", "non-string summary", "unsupported summary", "duplicate item ID":
+				if err != nil || response.State == nil {
+					t.Fatalf("optional reasoning or item metadata blocked output: %+v, %v", response, err)
+				}
+				return
+			}
 			if err == nil || !reflect.DeepEqual(response, adapter.Response{}) {
 				t.Fatalf("unsupported native state accepted: %+v, %v", response, err)
 			}
@@ -163,7 +176,7 @@ func TestNormalizeUsagePreservesProviderTotalsAndOptionalDetails(t *testing.T) {
 	}
 }
 
-func TestNormalizeUsageRejectsInvalidKnownCounters(t *testing.T) {
+func TestNormalizeUsageDiscardsInvalidKnownCounters(t *testing.T) {
 	for _, raw := range []string{
 		`[]`, `{}`, `true`,
 		`{"input_tokens":1,"output_tokens":2}`,
@@ -184,13 +197,13 @@ func TestNormalizeUsageRejectsInvalidKnownCounters(t *testing.T) {
 		`{"input_tokens":1,"output_tokens":2,"total_tokens":3,"output_tokens_details":{"reasoning_tokens":-1}}`,
 	} {
 		t.Run(raw, func(t *testing.T) {
-			if usage, err := normalizeUsage(json.RawMessage(raw)); err == nil || usage != nil {
-				t.Fatalf("invalid usage accepted: %v", usage)
+			if usage, err := normalizeUsage(json.RawMessage(raw)); err != nil || usage != nil {
+				t.Fatalf("invalid usage was retained or caused failure: %v, %v", usage, err)
 			}
 		})
 	}
 	raw := strings.Replace(generatedToolResponse, `"input_tokens":20`, `"input_tokens":"20"`, 1)
-	if response, err := convertNativeResponse(t, raw); err == nil || !reflect.DeepEqual(response, adapter.Response{}) {
-		t.Fatal("invalid usage exposed otherwise valid tools or state")
+	if response, err := convertNativeResponse(t, raw); err != nil || len(response.ToolCalls) != 2 || response.State == nil || response.Usage != nil {
+		t.Fatalf("invalid usage blocked otherwise valid tools: %+v, %v", response, err)
 	}
 }

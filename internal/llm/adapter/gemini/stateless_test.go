@@ -95,7 +95,7 @@ func TestResponseRequiresIdentityUnlessStoreIsExplicitlyFalse(t *testing.T) {
 				params.Store = store
 				raw := strings.Replace(statelessTextResponse, `{`, `{`+id, 1)
 				response, err := p.convertResponse(params, json.RawMessage(raw))
-				wantSuccess := id == `"id":"stored",` || (id == "" && store != nil && !*store)
+				wantSuccess := id == `"id":"stored",` || (store != nil && !*store)
 				if (err == nil) != wantSuccess || (response.State != nil) != wantSuccess {
 					t.Fatalf("incorrect response identity validation: response=%+v err=%v", response, err)
 				}
@@ -116,23 +116,23 @@ func TestStatelessStreamValidatesPresentMetadataAndCompletion(t *testing.T) {
 		{name: "identity only in created", created: withID(statelessCreatedEvent, `"a"`)},
 		{name: "identity only in terminal", completed: withID(statelessCompletedEvent, `"a"`)},
 		{name: "late identity", update: `{"event_type":"interaction.status_update","interaction_id":"a","status":"in_progress"}`, completed: withID(statelessCompletedEvent, `"a"`)},
-		{name: "identity conflict across missing update", created: withID(statelessCreatedEvent, `"a"`), completed: withID(statelessCompletedEvent, `"b"`), wantError: true},
-		{name: "late identity conflict", update: `{"event_type":"interaction.status_update","interaction_id":"a","status":"in_progress"}`, completed: withID(statelessCompletedEvent, `"b"`), wantError: true},
-		{name: "numeric created ID", created: withID(statelessCreatedEvent, `123`), wantError: true},
-		{name: "null created ID", created: withID(statelessCreatedEvent, `null`), wantError: true},
-		{name: "empty created ID", created: withID(statelessCreatedEvent, `""`), wantError: true},
-		{name: "numeric update ID", update: `{"event_type":"interaction.status_update","interaction_id":123,"status":"in_progress"}`, wantError: true},
-		{name: "null update ID", update: `{"event_type":"interaction.status_update","interaction_id":null,"status":"in_progress"}`, wantError: true},
-		{name: "numeric terminal ID", completed: withID(statelessCompletedEvent, `123`), wantError: true},
-		{name: "null created status", created: strings.Replace(statelessCreatedEvent, `"object":`, `"status":null,"object":`, 1), wantError: true},
-		{name: "terminal status in created", created: strings.Replace(statelessCreatedEvent, `"object":`, `"status":"completed","object":`, 1), wantError: true},
+		{name: "identity conflict across missing update", created: withID(statelessCreatedEvent, `"a"`), completed: withID(statelessCompletedEvent, `"b"`)},
+		{name: "late identity conflict", update: `{"event_type":"interaction.status_update","interaction_id":"a","status":"in_progress"}`, completed: withID(statelessCompletedEvent, `"b"`)},
+		{name: "numeric created ID", created: withID(statelessCreatedEvent, `123`)},
+		{name: "null created ID", created: withID(statelessCreatedEvent, `null`)},
+		{name: "empty created ID", created: withID(statelessCreatedEvent, `""`)},
+		{name: "numeric update ID", update: `{"event_type":"interaction.status_update","interaction_id":123,"status":"in_progress"}`},
+		{name: "null update ID", update: `{"event_type":"interaction.status_update","interaction_id":null,"status":"in_progress"}`},
+		{name: "numeric terminal ID", completed: withID(statelessCompletedEvent, `123`)},
+		{name: "null created status", created: strings.Replace(statelessCreatedEvent, `"object":`, `"status":null,"object":`, 1)},
+		{name: "terminal status in created", created: strings.Replace(statelessCreatedEvent, `"object":`, `"status":"completed","object":`, 1)},
 		{name: "empty created interaction", created: `{"event_type":"interaction.created","interaction":{}}`, wantError: true},
 		{name: "missing update status", update: `{"event_type":"interaction.status_update"}`, wantError: true},
-		{name: "missing terminal status", completed: strings.Replace(statelessCompletedEvent, `"status":"completed",`, "", 1), wantError: true},
+		{name: "missing terminal status", completed: strings.Replace(statelessCompletedEvent, `"status":"completed",`, "", 1)},
 		{name: "nonterminal completed event", completed: strings.Replace(statelessCompletedEvent, `"completed"`, `"in_progress"`, 1), wantError: true},
 		{name: "failed interaction", completed: strings.Replace(statelessCompletedEvent, `"completed"`, `"failed"`, 1), wantError: true},
 		{name: "incomplete interaction", completed: strings.Replace(statelessCompletedEvent, `"completed"`, `"incomplete"`, 1), wantError: true},
-		{name: "tool status without functions", completed: strings.Replace(statelessCompletedEvent, `"completed"`, `"requires_action"`, 1), wantError: true},
+		{name: "tool status without functions", completed: strings.Replace(statelessCompletedEvent, `"completed"`, `"requires_action"`, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			body := statelessTextStream
@@ -229,7 +229,16 @@ func TestStatelessStreamRejectsTruncationAndUnclosedSteps(t *testing.T) {
 			}
 			var closed atomic.Int32
 			backend := streamWithReader(t, strings.NewReader(body), "text/event-stream", &closed)
-			requireStreamFailure(t, collectStream(t, backend.Stream(context.Background(), requestFixture())))
+			events := collectStream(t, backend.Stream(context.Background(), requestFixture()))
+			if tc.name == "missing signature" {
+				for _, event := range events {
+					if event.Type == adapter.EventError {
+						t.Fatal(event.Error)
+					}
+				}
+				return
+			}
+			requireStreamFailure(t, events)
 		})
 	}
 }

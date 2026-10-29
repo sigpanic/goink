@@ -152,7 +152,7 @@ func TestRequestReplayCompatibilityAndFallback(t *testing.T) {
 	}
 }
 
-func TestRequestRejectsCorruptCompatibleNativeState(t *testing.T) {
+func TestRequestFallsBackFromCorruptCompatibleNativeState(t *testing.T) {
 	for _, raw := range []string{
 		`null`, `[]`,
 		`[{"type":"thought","summary":[]}]`,
@@ -173,16 +173,27 @@ func TestRequestRejectsCorruptCompatibleNativeState(t *testing.T) {
 			}
 			payload.Steps = json.RawMessage(raw)
 			req.Messages[1].State.Payload, _ = json.Marshal(payload)
-			if _, err := p.buildRequest(req); err == nil {
-				t.Fatal("corrupt compatible native state was accepted")
+			params, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Messages[1].State = nil
+			fallback, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _ := json.Marshal(params)
+			want, _ := json.Marshal(fallback)
+			if string(got) != string(want) {
+				t.Fatal("damaged native state changed the public history")
 			}
 		})
 	}
 	p := requestProvider()
 	req := replayFixture(t, p)
 	req.Messages[1].State.Payload = json.RawMessage(`{`)
-	if _, err := p.buildRequest(req); err == nil {
-		t.Fatal("invalid replay envelope was silently discarded")
+	if _, err := p.buildRequest(req); err != nil {
+		t.Fatalf("invalid replay envelope blocked public history: %v", err)
 	}
 }
 

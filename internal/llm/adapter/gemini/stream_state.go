@@ -2,6 +2,7 @@ package gemini
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
@@ -55,6 +56,11 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		}
 		return &adapter.APIError{Kind: kind, Message: message}
 	}
+	switch event.Type {
+	case "interaction.created", "interaction.completed", "interaction.status_update", "step.start", "step.delta", "step.stop":
+	default:
+		return nil
+	}
 	if s.completed || (s.terminal && event.Type != "interaction.completed") {
 		return invalidResponse("event after the interaction terminal status")
 	}
@@ -68,7 +74,7 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		if err := s.setInteractionID(s.interaction["id"]); err != nil {
 			return err
 		}
-		if rawStatus := s.interaction["status"]; len(rawStatus) != 0 || !s.stateless {
+		if rawStatus := s.interaction["status"]; !s.stateless {
 			var status string
 			if json.Unmarshal(rawStatus, &status) != nil || status != "in_progress" {
 				return invalidResponse("invalid created interaction status")
@@ -103,7 +109,9 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 			return invalidResponse("missing terminal interaction")
 		}
 		var status string
-		if json.Unmarshal(terminal["status"], &status) != nil {
+		if len(terminal["status"]) == 0 {
+			status = "completed"
+		} else if json.Unmarshal(terminal["status"], &status) != nil {
 			return invalidResponse("invalid terminal interaction status")
 		}
 		if err := s.setStatus(terminal["id"], status); err != nil {
@@ -145,11 +153,14 @@ func (s *streamState) consume(raw json.RawMessage, emit func(adapter.StreamEvent
 		}
 		return step.stop()
 	default:
-		return invalidResponse("unsupported SSE event " + event.Type)
+		return nil
 	}
 }
 
 func (s *streamState) setInteractionID(raw json.RawMessage) error {
+	if s.stateless {
+		return nil
+	}
 	id, err := parseInteractionID(raw, s.stateless)
 	if err != nil {
 		return err
@@ -200,12 +211,9 @@ func (s *streamState) updateUsage(raw json.RawMessage) error {
 	if len(raw) == 0 || strings.TrimSpace(string(raw)) == "null" {
 		return nil
 	}
-	if _, err := normalizeUsage(raw); err != nil {
-		return err
-	}
 	var usage map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &usage); err != nil {
-		return invalidResponse("invalid SSE usage")
+		return nil
 	}
 	if s.usage == nil {
 		s.usage = make(map[string]json.RawMessage)
@@ -248,9 +256,10 @@ func (s *streamState) finish(p Provider, params types.CreateModelInteraction) (a
 	if err != nil {
 		return adapter.Response{}, err
 	}
-	if response.Content != s.text.String() || response.ThinkingContent != s.thinking.String() {
+	if response.Content != s.text.String() {
 		return adapter.Response{}, invalidResponse("streamed text order does not match completed steps")
 	}
+	response.ThinkingContent = s.thinking.String()
 	if len(s.snapshot) > 0 && strings.TrimSpace(string(s.snapshot)) != "null" {
 		return s.withSnapshot(p, params, response)
 	}
@@ -260,13 +269,8 @@ func (s *streamState) finish(p Provider, params types.CreateModelInteraction) (a
 // withSnapshot 保留终态附带的原生 steps，同时核对已发布内容、调用和签名。
 func (s *streamState) withSnapshot(p Provider, params types.CreateModelInteraction, accumulated adapter.Response) (adapter.Response, error) {
 	var snapshot []map[string]json.RawMessage
-	if json.Unmarshal(s.snapshot, &snapshot) != nil || len(snapshot) != len(s.steps) {
-		return adapter.Response{}, invalidResponse("terminal steps do not match streamed steps")
-	}
-	for i, step := range s.steps {
-		if !jsonEqualScalar(step.raw["type"], snapshot[i]["type"]) || !jsonEqualScalar(step.raw["signature"], snapshot[i]["signature"]) {
-			return adapter.Response{}, invalidResponse("terminal step type or signature changed")
-		}
+	if json.Unmarshal(s.snapshot, &snapshot) != nil || len(snapshot) == 0 {
+		return accumulated, nil
 	}
 	s.interaction["steps"] = s.snapshot
 	raw, err := json.Marshal(s.interaction)
@@ -275,15 +279,30 @@ func (s *streamState) withSnapshot(p Provider, params types.CreateModelInteracti
 	}
 	response, err := p.convertResponse(params, raw)
 	if err != nil {
-		return adapter.Response{}, err
+		var fault *adapter.APIError
+		if errors.As(err, &fault) && fault.Kind == "tool_args_invalid" {
+			return adapter.Response{}, err
+		}
+		return accumulated, nil
 	}
-	if response.Content != accumulated.Content || response.ThinkingContent != accumulated.ThinkingContent || len(response.ToolCalls) != len(accumulated.ToolCalls) {
-		return adapter.Response{}, invalidResponse("terminal content does not match streamed content")
+	if len(response.ToolCalls) == 0 {
+		return accumulated, nil
+	}
+	if len(response.ToolCalls) != len(accumulated.ToolCalls) {
+		return adapter.Response{}, invalidResponse("terminal functions do not match streamed functions")
 	}
 	for i, call := range response.ToolCalls {
 		previous := accumulated.ToolCalls[i]
 		if call.ToolID != previous.ToolID || call.ToolName != previous.ToolName || !sameJSON(call.ArgumentsJSON, previous.ArgumentsJSON) {
 			return adapter.Response{}, invalidResponse("terminal functions do not match streamed functions")
+		}
+	}
+	if len(snapshot) != len(s.steps) || response.Content != accumulated.Content || response.ThinkingContent != accumulated.ThinkingContent {
+		return accumulated, nil
+	}
+	for i, step := range s.steps {
+		if !jsonEqualScalar(step.raw["type"], snapshot[i]["type"]) || !jsonEqualScalar(step.raw["signature"], snapshot[i]["signature"]) {
+			return accumulated, nil
 		}
 	}
 	return response, nil

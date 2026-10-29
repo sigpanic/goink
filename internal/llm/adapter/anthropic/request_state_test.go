@@ -138,7 +138,7 @@ func TestRequestDropsIncompatibleNativeState(t *testing.T) {
 	}
 }
 
-func TestRequestRejectsInvalidCompatibleNativeBlocks(t *testing.T) {
+func TestRequestFallsBackFromInvalidCompatibleNativeBlocks(t *testing.T) {
 	for _, content := range []string{
 		`null`, `[]`, `{}`,
 		`[{"type":"thinking","thinking":"","signature":""}]`,
@@ -158,8 +158,19 @@ func TestRequestRejectsInvalidCompatibleNativeBlocks(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Messages[1].State.Payload = data
-			if _, err := p.buildRequest(req); err == nil {
-				t.Fatal("invalid native blocks were silently replayed")
+			params, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Messages[1].State = nil
+			fallback, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, _ := json.Marshal(params)
+			want, _ := json.Marshal(fallback)
+			if string(got) != string(want) {
+				t.Fatal("damaged native state changed the public history")
 			}
 		})
 	}

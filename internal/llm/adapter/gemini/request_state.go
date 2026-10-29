@@ -44,7 +44,7 @@ func (p Provider) replaySteps(params types.CreateModelInteraction, message adapt
 	}
 	var payload replayPayload
 	if err := json.Unmarshal(state.Payload, &payload); err != nil {
-		return nil, false, fmt.Errorf("decode Gemini replay state: %w", err)
+		return nil, false, nil
 	}
 	hash, err := p.requestHash(params)
 	if err != nil {
@@ -55,7 +55,16 @@ func (p Provider) replaySteps(params types.CreateModelInteraction, message adapt
 	}
 	steps, text, calls, err := replayProjection(payload.Steps)
 	if err != nil {
-		return nil, false, err
+		return nil, false, nil
+	}
+	for _, step := range steps {
+		var native struct {
+			Type      string `json:"type"`
+			Signature string `json:"signature"`
+		}
+		if json.Unmarshal(step.UnknownRaw, &native) != nil || (native.Type == "thought" && native.Signature == "") {
+			return nil, false, nil
+		}
 	}
 	if text != message.Content || len(calls) != len(message.ToolCalls) {
 		return nil, false, nil
@@ -80,11 +89,24 @@ func replayProjection(rawSteps json.RawMessage) ([]types.Step, string, []adapter
 	var calls []adapter.ToolCall
 	steps := make([]types.Step, 0, len(raw))
 	seen := make(map[string]bool)
+	usable := false
 	for _, data := range raw {
+		var header struct {
+			Type string `json:"type"`
+		}
+		if !jsonObject(data) || json.Unmarshal(data, &header) != nil {
+			continue
+		}
+		switch header.Type {
+		case "thought", "model_output", "function_call":
+		default:
+			steps = append(steps, types.NewStepUnknown(slices.Clone(data)))
+			continue
+		}
 		var step struct {
 			functionCall
 			Content   []json.RawMessage `json:"content"`
-			Signature string            `json:"signature"`
+			Signature json.RawMessage   `json:"signature"`
 			Summary   json.RawMessage   `json:"summary"`
 			Error     json.RawMessage   `json:"error"`
 		}
@@ -96,24 +118,27 @@ func replayProjection(rawSteps json.RawMessage) ([]types.Step, string, []adapter
 		}
 		switch step.Type {
 		case "thought":
-			if step.Signature == "" {
-				return nil, "", nil, fmt.Errorf("gemini thought replay requires the original signature")
-			}
-			if len(step.Summary) > 0 && !bytes.HasPrefix(bytes.TrimSpace(step.Summary), []byte("[")) {
-				return nil, "", nil, fmt.Errorf("gemini thought summary must be an array")
-			}
+			usable = true
 		case "model_output":
+			usable = true
 			for _, content := range step.Content {
 				var block struct {
 					Type string  `json:"type"`
 					Text *string `json:"text"`
 				}
-				if err := json.Unmarshal(content, &block); err != nil || block.Type != "text" || block.Text == nil {
+				if err := json.Unmarshal(content, &block); err != nil {
+					return nil, "", nil, fmt.Errorf("gemini replay model_output requires text content")
+				}
+				if block.Type != "text" {
+					continue
+				}
+				if block.Text == nil {
 					return nil, "", nil, fmt.Errorf("gemini replay model_output requires text content")
 				}
 				text.WriteString(*block.Text)
 			}
 		case "function_call":
+			usable = true
 			if strings.TrimSpace(step.ID) == "" || strings.TrimSpace(step.Name) == "" || !jsonObject(step.Arguments) || seen[step.ID] {
 				return nil, "", nil, &adapter.APIError{Kind: "tool_args_invalid", Retryable: true,
 					Message: fmt.Sprintf("invalid or duplicate Gemini replay function call %q", step.ID)}
@@ -121,9 +146,11 @@ func replayProjection(rawSteps json.RawMessage) ([]types.Step, string, []adapter
 			seen[step.ID] = true
 			calls = append(calls, adapter.ToolCall{ID: step.ID, Name: step.Name, Arguments: slices.Clone(step.Arguments)})
 		default:
-			return nil, "", nil, fmt.Errorf("unsupported Gemini replay step %q", step.Type)
 		}
 		steps = append(steps, types.NewStepUnknown(slices.Clone(data)))
+	}
+	if !usable {
+		return nil, "", nil, fmt.Errorf("gemini response has no usable steps")
 	}
 	return steps, text.String(), calls, nil
 }

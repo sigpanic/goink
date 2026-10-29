@@ -14,11 +14,11 @@ func TestResponseRejectsInvalidStatesAndStepsWithoutPartialTools(t *testing.T) {
 	for _, tc := range []struct {
 		name, old, replacement, kind string
 	}{
-		{name: "missing id", old: `"id":"interaction_tools"`, replacement: `"id":""`, kind: "invalid_response"},
-		{name: "non-string id", old: `"id":"interaction_tools"`, replacement: `"id":123`, kind: "invalid_response"},
-		{name: "wrong object", old: `"object":"interaction"`, replacement: `"object":"message"`, kind: "invalid_response"},
-		{name: "managed agent", old: `"object":"interaction"`, replacement: `"object":"interaction","agent":"research"`, kind: "invalid_response"},
-		{name: "completed cannot execute tools", old: `"status":"requires_action"`, replacement: `"status":"completed"`, kind: "invalid_response"},
+		{name: "missing id", old: `"id":"interaction_tools"`, replacement: `"id":""`},
+		{name: "non-string id", old: `"id":"interaction_tools"`, replacement: `"id":123`},
+		{name: "wrong object", old: `"object":"interaction"`, replacement: `"object":"message"`},
+		{name: "managed agent", old: `"object":"interaction"`, replacement: `"object":"interaction","agent":"research"`},
+		{name: "completed with tools", old: `"status":"requires_action"`, replacement: `"status":"completed"`},
 		{name: "in progress", old: `"status":"requires_action"`, replacement: `"status":"in_progress"`, kind: "invalid_response"},
 		{name: "queued", old: `"status":"requires_action"`, replacement: `"status":"queued"`, kind: "invalid_response"},
 		{name: "incomplete", old: `"status":"requires_action"`, replacement: `"status":"incomplete"`, kind: "interaction_incomplete"},
@@ -29,14 +29,14 @@ func TestResponseRejectsInvalidStatesAndStepsWithoutPartialTools(t *testing.T) {
 		{name: "second tool has null arguments", old: `"id":"b","name":"read","arguments":{}`, replacement: `"id":"b","name":"read","arguments":null`, kind: "tool_args_invalid"},
 		{name: "duplicate call id", old: `"id":"b","name":"read","arguments":{}`, replacement: `"id":"a","name":"read","arguments":{}`, kind: "tool_args_invalid"},
 		{name: "empty call name", old: `"id":"b","name":"read","arguments":{}`, replacement: `"id":"b","name":"","arguments":{}`, kind: "tool_args_invalid"},
-		{name: "missing signature", old: `"signature":"opaque-signature"`, replacement: `"signature":""`, kind: "invalid_response"},
-		{name: "invalid summary", old: `"type":"text","text":"摘要"`, replacement: `"type":"text","text":123`, kind: "invalid_response"},
-		{name: "unknown summary", old: `"type":"text","text":"摘要"`, replacement: `"type":"document","text":"摘要"`, kind: "invalid_response"},
-		{name: "non-text output", old: `"type":"text","text":"后"`, replacement: `"type":"audio","data":"AA=="`, kind: "invalid_response"},
+		{name: "missing signature", old: `"signature":"opaque-signature"`, replacement: `"signature":""`},
+		{name: "invalid summary", old: `"type":"text","text":"摘要"`, replacement: `"type":"text","text":123`},
+		{name: "unknown summary", old: `"type":"text","text":"摘要"`, replacement: `"type":"document","text":"摘要"`},
+		{name: "non-text output", old: `"type":"text","text":"后"`, replacement: `"type":"audio","data":"AA=="`},
 		{name: "missing output text", old: `"type":"text","text":"后"`, replacement: `"type":"text"`, kind: "invalid_response"},
-		{name: "server tool", old: `"type":"function_call","id":"b"`, replacement: `"type":"google_search_call","id":"b"`, kind: "invalid_response"},
+		{name: "server tool", old: `"type":"function_call","id":"b"`, replacement: `"type":"google_search_call","id":"b"`},
 		{name: "step error", old: `"type":"function_call","id":"b"`, replacement: `"type":"function_call","error":{"code":13,"message":"failed"},"id":"b"`, kind: "invalid_response"},
-		{name: "invalid usage", old: `"total_cached_tokens":3`, replacement: `"total_cached_tokens":8`, kind: "invalid_response"},
+		{name: "invalid usage", old: `"total_cached_tokens":3`, replacement: `"total_cached_tokens":8`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := requestProvider()
@@ -49,6 +49,16 @@ func TestResponseRejectsInvalidStatesAndStepsWithoutPartialTools(t *testing.T) {
 				t.Fatal("test replacement did not match fixture")
 			}
 			response, err := p.convertResponse(params, json.RawMessage(raw))
+			if tc.kind == "" {
+				wantCalls := 2
+				if tc.name == "server tool" {
+					wantCalls = 1
+				}
+				if err != nil || response.State == nil || response.State.TurnComplete || len(response.ToolCalls) != wantCalls || response.Content == "" {
+					t.Fatalf("auxiliary data blocked usable output: %+v, %v", response, err)
+				}
+				return
+			}
 			var apiErr *adapter.APIError
 			if !errors.As(err, &apiErr) || apiErr.Kind != tc.kind || response.State != nil || len(response.ToolCalls) != 0 {
 				t.Fatalf("invalid response delivered a partial tool group or wrong error: response=%+v err=%+v", response, err)
@@ -66,7 +76,6 @@ func TestResponseRequiresNativeStepsAndValidToolStatus(t *testing.T) {
 		`{"id":"test","status":"completed","output_text":"flattened text only"}`,
 		`{"id":"test","status":"completed","steps":[]}`,
 		`{"id":"test","status":"completed","steps":[{"type":"user_input","content":[{"type":"text","text":"echo"}]}]}`,
-		`{"id":"test","status":"requires_action","steps":[{"type":"model_output","content":[{"type":"text","text":"no calls"}]}]}`,
 	} {
 		p := requestProvider()
 		params, err := p.buildRequest(requestFixture())
@@ -107,7 +116,6 @@ func TestNormalizeUsagePreservesOptionalFieldsAndProviderTotals(t *testing.T) {
 	for _, tc := range []struct {
 		name, raw string
 		want      map[string]any
-		wantError bool
 	}{
 		{name: "missing"},
 		{name: "null", raw: "null"},
@@ -119,17 +127,17 @@ func TestNormalizeUsagePreservesOptionalFieldsAndProviderTotals(t *testing.T) {
 		{name: "provider total", raw: `{"total_input_tokens":7,"total_output_tokens":20,"total_thought_tokens":22,"total_tokens":52}`, want: map[string]any{"prompt_tokens": float64(7), "completion_tokens": float64(42), "total_tokens": float64(52), "completion_tokens_details": map[string]any{"reasoning_tokens": float64(22)}}},
 		{name: "cached subset", raw: `{"total_input_tokens":7,"total_cached_tokens":3}`, want: map[string]any{"prompt_tokens": float64(7), "prompt_cache_hit_tokens": float64(3), "prompt_cache_miss_tokens": float64(4)}},
 		{name: "tool use is detail", raw: `{"total_input_tokens":100,"total_output_tokens":25,"total_tokens":125,"total_tool_use_tokens":50}`, want: map[string]any{"prompt_tokens": float64(100), "completion_tokens": float64(25), "total_tokens": float64(125), "total_tool_use_tokens": float64(50)}},
-		{name: "negative", raw: `{"total_thought_tokens":-1}`, wantError: true},
-		{name: "fraction", raw: `{"total_output_tokens":1.5}`, wantError: true},
-		{name: "string", raw: `{"total_tokens":"7"}`, wantError: true},
-		{name: "explicit null counter", raw: `{"total_input_tokens":null}`, wantError: true},
-		{name: "overflow", raw: `{"total_tokens":9223372036854775808}`, wantError: true},
-		{name: "cache exceeds input", raw: `{"total_input_tokens":7,"total_cached_tokens":8}`, wantError: true},
-		{name: "array", raw: `[]`, wantError: true},
+		{name: "negative", raw: `{"total_thought_tokens":-1}`},
+		{name: "fraction", raw: `{"total_output_tokens":1.5}`},
+		{name: "string", raw: `{"total_tokens":"7"}`},
+		{name: "explicit null counter", raw: `{"total_input_tokens":null}`},
+		{name: "overflow", raw: `{"total_tokens":9223372036854775808}`},
+		{name: "cache exceeds input", raw: `{"total_input_tokens":7,"total_cached_tokens":8}`},
+		{name: "array", raw: `[]`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := normalizeUsage(json.RawMessage(tc.raw))
-			if (err != nil) != tc.wantError || !reflect.DeepEqual(got, tc.want) {
+			if err != nil || !reflect.DeepEqual(got, tc.want) {
 				t.Fatalf("usage mapping mismatch: got=%v err=%v want=%v", got, err, tc.want)
 			}
 		})

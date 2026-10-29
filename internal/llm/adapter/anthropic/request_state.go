@@ -43,7 +43,7 @@ func (p Provider) replayContent(params sdk.MessageNewParams, message adapter.Mes
 	}
 	var payload replayPayload
 	if err := json.Unmarshal(state.Payload, &payload); err != nil {
-		return nil, false, fmt.Errorf("decode Anthropic replay state: %w", err)
+		return nil, false, nil
 	}
 	hash, err := p.requestHash(params)
 	if err != nil {
@@ -54,7 +54,7 @@ func (p Provider) replayContent(params sdk.MessageNewParams, message adapter.Mes
 	}
 	var content []json.RawMessage
 	if err := json.Unmarshal(payload.Content, &content); err != nil || len(content) == 0 {
-		return nil, false, fmt.Errorf("anthropic replay content must be a nonempty block array")
+		return nil, false, nil
 	}
 	var text strings.Builder
 	var calls []adapter.ToolCall
@@ -71,23 +71,22 @@ func (p Provider) replayContent(params sdk.MessageNewParams, message adapter.Mes
 			Input     json.RawMessage `json:"input"`
 		}
 		if err := json.Unmarshal(raw, &block); err != nil {
-			return nil, false, fmt.Errorf("decode Anthropic replay block: %w", err)
+			return nil, false, nil
 		}
 		switch block.Type {
 		case "text":
 			text.WriteString(block.Text)
 		case "thinking":
 			if block.Thinking == nil || block.Signature == "" {
-				return nil, false, fmt.Errorf("anthropic thinking replay requires original thinking and signature")
+				return nil, false, nil
 			}
 		case "redacted_thinking":
 			if block.Data == "" {
-				return nil, false, fmt.Errorf("anthropic redacted thinking replay requires original data")
+				return nil, false, nil
 			}
 		case "tool_use":
 			calls = append(calls, adapter.ToolCall{ID: block.ID, Name: block.Name, Arguments: block.Input})
 		default:
-			return nil, false, fmt.Errorf("unsupported Anthropic replay block %q", block.Type)
 		}
 		blocks = append(blocks, param.Override[sdk.ContentBlockParamUnion](slices.Clone(raw)))
 	}

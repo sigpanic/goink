@@ -63,7 +63,7 @@ func TestStreamRequiresProtocolCompletionAndPreservesReadErrors(t *testing.T) {
 		{name: "broken connection after terminal", reader: io.MultiReader(strings.NewReader(complete), iotest.ErrReader(io.ErrUnexpectedEOF)), wantError: true, cause: io.ErrUnexpectedEOF},
 		{name: "cancelled read", reader: iotest.ErrReader(context.Canceled), wantError: true, cause: context.Canceled},
 		{name: "malformed tail after terminal", reader: strings.NewReader(complete + "data: {\n\n"), wantError: true},
-		{name: "unknown event after terminal", reader: strings.NewReader(complete + "data: {\"event_type\":\"future_event\"}\n\n"), wantError: true},
+		{name: "unknown event after terminal", reader: strings.NewReader(complete + "data: {\"event_type\":\"future_event\"}\n\n")},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var closed atomic.Int32
@@ -126,7 +126,22 @@ func TestStreamMalformedHistoriesNeverDeliverPartOfAToolGroup(t *testing.T) {
 			}
 			var closed atomic.Int32
 			backend := streamWithReader(t, strings.NewReader(body), "text/event-stream", &closed)
-			requireStreamFailure(t, collectStream(t, backend.Stream(context.Background(), requestFixture())))
+			events := collectStream(t, backend.Stream(context.Background(), requestFixture()))
+			switch tc.name {
+			case "missing signature", "unknown tool step", "interaction ID changed", "completed with functions", "invalid usage":
+				complete := false
+				for _, event := range events {
+					if event.Type == adapter.EventError {
+						t.Fatal(event.Error)
+					}
+					complete = complete || event.Type == adapter.EventToolCallEnd
+				}
+				if !complete {
+					t.Fatal("auxiliary data blocked valid tools")
+				}
+			default:
+				requireStreamFailure(t, events)
+			}
 			if closed.Load() != 1 {
 				t.Fatalf("failed stream leaked its response body: %d", closed.Load())
 			}

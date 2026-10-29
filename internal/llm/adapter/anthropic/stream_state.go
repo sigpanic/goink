@@ -22,19 +22,24 @@ type streamState struct {
 	message                 sdk.Message
 	started, updated, ended bool
 	blocks                  []*streamBlock
+	discardNative           bool
 }
 
 func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.StreamEvent, bool, error) {
 	var out adapter.StreamEvent
 	publish := false
+	switch event.Type {
+	case "message_start", "content_block_start", "content_block_delta", "content_block_stop", "message_delta", "message_stop":
+	default:
+		return out, false, nil
+	}
 	if s.ended || (!s.started && event.Type != "message_start") {
 		return out, false, invalidResponse("unexpected stream event " + event.Type)
 	}
 	switch event.Type {
 	case "message_start":
 		message := event.Message
-		if s.started || message.Type != "message" || message.Role != "assistant" || message.ID == "" ||
-			!stringField(message.JSON.ID) || !message.JSON.Content.Valid() || len(message.Content) != 0 {
+		if s.started || len(message.Content) != 0 {
 			return out, false, invalidResponse("invalid message_start")
 		}
 		s.started = true
@@ -54,17 +59,14 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 			publish = block.Text != ""
 		case "thinking":
 			if !stringField(block.JSON.Thinking) {
-				return out, false, invalidResponse("thinking block requires thinking")
+				s.discardNative = true
 			}
 			if raw := block.JSON.Signature.Raw(); raw != "" && raw != "null" && !stringField(block.JSON.Signature) {
-				return out, false, invalidResponse("thinking signature must be a string")
+				s.discardNative = true
 			}
 			out = adapter.StreamEvent{Type: adapter.EventThinking, Data: block.Thinking}
-			publish = block.Thinking != ""
+			publish = stringField(block.JSON.Thinking) && block.Thinking != ""
 		case "redacted_thinking":
-			if !stringField(block.JSON.Data) || block.Data == "" {
-				return out, false, invalidResponse("redacted thinking block requires data")
-			}
 		case "tool_use":
 			if !stringField(block.JSON.ID) || !stringField(block.JSON.Name) || block.ID == "" || block.Name == "" {
 				return out, false, invalidResponse("tool block requires an ID and name")
@@ -85,7 +87,6 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 			out = adapter.StreamEvent{Type: adapter.EventToolCallStart, Delta: &adapter.ToolCallDelta{ToolID: block.ID, ToolName: block.Name}}
 			publish = true
 		default:
-			return out, false, invalidResponse("unsupported streamed block " + block.Type)
 		}
 		s.blocks = append(s.blocks, tracked)
 	case "content_block_delta", "content_block_stop":
@@ -118,16 +119,18 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 			out, publish = adapter.StreamEvent{Type: adapter.EventContent, Data: delta.Text}, delta.Text != ""
 		case block.kind == "text" && delta.Type == "citations_delta":
 			if !jsonObject(json.RawMessage(delta.JSON.Citation.Raw())) {
-				return out, false, invalidResponse("citation delta requires a citation object")
+				return out, false, nil
 			}
 		case block.kind == "thinking" && delta.Type == "thinking_delta":
 			if !stringField(delta.JSON.Thinking) {
-				return out, false, invalidResponse("thinking delta requires thinking")
+				s.discardNative = true
+				return out, false, nil
 			}
 			out, publish = adapter.StreamEvent{Type: adapter.EventThinking, Data: delta.Thinking}, delta.Thinking != ""
 		case block.kind == "thinking" && delta.Type == "signature_delta":
 			if !stringField(delta.JSON.Signature) {
-				return out, false, invalidResponse("signature delta requires a signature string")
+				s.discardNative = true
+				return out, false, nil
 			}
 		case block.kind == "tool_use" && delta.Type == "input_json_delta":
 			if !stringField(delta.JSON.PartialJSON) {
@@ -142,20 +145,19 @@ func (s *streamState) consume(event sdk.MessageStreamEventUnion) (adapter.Stream
 			}}
 			publish = true
 		default:
-			return out, false, invalidResponse("unsupported delta " + delta.Type + " for " + block.kind)
+			return out, false, nil
 		}
 	case "message_delta":
-		if !s.allClosed() || !event.JSON.Delta.Valid() || !event.Usage.JSON.OutputTokens.Valid() {
+		if !s.allClosed() {
 			return out, false, invalidResponse("message_delta before block completion or without usage")
 		}
 		s.updated = true
 	case "message_stop":
-		if !s.updated || !s.allClosed() {
+		if !s.allClosed() {
 			return out, false, invalidResponse("message_stop before complete blocks and message_delta")
 		}
 		s.ended = true
 	default:
-		return out, false, invalidResponse("unsupported stream event " + event.Type)
 	}
 	if err := s.message.Accumulate(event); err != nil {
 		return out, false, invalidResponse("SDK accumulation failed: " + err.Error())
@@ -201,5 +203,9 @@ func (s *streamState) finish(p Provider, params sdk.MessageNewParams) (adapter.R
 			return adapter.Response{}, invalidToolInput(block.id)
 		}
 	}
-	return p.convertResponse(params, &message)
+	response, err := p.convertResponse(params, &message)
+	if err == nil && s.discardNative {
+		response.State.Payload = nil
+	}
+	return response, err
 }

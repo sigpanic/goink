@@ -138,7 +138,7 @@ func TestReplayCompatibilityDropsOnlyOpaqueState(t *testing.T) {
 	}
 }
 
-func TestReplayProjectionRejectsDamagedMatchingState(t *testing.T) {
+func TestReplayProjectionFallsBackFromDamagedMatchingState(t *testing.T) {
 	for _, output := range []string{
 		`null`, `[]`, `{}`, `[null]`,
 		`[{"type":"reasoning","id":"rs_1"}]`,
@@ -159,8 +159,17 @@ func TestReplayProjectionRejectsDamagedMatchingState(t *testing.T) {
 				t.Fatal(err)
 			}
 			req.Messages[1].State.Payload = data
-			if _, err := p.buildRequest(req); err == nil {
-				t.Fatal("damaged matching native state was accepted")
+			params, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Messages[1].State = nil
+			fallback, err := p.buildRequest(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if string(encodeParams(t, params)["input"]) != string(encodeParams(t, fallback)["input"]) {
+				t.Fatal("damaged native state changed the public history")
 			}
 		})
 	}
@@ -225,8 +234,8 @@ func TestReplayFingerprintDoesNotStoreCredentials(t *testing.T) {
 		t.Fatal("replay state stores credentials or private endpoint")
 	}
 	req.Messages[1].State.Payload = json.RawMessage(`{`)
-	if _, err := p.buildRequest(req); err == nil {
-		t.Fatal("damaged state for the same instance was ignored")
+	if _, err := p.buildRequest(req); err != nil {
+		t.Fatalf("damaged state blocked the public history: %v", err)
 	}
 	// 跨协议时不解释其他适配器的私有 payload。
 	req.Messages[1].State.Origin.AdapterName = adapter.ProtocolAnthropicMessages
