@@ -1070,6 +1070,18 @@
   "skill": {
     "skills": "Skills",
     "newSkill": "New Skill",
+    "copy": {
+      "title": "Copy from Another Novel",
+      "description": "Open selected novel-level skills in the new skill editor. Saving creates independent copies in this novel. The content may contain settings specific to the source novel; edit as needed.",
+      "source": "Source novel",
+      "selectSource": "Select a novel",
+      "noOtherNovels": "No other novels available",
+      "noNovelSkills": "This novel has no novel-level skills",
+      "overwrite": "Overwrite existing skill",
+      "overwriteWarning": "These skills have the same names as skills in this novel. Continuing replaces their editor drafts; saving overwrites the original files. Continue?",
+      "confirmOverwrite": "Confirm Overwrite and Edit",
+      "openDrafts": "Copy and Edit"
+    },
     "confirm": "Confirm",
     "search": "Search...",
     "loading": "Loading...",

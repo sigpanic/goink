@@ -1046,6 +1046,18 @@
   "skill": {
     "skills": "技能",
     "newSkill": "新建技能",
+    "copy": {
+      "title": "从其他小说复制",
+      "description": "将选中的小说级技能带入新建编辑器，保存后成为当前小说的独立副本。正文可能包含源小说的专有设定，请按需修改。",
+      "source": "源小说",
+      "selectSource": "请选择小说",
+      "noOtherNovels": "暂无其他小说可供复制",
+      "noNovelSkills": "这部小说暂无小说级技能",
+      "overwrite": "覆盖同名技能",
+      "overwriteWarning": "以下技能与当前小说的技能同名。继续后将替换编辑器中的草稿，保存时覆盖原文件，是否继续？",
+      "confirmOverwrite": "确认覆盖并编辑",
+      "openDrafts": "复制并编辑"
+    },
     "confirm": "确定",
     "search": "搜索...",
     "loading": "加载中...",

@@ -108,6 +108,11 @@ vi.mock("@/components/skill/SkillEditForm", () => ({
       <button onClick={() => void onSave(content).catch(() => undefined)}>
         save
       </button>
+      <button
+        onClick={() => void onSave(`${content}\n`).catch(() => undefined)}
+      >
+        save normalized skill
+      </button>
       <button onClick={onCancel}>cancel skill</button>
     </div>
   ),
@@ -487,6 +492,107 @@ describe("ContentPanel", () => {
     });
 
     expect(mockFetchContent).toHaveBeenCalledWith(1, "chapters/id_1.md");
+  });
+
+  it("opens copied content as an unsaved skill and saves it through the existing save flow", async () => {
+    mockFetchContent.mockResolvedValue("");
+    mockOpenTab.mockImplementation((tab: Omit<EditorTab, "id">) => {
+      const id = useEditorTabsStore.getState().openTab(1, tab);
+      mockTabsState = useEditorTabsStore.getState().byNovel["1"].tabs;
+      mockActiveTabIdState = id;
+      return id;
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = useEditorTabsStore.getState().byNovel["1"].tabs;
+      },
+    );
+    const content = "---\nname: copied\ndescription: source\n---\nsource body";
+    const ref = { current: null as ContentPanelHandle | null };
+    const view = render(<ContentPanel ref={ref} />);
+    await act(async () =>
+      ref.current?.openFile(
+        "skills/copied.md",
+        "copied",
+        false,
+        "edit",
+        content,
+      ),
+    );
+
+    expect(mockSaveContent).not.toHaveBeenCalled();
+    expect(mockTabsState[0]).toMatchObject({
+      path: "skills/copied.md",
+      content,
+      contentBase: "",
+      isDirty: true,
+      viewMode: "edit",
+    });
+    view.rerender(<ContentPanel ref={ref} />);
+    expect(screen.getByTestId("skill-edit-form")).toHaveTextContent(
+      "source body",
+    );
+    await act(async () =>
+      fireEvent.click(
+        screen.getByRole("button", { name: "save normalized skill" }),
+      ),
+    );
+    expect(mockSaveContent).toHaveBeenCalledWith({
+      novel_id: 1,
+      path: "skills/copied.md",
+      content: `${content}\n`,
+      expected_content: "",
+    });
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      content: `${content}\n`,
+      contentBase: `${content}\n`,
+      isDirty: false,
+      viewMode: "preview",
+    });
+  });
+
+  it("replaces a confirmed same-name editor draft while retaining its normal save base", async () => {
+    const tab: EditorTab = {
+      id: "existing-skill",
+      type: "file",
+      path: "skills/plot.md",
+      title: "plot",
+      content: "old draft",
+      contentBase: "saved version",
+      isDirty: true,
+    };
+    mockTabsState = [tab];
+    mockActiveTabIdState = tab.id;
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: [tab], activeTabId: tab.id } },
+    });
+    mockFetchContent.mockResolvedValue("saved version");
+    mockCloseTab.mockImplementation((id: string) =>
+      useEditorTabsStore.getState().closeTab(1, id),
+    );
+    mockOpenTab.mockImplementation((newTab: Omit<EditorTab, "id">) =>
+      useEditorTabsStore.getState().openTab(1, newTab),
+    );
+    const ref = { current: null as ContentPanelHandle | null };
+    render(<ContentPanel ref={ref} />);
+    await act(async () =>
+      ref.current?.openFile(tab.path, "plot", false, "edit", "copied content"),
+    );
+    expect(mockCloseTab).toHaveBeenCalledWith(tab.id);
+    expect(mockOpenTab).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: "copied content",
+        contentBase: "saved version",
+        isDirty: true,
+        viewMode: "edit",
+      }),
+    );
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs).toHaveLength(1);
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0].id).not.toBe(
+      tab.id,
+    );
+    expect(mockSaveContent).not.toHaveBeenCalled();
   });
 
   it.each(["success", "failure"])(

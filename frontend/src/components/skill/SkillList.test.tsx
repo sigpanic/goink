@@ -46,6 +46,25 @@ vi.mock("./SkillMarketplace", () => ({
   default: () => null,
 }));
 
+vi.mock("./SkillCopyDialog", () => ({
+  default: ({
+    onNewSkill,
+    onClose,
+  }: {
+    onNewSkill: (name: string, content: string) => void;
+    onClose: () => void;
+  }) => (
+    <button
+      onClick={() => {
+        onNewSkill("copied", "source content");
+        onClose();
+      }}
+    >
+      copy skill
+    </button>
+  ),
+}));
+
 // 5.4 commit 1: skills 数据走 useSkills query（不再走 useApp.ListSkills）。
 // mockUseSkills 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
 // 5.4 commit 2: DeleteSkill 走 useDeleteSkill mutation（不再走 useApp）。
@@ -90,6 +109,19 @@ describe("SkillList", () => {
   it("renders empty state when no skills", async () => {
     render(<SkillList {...defaultProps} />);
     expect(await screen.findByText("skill.noSkills")).toBeInTheDocument();
+  });
+
+  it("opens copying from the skill panel and forwards the source draft to new skill", () => {
+    render(<SkillList {...defaultProps} />);
+    fireEvent.click(screen.getByTitle("skill.copy.title"));
+    fireEvent.click(screen.getByRole("button", { name: "copy skill" }));
+    expect(defaultProps.onNewSkill).toHaveBeenCalledWith(
+      "copied",
+      "source content",
+    );
+    expect(
+      screen.queryByRole("button", { name: "copy skill" }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows loadFailed when isError", async () => {

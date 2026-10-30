@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Search, Plus, Pencil, Trash2, Heart, Store } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, Heart, Store, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -10,6 +10,7 @@ import { getEditorSaveQueue } from "@/components/content/editorSaveQueue";
 import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
+import SkillCopyDialog from "./SkillCopyDialog";
 import { useSkills } from "./useSkills";
 import { useDeleteSkill } from "./useDeleteSkill";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -19,7 +20,7 @@ interface Props {
   activeSkillName: string | null;
   onSelectSkill: (path: string, title: string, readOnly: boolean) => void;
   onEditSkill: (path: string, title: string, readOnly: boolean) => void;
-  onNewSkill: (name: string) => void;
+  onNewSkill: (name: string, initialContent?: string) => void;
 }
 
 function skillPath(name: string, source: string): string {
@@ -54,6 +55,7 @@ export default function SkillList({
   const [newName, setNewName] = useState("");
   const [showContribute, setShowContribute] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   const handleMarketplaceInstalled = useCallback(() => {
     qc.invalidateQueries({ queryKey: skillKeys.list(novelId) });
@@ -139,6 +141,14 @@ export default function SkillList({
           {t("skill.skills")} ({skills.length})
         </span>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setCopyOpen(true)}
+            disabled={!novelId}
+            className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            title={t("skill.copy.title")}
+          >
+            <Copy className="w-3.5 h-3.5" />
+          </button>
           <button
             onClick={() => setMarketplaceOpen(true)}
             className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
@@ -267,6 +277,15 @@ export default function SkillList({
         open={showContribute}
         onClose={() => setShowContribute(false)}
       />
+      {copyOpen && (
+        <SkillCopyDialog
+          key={novelId}
+          novelId={novelId}
+          currentSkills={skills}
+          onNewSkill={onNewSkill}
+          onClose={() => setCopyOpen(false)}
+        />
+      )}
       <SkillMarketplace
         open={marketplaceOpen}
         onOpenChange={setMarketplaceOpen}
