@@ -116,5 +116,6 @@ func (c *Adapter) Generate(ctx context.Context, input adapter.Request) (adapter.
 			ArgumentsJSON: json.RawMessage(call.Function.Arguments),
 		})
 	}
+	response.State = p.responseState(input.Model, choice.FinishReason, len(response.ToolCalls) > 0)
 	return response, nil
 }

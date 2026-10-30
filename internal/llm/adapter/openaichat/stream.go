@@ -139,7 +139,7 @@ func (c *Adapter) Stream(ctx context.Context, input adapter.Request) <-chan Stre
 		}
 
 		// SSE 逐行解析
-		c.parseSSE(ctx, ch, resp)
+		c.parseSSE(ctx, ch, resp, p, model)
 	}()
 
 	return ch
@@ -235,7 +235,7 @@ func (c *Adapter) buildPayload(
 }
 
 // parseSSE 解析 SSE 流，产出 StreamEvent。
-func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *http.Response) {
+func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *http.Response, p Provider, model string) {
 	scanner := bufio.NewScanner(resp.Body)
 	scanner.Buffer(make([]byte, 0, 64*1024), 2*1024*1024) // 行最长 2MB
 
@@ -247,6 +247,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 	}
 	accumulated := make([]accToolCall, 0, 4)
 	var diag sseDiagnostics // 诊断追踪（hasContent/hasToolCalls/hasReason/headLines/tailLines 等）
+	var stopReason string
 	// usage 缓冲（diag.lastUsage）：部分 provider（如硅基流动）在每个 SSE chunk 都带 usage，
 	// 而非只在末尾。这里只保留最后一个，流结束后统一发一次，避免每 chunk
 	// 触发一次 DB 持久化（tokens.go updateUsage）和前端事件刷屏。
@@ -301,6 +302,9 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 		choice, ok := choices[0].(map[string]any)
 		if !ok {
 			continue
+		}
+		if reason, ok := choice["finish_reason"].(string); ok && reason != "" {
+			stopReason = reason
 		}
 		delta, ok := choice["delta"].(map[string]any)
 		if !ok {
@@ -476,6 +480,14 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 			return
 		}
 	} else {
+		// 终态可由 finish_reason 或 [DONE] 确认；无终态 EOF 沿用旧行为，但不发布完整 State。
+		if (stopReason != "" || diag.gotDone) && (diag.hasContent || len(validToolCalls) > 0) {
+			if !adapter.SendEvent(ctx, ch, StreamEvent{
+				Type: adapter.EventResponseState, State: p.responseState(model, stopReason, len(validToolCalls) > 0),
+			}) {
+				return
+			}
+		}
 		// 没有失败，发送完整的 tool call
 		for _, vtc := range validToolCalls {
 			acc := &accumulated[vtc.idx]

@@ -118,14 +118,16 @@ func TestProtocolSwitchPreservesStoredHistory(t *testing.T) {
 					if message.Content != "先读取两章。" || message.ThinkingContent != "private-thought" || !reflect.DeepEqual(message.ToolCalls, wantCalls) {
 						t.Fatalf("source response lost common fields or argument precision: %+v", message)
 					}
+					if message.State == nil || !message.State.Complete || message.State.TurnComplete ||
+						message.State.Origin != (MessageOrigin{AdapterName: source.Protocol, ProviderName: "relay", ProviderType: source.ProviderType, Model: req.Model}) {
+						t.Fatalf("source response did not supply its tool-waiting response state: %+v", message.State)
+					}
 					if source.Protocol == adapter.ProtocolOpenAIChat {
-						if message.State != nil {
-							t.Fatal("Chat unexpectedly supplied native state")
+						if len(message.State.Payload) != 0 || message.State.StopReason != "tool_calls" {
+							t.Fatalf("Chat response state has native payload or lost its stop reason: %+v", message.State)
 						}
-					} else if message.State == nil || !message.State.Complete || message.State.TurnComplete ||
-						message.State.Origin != (MessageOrigin{AdapterName: source.Protocol, ProviderName: "relay", ProviderType: source.ProviderType, Model: req.Model}) ||
-						!bytes.Contains(message.State.Payload, []byte("private-")) {
-						t.Fatalf("source response did not supply its tool-waiting native state: %+v", message.State)
+					} else if !bytes.Contains(message.State.Payload, []byte("private-")) {
+						t.Fatalf("source response lost its native payload: %+v", message.State)
 					}
 					stored := switchJSON(t, message)
 					var loaded Message
@@ -142,7 +144,8 @@ func TestProtocolSwitchPreservesStoredHistory(t *testing.T) {
 					if result.Content != "续聊成功" || len(result.ToolCalls) != 0 {
 						t.Fatalf("target failed to continue or repeated a historical tool call: %+v", result)
 					}
-					if target.Protocol != adapter.ProtocolOpenAIChat && (result.State == nil || !result.State.Complete || !result.State.TurnComplete || result.State.Origin.AdapterName != target.Protocol) {
+					if result.State == nil || !result.State.Complete || !result.State.TurnComplete ||
+						result.State.Origin != (MessageOrigin{AdapterName: target.Protocol, ProviderName: "relay", ProviderType: target.ProviderType, Model: req.Model}) {
 						t.Fatalf("target did not supply its own complete response state: %+v", result.State)
 					}
 					if !bytes.Equal(before, switchJSON(t, req)) {
