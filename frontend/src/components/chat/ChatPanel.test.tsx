@@ -177,7 +177,49 @@ it("retains opaque thinking after its end event and subsequent answer", async ()
   expect(screen.getByText("最终回答")).toBeInTheDocument();
   expect(screen.getByRole("status")).toHaveTextContent("chat.thinkingProcess");
   await act(async () => request.resolve());
+  expect(screen.getByText("最终回答")).toBeVisible();
+  expect(screen.queryByRole("status")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "chat.workHistory" }));
+  expect(screen.getByRole("status")).toHaveTextContent("chat.thinkingProcess");
 });
+
+it.each([true, false])(
+  "respects bottom-following=%s when completed work history collapses",
+  async (nearBottom) => {
+    const request = await startChat();
+    await act(async () => {
+      emit("agent:1", { turn_id: 1, type: AgentEventType.Thinking });
+      emit("agent:1", { turn_id: 1, type: AgentEventType.ThinkingDone });
+      emit("agent:1", {
+        turn_id: 1,
+        type: AgentEventType.Content,
+        data: "最终回复",
+      });
+    });
+    const scrollContainer = screen
+      .getByText("最终回复")
+      .closest(".overflow-y-auto")!;
+    Object.defineProperties(scrollContainer, {
+      scrollHeight: { configurable: true, value: 1000 },
+      clientHeight: { configurable: true, value: 400 },
+      scrollTop: { configurable: true, value: nearBottom ? 600 : 100 },
+    });
+    fireEvent.scroll(scrollContainer);
+    vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+    await act(async () => request.resolve());
+    expect(
+      screen.getByRole("button", { name: "chat.workHistory" }),
+    ).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByText("最终回复")).toBeVisible();
+    if (nearBottom) {
+      expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+        behavior: "instant",
+      });
+    } else {
+      expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+    }
+  },
+);
 
 it.each(["error", "system_interrupted"])(
   "preserves the %s reason when the Chat promise rejects afterward",

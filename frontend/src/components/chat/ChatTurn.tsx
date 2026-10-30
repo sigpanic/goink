@@ -1,12 +1,9 @@
-import { Loader2 } from "lucide-react";
+import { useId, useState } from "react";
+import { ChevronRight, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { Turn } from "./types";
 import MessageBubble from "./MessageBubble";
-import ThinkingBlock from "./ThinkingBlock";
-import ToolCallCard from "./ToolCallCard";
-import WebSearchCard from "./WebSearchCard";
-import WebFetchCard from "./WebFetchCard";
-import SubagentCard from "./SubagentCard";
-import CompressionBlock from "./CompressionBlock";
+import TurnSegmentView from "./TurnSegmentView";
 import TurnOutcome from "./TurnOutcome";
 
 interface Props {
@@ -16,106 +13,73 @@ interface Props {
 }
 
 export default function ChatTurn({ turn, onApprove, onReject }: Props) {
+  const { t } = useTranslation();
+  const historyId = useId();
+  const [historyExpanded, setHistoryExpanded] = useState(false);
+  const finalIndex = turn.segments.findLastIndex(
+    (seg) => seg.type === "text" && seg.content.trim() !== "",
+  );
+  const canCollapse =
+    turn.status === "done" &&
+    !turn.compressionOnly &&
+    finalIndex >= 0 &&
+    turn.segments.slice(finalIndex + 1).every((seg) => seg.type === "text") &&
+    turn.segments.some((seg, index) =>
+      seg.type === "text"
+        ? !!(
+            seg.thinkingContent ||
+            seg.hasThinking ||
+            (index !== finalIndex && seg.content)
+          )
+        : seg.type !== "tool" || seg.toolName !== "run_subagent",
+    );
+
   return (
     <div className="space-y-2">
       {turn.userMessage && (
         <MessageBubble role="user" content={turn.userMessage} />
       )}
 
-      {turn.segments.map((seg) => {
-        if (seg.type === "subagent" && seg.agentType) {
-          return (
-            <SubagentCard
-              key={seg.id}
-              agentType={seg.agentType}
-              segments={seg.segments || []}
-              status={seg.status || "done"}
-              retrying={seg.retrying}
-              errorMessage={seg.errorMessage}
+      <div className="space-y-2">
+        {canCollapse && (
+          <button
+            type="button"
+            aria-expanded={historyExpanded}
+            aria-controls={historyId}
+            onClick={() => setHistoryExpanded((expanded) => !expanded)}
+            className="flex items-center gap-1.5 rounded-md px-1 py-1 text-xs text-muted-foreground hover:text-foreground focus-visible:outline-2 focus-visible:outline-ring"
+          >
+            <ChevronRight
+              className={`h-3.5 w-3.5 ${historyExpanded ? "rotate-90" : ""}`}
+              aria-hidden="true"
             />
-          );
-        }
-
-        if (seg.type === "tool") {
-          // run_subagent 已由 subagent 段渲染，跳过纯工具卡
-          if (seg.toolName === "run_subagent") return null;
-
-          if (
-            seg.toolName === "web_search" &&
-            seg.toolStatus === "completed" &&
-            seg.result
-          ) {
-            return <WebSearchCard key={seg.id} result={seg.result} />;
-          }
-          if (
-            seg.toolName === "web_fetch" &&
-            seg.toolStatus === "completed" &&
-            seg.result
-          ) {
-            return (
-              <WebFetchCard
-                key={seg.id}
-                result={seg.result}
-                displayText={seg.displayText}
-              />
-            );
-          }
-
-          return (
-            <ToolCallCard
-              key={seg.id}
-              toolName={seg.toolName}
-              displayText={seg.displayText}
-              status={seg.toolStatus}
-              activityKind={seg.activityKind}
-              error={seg.error}
-              approvalType={seg.approvalType}
-              approvalPayload={seg.approvalPayload}
-              result={seg.result}
-              onApprove={
-                seg.toolStatus === "awaiting_approval"
-                  ? (feedback: string) => onApprove(seg.toolId, feedback)
-                  : undefined
-              }
-              onReject={
-                seg.toolStatus === "awaiting_approval"
-                  ? (feedback: string) => onReject(seg.toolId, feedback)
-                  : undefined
-              }
+            {t("chat.workHistory")}
+          </button>
+        )}
+        <div
+          id={historyId}
+          hidden={canCollapse && !historyExpanded}
+          className="space-y-2"
+        >
+          {turn.segments.map((segment, index) => (
+            <TurnSegmentView
+              key={segment.id}
+              segment={segment}
+              isTurnStreaming={turn.status === "streaming"}
+              hideContent={canCollapse && index === finalIndex}
+              onApprove={onApprove}
+              onReject={onReject}
             />
-          );
-        }
+          ))}
+        </div>
+      </div>
 
-        if (seg.type === "compression") {
-          return (
-            <CompressionBlock
-              key={seg.id}
-              phase={seg.compressionPhase || "compressing"}
-            />
-          );
-        }
-
-        return (
-          <div key={seg.id}>
-            {(seg.thinkingContent || seg.hasThinking) && (
-              <div className="max-w-[85%]">
-                <ThinkingBlock
-                  content={seg.thinkingContent}
-                  hasThinking={seg.hasThinking}
-                  isStreaming={
-                    turn.status === "streaming" &&
-                    !seg.thinkingDone &&
-                    seg.isStreaming
-                  }
-                />
-              </div>
-            )}
-            {seg.content && (
-              <MessageBubble role="assistant" content={seg.content} />
-            )}
-          </div>
-        );
-      })}
+      {canCollapse && (
+        <MessageBubble
+          role="assistant"
+          content={turn.segments[finalIndex].content}
+        />
+      )}
 
       <TurnOutcome
         status={turn.status}
