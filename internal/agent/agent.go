@@ -441,7 +441,6 @@ func (a *Agent) run(
 						// 丢弃本轮所有输出（content + thinking + tool_calls）
 						responseBuffer.Reset()
 						thinkingBuffer.Reset()
-						isThinking = false
 
 						// appendMsg user reminder，告诉 LLM 刚才 tool call 解析失败
 						// 仅首次 tool_args_invalid 时追加，避免重试耗尽后残留多条孤立 reminder
@@ -521,7 +520,6 @@ func (a *Agent) run(
 						// 首次进入是外层 turn 顶部已确保空；重试进入是上次末已 Reset）。
 						responseBuffer.Reset()
 						thinkingBuffer.Reset()
-						isThinking = false
 						// toolOutputs / pendingInjects 在本轮 streamLoop 内，
 						// EventError 发生时本轮 tool 还未执行（toolOutputs 为空），
 						// 不需要清空
