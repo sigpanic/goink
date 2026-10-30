@@ -483,7 +483,7 @@ func (c *Adapter) parseSSE(ctx context.Context, ch chan<- StreamEvent, resp *htt
 		// 终态可由 finish_reason 或 [DONE] 确认；无终态 EOF 沿用旧行为，但不发布完整 State。
 		if (stopReason != "" || diag.gotDone) && (diag.hasContent || len(validToolCalls) > 0) {
 			if !adapter.SendEvent(ctx, ch, StreamEvent{
-				Type: adapter.EventResponseState, State: p.responseState(model, stopReason, len(validToolCalls) > 0),
+				Type: adapter.EventResponseState, State: responseState(p.Name, p.ProviderType, model, stopReason, len(validToolCalls) > 0),
 			}) {
 				return
 			}
