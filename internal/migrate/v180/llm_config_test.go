@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"gorm.io/driver/sqlite"
@@ -58,7 +59,9 @@ func TestLLMConfigMigrationPreservesOverrides(t *testing.T) {
 	require.Equal(t, original, backup, "备份保留原始密文，不能重新加密或输出明文")
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	require.Zero(t, info.Mode().Perm()&0077)
+	if runtime.GOOS != "windows" {
+		require.Zero(t, info.Mode().Perm()&0077)
+	}
 }
 
 func TestLLMConfigMigrationLeavesVersionedFilesUntouched(t *testing.T) {
@@ -77,7 +80,9 @@ func TestLLMConfigMigrationLeavesVersionedFilesUntouched(t *testing.T) {
 		})
 	}
 	t.Run("missing file", func(t *testing.T) {
-		t.Setenv("HOME", t.TempDir())
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		t.Setenv("USERPROFILE", home)
 		require.NoError(t, (llmConfigStep{}).Run(nil, slog.Default()))
 		_, err := os.Stat(config.LLMConfigPath())
 		require.ErrorIs(t, err, os.ErrNotExist)
@@ -181,7 +186,9 @@ func TestLLMConfigResumesAfterFileReplacedBeforeDone(t *testing.T) {
 
 func writeLegacyConfig(t *testing.T, plain []byte) (string, []byte) {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	path := config.LLMConfigPath()
 	require.NoError(t, os.MkdirAll(filepath.Dir(path), 0700))
 	enc, err := config.Encrypt(plain)

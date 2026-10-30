@@ -301,7 +301,9 @@ func setupMigrationIntegrationEnv(t *testing.T) string {
 	// 迁移会 git commit 文件改名，必须有真实 git；测试模式默认只认 DataDir 下的
 	// bundled git，故显式注入系统 git，而非伪造一份 bundled 布局（Windows 上伪造不出来）。
 	t.Setenv("GOINK_GIT_BIN", gitSrc)
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	config.Set(&config.AppConfig{})
 	return dataDir
 }
