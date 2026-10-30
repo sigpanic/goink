@@ -125,6 +125,24 @@ func (a *App) GetSessionMessages(sessionID string) ([]session.Message, error) {
 	return msgs, nil
 }
 
+// GetSessionMessagesPageInput 包含会话及按轮次翻页的选项。
+type GetSessionMessagesPageInput struct {
+	SessionID string `json:"session_id"`
+	session.MessagePageOptions
+}
+
+// GetSessionMessagesPage 返回最近或指定游标之前的完整轮次，供聊天历史懒加载。
+func (a *App) GetSessionMessagesPage(input GetSessionMessagesPageInput) (*session.MessagePage, error) {
+	if a.session == nil {
+		return &session.MessagePage{Items: []session.Message{}}, nil
+	}
+	page, err := a.session.GetMessagesPageForFrontend(a.ctx, input.SessionID, input.MessagePageOptions)
+	if err != nil {
+		return nil, fmt.Errorf("app: get message page: %w", err)
+	}
+	return page, nil
+}
+
 // GetLLMConfig 返回合并内置模板和用户配置的完整视图。
 func (a *App) GetLLMConfig() (*llm.LLMConfigView, error) {
 	user, err := llm.LoadUserConfig(config.LLMConfigPath())

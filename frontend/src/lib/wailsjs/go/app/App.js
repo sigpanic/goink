@@ -294,6 +294,10 @@ export function GetSessionMessages(arg1) {
   return window['go']['app']['App']['GetSessionMessages'](arg1);
 }
 
+export function GetSessionMessagesPage(arg1) {
+  return window['go']['app']['App']['GetSessionMessagesPage'](arg1);
+}
+
 export function GetSessions(arg1) {
   return window['go']['app']['App']['GetSessions'](arg1);
 }

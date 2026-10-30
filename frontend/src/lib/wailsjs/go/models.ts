@@ -523,6 +523,22 @@ export namespace app {
 	        this.search = source["search"];
 	    }
 	}
+	export class GetSessionMessagesPageInput {
+	    session_id: string;
+	    before_turn_id: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetSessionMessagesPageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.before_turn_id = source["before_turn_id"];
+	        this.size = source["size"];
+	    }
+	}
 	export class GetSessionsInput {
 	    novel_id: number;
 	    page: number;
@@ -2727,6 +2743,40 @@ export namespace session {
 	        this.agent_type = source["agent_type"];
 	        this.sub_task_id = source["sub_task_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MessagePage {
+	    items: Message[];
+	    next_before_turn_id: number;
+	    has_more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MessagePage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Message);
+	        this.next_before_turn_id = source["next_before_turn_id"];
+	        this.has_more = source["has_more"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

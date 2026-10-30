@@ -25,6 +25,7 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 - 对涉及多个文件、数据结构、API、数据库、UI 流程或行为变化的任务，必须先说明设计、影响范围、风险和验证方案；用户确认前不要写代码。
 - 仅当用户明确要求文档时，设计确认后先把方案沉淀到合适的 `docs/` 文档；未要求文档时，在对话中说明设计、影响范围和 commit 路线即可。
 - 开始实现前，列出预计的文件范围、实现步骤和 commit 拆分/路线；不要在没有路线的情况下随意边改边提交。
+- 不要求中间 commit 可编译；绝对禁止为通过编译引入不必要的中间态（如临时 API、兼容层）。
 - 未经用户明确允许，不要自行创建、修改或删除代码文件。可以进行只读检查、分析、提出方案和文档草稿；代码实现必须等用户确认。
 - 纯格式化、明显的拼写修正或用户明确要求“直接修复”的小改动可以直接处理，但仍需遵守其他规则，并在完成后等待 review。
 - 写完代码后报告变更和验证结果，停下来等待用户 review；不得因为测试通过就自动暂存、提交、推送或合并。
@@ -36,6 +37,7 @@ Goink 是一个使用 Wails（Go + React）的桌面 AI 网文写作助手。用
 - 前端命令必须先进入 `frontend/`：使用 `npm run build`、`npm run lint`、`npm run test`；不要在项目根目录运行 `npm install`。
 - 安装前端依赖时，在 `frontend/` 中执行 `npm install <pkg> --save`。
 - `.githooks/pre-commit` 会按 staged 文件范围执行验证：Go 变更触发 build/test/golangci-lint，前端变更触发 build/lint/test，文档和配置变更跳过。除非用户要求或需要诊断，通常不重复运行整套验证。
+- 已获提交授权时，阶段性编译失败可用 `git commit --no-verify`；说明原因，迁移完成后补齐验证。
 - `commit-msg` hook 会校验 Conventional Commits，并要求 subject 与 body 之间有空行且 body 非空；提交前应主动遵守，不要依赖 hook 纠错。
 - 系统依赖（Ubuntu/Debian）：`libsqlite3-dev libgtk-3-dev libwebkit2gtk-4.1-dev gcc`。
 

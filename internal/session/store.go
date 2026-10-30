@@ -226,6 +226,9 @@ func (s *Store) GetMessagesForFrontend(ctx context.Context, sessionID string) ([
 		Find(&msgs).Error; err != nil {
 		return nil, fmt.Errorf("session store: get frontend messages: %w", err)
 	}
+	if err := projectFrontendMessages(msgs); err != nil {
+		return nil, fmt.Errorf("session store: project frontend messages: %w", err)
+	}
 	return msgs, nil
 }
 

@@ -175,6 +175,8 @@ export function GetSession(arg1:string):Promise<app.SessionDetail>;
 
 export function GetSessionMessages(arg1:string):Promise<Array<session.Message>>;
 
+export function GetSessionMessagesPage(arg1:app.GetSessionMessagesPageInput):Promise<session.MessagePage>;
+
 export function GetSessions(arg1:app.GetSessionsInput):Promise<storage.PageResult_github_com_sigpanic_goink_app_SessionMeta_>;
 
 export function GetSettings():Promise<config.AppSettings>;
