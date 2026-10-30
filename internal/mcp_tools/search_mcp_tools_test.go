@@ -144,12 +144,11 @@ func TestSearchMCPValidatesQueriesAndAgentAccess(t *testing.T) {
 		result := r.Execute(context.Background(), "search_mcp", json.RawMessage(`{"queries":["分卷"]}`), ToolContext{}, agentcfg.Allowlist(role))
 		require.False(t, result.Success)
 		require.Contains(t, result.Error, "工具禁止使用")
-		require.Empty(t, r.OpenAI(agentcfg.Allowlist(role)))
+		require.Empty(t, r.Definitions(agentcfg.Allowlist(role)))
 	}
-	tools := r.OpenAI(agentcfg.Allowlist(agentcfg.MainAgent))
+	tools := r.Definitions(agentcfg.Allowlist(agentcfg.MainAgent))
 	require.Len(t, tools, 1)
-	function := tools[0]["function"].(map[string]any)
-	require.Equal(t, "search_mcp", function["name"])
+	require.Equal(t, "search_mcp", tools[0].Name)
 	var schema struct {
 		Required   []string
 		Properties map[string]struct {
@@ -158,7 +157,7 @@ func TestSearchMCPValidatesQueriesAndAgentAccess(t *testing.T) {
 			MaxItems int
 		}
 	}
-	require.NoError(t, json.Unmarshal(function["parameters"].(json.RawMessage), &schema))
+	require.NoError(t, json.Unmarshal(tools[0].InputSchema, &schema))
 	require.Equal(t, []string{"queries"}, schema.Required)
 	require.Equal(t, "array", schema.Properties["queries"].Type)
 	require.Equal(t, 1, schema.Properties["queries"].MinItems)

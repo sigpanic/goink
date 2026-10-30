@@ -35,14 +35,15 @@ func main() {
 	tags := flag.String("tags", "", "comma-separated release tags; empty selects all stable releases since v1.0.0")
 	check := flag.Bool("check", false, "check archive hashes and coverage of historical release tags")
 	target := flag.String("target", "", "candidate tag excluded from historical coverage")
+	rebuild := flag.Bool("rebuild", false, "explicitly regenerate frozen fixtures after verifying their existing checksums and source commits")
 	flag.Parse()
-	if err := run(*tags, *check, *target); err != nil {
+	if err := run(*tags, *check, *target, *rebuild); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func run(selected string, check bool, target string) error {
+func run(selected string, check bool, target string, rebuild bool) error {
 	root, err := os.Getwd()
 	if err != nil {
 		return err
@@ -127,7 +128,7 @@ func run(selected string, check bool, target string) error {
 					frozen = true
 				}
 			}
-			if frozen {
+			if frozen && !rebuild {
 				continue
 			}
 			fmt.Println("Generate", name, commit)
@@ -155,7 +156,7 @@ func run(selected string, check bool, target string) error {
 			f.Tag, f.Commit, f.Origin, f.Archive = tag, commit, origin, name+".zip"
 			// Persist each completed sample, so an interrupted generation can be
 			// reviewed and resumed without overwriting already frozen archives.
-			if err := saveFixture(filepath.Join(home, "Goink"), path, &m, f); err != nil {
+			if err := saveFixture(filepath.Join(home, "Goink"), path, &m, f, rebuild); err != nil {
 				return err
 			}
 		}
@@ -188,6 +189,9 @@ func releaseTags(root, target string) ([]string, error) {
 }
 
 func checkManifest(root string, m manifest, tags []string) error {
+	if _, err := fixturedata.Load(filepath.Join(root, fixtureDir)); err != nil {
+		return err
+	}
 	seen := make(map[string]bool)
 	for _, f := range m.Fixtures {
 		key := f.Tag + "/" + f.Origin
@@ -201,13 +205,6 @@ func checkManifest(root string, m manifest, tags []string) error {
 		}
 		if commit != f.Commit {
 			return fmt.Errorf("tag %s no longer matches frozen commit %s", f.Tag, f.Commit)
-		}
-		hash, err := fileHash(filepath.Join(root, fixtureDir, f.Archive))
-		if err != nil {
-			return err
-		}
-		if hash != f.SHA256 {
-			return fmt.Errorf("fixture checksum mismatch: %s", key)
 		}
 	}
 	for _, tag := range tags {
@@ -345,48 +342,54 @@ func zipData(dir, target string) error {
 		}
 	}()
 	zw := zip.NewWriter(f)
-	err = filepath.WalkDir(dir, func(path string, entry os.DirEntry, walkErr error) error {
-		if walkErr != nil {
-			return walkErr
-		}
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		name := filepath.ToSlash(rel)
-		if entry.IsDir() {
-			if name == "backups" || strings.HasSuffix(name, "/.git/hooks") {
-				return filepath.SkipDir
+	walk := func(root, prefix string) error {
+		return filepath.WalkDir(root, func(path string, entry os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
 			}
-			return nil
-		}
-		if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") {
-			return fmt.Errorf("database must be closed before freezing: %s", name)
-		}
-		info, err := entry.Info()
-		if err != nil {
+			rel, err := filepath.Rel(root, path)
+			if err != nil {
+				return err
+			}
+			name := filepath.ToSlash(filepath.Join(prefix, rel))
+			if entry.IsDir() {
+				if name == "backups" || strings.HasSuffix(name, "/.git/hooks") {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if strings.HasSuffix(name, "-wal") || strings.HasSuffix(name, "-shm") {
+				return fmt.Errorf("database must be closed before freezing: %s", name)
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			if !info.Mode().IsRegular() {
+				return fmt.Errorf("unsupported fixture file %s", name)
+			}
+			header, err := zip.FileInfoHeader(info)
+			if err != nil {
+				return err
+			}
+			header.Name, header.Method = name, zip.Deflate
+			header.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+			writer, err := zw.CreateHeader(header)
+			if err != nil {
+				return err
+			}
+			data, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			_, err = writer.Write(data)
 			return err
-		}
-		if !info.Mode().IsRegular() {
-			return fmt.Errorf("unsupported fixture file %s", name)
-		}
-		header, err := zip.FileInfoHeader(info)
-		if err != nil {
-			return err
-		}
-		header.Name, header.Method = name, zip.Deflate
-		header.Modified = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
-		writer, err := zw.CreateHeader(header)
-		if err != nil {
-			return err
-		}
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return err
-		}
-		_, err = writer.Write(data)
-		return err
-	})
+		})
+	}
+	err = walk(dir, "")
+	if err == nil {
+		err = walk(filepath.Join(filepath.Dir(dir), ".goink"), ".goink")
+	}
 	closeZipErr, closeFileErr := zw.Close(), f.Close()
 	if err != nil {
 		return err

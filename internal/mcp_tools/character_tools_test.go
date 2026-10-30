@@ -8,6 +8,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+	"gorm.io/driver/sqlite"
+	"gorm.io/gorm"
+
+	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 )
 
@@ -167,4 +172,44 @@ func TestUpdateCharacterRelationship_ZeroValueTrapBlockedTarget(t *testing.T) {
 	if !strings.Contains(res.Error, "参数组合非法") {
 		t.Errorf("explicit zero target should be detected as field present, got: %s", res.Error)
 	}
+}
+
+// 验证 evolveRelation 区分新建与演变：两角色此前无关系时返回 action=create，
+// 已有同向当前关系时旧关系归档、返回 action=evolve。
+func TestUpdateCharacterRelationship_DistinguishesCreateAndEvolve(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	require.NoError(t, db.AutoMigrate(&character.Character{}, &character.CharacterRelation{}))
+	require.NoError(t, db.Create(&character.Character{ID: 1, NovelID: 1, Name: "甲"}).Error)
+	require.NoError(t, db.Create(&character.Character{ID: 2, NovelID: 1, Name: "乙"}).Error)
+
+	reg := newTestRegistry(t)
+	tc := mcp_tools.ToolContext{DB: db, NovelID: 1}
+
+	call := func(describe string) any {
+		t.Helper()
+		b, err := json.Marshal(map[string]any{
+			"source_character_id": 1,
+			"target_character_id": 2,
+			"relation_describe":   describe,
+		})
+		require.NoError(t, err)
+		res := reg.Execute(context.Background(), "update_character_relationship", b, tc, nil)
+		require.True(t, res.Success, "%+v", res)
+		return res.Data["action"]
+	}
+
+	require.Equal(t, "create", call("初次相识"))
+	require.Equal(t, "evolve", call("结为挚友"))
+
+	// 旧关系归档为非当前，仅保留一条当前关系
+	var rels []character.CharacterRelation
+	require.NoError(t, db.Order("id").Find(&rels).Error)
+	require.Len(t, rels, 2)
+	require.False(t, rels[0].IsCurrent)
+	require.True(t, rels[1].IsCurrent)
 }

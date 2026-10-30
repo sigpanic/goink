@@ -1,0 +1,105 @@
+event: message_start
+data: {"type":"message_start","message":{"model":"claude-sonnet-5-5","id":"msg_011CgVJyQ2aca6QiQnVHuykq","type":"message","role":"assistant","content":[],"container":null,"stop_reason":null,"stop_sequence":null,"stop_details":null,"usage":{"input_tokens":4,"cache_creation_input_tokens":515,"cache_read_input_tokens":0,"cache_creation":{"ephemeral_5m_input_tokens":515,"ephemeral_1h_input_tokens":0},"output_tokens":5,"service_tier":"standard","inference_geo":"global","speed":"standard"},"diagnostics":null}   }
+
+event: content_block_start
+data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":"","signature":""}          }
+
+event: ping
+data: {"type": "ping"}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"137"}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"/23.4 g"}        }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"ives about"}             }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" 5.85"}             }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" hours of"}   }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" dri"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"ving, ro"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"ughly 5h 51min"}            }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":", plus 36 min"}        }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"utes of stops tot"}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"als about 6h 27min"} }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":". Starting at 13:"}             }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"47 that"}}
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" lands right around 20:14"}   }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":","}              }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" so I'll check the weather"}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":" for Paris next"}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"."}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"\n\n"}     }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"CAQS9QYKEAgTGAI4AUIIdGhpbmtpbmcSDHIpSDUYRumMmj7g9xoMZJxJSWBVX4/hcNAHIjBbXsKfOjhFuv2MX2A5BER6dOytUknvek/Xz1+bEEL88ADa0bRa29pJuUEooyeqRMAqkgZqpNEICU16xvNUkUxf1tiWndzWXCun5DYkdHmVzMA+CyYc6yrfIuthCSJRV7JXqemB2Hnp2w6+w8MZjS0o4gJn7VY4HYYm2UgWoPLVSEE6o99NAYANcMfJpaHsu/rPtxy1aSRnNaYB4uxk3aXFwuGs8a0fDD3AFQQesALutAWVT3L0h3qqWSoAI2wOEg3z7jOMwOUNMOLLUJCnRSN31ZiiqvAB/pUTtD2csOfYrSoPJnLD334PQI7edVnaX9gnPIzrNPUMnGv7yq7pg5JFJ1SCQVHx/jwm3f9wtET4ewKYv4FAK1EesiNV7um8DsLz7C02SiDAcXddj7sTlcd5m1zHSezZHRS0PU1wYqfAEDu8pANVijAT62IUmbkRuVx3axNmc0+iL/+3sAqwBlK+z1akxa6K1HxqC6qTbl79vsHZs/bArkn6Bq1nqFVcRH5TvMJdRJTqmaU5rCG+b0tAOrS4tMH2fi8c/ZkHILTNdmsy6XkG/NTslV70nR9z+RDOOw1Hupj03bsRlwVM8RqbriJnnJNJHyQbSgMb9V9Y/NNR0GqbiciGxfGSKRazrcCYsqNkvF7Ri6aiiXDvLUmgjqL54A1RyfRFQGcUYh6OFxVvvymHLWbFwwEjK7JvT8KnR4zwqGT97FgXT03JTACkObLVnxrD/3QfS1vG8HbScXsqf+D9zqOu7NVaB25CP0Ywh4ZTZZ8H1R773ayuxgOIhnr+FYbQ5HmQCFVSbXpzw2zxMTSIo7lyQlUmNofqPqr3WzjeRb3L6Om6zz/X5iR+igqZX/PAtpUrzHVFVcrlg3WGb268fV6MDmS81im5Cj3jKgu6Qk+k+JeHk19nG59uyNbOdif+14NDmrVyhw792Af0wDPJScNFZQHHWTRZThmsyor1OLR1MktrsNRNkHgTdmqZoCnf11Tk/gq3G+ov6B8sHcdSFynNWNHy9LZI3fMEGn7GSFU9dhhMo8Y55vtUwImpNp2jkaGMb2vYIQzQPDANqSKPIIZCD2M9MSNw36F15Ek7fDxSUhUZZiAG5PbclO2k59oYAQ=="}     }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":0    }
+
+event: content_block_start
+data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_01DJjR7J1yjbQGzt5RKZcttc","name":"get_weather","input":{},"caller":{"type":"direct"}}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":""}    }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\"city\""}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":": \"Pari"}       }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"s\""}          }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":", \"unit"}           }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"\": \"cel"}     }
+
+event: content_block_delta
+data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"sius\"}"}           }
+
+event: content_block_stop
+data: {"type":"content_block_stop","index":1              }
+
+event: message_delta
+data: {"type":"message_delta","delta":{"stop_reason":"tool_use","stop_sequence":null,"stop_details":null,"container":null},"usage":{"input_tokens":4,"cache_creation_input_tokens":515,"cache_read_input_tokens":0,"output_tokens":236,"output_tokens_details":{"thinking_tokens":161}}             }
+
+event: message_stop
+data: {"type":"message_stop"   }
+

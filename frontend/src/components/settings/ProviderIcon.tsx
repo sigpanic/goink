@@ -5,19 +5,25 @@ import qwenRaw from "@/assets/providers/qwen.svg?raw";
 import zhipuRaw from "@/assets/providers/zhipu.svg?raw";
 import minimaxRaw from "@/assets/providers/minimax.svg?raw";
 import mimoRaw from "@/assets/providers/mimo.svg?raw";
-import moonshotRaw from "@/assets/providers/moonshot.svg?raw";
+import kimiRaw from "@/assets/providers/kimi.svg?raw";
 import opencodeRaw from "@/assets/providers/opencode.svg?raw";
+import openaiRaw from "@/assets/providers/openai.svg?raw";
+import claudeRaw from "@/assets/providers/claude.svg?raw";
+import geminiRaw from "@/assets/providers/gemini.svg?raw";
 
 const LOGOS: Record<string, string> = {
   deepseek: deepseekRaw,
-  doubao: doubaoRaw,
-  qwen: qwenRaw,
+  bytedance: doubaoRaw,
+  alibaba: qwenRaw,
   zhipu: zhipuRaw,
   minimax: minimaxRaw,
-  mimo: mimoRaw,
-  moonshot: moonshotRaw,
+  xiaomi: mimoRaw,
+  moonshot: kimiRaw,
   opencode: opencodeRaw,
   "opencode-go": opencodeRaw,
+  openai: openaiRaw,
+  anthropic: claudeRaw,
+  google: geminiRaw,
 };
 
 export default function ProviderIcon({
@@ -32,6 +38,10 @@ export default function ProviderIcon({
   const raw = LOGOS[provider];
   if (!raw) return <>{fallback}</>;
   return (
-    <span className={className} dangerouslySetInnerHTML={{ __html: raw }} />
+    <span
+      aria-hidden="true"
+      className={className}
+      dangerouslySetInnerHTML={{ __html: raw }}
+    />
   );
 }

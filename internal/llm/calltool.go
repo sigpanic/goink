@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // CallToolStatus 描述一次 toolcall 调用过程中的状态，用于 OnStatus 回调推送。
@@ -36,9 +38,10 @@ type CallToolOptions struct {
 // 调用方按目标类型 json.Unmarshal。
 func (c *Client) CallTool(
 	ctx context.Context,
+	adapterName adapter.Protocol,
 	providerName, modelID string,
-	messages []map[string]any,
-	tools []map[string]any,
+	messages []Message,
+	tools []ToolDefinition,
 	toolName string,
 	opts *CallToolOptions,
 ) (json.RawMessage, error) {
@@ -71,7 +74,8 @@ func (c *Client) CallTool(
 		}
 		var lastErr error
 		sentThinking := false
-		events := c.ChatStream(ctx, providerName, messages, tools, modelID, callOpts)
+		callCtx, cancel := context.WithCancel(ctx)
+		events := c.ChatStream(callCtx, adapterName, providerName, modelID, messages, tools, callOpts)
 		for evt := range events {
 			switch evt.Type {
 			case EventError:
@@ -87,13 +91,16 @@ func (c *Client) CallTool(
 				}
 			case EventToolCallEnd:
 				if evt.Delta != nil && evt.Delta.ToolName == toolName && len(evt.Delta.ArgumentsJSON) > 0 {
+					cancel()
 					return evt.Delta.ArgumentsJSON, nil
 				}
 			}
 			if err := ctx.Err(); err != nil {
+				cancel()
 				return nil, err
 			}
 		}
+		cancel()
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}

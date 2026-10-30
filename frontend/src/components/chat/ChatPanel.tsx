@@ -1,9 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { MessageSquare, Loader2, History, Plus } from "lucide-react";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
+import { app } from "@/lib/wailsjs/go/models";
 import { cachedFileDescription } from "@/components/content/fileDescription";
 import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
@@ -20,18 +20,12 @@ import {
   rebuildTurns,
 } from "./types";
 import ChatInput from "./ChatInput";
+import ChatHeader from "./ChatHeader";
 import ChatControls from "./ChatControls";
 import DeleteSessionDialog from "./DeleteSessionDialog";
-import MessageBubble from "./MessageBubble";
-import ThinkingBlock from "./ThinkingBlock";
-import ToolCallCard from "./ToolCallCard";
-import WebSearchCard from "./WebSearchCard";
-import WebFetchCard from "./WebFetchCard";
-import SubagentCard from "./SubagentCard";
-import CompressionBlock from "./CompressionBlock";
+import ChatMessageList from "./ChatMessageList";
 import type { UsageInfo } from "./ContextRing";
 import SettingsDialog from "@/components/settings/SettingsDialog";
-import RecentSessions from "./RecentSessions";
 import SessionHistory from "./SessionHistory";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -39,8 +33,7 @@ import { useChatStore } from "./useChatStore";
 import { useCompressContext } from "./useCompressContext";
 import { useCancelChat } from "./useCancelChat";
 import { useSetLastSession } from "./useSetLastSession";
-import { useSetSelectedModel } from "./useSetSelectedModel";
-import { useSetReasoningEffort } from "./useSetReasoningEffort";
+import { useChatModelSelection } from "./useChatModelSelection";
 import { useSetApprovalMode } from "./useSetApprovalMode";
 
 interface Props {
@@ -88,8 +81,6 @@ export default function ChatPanel({
   const compressMutation = useCompressContext();
   const cancelChatMutation = useCancelChat();
   const setLastSessionMutation = useSetLastSession();
-  const setSelectedModelMutation = useSetSelectedModel();
-  const setReasoningEffortMutation = useSetReasoningEffort();
   const setApprovalModeMutation = useSetApprovalMode();
   const modelsQuery = useModels();
   const settingsQuery = useSettings();
@@ -106,14 +97,10 @@ export default function ChatPanel({
   const [turns, setTurns] = useState<Turn[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [cancelRequested, setCancelRequested] = useState(false);
   // selectedModel/reasoningEffort/approvalMode 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。
-  const selectedModel = useChatStore((s) => s.selectedModel);
-  const setSelectedModel = useChatStore((s) => s.setSelectedModel);
-  const reasoningEffort = useChatStore((s) => s.reasoningEffort);
-  const setReasoningEffort = useChatStore((s) => s.setReasoningEffort);
   const approvalMode = useChatStore((s) => s.approvalMode);
   const setApprovalMode = useChatStore((s) => s.setApprovalMode);
-  const selectedKey = selectedModel?.Key ?? "";
   const [lastUsage, setLastUsage] = useState<UsageInfo | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
   const compressingRef = useRef(false);
@@ -146,26 +133,10 @@ export default function ChatPanel({
   // selectedModel 存结构化对象（含 ModelID/ProviderName），废弃拼接 key + splitModelKey。
   useEffect(() => {
     if (restoredRef.current) return;
-    const modelList = modelsQuery.data;
     const settings = settingsQuery.data;
-    if (!modelList || modelList.length === 0 || !settings) return;
+    if (!settings) return;
     if (!novelId) return;
     restoredRef.current = true;
-
-    // 恢复模型选择（验证 key 仍存在）→ 设结构化 selectedModel
-    const key = settings.selected_model_key || "";
-    let model = modelList.find((m) => m.Key === key);
-    if (!model) {
-      model = modelList[0];
-    }
-    setSelectedModel(model);
-
-    // 恢复推理程度（验证级别仍合法）
-    let effort = settings.reasoning_effort || "";
-    if (!effort || !model.ReasoningLevels?.includes(effort)) {
-      effort = model.ReasoningLevels?.[0] || "";
-    }
-    setReasoningEffort(effort);
 
     // 恢复审批模式
     const mode = settings.approval_mode;
@@ -190,37 +161,31 @@ export default function ChatPanel({
         });
     }
   }, [
-    modelsQuery.data,
     settingsQuery.data,
     novelId,
-    setSelectedModel,
-    setReasoningEffort,
     setApprovalMode,
     setLastSessionMutation.mutateAsync,
     t,
   ]);
-
-  // models query refetch 后（如 SettingsDialog 保存触发 invalidate）：
-  // 检查当前 selectedModel 是否仍在新列表，不在则选第一个（替代原 onSaved 回调）。
-  useEffect(() => {
-    if (!restoredRef.current) return;
-    const modelList = modelsQuery.data;
-    if (!modelList || modelList.length === 0) return;
-    const currentKey = selectedModel?.Key;
-    if (!currentKey || !modelList.find((m) => m.Key === currentKey)) {
-      const first = modelList[0];
-      setSelectedModel(first);
-      if (first.ReasoningLevels?.length) {
-        setReasoningEffort(first.ReasoningLevels[0]);
-      }
-    }
-  }, [modelsQuery.data, selectedModel, setSelectedModel, setReasoningEffort]);
 
   // 活跃会话详情 + 历史消息：useSession / useSessionMessages query。
   // activeSid 为空（新对话/未选中）时 enabled false 不 fetch。
   const activeSid = activeSessionId ?? "";
   const sessionQuery = useSession(activeSid);
   const messagesQuery = useSessionMessages(activeSid);
+  const {
+    selectedModel,
+    modelSelection,
+    handleSelectModel,
+    handleSelectEffort,
+  } = useChatModelSelection({
+    sessionId: activeSid,
+    models: modelsQuery.data,
+    defaultSelection: settingsQuery.data?.default_model_selection,
+    session: sessionQuery.data,
+    enabled: novelId > 0,
+  });
+  const selectedKey = selectedModel?.Key ?? "";
 
   // novelId 变化时重置会话视图。
   // 会话恢复由上方 restoredRef effect 负责（首次加载时直接恢复）。
@@ -301,12 +266,16 @@ export default function ChatPanel({
     const cleanup = EventsOn(
       "chat:turn_outcome",
       (data: { turn_id: number; event_type: string; reason: string }) => {
+        const status = data.event_type;
+        if (
+          status !== "error" &&
+          status !== "system_interrupted" &&
+          status !== "user_stopped"
+        )
+          return;
         setTurns((prev) =>
           prev.map((turn) => {
             if (turn.turnId !== data.turn_id) return turn;
-            let status: Turn["status"] = "interrupted";
-            if (data.event_type === "error") status = "failed";
-            else if (data.event_type === "user_stopped") status = "stopped";
             return {
               ...turn,
               status,
@@ -473,10 +442,10 @@ export default function ChatPanel({
           // 主 turn 失败
           setTurns((prev) =>
             prev.map((turn) =>
-              turn.turnId === turnId
+              turn.turnId === turnId && turn.status === "streaming"
                 ? {
                     ...turn,
-                    status: "failed" as const,
+                    status: "error" as const,
                     errorMessage: event.error || t("chat.chatError"),
                     retrying: null,
                   }
@@ -521,7 +490,7 @@ export default function ChatPanel({
           }
           setTurns((prev) =>
             prev.map((turn) =>
-              turn.turnId === turnId
+              turn.turnId === turnId && turn.status === "streaming"
                 ? {
                     ...turn,
                     status: "streaming" as const,
@@ -663,11 +632,13 @@ export default function ChatPanel({
                   subSegs[subSegs.length - 1] = {
                     ...last,
                     thinkingContent: last.thinkingContent + chunk,
+                    hasThinking: true,
                   };
                 } else {
                   subSegs.push({
                     ...emptySegment(subSegId),
                     thinkingContent: chunk,
+                    hasThinking: true,
                     thinkingDone: false,
                     isStreaming: true,
                     firstSeq: event.seq ?? 0,
@@ -762,11 +733,13 @@ export default function ChatPanel({
                 segments[segments.length - 1] = {
                   ...lastSeg,
                   thinkingContent: lastSeg.thinkingContent + chunk,
+                  hasThinking: true,
                 };
               } else {
                 segments.push({
                   ...emptySegment(segId),
                   thinkingContent: chunk,
+                  hasThinking: true,
                   thinkingDone: false,
                   isStreaming: true,
                   firstSeq: event.seq ?? 0,
@@ -1004,43 +977,6 @@ export default function ChatPanel({
     qc.invalidateQueries({ queryKey: modelKeys.all });
   }, [qc]);
 
-  const handleSelectModel = useCallback(
-    (key: string) => {
-      const m = modelsQuery.data?.find((x) => x.Key === key);
-      if (!m) return;
-      setSelectedModel(m);
-      let effort = "";
-      if (m.ReasoningLevels?.length) {
-        effort = m.ReasoningLevels[0];
-        setReasoningEffort(effort);
-      }
-      setSelectedModelMutation
-        .mutateAsync({ key, effort })
-        .catch((err) =>
-          toastError(toErrorMessage(err, t("chat.setSelectedModelFailed"))),
-        );
-    },
-    [
-      modelsQuery.data,
-      setSelectedModel,
-      setReasoningEffort,
-      setSelectedModelMutation.mutateAsync,
-      t,
-    ],
-  );
-
-  const handleSelectEffort = useCallback(
-    (effort: string) => {
-      setReasoningEffort(effort);
-      setReasoningEffortMutation
-        .mutateAsync(effort)
-        .catch((err) =>
-          toastError(toErrorMessage(err, t("chat.setReasoningEffortFailed"))),
-        );
-    },
-    [setReasoningEffort, setReasoningEffortMutation.mutateAsync, t],
-  );
-
   const handleToggleApproval = useCallback(() => {
     const next = approvalMode === "manual" ? "auto" : "manual";
     setApprovalMode(next);
@@ -1052,9 +988,7 @@ export default function ChatPanel({
   }, [approvalMode, setApprovalMode, setApprovalModeMutation.mutateAsync, t]);
 
   const handleCompress = useCallback(async () => {
-    if (!sessionId || !selectedModel || compressingRef.current) return;
-    const providerName = selectedModel.ProviderName;
-    const modelID = selectedModel.ModelID;
+    if (!sessionId || !modelSelection || compressingRef.current) return;
 
     compressingRef.current = true;
     setIsCompressing(true);
@@ -1077,11 +1011,12 @@ export default function ChatPanel({
     setTurns((prev) => [...prev, compressingTurn]);
 
     try {
-      const result = await compressMutation.mutateAsync({
-        session_id: sessionId,
-        provider_name: providerName,
-        model_id: modelID,
-      });
+      const result = await compressMutation.mutateAsync(
+        new app.CompressInput({
+          session_id: sessionId,
+          model_selection: modelSelection,
+        }),
+      );
       // 更新：回填真实 turnId + 完成状态
       setTurns((prev) =>
         prev.map((t) => {
@@ -1107,13 +1042,11 @@ export default function ChatPanel({
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, selectedModel, compressMutation.mutateAsync, t]);
+  }, [sessionId, modelSelection, compressMutation.mutateAsync, t]);
 
   const handleSend = useCallback(
     async (content: string) => {
-      if (!selectedModel) return;
-      const p = selectedModel.ProviderName;
-      const m = selectedModel.ModelID;
+      if (!modelSelection) return;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
         cancelChatMutation
@@ -1173,30 +1106,32 @@ export default function ChatPanel({
       startedUnsubRef.current = startedCleanup;
 
       try {
-        await Chat({
-          session_id: sessionId,
-          novel_id: novelId,
-          message: content,
-          provider_name: p,
-          model_id: m,
-          reasoning_effort: reasoningEffort,
-        });
+        await Chat(
+          new app.ChatInput({
+            session_id: sessionId,
+            novel_id: novelId,
+            message: content,
+            model_selection: modelSelection,
+          }),
+        );
         // 刷新会话列表（invalidate 触发 useSessions refetch）
         qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
       } catch (err) {
+        const reason = toErrorMessage(err, t("chat.chatError"));
         setTurns((prev) =>
           prev.map((t) => {
             if (t.id !== turnId) return t;
             if (
-              t.status === "stopped" ||
-              t.status === "failed" ||
-              t.status === "interrupted"
+              t.status === "user_stopped" ||
+              t.status === "error" ||
+              t.status === "system_interrupted"
             )
               return t;
             return {
               ...t,
-              status: "interrupted" as const,
-              errorMessage: String(err),
+              status: "error" as const,
+              errorMessage: reason,
+              retrying: null,
             };
           }),
         );
@@ -1217,10 +1152,11 @@ export default function ChatPanel({
         eventQueuesRef.current.clear();
         setTurns((prev) =>
           prev.map((t) =>
-            t.id === turnId && t.status === "streaming"
+            t.id === turnId
               ? {
                   ...t,
-                  status: "done" as const,
+                  status:
+                    t.status === "streaming" ? ("done" as const) : t.status,
                   segments: t.segments.map((seg) =>
                     seg.type === "text" ? { ...seg, isStreaming: false } : seg,
                   ),
@@ -1231,6 +1167,7 @@ export default function ChatPanel({
         activeCountRef.current--;
         if (activeCountRef.current === 0) {
           setIsLoading(false);
+          setCancelRequested(false);
         }
         startedUnsubRef.current?.();
         startedUnsubRef.current = null;
@@ -1241,8 +1178,7 @@ export default function ChatPanel({
     [
       sessionId,
       novelId,
-      selectedModel,
-      reasoningEffort,
+      modelSelection,
       handleAgentEvent,
       applyAgentEvent,
       activeSessionId,
@@ -1279,25 +1215,7 @@ export default function ChatPanel({
         onMouseDown={handleMouseDown}
       />
 
-      <div className="px-4 py-2.5 border-b shrink-0 flex items-center justify-between select-none">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-          {t("chat.aiChat")}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={handleOpenHistory}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <History className="w-3.5 h-3.5" /> {t("chat.history")}
-          </button>
-          <button
-            onClick={handleNewChat}
-            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("chat.newChat")}
-          </button>
-        </div>
-      </div>
+      <ChatHeader onOpenHistory={handleOpenHistory} onNewChat={handleNewChat} />
 
       <div className="absolute left-0 right-0 top-[41px] bottom-0 pointer-events-none z-30">
         <SessionHistory
@@ -1313,213 +1231,19 @@ export default function ChatPanel({
         onScroll={handleMessagesScroll}
         className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 relative"
       >
-        {!hasNovel ? (
-          <div className="flex items-center justify-center h-full">
-            <div className="text-center">
-              <MessageSquare className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">
-                {t("chat.selectNovel")}
-              </p>
-            </div>
-          </div>
-        ) : showRecent ? (
-          <RecentSessions
-            sessions={sessionsQuery.data?.items ?? []}
-            total={sessionsQuery.data?.total ?? 0}
-            onSelectSession={handleSelectSession}
-            onViewAll={handleOpenHistory}
-          />
-        ) : messagesQuery.isLoading ? (
-          <div className="flex items-center justify-center h-full">
-            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-          </div>
-        ) : (
-          <>
-            {/* 消息列表 */}
-            {messagesQuery.isError ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <p className="text-sm text-red-500 mb-2">
-                    {t("chat.loadMessagesFailed")}
-                  </p>
-                  <button
-                    onClick={() => messagesQuery.refetch()}
-                    className="text-xs text-primary underline cursor-pointer"
-                  >
-                    {t("chat.retry")}
-                  </button>
-                </div>
-              </div>
-            ) : !hasTurns && !isLoading ? (
-              <div className="flex items-center justify-center h-full">
-                <div className="text-center">
-                  <MessageSquare className="w-10 h-10 text-muted-foreground/20 mx-auto mb-3" />
-                  <p className="text-sm text-muted-foreground">
-                    {t("chat.startConversation")}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {turns.map((turn) => (
-                  <div key={turn.id} className="space-y-2">
-                    {turn.userMessage && (
-                      <MessageBubble role="user" content={turn.userMessage} />
-                    )}
-
-                    {turn.segments.map((seg) => {
-                      if (seg.type === "subagent" && seg.agentType) {
-                        return (
-                          <SubagentCard
-                            key={seg.id}
-                            agentType={seg.agentType}
-                            segments={seg.segments || []}
-                            status={seg.status || "done"}
-                            retrying={seg.retrying}
-                            errorMessage={seg.errorMessage}
-                          />
-                        );
-                      }
-
-                      if (seg.type === "tool") {
-                        // run_subagent 已由 subagent 段渲染，跳过纯工具卡
-                        if (seg.toolName === "run_subagent") return null;
-
-                        if (
-                          seg.toolName === "web_search" &&
-                          seg.toolStatus === "completed" &&
-                          seg.result
-                        ) {
-                          return (
-                            <WebSearchCard key={seg.id} result={seg.result} />
-                          );
-                        }
-                        if (
-                          seg.toolName === "web_fetch" &&
-                          seg.toolStatus === "completed" &&
-                          seg.result
-                        ) {
-                          return (
-                            <WebFetchCard
-                              key={seg.id}
-                              result={seg.result}
-                              displayText={seg.displayText}
-                            />
-                          );
-                        }
-
-                        return (
-                          <ToolCallCard
-                            key={seg.id}
-                            toolName={seg.toolName}
-                            displayText={seg.displayText}
-                            status={seg.toolStatus}
-                            activityKind={seg.activityKind}
-                            error={seg.error}
-                            approvalType={seg.approvalType}
-                            approvalPayload={seg.approvalPayload}
-                            result={seg.result}
-                            onApprove={
-                              seg.toolStatus === "awaiting_approval"
-                                ? (feedback: string) =>
-                                    onApprove(seg.toolId, feedback)
-                                : undefined
-                            }
-                            onReject={
-                              seg.toolStatus === "awaiting_approval"
-                                ? (feedback: string) =>
-                                    onReject(seg.toolId, feedback)
-                                : undefined
-                            }
-                          />
-                        );
-                      }
-
-                      if (seg.type === "compression") {
-                        return (
-                          <CompressionBlock
-                            key={seg.id}
-                            phase={seg.compressionPhase || "compressing"}
-                          />
-                        );
-                      }
-
-                      return (
-                        <div key={seg.id}>
-                          {seg.thinkingContent && (
-                            <div className="max-w-[85%]">
-                              <ThinkingBlock
-                                content={seg.thinkingContent}
-                                isStreaming={
-                                  !seg.thinkingDone && seg.isStreaming
-                                }
-                              />
-                            </div>
-                          )}
-                          {seg.content && (
-                            <MessageBubble
-                              role="assistant"
-                              content={seg.content}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-
-                    {turn.status === "failed" && turn.errorMessage && (
-                      <div className="flex justify-start">
-                        <div className="bg-danger-bg border border-danger-border rounded-lg px-3 py-2 text-xs text-red-600 max-w-[80%]">
-                          {turn.errorMessage}
-                        </div>
-                      </div>
-                    )}
-                    {turn.status === "interrupted" && (
-                      <div className="flex justify-center">
-                        <div className="bg-danger-bg border border-danger-border rounded-lg px-3 py-2 text-xs text-red-500 max-w-[80%]">
-                          {turn.errorMessage || t("chat.chatInterrupted")}
-                        </div>
-                      </div>
-                    )}
-                    {turn.status === "stopped" && (
-                      <div className="flex justify-center">
-                        <div className="bg-muted/50 border rounded-lg px-3 py-2 text-xs text-muted-foreground max-w-[80%]">
-                          {t("chat.chatStopped")}
-                        </div>
-                      </div>
-                    )}
-                    {turn.retrying && (
-                      <div className="flex justify-center">
-                        <div className="bg-warning border border-warning-border rounded-lg px-3 py-2 text-xs text-warning-foreground max-w-[80%] flex items-center gap-2">
-                          <Loader2 className="w-3 h-3 animate-spin" />
-                          <span>
-                            {t("chat.retrying", {
-                              attempt: turn.retrying.attempt,
-                              max: turn.retrying.maxRetries,
-                            })}
-                          </span>
-                          {turn.retrying.errorMessage && (
-                            <span className="opacity-70">
-                              · {turn.retrying.errorMessage}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    )}
-                    {turn.status === "streaming" &&
-                      turn.segments.length === 0 &&
-                      !turn.retrying && (
-                        <div className="flex justify-start">
-                          <div className="bg-muted rounded-lg rounded-bl-sm px-3 py-2">
-                            <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                          </div>
-                        </div>
-                      )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+        <ChatMessageList
+          hasNovel={hasNovel}
+          hasTurns={hasTurns}
+          showRecent={showRecent}
+          isLoading={isLoading}
+          turns={turns}
+          sessionsQuery={sessionsQuery}
+          messagesQuery={messagesQuery}
+          onSelectSession={handleSelectSession}
+          onViewAll={handleOpenHistory}
+          onApprove={onApprove}
+          onReject={onReject}
+        />
 
         <div ref={messagesEndRef} />
       </div>
@@ -1527,25 +1251,18 @@ export default function ChatPanel({
       <ChatInput
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading}
-        isCancelling={cancelChatMutation.isPending}
+        isCancelling={cancelRequested || cancelChatMutation.isPending}
         placeholder={inputPlaceholder}
         draftKey={draftKey}
         slashItems={slashCommandsQuery.data ?? []}
         onSend={handleSend}
         onListSlash={refreshSlashCommands}
         onStop={() => {
-          setTurns((prev) =>
-            prev.map((t) =>
-              t.status === "streaming"
-                ? { ...t, status: "stopped" as const }
-                : t,
-            ),
-          );
-          cancelChatMutation
-            .mutateAsync(sessionId)
-            .catch((err) =>
-              toastError(toErrorMessage(err, t("chat.cancelFailed"))),
-            );
+          setCancelRequested(true);
+          cancelChatMutation.mutateAsync(sessionId).catch((err) => {
+            setCancelRequested(false);
+            toastError(toErrorMessage(err, t("chat.cancelFailed")));
+          });
         }}
       />
 

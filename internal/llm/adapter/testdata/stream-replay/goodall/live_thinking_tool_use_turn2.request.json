@@ -1,0 +1,87 @@
+{
+  "model": "claude-sonnet-5-5",
+  "max_tokens": 2048,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Look up the current weather in a city.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "the city to look up, such as Paris"
+          },
+          "unit": {
+            "type": "string",
+            "description": "celsius or fahrenheit",
+            "enum": [
+              "celsius",
+              "fahrenheit"
+            ]
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "thinking": {
+    "type": "adaptive",
+    "display": "summarized"
+  },
+  "output_config": {
+    "effort": "high"
+  },
+  "cache_control": {
+    "type": "ephemeral"
+  },
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "A cyclist in Paris will ride 137 km at 23.4 km/h with two 18-minute stops, starting at 13:47. Work out to the minute when they finish, look up the weather there, and tell me whether they should expect rain during the ride."
+        }
+      ]
+    },
+    {
+      "role": "assistant",
+      "content": [
+        {
+          "type": "thinking",
+          "thinking": "137/23.4 gives about 5.85 hours of driving, roughly 5h 51min, plus 36 minutes of stops totals about 6h 27min. Starting at 13:47 that lands right around 20:14, so I'll check the weather for Paris next.\n\n",
+          "signature": "CAQS9QYKEAgTGAI4AUIIdGhpbmtpbmcSDHIpSDUYRumMmj7g9xoMZJxJSWBVX4/hcNAHIjBbXsKfOjhFuv2MX2A5BER6dOytUknvek/Xz1+bEEL88ADa0bRa29pJuUEooyeqRMAqkgZqpNEICU16xvNUkUxf1tiWndzWXCun5DYkdHmVzMA+CyYc6yrfIuthCSJRV7JXqemB2Hnp2w6+w8MZjS0o4gJn7VY4HYYm2UgWoPLVSEE6o99NAYANcMfJpaHsu/rPtxy1aSRnNaYB4uxk3aXFwuGs8a0fDD3AFQQesALutAWVT3L0h3qqWSoAI2wOEg3z7jOMwOUNMOLLUJCnRSN31ZiiqvAB/pUTtD2csOfYrSoPJnLD334PQI7edVnaX9gnPIzrNPUMnGv7yq7pg5JFJ1SCQVHx/jwm3f9wtET4ewKYv4FAK1EesiNV7um8DsLz7C02SiDAcXddj7sTlcd5m1zHSezZHRS0PU1wYqfAEDu8pANVijAT62IUmbkRuVx3axNmc0+iL/+3sAqwBlK+z1akxa6K1HxqC6qTbl79vsHZs/bArkn6Bq1nqFVcRH5TvMJdRJTqmaU5rCG+b0tAOrS4tMH2fi8c/ZkHILTNdmsy6XkG/NTslV70nR9z+RDOOw1Hupj03bsRlwVM8RqbriJnnJNJHyQbSgMb9V9Y/NNR0GqbiciGxfGSKRazrcCYsqNkvF7Ri6aiiXDvLUmgjqL54A1RyfRFQGcUYh6OFxVvvymHLWbFwwEjK7JvT8KnR4zwqGT97FgXT03JTACkObLVnxrD/3QfS1vG8HbScXsqf+D9zqOu7NVaB25CP0Ywh4ZTZZ8H1R773ayuxgOIhnr+FYbQ5HmQCFVSbXpzw2zxMTSIo7lyQlUmNofqPqr3WzjeRb3L6Om6zz/X5iR+igqZX/PAtpUrzHVFVcrlg3WGb268fV6MDmS81im5Cj3jKgu6Qk+k+JeHk19nG59uyNbOdif+14NDmrVyhw792Af0wDPJScNFZQHHWTRZThmsyor1OLR1MktrsNRNkHgTdmqZoCnf11Tk/gq3G+ov6B8sHcdSFynNWNHy9LZI3fMEGn7GSFU9dhhMo8Y55vtUwImpNp2jkaGMb2vYIQzQPDANqSKPIIZCD2M9MSNw36F15Ek7fDxSUhUZZiAG5PbclO2k59oYAQ=="
+        },
+        {
+          "type": "tool_use",
+          "id": "toolu_01DJjR7J1yjbQGzt5RKZcttc",
+          "name": "get_weather",
+          "input": {
+            "city": "Paris",
+            "unit": "celsius"
+          }
+        }
+      ]
+    },
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "tool_result",
+          "tool_use_id": "toolu_01DJjR7J1yjbQGzt5RKZcttc",
+          "content": [
+            {
+              "type": "text",
+              "text": "{\"city\":\"Paris\",\"temperature_c\":18,\"conditions\":\"light rain\"}"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

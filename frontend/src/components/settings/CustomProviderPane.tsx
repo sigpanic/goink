@@ -1,19 +1,27 @@
 import { useState, useEffect } from "react";
 import { Plus } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/lib/wailsjs/go/models";
+import { llm, type adapter } from "@/lib/wailsjs/go/models";
+import {
+  PROVIDER_PROTOCOLS,
+  createProviderLabeler,
+  protocolLabel,
+  providerViewKey,
+} from "@/lib/llmProviders";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderFormFields from "./ProviderFormFields";
 import ProviderDropdown from "./ProviderDropdown";
 import ProviderStatusBadge from "./ProviderStatusBadge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
+import PopSelect from "@/components/shared/PopSelect";
 
 interface Props {
   providers: llm.ProviderView[];
+  existingProviders: llm.ProviderView[];
   onAdd: (provider: llm.ProviderView) => void;
   onUpdate: (key: string, patch: Partial<llm.ProviderView>) => void;
   onRemove: (key: string) => void;
-  onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
+  onAddCustomModel: (providerKey: string, model: adapter.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
   onTest: (
     providerKey: string,
@@ -31,6 +39,7 @@ interface Props {
 
 export default function CustomProviderPane({
   providers,
+  existingProviders,
   onAdd,
   onUpdate,
   onRemove,
@@ -76,28 +85,54 @@ export default function CustomProviderPane({
     setDeleteTarget(null);
   };
   const [newName, setNewName] = useState("");
+  const [newAdapterName, setNewAdapterName] = useState("openai_chat");
+  const [nameConflict, setNameConflict] = useState(false);
   const [newChatURL, setNewChatURL] = useState("");
   const [newApiKey, setNewApiKey] = useState("");
   const provider = providers.find((p) => p.key === selectedKey);
+  const newProtocol =
+    PROVIDER_PROTOCOLS.find((p) => p.adapterName === newAdapterName) ??
+    PROVIDER_PROTOCOLS[0];
+  const providerLabel = createProviderLabeler(
+    providers.map((p) => [p.name, p.adapter_name] as const),
+  );
+  const deleteProvider = providers.find((p) => p.key === deleteTarget);
 
   const handleAdd = () => {
     if (!newName.trim() || !newChatURL.trim()) return;
-    onAdd({
-      key: newName.trim().toLowerCase().replace(/\s+/g, "-"),
-      name: newName.trim(),
-      chat_url: newChatURL.trim(),
-      api_key: newApiKey,
-      source: "custom",
-      builtin_models: [],
-      custom_models: [],
-      temperature: 0.7,
-    } as unknown as llm.ProviderView);
+    const name = newName.trim();
+    if (
+      existingProviders.some(
+        (p) => p.adapter_name === newProtocol.adapterName && p.name === name,
+      )
+    ) {
+      setNameConflict(true);
+      return;
+    }
+    const key = providerViewKey(newProtocol.adapterName, name);
+    onAdd(
+      new llm.ProviderView({
+        key,
+        adapter_name: newProtocol.adapterName,
+        provider_type: newProtocol.providerType,
+        name,
+        chat_url: newChatURL.trim(),
+        api_key: newApiKey,
+        source: "custom",
+        platform_url: "",
+        help_text: "",
+        builtin_models: [],
+        custom_models: [],
+      }),
+    );
     setNewName("");
+    setNewAdapterName("openai_chat");
+    setNameConflict(false);
     setNewChatURL("");
     setNewApiKey("");
     setShowNewForm(false);
     // 选中新加的 provider
-    setSelectedKey(newName.trim().toLowerCase().replace(/\s+/g, "-"));
+    setSelectedKey(key);
   };
 
   // 无自定义服务商且未展开新建表单
@@ -145,6 +180,7 @@ export default function CustomProviderPane({
           testResult={provider ? testResults[provider.key] : undefined}
         />
         <button
+          aria-label={t("settings.addCustomProvider")}
           onClick={() => setShowNewForm(!showNewForm)}
           className="text-xs text-primary flex items-center gap-0.5 hover:underline shrink-0"
         >
@@ -154,9 +190,34 @@ export default function CustomProviderPane({
 
       {/* 新建表单 */}
       {showNewForm && (
-        <div className="border rounded-md p-3 space-y-3">
+        <div
+          role="group"
+          aria-label={t("settings.newCustomProvider")}
+          className="border rounded-md p-3 space-y-3"
+        >
           <div className="text-xs font-medium">
             {t("settings.newCustomProvider")}
+          </div>
+
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-muted-foreground w-16 shrink-0">
+              {t("settings.protocol")}
+            </label>
+            <PopSelect
+              ariaLabel={t("settings.protocol")}
+              value={newProtocol.adapterName}
+              options={PROVIDER_PROTOCOLS.map((p) => ({
+                value: p.adapterName,
+                label: p.label,
+              }))}
+              onChange={(value) => {
+                setNewAdapterName(value);
+                setNameConflict(false);
+              }}
+              className="flex-1 min-w-0"
+              size="form"
+              dropUp={false}
+            />
           </div>
 
           <div className="flex items-center gap-3">
@@ -164,8 +225,12 @@ export default function CustomProviderPane({
               {t("common.name")}
             </label>
             <input
+              aria-label={t("common.name")}
               value={newName}
-              onChange={(e) => setNewName(e.target.value)}
+              onChange={(e) => {
+                setNewName(e.target.value);
+                setNameConflict(false);
+              }}
               placeholder={t("settings.providerName")}
               className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
@@ -176,9 +241,10 @@ export default function CustomProviderPane({
               {t("settings.chatUrl")}
             </label>
             <input
+              aria-label={t("settings.chatUrl")}
               value={newChatURL}
               onChange={(e) => setNewChatURL(e.target.value)}
-              placeholder="https://api.example.com/v1/chat/completions"
+              placeholder={newProtocol.endpoint}
               className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
           </div>
@@ -189,12 +255,19 @@ export default function CustomProviderPane({
             </label>
             <input
               type="password"
+              aria-label={t("settings.apiKey")}
               value={newApiKey}
               onChange={(e) => setNewApiKey(e.target.value)}
               placeholder={t("settings.enterApiKey")}
               className="flex-1 h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
             />
           </div>
+
+          {nameConflict && (
+            <p role="alert" className="text-xs text-destructive">
+              {t("settings.providerNameConflict")}
+            </p>
+          )}
 
           <div className="flex items-center gap-2 pt-1">
             <div className="flex-1" />
@@ -217,6 +290,15 @@ export default function CustomProviderPane({
       {/* 选中已有服务商时的编辑区 */}
       {provider && !showNewForm && (
         <>
+          <div className="flex items-center gap-3">
+            <label className="text-xs text-muted-foreground w-16 shrink-0">
+              {t("settings.protocol")}
+            </label>
+            <span className="text-sm">
+              {protocolLabel(provider.adapter_name)}
+            </span>
+          </div>
+
           <div className="flex items-center gap-3">
             <label className="text-xs text-muted-foreground w-16 shrink-0">
               {t("common.name")}
@@ -242,9 +324,7 @@ export default function CustomProviderPane({
 
           <ModelDiscoveryPanel
             key={selectedKey}
-            providerName={provider.name}
-            chatUrl={provider.chat_url}
-            apiKey={provider.api_key}
+            provider={provider}
             existingIds={
               new Set((provider?.custom_models || []).map((m) => m.id))
             }
@@ -266,8 +346,8 @@ export default function CustomProviderPane({
         open={deleteTarget !== null}
         title={t("settings.confirmDeleteProvider")}
         message={
-          deleteTarget
-            ? `"${providers.find((p) => p.key === deleteTarget)?.name || deleteTarget}"？${t("common.irreversible")}`
+          deleteProvider
+            ? `"${providerLabel(deleteProvider.name, deleteProvider.adapter_name)}"？${t("common.irreversible")}`
             : ""
         }
         danger

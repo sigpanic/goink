@@ -1,0 +1,6 @@
+: Modified by Goink: extracted recorded response segments and reframed them as SSE; added this notice.
+: Source: https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/Chats_Tests_chats_function_calling_Google_AI_with_function_calling_stream.json
+: License: Apache-2.0; see GOOGLE-LICENSE.txt.
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"args":{"denominator":2,"numerator":50},"name":"customDivide"}}],"role":"model"},"finishReason":"STOP"}],"modelVersion":"gemini-2.0-flash","responseId":"xtSfaMmgI_7Xn9kPr_f76AI","usageMetadata":{"candidatesTokenCount":6,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":6}],"promptTokenCount":38,"promptTokensDetails":[{"modality":"TEXT","tokenCount":38}],"totalTokenCount":44}}
+

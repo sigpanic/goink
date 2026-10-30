@@ -86,7 +86,7 @@ func TestBackupSQLiteDatabaseIncludesCommittedWALData(t *testing.T) {
 	}
 }
 
-func TestRunStopsDestructiveMigrationWhenBackupFails(t *testing.T) {
+func TestRunStopsMigrationWhenRequiredBackupFails(t *testing.T) {
 	dataDir := testsupport.Isolate(t)
 	config.Set(&config.AppConfig{})
 
@@ -191,7 +191,7 @@ func TestRunBacksUpWholeUpgradeOnceBeforeChanges(t *testing.T) {
 						}
 						return db.Exec("CREATE TABLE IF NOT EXISTS created_by_upgrade (id INTEGER)").Error
 					}}}},
-				{Name: "v1.2.0-first", Destructive: true, NeedsMigration: needsLater,
+				{Name: "v1.2.0-first", RequiresBackup: true, NeedsMigration: needsLater,
 					PreSchemaSteps: []engine.Step{sequentialTestStep{key: "first", run: func(db *gorm.DB) error {
 						return db.Exec("UPDATE backup_fixture SET value = 'first-destructive'").Error
 					}}}},
@@ -199,7 +199,7 @@ func TestRunBacksUpWholeUpgradeOnceBeforeChanges(t *testing.T) {
 					PreSchemaSteps: []engine.Step{sequentialTestStep{key: "middle", run: func(_ *gorm.DB) error {
 						return os.WriteFile(novelFile, []byte("changed"), 0644)
 					}}}},
-				{Name: "v1.4.0-last", Destructive: true, NeedsMigration: needsLater,
+				{Name: "v1.4.0-last", RequiresBackup: true, NeedsMigration: needsLater,
 					PreSchemaSteps: []engine.Step{sequentialTestStep{key: "last", run: func(db *gorm.DB) error {
 						if _, err := os.Stat(blocker); err == nil {
 							return interrupted
@@ -271,7 +271,7 @@ func TestRunBacksUpWholeUpgradeOnceBeforeChanges(t *testing.T) {
 
 			// 后续新增迁移目标时另建备份，不复用上一轮的起始快照。
 			engine.Registry = append(engine.Registry, engine.Migration{
-				Name: "v1.5.0-next", Destructive: true,
+				Name: "v1.5.0-next", RequiresBackup: true,
 				NeedsMigration: func(_ *gorm.DB) (bool, error) { return true, nil },
 				PreSchemaSteps: []engine.Step{sequentialTestStep{key: "next", run: func(db *gorm.DB) error {
 					return db.Exec("UPDATE backup_fixture SET value = 'next'").Error
@@ -301,7 +301,7 @@ func TestRunBacksUpWholeUpgradeOnceBeforeChanges(t *testing.T) {
 	}
 }
 
-func TestPrepareUpgradeBackupIncludesCompletedLaterDestructiveGroup(t *testing.T) {
+func TestPrepareUpgradeBackupIncludesCompletedLaterGroupRequiringBackup(t *testing.T) {
 	dataDir := testsupport.Isolate(t)
 	config.Set(&config.AppConfig{})
 	db, err := gorm.Open(sqlite.Open(config.GlobalDBPath()), &gorm.Config{})
@@ -321,13 +321,13 @@ func TestPrepareUpgradeBackupIncludesCompletedLaterDestructiveGroup(t *testing.T
 			PreSchemaSteps: []engine.Step{sequentialTestStep{key: "pending", run: func(_ *gorm.DB) error {
 				return errors.New("backup inspection must not execute steps")
 			}}}},
-		{Name: "v1.9.0-completed", Destructive: true,
+		{Name: "v1.9.0-completed", RequiresBackup: true,
 			PreSchemaSteps: []engine.Step{sequentialTestStep{key: "completed"}}},
 	}
 	if err := db.Create(&engine.MigrateState{Migration: registry[1].Name, Step: "completed", Status: "done"}).Error; err != nil {
 		t.Fatal(err)
 	}
-	// 即使后组已有完成记录，也按首个待执行组之后的破坏性定义保守备份。
+	// 即使后组已有完成记录，也按首个待执行组之后的备份要求保守备份。
 	if err := prepareUpgradeBackup(db, slog.Default(), false, registry); err != nil {
 		t.Fatal(err)
 	}

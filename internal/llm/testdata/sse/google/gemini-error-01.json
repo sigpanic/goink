@@ -1,0 +1,24 @@
+{
+  "_fixture_notice": {
+    "modified_by": "Goink",
+    "changes": "Extracted the response status and body segments from the upstream recording, omitted request data, and added this notice. This metadata is not part of the API response.",
+    "source_url": "https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/Chats_Tests_sendMessage_Send_message_stream_with_error.json",
+    "license": "Apache-2.0; see GOOGLE-LICENSE.txt."
+  },
+  "status_code": 404,
+  "body_segments": [
+    {
+      "error": {
+        "code": 404,
+        "details": [
+          {
+            "@type": "type.googleapis.com/google.rpc.DebugInfo",
+            "detail": "[ORIGINAL ERROR] generic::not_found: models/custom-gemini-2.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods. [google.rpc.error_details_ext] { message: \"models/custom-gemini-2.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.\" }"
+          }
+        ],
+        "message": "models/custom-gemini-2.0-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.",
+        "status": "NOT_FOUND"
+      }
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "providers": [
+    {"name": "deepseek", "api_key": "test-deepseek", "chat_url": "", "models": null},
+    {"name": "opencode", "api_key": "test-opencode", "chat_url": "", "models": []},
+    {"name": "opencode-go", "api_key": "test-opencode-go", "chat_url": "", "models": []},
+    {"name": "doubao", "api_key": "test-doubao", "chat_url": "", "models": [], "temperature": 0.1},
+    {"name": "qwen", "api_key": "test-qwen", "chat_url": "", "models": []},
+    {"name": "zhipu", "api_key": "test-zhipu", "chat_url": "", "models": []},
+    {"name": "minimax", "api_key": "test-minimax", "chat_url": "", "models": []},
+    {
+      "name": "mimo",
+      "api_key": "test-mimo",
+      "chat_url": "https://mimo-relay.example/v8/chat/completions?route=custom%2Froute",
+      "models": [],
+      "temperature": 0.6
+    },
+    {"name": "moonshot", "api_key": "test-moonshot", "chat_url": "", "models": []},
+    {
+      "name": "my/relay",
+      "api_key": "test-relay",
+      "chat_url": "https://relay.example/v8/chat/completions?route=a%2Fb",
+      "temperature": 0,
+      "models": [
+        {
+          "id": "vendor/model",
+          "name": "Custom Model",
+          "context_window": 128000,
+          "max_output_tokens": 8192,
+          "supports_thinking": true,
+          "reasoning_levels": ["low", "high"],
+          "supports_vision": true
+        }
+      ]
+    },
+    {"name": "DeepSeek", "api_key": "test-custom", "chat_url": "https://custom.example/chat/completions", "models": []},
+    {"name": "DeepSeek (custom)", "api_key": "test-existing-name", "chat_url": "https://other.example/chat/completions", "models": []}
+  ]
+}

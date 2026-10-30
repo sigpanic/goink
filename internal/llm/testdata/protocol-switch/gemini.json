@@ -1,0 +1,40 @@
+{
+  "protocol": "gemini_interactions",
+  "provider_type": "google",
+  "path": "/relay/v8/interactions",
+  "tools_response": {
+    "id": "interaction_source", "object": "interaction", "model": "switch-model", "status": "requires_action",
+    "created": "2026-10-23T00:00:00Z", "updated": "2026-10-23T00:00:01Z",
+    "steps": [
+      {"type": "thought", "signature": "private-gemini-signature", "summary": [{"type": "text", "text": "private-thought"}]},
+      {"type": "model_output", "content": [{"type": "text", "text": "先读取两章。"}]},
+      {"type": "function_call", "id": "call_1", "name": "read", "arguments": {"chapter":9007199254740993}},
+      {"type": "function_call", "id": "call_2", "name": "read", "arguments": {}}
+    ]
+  },
+  "text_response": {
+    "id": "interaction_target", "object": "interaction", "model": "switch-model", "status": "completed",
+    "created": "2026-10-23T00:00:00Z", "updated": "2026-10-23T00:00:01Z",
+    "steps": [{"type": "model_output", "content": [{"type": "text", "text": "续聊成功"}]}]
+  },
+  "stream_events": [
+    {"event_type": "interaction.created", "interaction": {"id": "interaction_target", "status": "in_progress"}},
+    {"event_type": "step.start", "index": 0, "step": {"type": "model_output", "content": [{"type": "text", "text": "续聊成功"}]}},
+    {"event_type": "step.stop", "index": 0},
+    {"event_type": "interaction.status_update", "interaction_id": "interaction_target", "status": "completed"}
+  ],
+  "expected_request": {
+    "model": "switch-model", "store": false, "background": false,
+    "system_instruction": "你是网文助手。",
+    "input": [
+      {"type": "user_input", "content": [{"type": "text", "text": "请比较这两章。"}]},
+      {"type": "model_output", "content": [{"type": "text", "text": "先读取两章。"}]},
+      {"type": "function_call", "id": "call_1", "name": "read", "arguments": {"chapter":9007199254740993}},
+      {"type": "function_call", "id": "call_2", "name": "read", "arguments": {}},
+      {"type": "function_result", "call_id": "call_1", "name": "read", "result": [{"type": "text", "text": ""}]},
+      {"type": "function_result", "call_id": "call_2", "name": "read", "result": [{"type": "text", "text": "第二章原文"}]},
+      {"type": "user_input", "content": [{"type": "text", "text": "继续比较。"}]}
+    ],
+    "tools": [{"type": "function", "name": "read", "description": "读取章节", "parameters": {"type": "object", "properties": {"chapter": {"type": "integer"}}}}]
+  }
+}

@@ -1,221 +1,330 @@
 package llm
 
 import (
+	"fmt"
+	"math"
+	"net/url"
+	"slices"
 	"sort"
+	"strings"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
+const ConfigVersion = 2
+
 // UserLLMConfig 是用户 LLM 配置的持久化格式（加密 JSON）。
-// 一个 provider 一个 key，内置模型随代码自动更新，自定义模型需完整填写信息。
+// 只保存用户配置；内置模型由具体适配器提供，自定义模型需完整填写信息。
 type UserLLMConfig struct {
-	Providers []Provider `json:"providers"`
+	Version  int                                `json:"version"`
+	Adapters map[adapter.Protocol]AdapterConfig `json:"adapters"`
 }
+
+// AdapterConfig 按协议保存用户修改和自定义实例，Name 在所属协议内唯一。
+type AdapterConfig struct {
+	Providers []adapter.Provider `json:"providers"`
+}
+
+// ProviderMap 按实例 Name 索引单个协议下的公共配置。
+type ProviderMap = adapter.ProviderMap
 
 // AvailableModel 是前端下拉列表的模型选项。
 type AvailableModel struct {
-	Key              string // "deepseek/deepseek-v4-pro"
-	ModelID          string // "deepseek-v4-pro"（独立字段，不依赖 Key 拆分）
-	ProviderKey      string // "deepseek"（小写 key，与 ProviderView.Key 一致，供 ProviderIcon 匹配）
-	ProviderName     string // "DeepSeek"
-	ModelName        string // "DeepSeek V4 Pro"
-	ContextWindow    int
-	MaxOutputTokens  int
-	SupportsThinking bool
-	ReasoningLevels  []string
-	SupportsVision   bool
+	Model        ModelInfo `json:"model"`
+	Key          string
+	AdapterName  adapter.Protocol
+	ProviderName string // 所属协议内的实例 Name，调用方直接传递，不解析 Key
+	ProviderType string // 厂商规则类型，可用于匹配图标，不充当实例索引
 }
 
-// Builtin 内置 provider 模板。APIKey 留空，运行时由用户配置注入。
 func floatPtr(f float64) *float64 { return &f }
-func derefOrZero(p *float64) float64 {
-	if p == nil {
-		return 0
-	}
-	return *p
-}
 
-// Merge 合并内置模板和用户配置，返回组装完成的 Provider map。
-// 内置模型全量加入（随代码版本），用户自定义模型去重追加。只产出用户配置过的 Provider。
-func Merge(builtin map[string]Provider, user *UserLLMConfig) map[string]Provider {
-	result := make(map[string]Provider, len(user.Providers))
-
-	for _, up := range user.Providers {
-		bp, isBuiltin := builtin[up.Name]
-
-		p := Provider{Name: up.Name, ChatURL: up.ChatURL, APIKey: up.APIKey}
-
-		if isBuiltin {
-			if p.ChatURL == "" {
-				p.ChatURL = bp.ChatURL
-			}
-			if up.Temperature != nil {
-				p.Temperature = up.Temperature
-			} else {
-				p.Temperature = bp.Temperature
-			}
-			p.BuildRequest = bp.BuildRequest
-			p.BuildHeaders = bp.BuildHeaders
-			p.ParseError = bp.ParseError
-
-			// 内置模型全量加入（随代码版本自动更新）
-			p.Models = append([]ModelInfo{}, bp.Models...)
-		}
-
-		// 用户自定义模型去重追加
-		for _, um := range up.Models {
-			if !modelExists(p.Models, um.ID) {
-				p.Models = append(p.Models, um)
-			}
-		}
-
-		result[up.Name] = p
-	}
-
-	return result
-}
-
-// LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置模板和用户配置。
+// LLMConfigView 是 GetLLMConfig 返回的完整配置视图，合并内置实例和用户配置。
 type LLMConfigView struct {
 	Providers []ProviderView `json:"providers"`
 }
 
 // ProviderView 是单个 provider 的前端展示视图。
 type ProviderView struct {
-	Key           string      `json:"key"`            // provider 标识符，如 "deepseek"
-	Name          string      `json:"name"`           // 显示名称
-	ChatURL       string      `json:"chat_url"`       // API 端点
-	APIKey        string      `json:"api_key"`        // 用户配置的 key，空表示未配置
-	PlatformURL   string      `json:"platform_url"`   // 注册平台链接
-	HelpText      string      `json:"help_text"`      // 注册引导文字
-	Temperature   float64     `json:"temperature"`    // 默认创意度 0~2
-	Source        string      `json:"source"`         // "builtin" | "custom"
-	BuiltinModels []ModelInfo `json:"builtin_models"` // 内置模型，自定义 provider 为 nil
-	CustomModels  []ModelInfo `json:"custom_models"`  // 用户添加的自定义模型
+	Key           string           `json:"key"` // 由协议和 Name 派生，仅供 UI 使用，不反解析调用目标
+	AdapterName   adapter.Protocol `json:"adapter_name"`
+	ProviderType  string           `json:"provider_type"`
+	Name          string           `json:"name"`
+	ChatURL       string           `json:"chat_url"`
+	APIKey        string           `json:"api_key"`
+	PlatformURL   string           `json:"platform_url"`
+	HelpText      string           `json:"help_text"`
+	Temperature   *float64         `json:"temperature"`
+	Source        string           `json:"source"` // "builtin" | "custom"
+	BuiltinModels []ModelInfo      `json:"builtin_models"`
+	CustomModels  []ModelInfo      `json:"custom_models"`
 }
 
-// BuildConfigView 合并内置模板和用户配置，生成前端可用的完整视图。
-func BuildConfigView(user *UserLLMConfig) *LLMConfigView {
-	view := &LLMConfigView{}
+func emptyUserConfig() *UserLLMConfig {
+	return &UserLLMConfig{Version: ConfigVersion, Adapters: make(map[adapter.Protocol]AdapterConfig)}
+}
 
-	// 内置 provider：从 Builtin 取模板，从 user 取 key、URL 和自定义模型
-	for key, bp := range Builtin {
-		var apiKey, chatURL string
-		var customModels []ModelInfo
-		temperature := derefOrZero(bp.Temperature)
-		for _, up := range user.Providers {
-			if up.Name == key {
-				apiKey = up.APIKey
-				if up.ChatURL != "" {
-					chatURL = up.ChatURL
+// ValidateUserConfig 只校验新格式，不推断协议、实例名称或厂商类型。
+func ValidateUserConfig(user *UserLLMConfig) error {
+	return validateUserConfig(user, builtinProviders())
+}
+
+func validateUserConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) error {
+	if user == nil {
+		return fmt.Errorf("LLM config must not be nil")
+	}
+	if user.Version != ConfigVersion {
+		return fmt.Errorf("unsupported LLM config version: %d; expected %d", user.Version, ConfigVersion)
+	}
+	if user.Adapters == nil {
+		return fmt.Errorf("LLM config adapters must be an object")
+	}
+	for protocol, group := range user.Adapters {
+		builtins, ok := defaults[protocol]
+		if !ok {
+			return fmt.Errorf("unsupported adapter: %s", protocol)
+		}
+		seen := make(map[string]bool, len(group.Providers))
+		for _, p := range group.Providers {
+			if p.Name == "" || strings.TrimSpace(p.Name) != p.Name {
+				return fmt.Errorf("provider name must not be empty or have surrounding whitespace in adapter %s", protocol)
+			}
+			if seen[p.Name] {
+				return fmt.Errorf("duplicate provider: %s/%s", protocol, p.Name)
+			}
+			seen[p.Name] = true
+			_, builtin := builtins[p.Name]
+			if builtin {
+				if p.ProviderType != "" {
+					return fmt.Errorf("builtin provider %s/%s must omit provider_type", protocol, p.Name)
 				}
-				customModels = up.Models
-				if up.Temperature != nil {
-					temperature = *up.Temperature
+			} else if err := validateProviderType(protocol, p.ProviderType); err != nil {
+				return fmt.Errorf("provider %s/%s: %w", protocol, p.Name, err)
+			}
+			if p.ChatURL != "" || !builtin {
+				parsed, err := url.Parse(p.ChatURL)
+				if err != nil || parsed.Host == "" || (parsed.Scheme != "http" && parsed.Scheme != "https") {
+					return fmt.Errorf("provider %s/%s requires an absolute HTTP(S) chat_url", protocol, p.Name)
 				}
-				break
+			}
+			if p.Temperature != nil && (math.IsNaN(*p.Temperature) || math.IsInf(*p.Temperature, 0)) {
+				return fmt.Errorf("provider %s/%s temperature must be finite", protocol, p.Name)
+			}
+			models := make(map[string]bool, len(p.Models))
+			for _, model := range p.Models {
+				if strings.TrimSpace(model.ID) == "" {
+					return fmt.Errorf("provider %s/%s model id must not be empty", protocol, p.Name)
+				}
+				if models[model.ID] {
+					return fmt.Errorf("provider %s/%s has duplicate model: %s", protocol, p.Name, model.ID)
+				}
+				models[model.ID] = true
 			}
 		}
-		if chatURL == "" {
-			chatURL = bp.ChatURL
-		}
-		view.Providers = append(view.Providers, ProviderView{
-			Key:           key,
-			Name:          bp.Name,
-			ChatURL:       chatURL,
-			APIKey:        apiKey,
-			PlatformURL:   bp.PlatformURL,
-			HelpText:      bp.HelpText,
-			Temperature:   temperature,
-			Source:        "builtin",
-			BuiltinModels: append([]ModelInfo{}, bp.Models...),
-			CustomModels:  append([]ModelInfo{}, customModels...),
-		})
 	}
+	return nil
+}
 
-	// 自定义 provider：不在 Builtin 中的用户 provider
-	for _, up := range user.Providers {
-		if _, isBuiltin := Builtin[up.Name]; !isBuiltin {
-			view.Providers = append(view.Providers, ProviderView{
-				Key:           up.Name,
-				Name:          up.Name,
-				ChatURL:       up.ChatURL,
-				APIKey:        up.APIKey,
-				Temperature:   derefOrZero(up.Temperature),
-				Source:        "custom",
-				BuiltinModels: nil,
-				CustomModels:  append([]ModelInfo{}, up.Models...),
-			})
+// Merge 按协议和 Name 组装有 APIKey 的运行时实例，不按 ProviderType 继承实例配置。
+// 返回值是运行时快照，不可直接反写为用户配置，否则会固化内置默认值。
+func Merge(user *UserLLMConfig) (map[adapter.Protocol]ProviderMap, error) {
+	result, err := mergeConfig(user, builtinProviders())
+	if err != nil {
+		return nil, err
+	}
+	for protocol, providers := range result {
+		for name, p := range providers {
+			if p.APIKey == "" {
+				delete(providers, name)
+			}
+		}
+		if len(providers) == 0 {
+			delete(result, protocol)
 		}
 	}
+	return result, nil
+}
 
+// mergeConfig 合并全部内置实例和用户配置，供设置视图与运行时过滤共用。
+func mergeConfig(user *UserLLMConfig, defaults map[adapter.Protocol]ProviderMap) (map[adapter.Protocol]ProviderMap, error) {
+	if user == nil {
+		user = emptyUserConfig()
+	}
+	if err := validateUserConfig(user, defaults); err != nil {
+		return nil, err
+	}
+	result := make(map[adapter.Protocol]ProviderMap, len(defaults))
+	for protocol, builtins := range defaults {
+		providers := make(ProviderMap, len(builtins))
+		for name, p := range builtins {
+			providers[name] = p.Clone()
+		}
+		result[protocol] = providers
+	}
+	for protocol, group := range user.Adapters {
+		for _, p := range group.Providers {
+			result[protocol][p.Name] = mergeProvider(defaults[protocol][p.Name], p)
+		}
+	}
+	return result, nil
+}
+
+func mergeProvider(preset, user adapter.Provider) adapter.Provider {
+	if preset.Name == "" {
+		return user.Clone()
+	}
+	p := preset.Clone()
+	p.APIKey = user.APIKey
+	if user.ChatURL != "" {
+		p.ChatURL = user.ChatURL
+	}
+	if user.Temperature != nil {
+		p.Temperature = floatPtr(*user.Temperature)
+	}
+	seen := make(map[string]bool, len(p.Models)+len(user.Models))
+	for _, model := range p.Models {
+		seen[model.ID] = true
+	}
+	for _, model := range user.Models {
+		if seen[model.ID] {
+			continue
+		}
+		seen[model.ID] = true
+		p.Models = append(p.Models, model.Clone())
+	}
+	return p
+}
+
+// BuildConfigView 使用同一合并规则生成设置视图，并展示尚未配置的全部内置实例。
+func BuildConfigView(user *UserLLMConfig) (*LLMConfigView, error) {
+	defaults := builtinProviders()
+	resolved, err := mergeConfig(user, defaults)
+	if err != nil {
+		return nil, err
+	}
+	saved := make(map[adapter.Protocol]ProviderMap)
+	if user != nil {
+		for protocol, group := range user.Adapters {
+			saved[protocol] = make(ProviderMap, len(group.Providers))
+			for _, p := range group.Providers {
+				saved[protocol][p.Name] = p
+			}
+		}
+	}
+	view := &LLMConfigView{Providers: []ProviderView{}}
+	for protocol, providers := range resolved {
+		for name, p := range providers {
+			preset, builtin := defaults[protocol][name]
+			source := "custom"
+			if builtin {
+				source = "builtin"
+			}
+			view.Providers = append(view.Providers, providerView(protocol, p, preset, saved[protocol][name].Models, source))
+		}
+	}
 	sort.Slice(view.Providers, func(i, j int) bool {
-		return view.Providers[i].Key < view.Providers[j].Key
+		if view.Providers[i].Name != view.Providers[j].Name {
+			return view.Providers[i].Name < view.Providers[j].Name
+		}
+		return view.Providers[i].AdapterName < view.Providers[j].AdapterName
 	})
+	return view, nil
+}
 
-	return view
+func providerView(protocol adapter.Protocol, p, preset adapter.Provider, customModels []adapter.ModelInfo, source string) ProviderView {
+	p = p.Clone()
+	return ProviderView{
+		Key: providerViewKey(protocol, p.Name), AdapterName: protocol,
+		Name: p.Name, ProviderType: p.ProviderType,
+		ChatURL: p.ChatURL, APIKey: p.APIKey, Temperature: p.Temperature,
+		PlatformURL: p.PlatformURL, HelpText: p.HelpText, Source: source,
+		BuiltinModels: cloneModels(preset.Models), CustomModels: cloneModels(customModels),
+	}
+}
+
+func providerViewKey(adapterName adapter.Protocol, providerName string) string {
+	return url.PathEscape(string(adapterName)) + "/" + url.PathEscape(providerName)
 }
 
 // ToUserConfig 将前端视图转换回可持久化的 UserLLMConfig。
-// 只保留有 APIKey 的 provider，无 key 的不写入（内置模板由 Merge 自动提供）。
-//
-// 保存用户填的 URL 原值，不再 normalizeURL：
-//   - 保存前前端已通过 TestConnection 验证 URL，并把探测到的正确 URL 回写到 pv.ChatURL
-//   - 二次 normalizeURL 会破坏已验证的 URL（测试和保存不一致）
-//   - 内置 provider 用户未改 URL 时留空，由 Merge 用 bp.ChatURL 兜底
-func (v *LLMConfigView) ToUserConfig() *UserLLMConfig {
-	providers := make([]Provider, 0, len(v.Providers))
-	for _, pv := range v.Providers {
-		if pv.APIKey == "" {
-			continue
-		}
-		p := Provider{
-			Name:   pv.Key,
-			APIKey: pv.APIKey,
-			Models: append([]ModelInfo{}, pv.CustomModels...),
-		}
-		if pv.Source != "builtin" {
-			p.ChatURL = pv.ChatURL
-		} else if bp, ok := Builtin[pv.Key]; ok && pv.ChatURL != bp.ChatURL {
-			p.ChatURL = pv.ChatURL
-		}
-		p.Temperature = floatPtr(pv.Temperature)
-		providers = append(providers, p)
+// 保留无 APIKey 的用户覆盖和自定义实例；无任何覆盖的内置实例不写入。
+// 保存经过探测的 URL 原值；等于内置默认地址时留空，后续随内置配置更新。
+// URL 和温度与当前默认值相等时统一归一为继承，不区分原先是否显式保存过该等值字段。
+func (v *LLMConfigView) ToUserConfig() (*UserLLMConfig, error) {
+	if v == nil {
+		return nil, fmt.Errorf("LLM config view must not be nil")
 	}
-	return &UserLLMConfig{Providers: providers}
+	defaults := builtinProviders()
+	all := emptyUserConfig()
+	result := emptyUserConfig()
+	for _, pv := range v.Providers {
+		preset, builtin := defaults[pv.AdapterName][pv.Name]
+		if (builtin && pv.Source != "builtin") || (!builtin && pv.Source != "custom") {
+			return nil, fmt.Errorf("provider %s/%s source does not match builtin membership", pv.AdapterName, pv.Name)
+		}
+		p := adapter.Provider{
+			Name: pv.Name, ProviderType: pv.ProviderType, ChatURL: pv.ChatURL, APIKey: pv.APIKey,
+			Models: pv.CustomModels, Temperature: pv.Temperature,
+		}
+		if builtin {
+			p.ProviderType = ""
+			if p.ChatURL == preset.ChatURL {
+				p.ChatURL = ""
+			}
+			if sameTemperature(p.Temperature, preset.Temperature) {
+				p.Temperature = nil
+			}
+		}
+		p = p.Clone()
+		group := all.Adapters[pv.AdapterName]
+		group.Providers = append(group.Providers, p)
+		all.Adapters[pv.AdapterName] = group
+		if !builtin || p.APIKey != "" || p.ChatURL != "" || p.Temperature != nil || len(p.Models) > 0 {
+			group = result.Adapters[pv.AdapterName]
+			group.Providers = append(group.Providers, p)
+			result.Adapters[pv.AdapterName] = group
+		}
+	}
+	if err := validateUserConfig(all, defaults); err != nil {
+		return nil, err
+	}
+	return result, nil
 }
 
-// Models 从 Provider map 中提取前端下拉列表。
-func Models(providers map[string]Provider) []AvailableModel {
-	var list []AvailableModel
-	for name, p := range providers {
-		for _, m := range p.Models {
-			list = append(list, AvailableModel{
-				Key:              name + "/" + m.ID,
-				ModelID:          m.ID,
-				ProviderKey:      name,
-				ProviderName:     p.Name,
-				ModelName:        m.Name,
-				ContextWindow:    m.ContextWindow,
-				MaxOutputTokens:  m.MaxOutputTokens,
-				SupportsThinking: m.SupportsThinking,
-				ReasoningLevels:  m.ReasoningLevels,
-				SupportsVision:   m.SupportsVision,
-			})
+func sameTemperature(a, b *float64) bool {
+	return (a == nil && b == nil) || (a != nil && b != nil && *a == *b)
+}
+
+// Models 从按协议分组的 provider 快照中提取模型选项。
+// Key 包含协议，避免跨协议同名 provider/model 冲突；调用使用独立字段。
+func Models(providers map[adapter.Protocol]ProviderMap) []AvailableModel {
+	list := make([]AvailableModel, 0)
+	for adapterName, group := range providers {
+		for providerName, p := range group {
+			for _, m := range p.Models {
+				list = append(list, AvailableModel{
+					Model: m.Clone(), Key: providerViewKey(adapterName, providerName) + "/" + url.PathEscape(m.ID),
+					AdapterName: adapterName, ProviderName: p.Name, ProviderType: p.ProviderType,
+				})
+			}
 		}
 	}
 	sort.Slice(list, func(i, j int) bool {
 		if list[i].ProviderName != list[j].ProviderName {
 			return list[i].ProviderName < list[j].ProviderName
 		}
-		return list[i].ModelName < list[j].ModelName
+		if list[i].AdapterName != list[j].AdapterName {
+			return list[i].AdapterName < list[j].AdapterName
+		}
+		return list[i].Model.ID < list[j].Model.ID
 	})
 	return list
 }
 
-func modelExists(models []ModelInfo, id string) bool {
+func cloneModels(models []ModelInfo) []ModelInfo {
+	models = slices.Clone(models)
 	for i := range models {
-		if models[i].ID == id {
-			return true
-		}
+		models[i] = models[i].Clone()
 	}
-	return false
+	return models
 }

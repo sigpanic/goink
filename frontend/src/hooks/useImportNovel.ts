@@ -59,7 +59,7 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
 
   // LLM 兜底相关状态
   const [filePath, setFilePath] = useState("");
-  // selectedModel 存结构化 AvailableModel 对象（含 ProviderName/ModelID），
+  // selectedModel 存结构化 AvailableModel 对象（含协议、服务商实例和 model 元数据），
   // 替代原 modelKey 字符串 + splitModelKey 拆串。models 列表只读走 query data。
   const [selectedModel, setSelectedModel] = useState<llm.AvailableModel | null>(
     null,
@@ -94,11 +94,29 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
   // 原命令式 app.GetModels().then + app.GetSettings().then 改用 query 缓存，
   // 30s staleTime 内命中缓存不重复 fetch。
   useEffect(() => {
-    if (!modelsData?.length) return;
-    const key = settingsData?.selected_model_key || "";
-    setSelectedModel(
-      modelsData.find((m) => m.Key === key) ?? modelsData[0] ?? null,
-    );
+    if (!settingsData) return;
+    setSelectedModel((current) => {
+      const existing =
+        current &&
+        modelsData.find(
+          (m) =>
+            m.AdapterName === current.AdapterName &&
+            m.ProviderName === current.ProviderName &&
+            m.model.id === current.model.id,
+        );
+      if (existing) return existing;
+      const saved = settingsData.default_model_selection;
+      return (
+        modelsData.find(
+          (m) =>
+            m.AdapterName === saved?.adapter_name &&
+            m.ProviderName === saved?.provider_name &&
+            m.model.id === saved?.model_id,
+        ) ??
+        modelsData[0] ??
+        null
+      );
+    });
   }, [modelsData, settingsData]);
 
   const reset = useCallback(() => {
@@ -172,11 +190,15 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
   );
 
   // 用户点"AI 分析"→ 调 ImportWithLLM，LLM 分析后直接导入
-  // 结构化入参：直接取 selectedModel.ProviderName/ModelID，不再 splitModelKey 拆串。
+  // 结构化入参：直接取协议、服务商实例和 model.id，不反解析显示 key。
   const startLLMImport = useCallback(async () => {
     if (!filePath || !selectedModel) return;
-    const { ProviderName: providerName, ModelID: modelID } = selectedModel;
-    if (!providerName || !modelID) return;
+    const {
+      AdapterName: adapterName,
+      ProviderName: providerName,
+      model,
+    } = selectedModel;
+    if (!adapterName || !providerName || !model.id) return;
 
     setError("");
     setProgress((prev) => ({
@@ -189,8 +211,9 @@ export function useImportNovel({ onImported }: UseImportNovelOptions) {
     try {
       const result = await ImportWithLLM({
         file_path: filePath,
+        adapter_name: adapterName,
         provider_name: providerName,
-        model_id: modelID,
+        model_id: model.id,
       });
 
       setskipped_count(result.skipped_count ?? 0);

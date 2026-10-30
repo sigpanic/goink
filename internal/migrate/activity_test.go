@@ -12,6 +12,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/migrate"
 )
 
@@ -29,7 +30,8 @@ func TestActivityMigrationPreservesExistingSettingsAndStatistics(t *testing.T) {
 	setupMigrationIntegrationEnv(t)
 	db := openMigrationIntegrationDB(t)
 	require.NoError(t, migrate.Run(db, slog.Default()))
-	require.NoError(t, db.Create(&config.AppSettings{ID: 1, UserName: "已有作者", SelectedModelKey: "provider/model"}).Error)
+	selection := adapter.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "provider", ModelID: "model"}
+	require.NoError(t, db.Create(&config.AppSettings{ID: 1, UserName: "已有作者", DefaultModelSelection: selection}).Error)
 	require.NoError(t, db.Migrator().DropTable(&activity.DailyActivity{}, &activity.DailyLLMUsage{}))
 	require.NoError(t, db.Migrator().DropColumn(&config.AppSettings{}, "tracking_started_at"))
 	require.NoError(t, db.Migrator().DropColumn(&config.AppSettings{}, "tracking_start_date"))
@@ -38,7 +40,7 @@ func TestActivityMigrationPreservesExistingSettingsAndStatistics(t *testing.T) {
 	settings, err := config.LoadSettings(db)
 	require.NoError(t, err)
 	require.Equal(t, "已有作者", settings.UserName)
-	require.Equal(t, "provider/model", settings.SelectedModelKey)
+	require.Equal(t, selection, settings.DefaultModelSelection)
 	require.Nil(t, settings.TrackingStartedAt)
 	require.Empty(t, settings.TrackingStartDate)
 	store := activity.NewStore(db, slog.Default())

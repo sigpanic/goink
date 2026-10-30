@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func TestUserConfigEncryptionCompatibility(t *testing.T) {
 	require.NoError(t, err)
 	legacyCipher, err := cipher.NewGCM(block)
 	require.NoError(t, err)
-	state := &UserLLMConfig{Providers: []Provider{{Name: "test", APIKey: "private-test-key", ChatURL: "https://example.com"}}}
+	state := testUserConfig(adapter.Provider{Name: "test", ProviderType: "openai", APIKey: "private-test-key", ChatURL: "https://example.com"})
 	plain, err := json.MarshalIndent(state, "", "  ")
 	require.NoError(t, err)
 	nonce := make([]byte, legacyCipher.NonceSize())
@@ -67,7 +68,7 @@ func TestSaveUserConfigFailedAtomicReplacePreservesDestination(t *testing.T) {
 	require.NoError(t, os.Mkdir(path, 0700))
 	marker := filepath.Join(path, "existing")
 	require.NoError(t, os.WriteFile(marker, []byte("preserve"), 0600))
-	state := &UserLLMConfig{Providers: []Provider{{Name: "test", APIKey: "private-test-key"}}}
+	state := testUserConfig(adapter.Provider{Name: "test", ProviderType: "openai", APIKey: "private-test-key", ChatURL: "https://example.com"})
 
 	err := SaveUserConfig(path, state)
 	var renameErr *os.LinkError
@@ -89,4 +90,123 @@ func TestLoadUserConfigPreservesJSONError(t *testing.T) {
 	var parseErr *json.SyntaxError
 	require.ErrorAs(t, err, &parseErr)
 	require.ErrorContains(t, err, "parse config failed")
+}
+
+func TestLoadUserConfigMissingFileReturnsNewFormat(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "missing.enc")
+	loaded, err := LoadUserConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, ConfigVersion, loaded.Version)
+	require.NotNil(t, loaded.Adapters)
+	require.Empty(t, loaded.Adapters)
+	_, err = os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
+func TestLoadUserConfigRejectsLegacyAndInvalidSchema(t *testing.T) {
+	tests := []struct {
+		name string
+		json string
+		want string
+	}{
+		{"legacy top level", `{"providers":[{"name":"mimo","api_key":"private-test-key"}]}`, `unknown field "providers"`},
+		{"legacy provider name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","provider_name":"legacy","provider_type":"xiaomi","chat_url":"https://relay.example"}]}}}`, `unknown field "provider_name"`},
+		{"legacy adapter name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","adapter_name":"openai_chat","provider_type":"xiaomi","chat_url":"https://relay.example"}]}}}`, `unknown field "adapter_name"`},
+		{"missing version", `{"adapters":{}}`, "version"},
+		{"unknown version", `{"version":3,"adapters":{}}`, "version"},
+		{"missing adapters", `{"version":2}`, "adapters"},
+		{"null adapters", `{"version":2,"adapters":null}`, "adapters"},
+		{"missing custom type", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"relay","chat_url":"https://relay.example","api_key":"private-test-key"}]}}}`, "provider type"},
+		{"builtin type not persisted", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","provider_type":"xiaomi"}]}}}`, "must omit provider_type"},
+		{"duplicate name", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo"},{"name":"MiMo"}]}}}`, "duplicate provider"},
+		{"unknown nested field", `{"version":2,"adapters":{"openai_chat":{"providers":[{"name":"MiMo","extra":"value"}]}}}`, `unknown field "extra"`},
+		{"multiple documents", `{"version":2,"adapters":{}} {"version":2,"adapters":{}}`, "parse config failed"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "config.enc")
+			data, err := config.Encrypt([]byte(tt.json))
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path, data, 0600))
+			_, err = LoadUserConfig(path)
+			require.ErrorContains(t, err, tt.want)
+			require.NotContains(t, err.Error(), "private-test-key")
+			after, err := os.ReadFile(path)
+			require.NoError(t, err)
+			require.Equal(t, data, after, "加载不应隐式迁移或重写配置")
+		})
+	}
+}
+
+func TestSaveUserConfigRejectsInvalidWithoutChangingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "config.enc")
+	valid := testUserConfig(adapter.Provider{Name: "MiMo", APIKey: "key", Temperature: floatPtr(0)})
+	require.NoError(t, SaveUserConfig(path, valid))
+	before, err := os.ReadFile(path)
+	require.NoError(t, err)
+	invalid := testUserConfig(adapter.Provider{Name: "MiMo"}, adapter.Provider{Name: "MiMo"})
+	require.ErrorContains(t, SaveUserConfig(path, invalid), "duplicate provider")
+	after, err := os.ReadFile(path)
+	require.NoError(t, err)
+	require.Equal(t, before, after)
+	entries, err := os.ReadDir(dir)
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "无效配置不应留下临时文件")
+	loaded, err := LoadUserConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, valid, loaded)
+}
+
+func TestSaveUserConfigPersistsExplicitRecordsWithoutKey(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.enc")
+	state := testUserConfig(adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example", Temperature: floatPtr(0)})
+	require.NoError(t, SaveUserConfig(path, state))
+	loaded, err := LoadUserConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, state, loaded, "无 Key 配置应完整保留")
+	info, err := os.Stat(path)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+}
+
+func TestBuiltinOverridesRoundTripWithoutPersistingDefaults(t *testing.T) {
+	user := testUserConfig(
+		adapter.Provider{Name: "DeepSeek", ChatURL: "https://override.example", Temperature: floatPtr(0)},
+		adapter.Provider{Name: "MiMo", APIKey: "official-key"},
+		adapter.Provider{Name: "relay", ProviderType: "xiaomi", ChatURL: "https://relay.example"},
+	)
+	view, err := BuildConfigView(user)
+	require.NoError(t, err)
+	saved, err := view.ToUserConfig()
+	require.NoError(t, err)
+	require.Equal(t, user, saved)
+
+	path := filepath.Join(t.TempDir(), "config.enc")
+	require.NoError(t, SaveUserConfig(path, saved))
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	plain, err := config.Decrypt(data)
+	require.NoError(t, err)
+	require.JSONEq(t, `{
+		"version": 2,
+		"adapters": {"openai_chat": {"providers": [
+			{"name": "DeepSeek", "chat_url": "https://override.example", "models": null, "temperature": 0},
+			{"name": "MiMo", "chat_url": "", "api_key": "official-key", "models": null},
+			{"name": "relay", "provider_type": "xiaomi", "chat_url": "https://relay.example", "models": null}
+		]}}
+	}`, string(plain))
+
+	loaded, err := LoadUserConfig(path)
+	require.NoError(t, err)
+	require.Equal(t, user, loaded)
+	resolved, err := Merge(loaded)
+	require.NoError(t, err)
+	require.Len(t, resolved[adapter.ProtocolOpenAIChat], 1, "只有已配置 APIKey 的 MiMo 进入运行时")
+	preset := builtinProviders()[adapter.ProtocolOpenAIChat]["MiMo"]
+	official := resolved[adapter.ProtocolOpenAIChat]["MiMo"]
+	require.Equal(t, preset.ProviderType, official.ProviderType)
+	require.Equal(t, preset.ChatURL, official.ChatURL)
+	require.Equal(t, preset.Temperature, official.Temperature)
+	require.Equal(t, preset.Models, official.Models)
 }

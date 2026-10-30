@@ -12,6 +12,7 @@ import (
 
 	"gorm.io/gorm"
 	"{{.}}/internal/config"
+	"{{.}}/internal/llm"
 	"{{.}}/internal/migrate"
 	"{{.}}/internal/platform"
 	"{{.}}/internal/storage"
@@ -50,6 +51,15 @@ func run() error {
 		if err := seed(db, log); err != nil {
 			return err
 		}
+		if err := seedLLMConfig(); err != nil {
+			return err
+		}
+	}
+	if _, err := os.Stat(config.LLMConfigPath()); err != nil {
+		return err
+	}
+	if _, err := llm.LoadUserConfig(config.LLMConfigPath()); err != nil {
+		return fmt.Errorf("historical LLM config: %w", err)
 	}
 	// Expected counts are supplied by the seed, never recomputed from the result
 	// of a historical upgrade (which would bless historical data corruption).
@@ -97,6 +107,47 @@ func bytesTrim(data []byte) []byte {
 		data = data[:len(data)-1]
 	}
 	return data
+}
+
+func seedLLMConfig() error {
+	const seed = `[
+		{"name":"deepseek","api_key":"fixture-builtin-key","chat_url":"https://builtin.example/v8/chat/completions?region=cn","temperature":0,"models":[{"id":"fixture-deepseek","name":"内置服务商自定义模型","context_window":65536,"max_output_tokens":8192,"supports_thinking":true,"reasoning_levels":["low","high"],"supports_vision":true}]},
+		{"name":"升级中转站","api_key":"fixture-relay-key","chat_url":"https://relay.example/custom/chat/completions?tenant=fixture","temperature":0.7,"models":[{"id":"vendor/model","name":"中转模型","context_window":32768,"max_output_tokens":4096,"supports_thinking":false,"supports_vision":false}]}
+	]`
+	var providers []map[string]any
+	if err := json.Unmarshal([]byte(seed), &providers); err != nil {
+		return err
+	}
+	shape, err := json.Marshal(llm.UserLLMConfig{})
+	if err != nil {
+		return err
+	}
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(shape, &fields); err != nil {
+		return err
+	}
+	document := map[string]any{"providers": providers}
+	if _, versioned := fields["adapters"]; versioned {
+		providers[0]["name"] = "DeepSeek"
+		providers[1]["provider_type"] = "openai"
+		document = map[string]any{"version": 2, "adapters": map[string]any{"openai_chat": map[string]any{"providers": providers}}}
+	}
+	data, err := json.Marshal(document)
+	if err != nil {
+		return err
+	}
+	var cfg llm.UserLLMConfig
+	if err := json.Unmarshal(data, &cfg); err != nil {
+		return err
+	}
+	path := config.LLMConfigPath()
+	if filepath.Clean(path) != filepath.Join(os.Getenv("HOME"), ".goink", "llm_config.enc") {
+		return fmt.Errorf("historical config directory was not isolated")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+		return err
+	}
+	return llm.SaveUserConfig(path, &cfg)
 }
 
 func seed(db *gorm.DB, log *slog.Logger) error {

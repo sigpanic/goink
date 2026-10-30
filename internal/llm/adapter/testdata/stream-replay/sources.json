@@ -1,0 +1,141 @@
+{
+  "retrieval_date": "2026-10-30",
+  "files": [
+    {
+      "file": "goodall/LICENSE",
+      "url": "https://raw.githubusercontent.com/bensyverson/goodall/afdcceb656fd235bc1d2ba3cbdbfab0ae2d00f8b/LICENSE",
+      "sha256": "726b13716195fb49858824a8b8e24f01f7b595b41bb0291810670c3b5bdf7a19",
+      "kind": "license",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "goodall/live_thinking_tool_use.request.json",
+      "url": "https://raw.githubusercontent.com/bensyverson/goodall/afdcceb656fd235bc1d2ba3cbdbfab0ae2d00f8b/anthropic/testdata/live_thinking_tool_use.request.json",
+      "sha256": "ce469ef33f296b09199820d1fa1590a4df0e1444376cfc68080781e6f82b8e34",
+      "kind": "recorded-request-or-sse",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "goodall/live_thinking_tool_use.sse",
+      "url": "https://raw.githubusercontent.com/bensyverson/goodall/afdcceb656fd235bc1d2ba3cbdbfab0ae2d00f8b/anthropic/testdata/live_thinking_tool_use.sse",
+      "sha256": "031df0df4d8cc9dde8aa5fbeb40408ebb116caa97df85256675cdf67bb7ed2a1",
+      "kind": "recorded-request-or-sse",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "goodall/live_thinking_tool_use_turn2.request.json",
+      "url": "https://raw.githubusercontent.com/bensyverson/goodall/afdcceb656fd235bc1d2ba3cbdbfab0ae2d00f8b/anthropic/testdata/live_thinking_tool_use_turn2.request.json",
+      "sha256": "76fcabc782a1c134a472f6455c30dc0005b1d46455b49c5e8c53a9551deb8283",
+      "kind": "recorded-request-or-sse",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "goodall/live_thinking_tool_use_turn2.sse",
+      "url": "https://raw.githubusercontent.com/bensyverson/goodall/afdcceb656fd235bc1d2ba3cbdbfab0ae2d00f8b/anthropic/testdata/live_thinking_tool_use_turn2.sse",
+      "sha256": "4d9b7944bdc6cf9d51a036e1372efed396465610da4d7ae2817861a69feb8f53",
+      "kind": "recorded-request-or-sse",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "grafana/LICENSE",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/LICENSE",
+      "sha256": "efb4d91baa7cd9559d3452f79deb2b3d9dc819c83d7058a1f90ac70484a1a23e",
+      "kind": "license",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "grafana/NOTICE",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/NOTICE",
+      "sha256": "70b95b2fa3ee4b1b2a6f0d1118c149744f283006952429d0f693997bb630f9cb",
+      "kind": "license",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "grafana/config.yaml",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/test/conformance/openai/recorded/reasoning-tool-use/config.yaml",
+      "sha256": "68823e90bdd7f6e83385ebd994b976916084c17d93b56cac81f9d8ea8da96697",
+      "kind": "recorded-conformance",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "grafana/expected-requests.jsonl",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/test/conformance/openai/recorded/reasoning-tool-use/expected-requests.jsonl",
+      "sha256": "c0f5f8b1787f67d2df1f825a82b15d00acea7a7088042eaac80643e5b6ded0c4",
+      "kind": "recorded-conformance",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "grafana/input-1.chunks.txt",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/test/conformance/openai/recorded/reasoning-tool-use/input-1.chunks.txt",
+      "sha256": "1afb5d7390beeb5a99d3a969ed2ee6922f391aa9f8dc874370f6bd0b483f0a14",
+      "kind": "recorded-conformance",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "grafana/input-2.chunks.txt",
+      "url": "https://raw.githubusercontent.com/grafana/ai-sdk/5ec038b2460b10575c341a870404553b3a94e7b5/test/conformance/openai/recorded/reasoning-tool-use/input-2.chunks.txt",
+      "sha256": "d9e0dbed7dee576ad5da3525ea128cec70729651760c60a40b329863313577cf",
+      "kind": "recorded-conformance",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "llm/LICENSE",
+      "url": "https://raw.githubusercontent.com/simonw/llm/aebaca27f9acb6cc56ba4b33ab81e08d6dcb3bc3/LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "kind": "license",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "llm/test_responses_tool_use_streaming.yaml",
+      "url": "https://raw.githubusercontent.com/simonw/llm/aebaca27f9acb6cc56ba4b33ab81e08d6dcb3bc3/tests/cassettes/test_openai_responses/test_responses_tool_use_streaming.yaml",
+      "sha256": "6d813ebb57976a88ffd892cbd526f21ee98fa8ca4d22d2c816572fd3bafc76a7",
+      "kind": "recorded-vcr-gzip",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "pydantic/LICENSE",
+      "url": "https://raw.githubusercontent.com/pydantic/pydantic-ai/fb04437121e9e84cda129a3db394ce8e27ae95f0/LICENSE",
+      "sha256": "bc0e89738f36944c8106e1947c3d69631f9c33b8f1bcb60ec4f89d677d2dfcf4",
+      "kind": "license",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "pydantic/test_anthropic_tool_with_thinking.yaml",
+      "url": "https://raw.githubusercontent.com/pydantic/pydantic-ai/fb04437121e9e84cda129a3db394ce8e27ae95f0/tests/models/cassettes/test_anthropic/test_anthropic_tool_with_thinking.yaml",
+      "sha256": "4a5e009089508af29484de7e8bc89118fafeb112ab48a8a244a698b45c727865",
+      "kind": "recorded-cassetter",
+      "license": "MIT",
+      "modified": false
+    },
+    {
+      "file": "vercel/LICENSE",
+      "url": "https://raw.githubusercontent.com/vercel/ai/dfed8e8234b684c3e2a0571ad1a1078c8364b44c/LICENSE",
+      "sha256": "b4f9adb7c568904834d0dd6cc98d16c390d21ca32fc17ae7a267715269bd5529",
+      "kind": "license",
+      "license": "Apache-2.0",
+      "modified": false
+    },
+    {
+      "file": "vercel/openai-reasoning-encrypted-content.1.chunks.txt",
+      "url": "https://raw.githubusercontent.com/vercel/ai/dfed8e8234b684c3e2a0571ad1a1078c8364b44c/packages/openai/src/responses/__fixtures__/openai-reasoning-encrypted-content.1.chunks.txt",
+      "sha256": "a1e8b0e752046299cafe44af4c5fcdcda5ceb9a9ee5c117304b39ef527a58edc",
+      "kind": "provider-event-json-lines",
+      "license": "Apache-2.0",
+      "modified": false
+    }
+  ]
+}

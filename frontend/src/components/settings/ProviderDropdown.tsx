@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import type { llm } from "@/lib/wailsjs/go/models";
+import { createProviderLabeler } from "@/lib/llmProviders";
 
 interface Props {
   providers: llm.ProviderView[];
@@ -37,6 +38,9 @@ export default function ProviderDropdown({
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const provider = providers.find((p) => p.key === selectedKey);
+  const providerLabel = createProviderLabeler(
+    providers.map((p) => [p.name, p.adapter_name] as const),
+  );
 
   // 切换服务商时重置折叠和下拉状态
   useEffect(() => {
@@ -67,7 +71,9 @@ export default function ProviderDropdown({
         className="flex items-center gap-2 w-full h-8 rounded-md border bg-background px-2.5 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         {renderIcon(provider.key, provider.name)}
-        <span className="flex-1 text-left">{provider.name}</span>
+        <span className="flex-1 text-left">
+          {providerLabel(provider.name, provider.adapter_name)}
+        </span>
         <ChevronDown
           className={`w-3.5 h-3.5 shrink-0 text-muted-foreground transition-transform duration-200 ${dropdownOpen ? "rotate-180" : ""}`}
         />
@@ -109,7 +115,7 @@ export default function ProviderDropdown({
                 className={`flex items-center gap-2 w-full px-2.5 py-1.5 text-sm hover:bg-muted/50 transition-colors ${p.key === selectedKey ? "bg-muted/30" : ""}`}
               >
                 {renderIcon(p.key, p.name)}
-                <span>{p.name}</span>
+                <span>{providerLabel(p.name, p.adapter_name)}</span>
                 <span
                   className={`ml-auto w-2 h-2 rounded-full ${badgeColor} shrink-0`}
                   aria-label={badgeLabel}

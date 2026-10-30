@@ -20,6 +20,7 @@ import (
 	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/search"
 	"github.com/sigpanic/goink/internal/session"
@@ -46,11 +47,12 @@ type RunOptions struct {
 	TurnID          int
 	SessionID       string
 	NovelID         int64
-	Messages        []map[string]any
+	Messages        []llm.Message
 	AllowedTools    map[string]bool
 	ActiveVersion   int
 	SubAgentVersion int // 子 Agent 内存版本计数器，不持久化
 	Model           *llm.ModelInfo
+	AdapterName     adapter.Protocol
 	ProviderName    string
 	AgentType       string
 	SubTaskID       string // 子 Agent 事件路由 ID
@@ -98,17 +100,17 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 	sysPrompt := agentcfg.AgentIdentity(at)
 	allowed := agentcfg.Allowlist(at)
 
-	msgs := []map[string]any{
-		{"role": "system", "content": sysPrompt},
+	msgs := []llm.Message{
+		{Role: "system", Content: sysPrompt},
 	}
 	// subagent 不需要 always/catalog（只读上下文），只注入 Profile + State
 	if profile, err := agentcfg.NovelProfile(ctx, a.db, req.NovelID); err == nil && profile != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": profile})
+		msgs = append(msgs, llm.Message{Role: "system", Content: profile})
 	}
 	if state, err := agentcfg.NovelState(ctx, a.db, req.NovelID); err == nil && state != "" {
-		msgs = append(msgs, map[string]any{"role": "system", "content": state})
+		msgs = append(msgs, llm.Message{Role: "system", Content: state})
 	}
-	msgs = append(msgs, map[string]any{"role": "user", "content": req.Instruction})
+	msgs = append(msgs, llm.Message{Role: "user", Content: req.Instruction})
 
 	subOpts := RunOptions{
 		TurnID:          parentOpts.TurnID,
@@ -122,6 +124,7 @@ func (a *Agent) RunSubAgent(ctx context.Context, parentOpts RunOptions, req mcp_
 		EventSeq:        parentOpts.EventSeq,
 		MaxTurns:        100,
 		Model:           parentOpts.Model,
+		AdapterName:     parentOpts.AdapterName,
 		ProviderName:    parentOpts.ProviderName,
 		ReasoningEffort: parentOpts.ReasoningEffort,
 	}
@@ -154,6 +157,23 @@ func agentTypeFromString(s string) agentcfg.AgentType {
 
 // Run 执行 Agent 循环，返回最终文本和轮数。
 func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, error) {
+	return a.run(ctx, opts,
+		func(ctx context.Context, opts RunOptions, tools []llm.ToolDefinition, callOpts *llm.CallOptions) <-chan llm.StreamEvent {
+			return a.llm.ChatStream(ctx, opts.AdapterName, opts.ProviderName, opts.Model.ID, opts.Messages, tools, callOpts)
+		},
+		func(event AgentEvent) {
+			wails.EventsEmit(ctx, "agent:"+strconv.Itoa(opts.TurnID), event)
+		},
+	)
+}
+
+// run 通过回调发起请求和发布事件，供局部回归覆盖响应收尾、重试及中断。
+func (a *Agent) run(
+	ctx context.Context,
+	opts RunOptions,
+	openStream func(context.Context, RunOptions, []llm.ToolDefinition, *llm.CallOptions) <-chan llm.StreamEvent,
+	publish func(AgentEvent),
+) (AgentLoopResult, error) {
 	if opts.MaxTurns <= 0 {
 		opts.MaxTurns = 100
 	}
@@ -170,8 +190,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 	recentPatterns := make([]string, 0, 6)
 	tracker := newInterruptTracker() // 工具连续失败计数（system 5/args 5/全局 10 中断）
 	runningTokens := a.InitRunningTokens(opts.Messages)
-	tools := a.registry.OpenAI(opts.AllowedTools)
-	agentEventName := "agent:" + strconv.Itoa(opts.TurnID)
+	tools := a.registry.Definitions(opts.AllowedTools)
 	eventSeq := opts.EventSeq
 	if eventSeq == nil {
 		seq := 0
@@ -185,7 +204,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			event.Timestamp = time.Now()
 		}
 		event.SubTaskID = opts.SubTaskID
-		wails.EventsEmit(ctx, agentEventName, event)
+		publish(event)
 	}
 
 	canceled := false    // 用户手动取消（ctx.Done）
@@ -226,10 +245,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
 		}
 	RETRY_STREAM:
+		var responseState *llm.ResponseState
+		hasThinking := false
+		isThinking = false
 		// 记录本轮 streamLoop 第一个事件 seq（前端据此清空本轮 partial segments）
 		// +1 是因为 emit 闭包是 `*eventSeq++; event.Seq = *eventSeq`（先自增再赋值）
 		streamStartSeq := *eventSeq + 1
-		stream := a.llm.ChatStream(ctx, opts.ProviderName, opts.Messages, tools, opts.Model.ID, callOpts)
+		streamCtx, cancelStream := context.WithCancel(ctx)
+		stream := openStream(streamCtx, opts, tools, callOpts)
 
 		// ---- SSE 流处理 ----
 	streamLoop:
@@ -237,6 +260,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 			select {
 			case <-ctx.Done():
 				canceled = true
+				cancelStream()
 				a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 				break streamLoop
 
@@ -246,13 +270,26 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 				}
 
 				switch event.Type {
+				case llm.EventResponseState:
+					if event.State != nil && event.State.Complete {
+						state := event.State.Clone()
+						responseState = &state
+					}
+
 				case llm.EventThinking:
+					hasThinking = true
 					isThinking = true
 					thinkingBuffer.WriteString(event.Data)
 					emit(AgentEvent{
 						TurnID: opts.TurnID, Type: EventThinking,
 						Data: event.Data, Timestamp: time.Now(),
 					})
+
+				case llm.EventThinkingDone:
+					if isThinking {
+						emit(AgentEvent{TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now()})
+						isThinking = false
+					}
 
 				case llm.EventContent:
 					if isThinking {
@@ -285,6 +322,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					})
 
 				case llm.EventToolCallEnd:
+					if isThinking {
+						emit(AgentEvent{TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now()})
+						isThinking = false
+					}
 					name := event.Delta.ToolName
 					id := event.Delta.ToolID
 					rawArgs := event.Delta.ArgumentsJSON
@@ -353,6 +394,11 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						Metadata: metadata, Timestamp: time.Now(),
 					})
 
+					toolOutputs = append(toolOutputs, toolOutput{
+						call: llm.ToolCall{ID: id, Name: name, Arguments: rawArgs}, result: result,
+						displayText: display.DisplayText, activityKind: display.ActivityKind,
+					})
+
 					// 失败计数：system 5 次/args 5 次/全局连续 10 次触发中断
 					if result.Success {
 						tracker.recordSuccess(name)
@@ -360,6 +406,7 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						if interrupt, reason := tracker.recordFailure(name, result.ErrKind); interrupt {
 							interrupted = true
 							interruptErr = reason
+							cancelStream()
 							a.flushInterruptedTools(ctx, stream, &opts, &toolOutputs)
 							break streamLoop
 						}
@@ -370,12 +417,12 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						pendingInjects[id] = result.Inject
 					}
 
-					toolOutputs = append(toolOutputs, toolOutput{name: name, id: id, rawArgs: rawArgs, result: result, displayText: display.DisplayText, activityKind: display.ActivityKind})
-
 				case llm.EventUsage:
 					a.updateUsage(ctx, event.Usage, runningTokens, opts)
 
 				case llm.EventError:
+					cancelStream()
+					responseState = nil
 					// 关键节点日志：agent 收到 EventError
 					var apiErr *llm.APIError
 					if errors.As(event.Error, &apiErr) {
@@ -394,13 +441,14 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						// 丢弃本轮所有输出（content + thinking + tool_calls）
 						responseBuffer.Reset()
 						thinkingBuffer.Reset()
-						isThinking = false
 
 						// appendMsg user reminder，告诉 LLM 刚才 tool call 解析失败
 						// 仅首次 tool_args_invalid 时追加，避免重试耗尽后残留多条孤立 reminder
 						if !reminderAdded {
 							reminder := buildToolArgsReminder(apiErr.Message)
-							a.appendMsg("user", reminder, "", nil, &opts, runningTokens)
+							if err := a.appendMsg(llm.Message{Role: "user", Content: reminder}, nil, &opts, runningTokens); err != nil {
+								return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(event.Error, err)
+							}
 							reminderAdded = true
 						}
 
@@ -472,7 +520,6 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 						// 首次进入是外层 turn 顶部已确保空；重试进入是上次末已 Reset）。
 						responseBuffer.Reset()
 						thinkingBuffer.Reset()
-						isThinking = false
 						// toolOutputs / pendingInjects 在本轮 streamLoop 内，
 						// EventError 发生时本轮 tool 还未执行（toolOutputs 为空），
 						// 不需要清空
@@ -499,13 +546,29 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					}
 					finalText := responseBuffer.String()
 					thinkingContent := thinkingBuffer.String()
-					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-						a.appendMsg("assistant", finalText, thinkingContent,
-							nil, &opts, runningTokens)
+					if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 || hasThinking {
+						if err := a.appendMsg(llm.Message{Role: "assistant", Content: finalText, ThinkingContent: thinkingContent, HasThinking: hasThinking},
+							nil, &opts, runningTokens); err != nil {
+							return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, errors.Join(event.Error, err)
+						}
 					}
 					return AgentLoopResult{FinalText: finalText, ThinkingContent: thinkingContent, TurnCount: loopCount}, event.Error
 				}
 			}
+		}
+
+		cancelStream()
+		if ctx.Err() != nil {
+			canceled = true
+		}
+		// 中断可能只接收了部分工具；原生状态不随不完整的公共消息回放。
+		if canceled || interrupted {
+			responseState = nil
+		}
+		message := llm.Message{
+			Role: "assistant", Content: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(),
+			HasThinking: hasThinking,
+			ToolCalls:   buildToolCalls(toolOutputs), State: responseState,
 		}
 
 		// ---- 流结束，判断是否有工具调用 ----
@@ -515,9 +578,10 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 					TurnID: opts.TurnID, Type: EventThinkingDone, Timestamp: time.Now(),
 				})
 			}
-			if responseBuffer.Len() > 0 || thinkingBuffer.Len() > 0 {
-				a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
-					nil, &opts, runningTokens)
+			if message.Content != "" || message.ThinkingContent != "" || message.HasThinking || message.State != nil {
+				if err := a.appendMsg(message, nil, &opts, runningTokens); err != nil {
+					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+				}
 			} //此处持久化最终信息，主agent和subagent共享避免遗漏
 			normalEnd = true
 			break
@@ -525,24 +589,28 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 		// 1. assistant + tool_calls + tool_displays
 
-		a.appendMsg("assistant", responseBuffer.String(), thinkingBuffer.String(),
+		if err := a.appendMsg(message,
 			map[string]any{
-				"tool_calls":    buildToolCalls(toolOutputs),
 				"tool_displays": buildToolDisplay(toolOutputs),
-			}, &opts, runningTokens)
+			}, &opts, runningTokens); err != nil {
+			return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+		}
 
 		// 2. tool 结果
 		for _, to := range toolOutputs {
-			a.appendMsg("tool", to.resultJSON(),
-				"", map[string]any{"tool_call_id": to.id, "tool_name": to.name},
-				&opts, runningTokens)
+			if err := a.appendMsg(llm.Message{Role: "tool", Content: to.resultJSON(), ToolCallID: to.call.ID, ToolName: to.call.Name}, nil,
+				&opts, runningTokens); err != nil {
+				return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+			}
 		}
 
 		// 3. inject（role=user，<system-reminder> 包裹）
 		for _, to := range toolOutputs {
-			for _, inj := range pendingInjects[to.id] {
+			for _, inj := range pendingInjects[to.call.ID] {
 				content := "<system-reminder>\n" + inj.Content + "\n</system-reminder>"
-				a.appendMsg(inj.Role, content, "", nil, &opts, runningTokens)
+				if err := a.appendMsg(llm.Message{Role: inj.Role, Content: content}, nil, &opts, runningTokens); err != nil {
+					return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount}, errors.Join(err, ctx.Err(), interruptErr)
+				}
 			}
 		}
 
@@ -587,32 +655,46 @@ func (a *Agent) Run(ctx context.Context, opts RunOptions) (AgentLoopResult, erro
 
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
 // opts 必须传指针，因为 opts.Messages 需要被追加（Go 切片传值会丢失 append）。
-func (a *Agent) appendMsg(role, content, thinkingContent string, extra map[string]any, opts *RunOptions, runningTokens map[string]int) {
-	msg := &session.Message{
-		SessionID:       opts.SessionID,
-		TurnID:          opts.TurnID,
-		AgentType:       opts.AgentType,
-		SubTaskID:       opts.SubTaskID,
-		Role:            role,
-		Content:         content,
-		ThinkingContent: thinkingContent,
-		ExtraMetadata:   extraJSON(extra),
-		Version:         opts.ActiveVersion,
-		ToAPI:           opts.AgentType == "main",
-		ToFrontend:      role == "assistant",
+func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) error {
+	role := message.Role
+	metadata, err := extraJSON(extra)
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: encode metadata for %s message: %w", role, err)
+	}
+	draft := session.Message{
+		SessionID:     opts.SessionID,
+		TurnID:        opts.TurnID,
+		AgentType:     opts.AgentType,
+		SubTaskID:     opts.SubTaskID,
+		ExtraMetadata: metadata,
+		Version:       opts.ActiveVersion,
+		ToAPI:         opts.AgentType == "main",
+		ToFrontend:    role == "assistant",
+	}
+	msg, err := draft.WithLLMMessage(message)
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: build %s message: %w", role, err)
 	}
 	a.logger.Debug("appendMsg", "role", role, "agentType", opts.AgentType, "subTaskID", opts.SubTaskID, "turnID", opts.TurnID)
-	if err := a.db.Create(msg).Error; err != nil {
+	if err := a.db.Create(&msg).Error; err != nil {
 		a.logger.Error("持久化消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: persist %s message: %w", role, err)
 	}
 
-	apiFormat := msg.ToAPIFormat(a.logger)
-	opts.Messages = append(opts.Messages, apiFormat)
-	n, err := llm.CountMessageTokens(apiFormat)
+	message, err = msg.ToLLMRequestMessage()
+	if err != nil {
+		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
+		return fmt.Errorf("agent: render %s message: %w", role, err)
+	}
+	opts.Messages = append(opts.Messages, message)
+	n, err := llm.CountMessageTokens(message)
 	if err != nil {
 		a.logger.Warn("token count failed", "role", role, "err", err)
 	}
 	runningTokens[role] += n
+	return nil
 }
 
 // sumRunningTokens 计算各角色 token 总数。
@@ -645,7 +727,7 @@ func displayPhase(phase string) mcp_tools.DisplayPhase {
 // buildWebSearch 构建 WebSearch 闭包，从当前 providers 中读取 DeepSeek 配置。
 func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
 	providers := a.llm.Providers()
-	ds, ok := providers["deepseek"]
+	ds, ok := providers[adapter.ProtocolOpenAIChat]["DeepSeek"]
 	if !ok || ds.APIKey == "" {
 		return nil
 	}
@@ -656,12 +738,12 @@ func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.W
 }
 
 // extraJSON 将 map 序列化为 JSON 字符串存入 ExtraMetadata。
-func extraJSON(extra map[string]any) string {
+func extraJSON(extra map[string]any) (string, error) {
 	if len(extra) == 0 {
-		return ""
+		return "", nil
 	}
-	b, _ := json.Marshal(extra)
-	return string(b)
+	b, err := json.Marshal(extra)
+	return string(b), err
 }
 
 // parseArgs 将 JSON args 解析为 map。

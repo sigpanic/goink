@@ -440,6 +440,7 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 	}
 
 	var newRel character.CharacterRelation
+	action := "create" // 默认全新关系；查到同向旧关系时改为 "evolve"
 	err = tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		// 将同向旧关系标记为非当前（append-only），逐行 Save 以触发操作日志回调
 		var oldRels []character.CharacterRelation
@@ -447,6 +448,9 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 			a.SourceCharacterID, a.TargetCharacterID, true).
 			Find(&oldRels).Error; err != nil {
 			return fmt.Errorf("query old relations: %w", err)
+		}
+		if len(oldRels) > 0 {
+			action = "evolve"
 		}
 		for i := range oldRels {
 			oldRels[i].IsCurrent = false
@@ -475,7 +479,7 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 
 	return &ToolResult{
 		Success: true,
-		Data:    map[string]any{"id": newRel.ID, "action": "evolve"},
+		Data:    map[string]any{"id": newRel.ID, "action": action},
 	}, nil
 }
 

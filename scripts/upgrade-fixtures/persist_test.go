@@ -17,7 +17,7 @@ func TestSaveFixtureRecoversUnregisteredArchive(t *testing.T) {
 	if err := os.WriteFile(archive, []byte("interrupted archive"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveFixture(source, path, &m, sample); err != nil {
+	if err := saveFixture(source, path, &m, sample, false); err != nil {
 		t.Fatal(err)
 	}
 	loaded, err := fixturedata.Load(dir)
@@ -31,8 +31,11 @@ func TestSaveFixtureRecoversUnregisteredArchive(t *testing.T) {
 	if got := readFile(t, filepath.Join(output, "novel-agent.db")); string(got) != "synthetic data" {
 		t.Fatalf("recovered archive has wrong content: %q", got)
 	}
+	if got := readFile(t, filepath.Join(output, ".goink", "llm_config.enc")); string(got) != "synthetic encrypted config" {
+		t.Fatalf("archive omitted the config: %q", got)
+	}
 	frozenManifest, frozenArchive := readFile(t, path), readFile(t, archive)
-	if err := saveFixture(source, path, &m, sample); err == nil {
+	if err := saveFixture(source, path, &m, sample, false); err == nil {
 		t.Fatal("overwrote a registered frozen fixture")
 	}
 	if !bytes.Equal(frozenManifest, readFile(t, path)) || !bytes.Equal(frozenArchive, readFile(t, archive)) {
@@ -49,7 +52,7 @@ func TestSaveFixtureRecoversManifestPublicationFailure(t *testing.T) {
 	if err := os.Mkdir(path, 0755); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveFixture(source, path, &m, sample); err == nil {
+	if err := saveFixture(source, path, &m, sample, false); err == nil {
 		t.Fatal("expected manifest publication to fail")
 	}
 	if len(m.Fixtures) != 0 {
@@ -64,7 +67,7 @@ func TestSaveFixtureRecoversManifestPublicationFailure(t *testing.T) {
 	if err := writeManifest(path, before); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveFixture(source, path, &m, sample); err != nil {
+	if err := saveFixture(source, path, &m, sample, false); err != nil {
 		t.Fatal("retry after publication failure:", err)
 	}
 	if _, err := fixturedata.Load(dir); err != nil {
@@ -78,7 +81,7 @@ func TestSaveFixtureLeavesManifestIntactOnArchiveFailure(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(source, "novel-agent.db-wal"), []byte("uncheckpointed"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := saveFixture(source, path, &m, sample); err == nil {
+	if err := saveFixture(source, path, &m, sample, false); err == nil {
 		t.Fatal("expected archive creation to fail with a live WAL")
 	}
 	if !bytes.Equal(before, readFile(t, path)) || len(m.Fixtures) != 0 {
@@ -89,9 +92,72 @@ func TestSaveFixtureLeavesManifestIntactOnArchiveFailure(t *testing.T) {
 	}
 }
 
+func TestRebuildFixtureVerifiesFrozenInputAndRollsBackFailure(t *testing.T) {
+	dir, source, path, m, sample := fixtureOutput(t)
+	if err := saveFixture(source, path, &m, sample, false); err != nil {
+		t.Fatal(err)
+	}
+	archive := filepath.Join(dir, sample.Archive)
+	original := readFile(t, archive)
+	if err := os.WriteFile(filepath.Join(source, "novel-agent.db"), []byte("expanded seed"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	wrongCommit := sample
+	wrongCommit.Commit = strings.Repeat("f", 40)
+	if err := saveFixture(source, path, &m, wrongCommit, true); err == nil {
+		t.Fatal("rebuilt an archive from a different release commit")
+	}
+	if err := os.WriteFile(archive, []byte("tampered"), 0644); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveFixture(source, path, &m, sample, true); err == nil {
+		t.Fatal("rebuilt a tampered frozen archive")
+	}
+	if err := os.WriteFile(archive, original, 0644); err != nil {
+		t.Fatal(err)
+	}
+	before := readFile(t, path)
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveFixture(source, path, &m, sample, true); err == nil {
+		t.Fatal("expected manifest publication failure")
+	}
+	if !bytes.Equal(original, readFile(t, archive)) {
+		t.Fatal("failed rebuild did not restore the original archive")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeManifest(path, before); err != nil {
+		t.Fatal(err)
+	}
+	if err := saveFixture(source, path, &m, sample, true); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Fixtures) != 1 || bytes.Equal(original, readFile(t, archive)) {
+		t.Fatal("rebuild did not replace the existing entry")
+	}
+	if _, err := fixturedata.Load(dir); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func fixtureOutput(t *testing.T) (string, string, string, manifest, fixture) {
 	t.Helper()
-	dir, source := t.TempDir(), t.TempDir()
+	dir, home := t.TempDir(), t.TempDir()
+	source := filepath.Join(home, "Goink")
+	for _, path := range []string{source, filepath.Join(home, ".goink")} {
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, ".goink", "llm_config.enc"), []byte("synthetic encrypted config"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(source, "novel-agent.db"), []byte("synthetic data"), 0644); err != nil {
 		t.Fatal(err)
 	}

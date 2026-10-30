@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/deletion"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/mcpclient"
@@ -363,13 +364,11 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	mcp_tools.RegisterAllTools(a.registry)
 
 	// 8. 初始化 LLM 客户端
-	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())
+	llmClient, err := a.loadLLMClient()
 	if err != nil {
-		a.logger.Warn("加载 LLM 配置失败，使用空配置", "err", err)
-		userConfig = &llm.UserLLMConfig{}
+		return fmt.Errorf("初始化 LLM 客户端失败: %w", err)
 	}
-	providers := llm.Merge(llm.Builtin, userConfig)
-	a.llmClient = llm.NewClient(providers, a.logger)
+	a.llmClient = llmClient
 
 	// 9. 初始化审批服务
 	a.approvals = approval.NewService(a.logger, a.settings.ApprovalMode)
@@ -447,4 +446,20 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	)
 	initSucceeded = true
 	return nil
+}
+
+// loadLLMClient 只读取新格式；损坏或不可用的配置降级为空运行时，不改写原文件。
+func (a *App) loadLLMClient() (*llm.Client, error) {
+	empty := &llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{}}
+	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())
+	if err != nil {
+		a.logger.Warn("加载 LLM 配置失败，使用空配置", "err", err)
+		userConfig = empty
+	}
+	client, err := llm.NewClient(userConfig, a.logger)
+	if err == nil {
+		return client, nil
+	}
+	a.logger.Warn("构建 LLM 客户端失败，使用空配置", "err", err)
+	return llm.NewClient(empty, a.logger)
 }

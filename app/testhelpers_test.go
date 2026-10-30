@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/deletion"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/migrate"
@@ -103,8 +104,8 @@ func setupTestApp(t *testing.T) *App {
 	mcp_tools.RegisterAllTools(registry)
 
 	// LLM client with empty providers (no real API calls in tests).
-	providers := llm.Merge(llm.Builtin, &llm.UserLLMConfig{})
-	llmClient := llm.NewClient(providers, logger)
+	llmClient, err := llm.NewClient(&llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{}}, logger)
+	require.NoError(t, err, "create LLM client")
 
 	// Approval service.
 	approvals := approval.NewService(logger, settings.ApprovalMode)

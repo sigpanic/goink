@@ -6,6 +6,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	imp "github.com/sigpanic/goink/internal/import"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // ImportNovelResult 是导入小说的返回结果。
@@ -66,9 +67,10 @@ func (a *App) PickAndImportNovel() (*ImportNovelResult, error) {
 
 // ImportWithLLMInput 是 AI 辅助导入小说的入参。
 type ImportWithLLMInput struct {
-	FilePath     string `json:"file_path"`
-	ProviderName string `json:"provider_name"`
-	ModelID      string `json:"model_id"`
+	FilePath     string           `json:"file_path"`
+	AdapterName  adapter.Protocol `json:"adapter_name"`
+	ProviderName string           `json:"provider_name"`
+	ModelID      string           `json:"model_id"`
 }
 
 // ImportWithLLM 使用 LLM 分析章节格式后导入小说。
@@ -76,7 +78,7 @@ type ImportWithLLMInput struct {
 // 流程：LLM 生成正则 → 全文分割 → 校验 → 导入。
 func (a *App) ImportWithLLM(input ImportWithLLMInput) (*ImportNovelResult, error) {
 	// 1. LLM 分析 + 分割（内含 isReasonableChapterCount 校验）
-	result, err := imp.AnalyzeWithLLM(a.ctx, input.FilePath, input.ProviderName, input.ModelID, a.llmClient.GenerateText)
+	result, err := imp.AnalyzeWithLLM(a.ctx, input.FilePath, input.AdapterName, input.ProviderName, input.ModelID, a.llmClient.GenerateText)
 	if err != nil {
 		return nil, err
 	}

@@ -1,0 +1,97 @@
+{
+  "_fixture_notice": {
+    "modified_by": "Goink",
+    "changes": "Extracted the response status and body segments from the upstream recording, omitted request data, and added this notice. This metadata is not part of the API response.",
+    "source_url": "https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/Chats_Tests_sendMessage_Google_AI_with_config_stream.json",
+    "license": "Apache-2.0; see GOOGLE-LICENSE.txt."
+  },
+  "status_code": 200,
+  "body_segments": [
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "The"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "qNSfaN6BAtWknvgPjZf02AQ",
+      "usageMetadata": {
+        "promptTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7
+          }
+        ],
+        "totalTokenCount": 7
+      }
+    },
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": " sky is blue"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "qNSfaN6BAtWknvgPjZf02AQ",
+      "usageMetadata": {
+        "promptTokenCount": 7,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 7
+          }
+        ],
+        "totalTokenCount": 7
+      }
+    },
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": " because of a phenomenon called **Rayleigh scattering**. Here's a breakdown:"
+              }
+            ],
+            "role": "model"
+          },
+          "finishReason": "MAX_TOKENS"
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "qNSfaN6BAtWknvgPjZf02AQ",
+      "usageMetadata": {
+        "candidatesTokenCount": 20,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 20
+          }
+        ],
+        "promptTokenCount": 6,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "totalTokenCount": 26
+      }
+    }
+  ]
+}

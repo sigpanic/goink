@@ -13,6 +13,7 @@ import {preference} from '../models';
 import {reader} from '../models';
 import {timeline} from '../models';
 import {llm} from '../models';
+import {adapter} from '../models';
 import {pattern} from '../models';
 import {storage} from '../models';
 import {git} from '../models';
@@ -106,7 +107,7 @@ export function DeleteTimelineEntry(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteVolume(arg1:number,arg2:number):Promise<void>;
 
-export function DiscoverModels(arg1:string,arg2:string,arg3:string):Promise<Array<llm.ModelInfo>>;
+export function DiscoverModels(arg1:llm.ProviderProbeInput):Promise<Array<adapter.ModelInfo>>;
 
 export function DismissUpdate(arg1:string):Promise<void>;
 
@@ -262,11 +263,9 @@ export function SetMCPConnectionEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetMCPToolAllowed(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
-export function SetReasoningEffort(arg1:string):Promise<void>;
+export function SetSelectedModel(arg1:app.SetSelectedModelInput):Promise<void>;
 
-export function SetSelectedModel(arg1:string,arg2:string):Promise<void>;
-
-export function TestConnection(arg1:app.TestConnectionInput):Promise<llm.TestConnectionResult>;
+export function TestConnection(arg1:llm.TestConnectionInput):Promise<adapter.TestConnectionResult>;
 
 export function TestMCPConnection(arg1:string):Promise<Array<mcpclient.ToolView>>;
 

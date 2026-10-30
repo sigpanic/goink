@@ -69,7 +69,7 @@ func Register() {
 		Name:        "v1.6.1-writing-daily",
 		Description: "写作增删量按日期和小说汇总，移除逐次保存与章节明细",
 		// 写作增删量属于非关键统计数据；此类迁移有意不做全量备份，避免为统计汇总复制整个数据目录。
-		Destructive:    false,
+		RequiresBackup: false,
 		NeedsMigration: needsWritingMigration,
 		PreSchemaSteps: []engine.Step{writingDailyStep{}},
 		SchemaStep:     engine.AutoMigrateStep{Models: FrozenModels},

@@ -17,18 +17,17 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
 )
 
 // ChatInput 是一次对话请求的入参。
 type ChatInput struct {
-	SessionID       string `json:"session_id"` // 空=新建会话
-	NovelID         int64  `json:"novel_id"`
-	Message         string `json:"message"`
-	ProviderName    string `json:"provider_name"`    // "deepseek"
-	ModelID         string `json:"model_id"`         // "deepseek-v4-pro"
-	ReasoningEffort string `json:"reasoning_effort"` // "high" | "max" | ""
+	SessionID      string             `json:"session_id"` // 空=新建会话
+	NovelID        int64              `json:"novel_id"`
+	Message        string             `json:"message"`
+	ModelSelection llm.ModelSelection `json:"model_selection"`
 }
 
 // ChatResult 是一次对话请求的返回值。
@@ -41,9 +40,10 @@ type ChatResult struct {
 // Chat 是对话入口。Wails 绑定，前端调用后同步执行，期间通过 EventsEmit 推流。
 func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	// 1. 验证模型（最早失败，不污染 DB）
-	model, ok := a.llmClient.ProviderModel(input.ProviderName, input.ModelID)
+	selection := input.ModelSelection
+	model, ok := a.llmClient.ProviderModel(selection.AdapterName, selection.ProviderName, selection.ModelID)
 	if !ok {
-		return nil, fmt.Errorf("模型未找到: %s/%s", input.ProviderName, input.ModelID)
+		return nil, fmt.Errorf("模型未找到: %s/%s/%s", selection.AdapterName, selection.ProviderName, selection.ModelID)
 	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -65,7 +65,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 
 	// 3. 新会话自动生成标题（异步，与 agent LLM 调用并发）
 	if isNew && sess.Title == "" {
-		go a.generateTitle(sess.SessionID, input.Message, input.ProviderName, input.ModelID)
+		go a.generateTitle(sess.SessionID, input.Message, selection.AdapterName, selection.ProviderName, selection.ModelID)
 	}
 
 	// 4. 获取下一个 turn ID
@@ -151,7 +151,7 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	}
 
 	// 8. 构建消息列表：全部来自 DB（含系统消息/历史/用户消息）
-	messages, err := a.loadAPIMessages(ctx, sess.SessionID, sess.ActiveVersion)
+	messages, err := a.loadLLMMessages(ctx, sess.SessionID, sess.ActiveVersion)
 	if err != nil {
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
 	}
@@ -170,45 +170,31 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		AllowedTools:    agentcfg.Allowlist(agentcfg.MainAgent),
 		ActiveVersion:   sess.ActiveVersion,
 		Model:           model,
-		ProviderName:    input.ProviderName,
+		AdapterName:     selection.AdapterName,
+		ProviderName:    selection.ProviderName,
 		AgentType:       "main",
 		MaxTurns:        100,
-		ReasoningEffort: input.ReasoningEffort,
+		ReasoningEffort: selection.ReasoningEffort,
 	})
 
 	// 10. 最终回复已由 agent.Run() 内部 appendMsg 持久化，此处不重复存储
 	if runErr != nil {
 		a.logger.Error("对话失败", "err", runErr)
-		eventType := session.EventSystemInterrupted
-		if errors.Is(runErr, context.Canceled) {
-			eventType = session.EventUserStopped
-		} else {
-			var apiErr *llm.APIError
-			if errors.As(runErr, &apiErr) {
-				eventType = session.EventError
-			}
+		outcome, saveErr := a.saveChatOutcome(sess.SessionID, turnID, runErr)
+		if saveErr != nil {
+			a.logger.Error("保存对话结局失败", "session_id", sess.SessionID, "turn_id", turnID, "err", saveErr)
 		}
-		a.session.DB.Create(&session.Message{
-			SessionID:  sess.SessionID,
-			TurnID:     turnID,
-			Role:       "system",
-			EventType:  eventType,
-			Content:    agent.FriendlyError(runErr),
-			ToFrontend: true,
-			ToAPI:      false,
-			AgentType:  "main",
-		})
 		// 统一 emit 结局事件：session.EventType 既是 DB 标记又是实时载荷，前端按同一套映射设 status
 		wails.EventsEmit(ctx, "chat:turn_outcome", map[string]any{
 			"turn_id":    turnID,
-			"event_type": string(eventType),
-			"reason":     agent.FriendlyError(runErr),
+			"event_type": string(outcome.EventType),
+			"reason":     outcome.Content,
 		})
 		return &ChatResult{
 			SessionID: sess.SessionID,
 			TurnID:    turnID,
 			FinalText: result.FinalText,
-		}, fmt.Errorf("%s", agent.FriendlyError(runErr))
+		}, fmt.Errorf("%s", outcome.Content)
 	}
 
 	return &ChatResult{
@@ -216,6 +202,24 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		TurnID:    turnID,
 		FinalText: result.FinalText,
 	}, nil
+}
+
+func (a *App) saveChatOutcome(sessionID string, turnID int, runErr error) (session.Message, error) {
+	eventType := session.EventError
+	var interruption agent.InterruptError
+	switch {
+	case errors.Is(runErr, context.Canceled):
+		eventType = session.EventUserStopped
+	case errors.As(runErr, &interruption):
+		eventType = session.EventSystemInterrupted
+	}
+	outcome := session.Message{
+		SessionID: sessionID, TurnID: turnID,
+		Role: "system", EventType: eventType, Content: agent.FriendlyError(runErr),
+		ToFrontend: true, ToAPI: false, AgentType: "main",
+	}
+	err := a.session.DB.Create(&outcome).Error
+	return outcome, err
 }
 
 // loadOrCreateSession 加载已有 session 或创建新 session。
@@ -232,10 +236,9 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 
 	// 创建新 session
 	sess := &session.Session{
-		SessionID:       fmt.Sprintf("sess_%d_%x", input.NovelID, time.Now().UnixNano()),
-		NovelID:         input.NovelID,
-		Model:           input.ModelID,
-		ReasoningEffort: input.ReasoningEffort,
+		SessionID:      fmt.Sprintf("sess_%d_%x", input.NovelID, time.Now().UnixNano()),
+		NovelID:        input.NovelID,
+		ModelSelection: input.ModelSelection,
 	}
 	if err := a.session.DB.WithContext(ctx).Create(sess).Error; err != nil {
 		return nil, false, err
@@ -265,86 +268,38 @@ func writeSystemMessages(tx *gorm.DB, sessionID string, turnID int, msgs *agentc
 	return nil
 }
 
-// loadAPIMessages 加载指定 version 的所有 to_api 消息，转为 map 格式。
-// 出口防御：历史 DB 数据可能存在重复 tool_call_id（DeepSeek 偶发 bug + 早期未去重），
-// 这里按 id 去重 assistant.tool_calls 和对应的 tool 消息，避免发给 DeepSeek 时触发 400。
-func (a *App) loadAPIMessages(ctx context.Context, sessionID string, version int) ([]map[string]any, error) {
+// loadLLMMessages 加载当前版本的模型请求历史，只执行 Session 的结构化映射。
+// 时间前缀和原生状态由 Session 映射保留；历史配对、清理及协议转换由目标适配器负责。
+func (a *App) loadLLMMessages(ctx context.Context, sessionID string, version int) ([]llm.Message, error) {
 	msgs, err := a.session.GetMessagesForAPI(ctx, sessionID, version)
 	if err != nil {
 		return nil, err
 	}
-	result := make([]map[string]any, 0, len(msgs))
-	// validToolCallIDs: assistant 消息去重后的 tool_call id 集合
-	// seenToolMsgIDs: 已保留的 tool 消息 tool_call_id 集合（每个 id 只保留一条 tool 消息）
-	validToolCallIDs := make(map[string]bool)
-	seenToolMsgIDs := make(map[string]bool)
+	result := make([]llm.Message, 0, len(msgs))
 	for _, m := range msgs {
-		api := m.ToAPIFormat(a.logger)
-		role, _ := api["role"].(string)
-
-		// assistant 消息：去重 tool_calls，保留首次出现的 id
-		if role == "assistant" {
-			if tc, ok := api["tool_calls"].([]any); ok && len(tc) > 0 {
-				seen := make(map[string]bool, len(tc))
-				deduped := make([]any, 0, len(tc))
-				for _, item := range tc {
-					call, ok := item.(map[string]any)
-					if !ok {
-						deduped = append(deduped, item)
-						continue
-					}
-					id, _ := call["id"].(string)
-					if id != "" {
-						if seen[id] {
-							a.logger.Warn("duplicate tool_call_id in DB assistant tool_calls, skipping",
-								"session_id", sessionID, "tool_call_id", id)
-							continue
-						}
-						seen[id] = true
-						validToolCallIDs[id] = true
-					}
-					deduped = append(deduped, item)
-				}
-				api["tool_calls"] = deduped
-			}
+		message, err := m.ToLLMRequestMessage()
+		if err != nil {
+			return nil, err
 		}
-
-		// tool 消息：跳过没有对应 tool_call 的 orphan + 跳过重复 tool 消息
-		if role == "tool" {
-			if id, ok := api["tool_call_id"].(string); ok && id != "" {
-				if !validToolCallIDs[id] {
-					a.logger.Warn("orphan tool message without matching tool_call, skipping",
-						"session_id", sessionID, "tool_call_id", id)
-					continue
-				}
-				if seenToolMsgIDs[id] {
-					a.logger.Warn("duplicate tool message in DB, skipping",
-						"session_id", sessionID, "tool_call_id", id)
-					continue
-				}
-				seenToolMsgIDs[id] = true
-			}
-		}
-
-		result = append(result, api)
+		result = append(result, message)
 	}
 	return result, nil
 }
 
 // generateTitle 用 LLM 为非流式调用生成对话标题（≤10 字）。
-func (a *App) generateTitle(sessionID, userMessage, providerName, modelID string) {
+func (a *App) generateTitle(sessionID, userMessage string, adapterName adapter.Protocol, providerName, modelID string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	messages := []map[string]any{
+	messages := []llm.Message{
 		{
-			"role":    "system",
-			"content": "基于用户消息，生成一个不超过10个字的对话标题。只需输出标题文本，不要添加引号、标点或者额外解释。",
+			Role:    "system",
+			Content: "基于用户消息，生成一个不超过10个字的对话标题。只需输出标题文本，不要添加引号、标点或者额外解释。",
 		},
-		{"role": "user", "content": userMessage},
+		{Role: "user", Content: userMessage},
 	}
 
-	title, err := a.llmClient.GenerateText(ctx, providerName, messages, modelID)
+	title, err := a.llmClient.GenerateText(ctx, adapterName, providerName, modelID, messages, nil)
 	if err != nil {
 		a.logger.Warn("自动生成标题失败", "err", err)
 		return
@@ -358,7 +313,7 @@ func (a *App) generateTitle(sessionID, userMessage, providerName, modelID string
 		return
 	}
 
-	if err := a.session.UpdateSessionMeta(a.ctx, sessionID, title, "", ""); err != nil {
+	if err := a.session.UpdateSessionTitle(a.ctx, sessionID, title); err != nil {
 		a.logger.Warn("更新标题失败", "err", err)
 		return
 	}
@@ -389,9 +344,8 @@ func (a *App) CancelChat(sessionID string) {
 
 // CompressInput 是手动压缩请求的入参。
 type CompressInput struct {
-	SessionID    string `json:"session_id"`
-	ProviderName string `json:"provider_name"`
-	ModelID      string `json:"model_id"`
+	SessionID      string             `json:"session_id"`
+	ModelSelection llm.ModelSelection `json:"model_selection"`
 }
 
 // CompressResult 是手动压缩请求的返回值。
@@ -412,9 +366,10 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	}
 
 	// 2. 查找模型
-	model, ok := a.llmClient.ProviderModel(input.ProviderName, input.ModelID)
+	selection := input.ModelSelection
+	model, ok := a.llmClient.ProviderModel(selection.AdapterName, selection.ProviderName, selection.ModelID)
 	if !ok {
-		return nil, fmt.Errorf("模型未找到: %s/%s", input.ProviderName, input.ModelID)
+		return nil, fmt.Errorf("模型未找到: %s/%s/%s", selection.AdapterName, selection.ProviderName, selection.ModelID)
 	}
 
 	// 3. 获取下一个 turn ID（手动压缩独立成一个 turn）
@@ -424,7 +379,7 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	}
 
 	// 4. 构建消息列表：全部来自 DB
-	messages, err := a.loadAPIMessages(context.Background(), sess.SessionID, sess.ActiveVersion)
+	messages, err := a.loadLLMMessages(context.Background(), sess.SessionID, sess.ActiveVersion)
 	if err != nil {
 		return nil, fmt.Errorf("加载 API 消息失败: %w", err)
 	}
@@ -441,14 +396,16 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	// 7. 执行压缩
 	// 注意：Compress 走 GenerateText 单次调用，不进入 agent loop，不需要 MaxTurns
 	opts := agent.RunOptions{
-		TurnID:        turnID,
-		SessionID:     sess.SessionID,
-		NovelID:       sess.NovelID,
-		Messages:      messages,
-		ActiveVersion: sess.ActiveVersion,
-		Model:         model,
-		ProviderName:  input.ProviderName,
-		AgentType:     "main",
+		TurnID:          turnID,
+		SessionID:       sess.SessionID,
+		NovelID:         sess.NovelID,
+		Messages:        messages,
+		ActiveVersion:   sess.ActiveVersion,
+		Model:           model,
+		AdapterName:     selection.AdapterName,
+		ProviderName:    selection.ProviderName,
+		ReasoningEffort: selection.ReasoningEffort,
+		AgentType:       "main",
 	}
 
 	if err := a.agent.Compress(ctx, &opts, runningTokens); err != nil {

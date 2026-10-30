@@ -2,6 +2,8 @@ package agent
 
 import (
 	"testing"
+
+	"github.com/sigpanic/goink/internal/llm"
 )
 
 func TestIsStuckLoop_NotEnoughTurns(t *testing.T) {
@@ -23,8 +25,8 @@ func TestIsStuckLoop_TooManyPatterns(t *testing.T) {
 func TestIsStuckLoop_RepeatingPatternsReadOnly(t *testing.T) {
 	patterns := []string{"a", "b", "a", "b"} // 2 unique, 4 turns
 	outputs := []toolOutput{
-		{name: "read", id: "1"},
-		{name: "search_story_memory", id: "2"},
+		{call: llm.ToolCall{Name: "read", ID: "1"}},
+		{call: llm.ToolCall{Name: "search_story_memory", ID: "2"}},
 	}
 	if !isStuckLoop(patterns, outputs, 4) {
 		t.Error("should detect loop: 2 repeating patterns + all read-only")
@@ -34,8 +36,8 @@ func TestIsStuckLoop_RepeatingPatternsReadOnly(t *testing.T) {
 func TestIsStuckLoop_HasWriteTool(t *testing.T) {
 	patterns := []string{"a", "b", "a", "b"}
 	outputs := []toolOutput{
-		{name: "read", id: "1"},
-		{name: "edit", id: "2"}, // write tool, not in readOnlyTools
+		{call: llm.ToolCall{Name: "read", ID: "1"}},
+		{call: llm.ToolCall{Name: "edit", ID: "2"}}, // write tool, not in readOnlyTools
 	}
 	if isStuckLoop(patterns, outputs, 4) {
 		t.Error("should not detect loop when a write tool is present")
@@ -46,7 +48,7 @@ func TestIsStuckLoop_OnlyReadsOldTurn(t *testing.T) {
 	// loopCount < 4 时不检测
 	patterns := []string{"a", "b", "a", "b"}
 	outputs := []toolOutput{
-		{name: "read", id: "1"},
+		{call: llm.ToolCall{Name: "read", ID: "1"}},
 	}
 	if isStuckLoop(patterns, outputs, 3) {
 		t.Error("should not detect loop when loopCount < 4")
@@ -55,7 +57,7 @@ func TestIsStuckLoop_OnlyReadsOldTurn(t *testing.T) {
 
 func TestToolPattern_Single(t *testing.T) {
 	outputs := []toolOutput{
-		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/id_1.md"}`)},
+		{call: llm.ToolCall{Name: "read", ID: "1", Arguments: []byte(`{"path":"chapters/id_1.md"}`)}},
 	}
 	result := toolPattern(outputs)
 	expected := "read:{\"path\":\"chapters/id_1.md\"}"
@@ -66,8 +68,8 @@ func TestToolPattern_Single(t *testing.T) {
 
 func TestToolPattern_Sorted(t *testing.T) {
 	outputs := []toolOutput{
-		{name: "get_characters", id: "2", rawArgs: []byte(`{}`)},
-		{name: "read", id: "1", rawArgs: []byte(`{"path":"chapters/id_3.md"}`)},
+		{call: llm.ToolCall{Name: "get_characters", ID: "2", Arguments: []byte(`{}`)}},
+		{call: llm.ToolCall{Name: "read", ID: "1", Arguments: []byte(`{"path":"chapters/id_3.md"}`)}},
 	}
 	result := toolPattern(outputs)
 	// 排序后 get_characters 在前
@@ -83,7 +85,7 @@ func TestToolPattern_TruncatesLongArgs(t *testing.T) {
 		long += "x"
 	}
 	outputs := []toolOutput{
-		{name: "read", id: "1", rawArgs: []byte(long)},
+		{call: llm.ToolCall{Name: "read", ID: "1", Arguments: []byte(long)}},
 	}
 	result := toolPattern(outputs)
 	if len(result) > 105 { // "read:" = 5 + 100 max

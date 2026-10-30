@@ -8,22 +8,29 @@ import (
 	"gorm.io/gorm"
 )
 
-// Migration 描述一次迁移，按 pre → 本组冻结 schema → post 执行。
+// Migration 描述一次迁移；数据库阶段按 pre → 本组冻结 schema → post 执行，
+// 全部数据库迁移及当前 schema 对齐成功后，再按注册顺序执行 PostDBMigrationSteps。
 type Migration struct {
 	Name        string // 迁移标识，如 "v1.6.0-chapter-id-refactor"，写入 migrate_state.migration
 	Description string // 迁移目的简述（本次迁移为了什么、主要做什么），打印进日志便于排查
-	Destructive bool   // 是否破坏性迁移（删列/rename/数据重写等）：true 时 migrate.Run 会在执行前自动备份全量数据
+	// RequiresBackup 当且仅当迁移会大规模改写重要数据时启用，不能仅因删列或改写数据就启用。
+	// true 时框架在升级前备份整个数据库和小说目录（含 Git 仓库），时间和磁盘代价很高。
+	RequiresBackup bool
 
-	// NeedsMigration 仅在既有数据库缺少本 migration 的 migrate_state 时调用，识别
+	// NeedsMigration 仅在既有数据库缺少本 migration 的数据库步骤状态时调用，识别
 	// 是否仍处于该 migration 的旧 schema。应返回 error 拒绝无法安全识别的混合 schema。
 	NeedsMigration  func(db *gorm.DB) (bool, error)
 	PreSchemaSteps  []Step // 本组 schema 对齐前执行，例如历史字段改名
 	SchemaStep      Step   // 使用冻结模型对齐 schema，与其他步骤共用状态记录
 	PostSchemaSteps []Step // 本组 schema 对齐后执行，例如数据重写、文件迁移、删旧列
+
+	// PostDBMigrationSteps 用于配置文件等不依赖历史 schema 的迁移，新库也会执行。
+	// 与数据库步骤共用 migrate_state，Key 不可重复；外部资源的备份由步骤负责。
+	PostDBMigrationSteps []Step
 }
 
-// AllSteps 按迁移的完整执行顺序返回所有步骤。
-func (m Migration) AllSteps() []Step {
+// DatabaseSteps 返回本组数据库阶段的步骤，不包含全部数据库迁移后的步骤。
+func (m Migration) DatabaseSteps() []Step {
 	steps := make([]Step, 0, len(m.PreSchemaSteps)+1+len(m.PostSchemaSteps))
 	steps = append(steps, m.PreSchemaSteps...)
 	if m.SchemaStep != nil {
@@ -33,7 +40,12 @@ func (m Migration) AllSteps() []Step {
 	return steps
 }
 
-// PlanAction 是一次启动中对一个 migration 的执行计划。
+// AllSteps 返回本组两个阶段的所有步骤，供校验和完整状态检查使用。
+func (m Migration) AllSteps() []Step {
+	return append(m.DatabaseSteps(), m.PostDBMigrationSteps...)
+}
+
+// PlanAction 是一次启动中对一个 migration 数据库阶段的执行计划。
 type PlanAction uint8
 
 const (
@@ -48,22 +60,27 @@ type Plan struct {
 	Action    PlanAction
 }
 
-// BuildPlans 根据当前 schema 生成计划。逐组执行时必须在前一组完成后重新判断后一组，
+// BuildPlans 根据当前 schema 生成数据库阶段计划。逐组执行时必须在前一组完成后重新判断后一组，
 // 因为前一组的冻结模型可能创建后一组需要处理的旧表或旧列。
-// 对于已有状态的迁移，migrate_state 是唯一真相；只有完全没有状态记录的既有库才
+// 对于已有数据库步骤状态的迁移，migrate_state 是唯一真相；只有没有该阶段状态的既有库才
 // 使用 Migration.NeedsMigration 识别历史 schema。
 func BuildPlans(db *gorm.DB, log *slog.Logger, isNewDatabase bool, registry []Migration) ([]Plan, error) {
 	plans := make([]Plan, 0, len(registry))
 	for _, migration := range registry {
-		steps := migration.AllSteps()
-		if err := validateSteps(migration.Name, steps); err != nil {
+		if err := validateSteps(migration.Name, migration.AllSteps()); err != nil {
 			return nil, err
+		}
+		steps := migration.DatabaseSteps()
+		if len(steps) == 0 {
+			plans = append(plans, Plan{Migration: migration, Action: PlanSkip})
+			continue
 		}
 
 		var states []MigrateState
 		if err := db.Where("migration = ?", migration.Name).Find(&states).Error; err != nil {
 			return nil, fmt.Errorf("read migration state %s: %w", migration.Name, err)
 		}
+		states = migration.databaseStates(states)
 		if len(states) > 0 {
 			allDone, unknownSteps := allStepsDone(states, steps)
 			if len(unknownSteps) > 0 {
@@ -129,6 +146,7 @@ func PrepareSequential(db *gorm.DB, log *slog.Logger, registry []Migration) erro
 			if err := tx.Where("migration = ?", migration.Name).Find(&states).Error; err != nil {
 				return fmt.Errorf("read migration state %s: %w", migration.Name, err)
 			}
+			states = migration.databaseStates(states)
 			if len(states) == 0 {
 				continue
 			}
@@ -150,6 +168,21 @@ func PrepareSequential(db *gorm.DB, log *slog.Logger, registry []Migration) erro
 		}
 		return markStep(tx, log, schedulerMigration, sequentialStep, "done", nil)
 	})
+}
+
+// databaseStates 排除已知的第二阶段记录，保留未知旧步骤供既有接纳和告警逻辑处理。
+func (m Migration) databaseStates(states []MigrateState) []MigrateState {
+	postDBKeys := make(map[string]struct{}, len(m.PostDBMigrationSteps))
+	for _, step := range m.PostDBMigrationSteps {
+		postDBKeys[step.Key()] = struct{}{}
+	}
+	result := make([]MigrateState, 0, len(states))
+	for _, state := range states {
+		if _, postDB := postDBKeys[state.Step]; !postDB {
+			result = append(result, state)
+		}
+	}
+	return result
 }
 
 func validateSteps(migration string, steps []Step) error {

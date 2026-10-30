@@ -26,7 +26,7 @@ func Register() {
 	engine.Register(engine.Migration{
 		Name:           migration,
 		Description:    "v1.2.0 章节号字段语义化命名：修正历史 *_id 误名并清理 novels.dir_path",
-		Destructive:    true,
+		RequiresBackup: false,
 		NeedsMigration: needsMigration,
 		SchemaStep: step{key: "auto", run: func(db *gorm.DB, log *slog.Logger) error {
 			// 仅清理现代库残留的 dir_path 时，不能重新添加旧章节号 schema。

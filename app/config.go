@@ -10,6 +10,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/storage"
@@ -53,18 +54,26 @@ func (a *App) updateSettings(fn func(s *config.AppSettings)) error {
 	return nil
 }
 
-// SetSelectedModel 保存选中的模型 key 和推理程度，持久化到 DB。
-func (a *App) SetSelectedModel(key, effort string) error {
-	return a.updateSettings(func(s *config.AppSettings) {
-		s.SelectedModelKey = key
-		s.ReasoningEffort = effort
-	})
+// SetSelectedModelInput 指定保存作用域；空 SessionID 表示新会话的全局默认值。
+type SetSelectedModelInput struct {
+	SessionID      string             `json:"session_id"`
+	ModelSelection llm.ModelSelection `json:"model_selection"`
 }
 
-// SetReasoningEffort 单独保存推理程度。
-func (a *App) SetReasoningEffort(effort string) error {
+// SetSelectedModel 按作用域保存模型选择和推理等级，允许清空等级。
+func (a *App) SetSelectedModel(input SetSelectedModelInput) error {
+	selection := input.ModelSelection
+	if selection.AdapterName == "" || selection.ProviderName == "" || selection.ModelID == "" {
+		return fmt.Errorf("adapter_name、provider_name 和 model_id 不能为空")
+	}
+	if input.SessionID != "" {
+		if a.session == nil {
+			return fmt.Errorf("会话存储未初始化")
+		}
+		return a.session.UpdateSessionModelSelection(a.ctx, input.SessionID, input.ModelSelection)
+	}
 	return a.updateSettings(func(s *config.AppSettings) {
-		s.ReasoningEffort = effort
+		s.DefaultModelSelection = input.ModelSelection
 	})
 }
 

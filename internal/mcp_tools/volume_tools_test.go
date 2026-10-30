@@ -35,8 +35,8 @@ func TestVolumeToolsDiscoverReadAndRun(t *testing.T) {
 		require.Equal(t, name, document.Name)
 		require.NotContains(t, string(document.InputSchema), "novel_id")
 		require.NotContains(t, string(document.InputSchema), "sort_order")
-		for _, tool := range r.OpenAI(nil) {
-			require.NotEqual(t, name, tool["function"].(map[string]any)["name"])
+		for _, tool := range r.Definitions(nil) {
+			require.NotEqual(t, name, tool.Name)
 		}
 	}
 	empty := call("run_mcp", `{"tool_name":"get_volumes","args":{}}`)

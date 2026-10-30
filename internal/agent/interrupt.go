@@ -24,9 +24,7 @@ func (a *Agent) flushInterruptedTools(ctx context.Context, stream <-chan llm.Str
 				args := parseArgs(rawArgs)
 				display := a.buildDisplay(ctx, name, args, mcp_tools.PhaseFailed, opts.NovelID)
 				*toolOutputs = append(*toolOutputs, toolOutput{
-					name:         name,
-					id:           id,
-					rawArgs:      rawArgs,
+					call:         llm.ToolCall{ID: id, Name: name, Arguments: rawArgs},
 					result:       &mcp_tools.ToolResult{Success: false, Error: "操作被中断"},
 					displayText:  display.DisplayText,
 					activityKind: display.ActivityKind,

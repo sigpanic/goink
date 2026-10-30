@@ -11,6 +11,7 @@ import (
 	"github.com/sigpanic/goink/internal/migrate/v120"
 	"github.com/sigpanic/goink/internal/migrate/v160"
 	"github.com/sigpanic/goink/internal/migrate/v161"
+	"github.com/sigpanic/goink/internal/migrate/v180"
 )
 
 // 必须显式固定版本顺序；包的 init 顺序会受依赖关系影响，不能用来决定迁移顺序。
@@ -18,6 +19,7 @@ func init() {
 	v120.Register()
 	v160.Register()
 	v161.Register()
+	v180.Register()
 }
 
 // Run 自动创建/更新全部数据表，幂等安全。作为外部入口，遍历 engine.Registry
@@ -40,7 +42,7 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 		return fmt.Errorf("migrate: 初始化逐组迁移: %w", err)
 	}
 
-	// 本轮若可能执行破坏性迁移，在任何业务变化前准备唯一的起始快照。
+	// 本轮若有迁移声明需要备份，在任何业务变化前准备唯一的起始快照。
 	if err := prepareUpgradeBackup(db, log, isNewDatabase, engine.Registry); err != nil {
 		return fmt.Errorf("migrate: 升级前备份准备失败，迁移未执行: %w", err)
 	}
@@ -55,12 +57,12 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 			continue
 		case engine.PlanMarkDone:
 			// 先持久化无需迁移的判定，后续组的 AutoMigrate 才不会让重启误判。
-			if err := engine.MarkStepsDone(db, log, migration.Name, migration.AllSteps()); err != nil {
+			if err := engine.MarkStepsDone(db, log, migration.Name, migration.DatabaseSteps()); err != nil {
 				return err
 			}
 		case engine.PlanRun:
 			log.Info("执行迁移", "migration", migration.Name, "description", migration.Description)
-			if err := engine.RunSteps(db, log, migration.Name, migration.AllSteps()); err != nil {
+			if err := engine.RunSteps(db, log, migration.Name, migration.DatabaseSteps()); err != nil {
 				return err
 			}
 		}
@@ -70,12 +72,17 @@ func Run(db *gorm.DB, log *slog.Logger) error {
 	// SQLite 的 RENAME COLUMN 会保留旧索引名。例如历史 writing_log.chapter_id
 	// 改为 chapter_number 后，旧索引仍叫 idx_writing_log_chapter_id；首次 AutoMigrate
 	// 因同名不补建当前 chapter_id 的索引，drop-legacy 删除旧列时便会一并删掉它。
-	// 所有迁移步骤完成后再次按当前 model 对齐，补回这类被历史 DDL 遮蔽或删除的索引。
+	// 所有数据库迁移步骤完成后再次按当前 model 对齐，补回这类被历史 DDL 遮蔽或删除的索引。
 	if err := db.AutoMigrate(models...); err != nil {
 		return fmt.Errorf("migrate: 迁移后 schema 对齐: %w", err)
 	}
 
 	log.Info("数据库迁移完成", "tables", len(models))
+	for _, migration := range engine.Registry {
+		if err := engine.RunSteps(db, log, migration.Name, migration.PostDBMigrationSteps); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

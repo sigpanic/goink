@@ -7,13 +7,24 @@ import (
 	"path/filepath"
 )
 
-func saveFixture(source, manifestPath string, m *manifest, sample fixture) error {
+func saveFixture(source, manifestPath string, m *manifest, sample fixture, rebuild bool) error {
 	if filepath.Base(sample.Archive) != sample.Archive || sample.Archive != sample.Tag+"-"+sample.Origin+".zip" {
 		return fmt.Errorf("invalid fixture archive %q", sample.Archive)
 	}
-	for _, frozen := range m.Fixtures {
+	replacing := -1
+	for i, frozen := range m.Fixtures {
 		if frozen.Archive == sample.Archive || (frozen.Tag == sample.Tag && frozen.Origin == sample.Origin) {
-			return fmt.Errorf("fixture %s is already frozen; refusing to overwrite", sample.Archive)
+			if !rebuild {
+				return fmt.Errorf("fixture %s is already frozen; refusing to overwrite", sample.Archive)
+			}
+			hash, err := fileHash(filepath.Join(filepath.Dir(manifestPath), frozen.Archive))
+			if err != nil {
+				return err
+			}
+			if frozen.Archive != sample.Archive || frozen.Commit != sample.Commit || hash != frozen.SHA256 {
+				return fmt.Errorf("frozen fixture %s changed; refusing to rebuild", sample.Archive)
+			}
+			replacing = i
 		}
 	}
 	dir := filepath.Dir(manifestPath)
@@ -31,17 +42,34 @@ func saveFixture(source, manifestPath string, m *manifest, sample fixture) error
 		return err
 	}
 	next := *m
-	next.Fixtures = append(append([]fixture(nil), m.Fixtures...), sample)
+	next.Fixtures = append([]fixture(nil), m.Fixtures...)
+	if replacing >= 0 {
+		next.Fixtures[replacing] = sample
+	} else {
+		next.Fixtures = append(next.Fixtures, sample)
+	}
 	data, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return err
 	}
 	// The manifest is the commit point. After an interruption, an archive absent
 	// from it is uncommitted and may be replaced by a newly generated sample.
-	if err := os.Rename(archive, filepath.Join(dir, sample.Archive)); err != nil {
+	target := filepath.Join(dir, sample.Archive)
+	previous := filepath.Join(staging, "previous.zip")
+	if replacing >= 0 {
+		if err := os.Link(target, previous); err != nil {
+			return err
+		}
+	}
+	if err := os.Rename(archive, target); err != nil {
 		return err
 	}
 	if err := writeManifest(manifestPath, append(data, '\n')); err != nil {
+		if replacing >= 0 {
+			if rollbackErr := os.Rename(previous, target); rollbackErr != nil {
+				return fmt.Errorf("publish manifest: %w; restore archive: %v", err, rollbackErr)
+			}
+		}
 		return err
 	}
 	*m = next
