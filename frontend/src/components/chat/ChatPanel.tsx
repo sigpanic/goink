@@ -10,20 +10,15 @@ import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSessions } from "./useSessions";
 import { useSession } from "./useSession";
-import { useSessionMessages } from "./useSessionMessages";
+import { useChatHistory } from "./useChatHistory";
 import { useSlashCommands } from "./useSlashCommands";
 import type { AgentEvent, Turn } from "./types";
-import {
-  AgentEventType,
-  emptySegment,
-  filterSegmentsBySeq,
-  rebuildTurns,
-} from "./types";
+import { AgentEventType, emptySegment, filterSegmentsBySeq } from "./types";
 import ChatInput from "./ChatInput";
 import ChatHeader from "./ChatHeader";
 import ChatControls from "./ChatControls";
 import DeleteSessionDialog from "./DeleteSessionDialog";
-import ChatMessageList from "./ChatMessageList";
+import ChatHistoryView from "./ChatHistoryView";
 import type { UsageInfo } from "./ContextRing";
 import SettingsDialog from "@/components/settings/SettingsDialog";
 import SessionHistory from "./SessionHistory";
@@ -110,9 +105,6 @@ export default function ChatPanel({
     string | null | undefined
   >(undefined);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const isNearBottomRef = useRef(true);
   const counterRef = useRef(0);
   const startedUnsubRef = useRef<(() => void) | null>(null);
   const agentUnsubRef = useRef<(() => void) | null>(null);
@@ -172,7 +164,10 @@ export default function ChatPanel({
   // activeSid 为空（新对话/未选中）时 enabled false 不 fetch。
   const activeSid = activeSessionId ?? "";
   const sessionQuery = useSession(activeSid);
-  const messagesQuery = useSessionMessages(activeSid);
+  // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
+  // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
+  const history = useChatHistory({ sessionId: activeSid, turns, setTurns });
+  const { reset: resetHistory, registerLocalTurn } = history;
   const {
     selectedModel,
     modelSelection,
@@ -192,24 +187,15 @@ export default function ChatPanel({
   // 会话列表由 useSessions query 自动 fetch（novelId 变化 → queryKey 变化 → refetch）。
   useEffect(() => {
     if (!novelId) return;
+    resetHistory();
     setActiveSessionId(undefined);
     setTurns([]);
     setSessionId("");
-  }, [novelId]);
+  }, [novelId, resetHistory]);
 
-  // activeSessionId 变化时同步 sessionId；messagesQuery.data ready 时 rebuildTurns。
-  // 流式过程中 activeSessionId 不变、messagesQuery.data 不变，turns 由 agent 事件更新。
   useEffect(() => {
-    if (!activeSessionId) {
-      setSessionId("");
-      return;
-    }
-    setSessionId(activeSessionId);
-    const msgs = messagesQuery.data;
-    if (msgs) {
-      setTurns(rebuildTurns(msgs));
-    }
-  }, [activeSessionId, messagesQuery.data]);
+    setSessionId(activeSid);
+  }, [activeSid]);
 
   // lastUsage 从 useSession data 的 usage 字段恢复（替代原 handleSelectSession 内 GetSession）。
   useEffect(() => {
@@ -289,22 +275,12 @@ export default function ChatPanel({
     return () => cleanup();
   }, []);
 
-  // 流式输出时自动滚到底部，但仅在用户未主动上滚时
-  useEffect(() => {
-    if (isNearBottomRef.current) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "instant" });
-    }
-  }, [turns]);
-
-  const handleMessagesScroll = useCallback(() => {
-    const el = scrollContainerRef.current;
-    if (!el) return;
-    isNearBottomRef.current =
-      el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-  }, []);
-
   const handleSelectSession = useCallback(
     (sid: string) => {
+      if (sid !== activeSid) {
+        resetHistory();
+        setTurns([]);
+      }
       setActiveSessionId(sid);
       setLastSessionMutation
         .mutateAsync(sid)
@@ -313,10 +289,11 @@ export default function ChatPanel({
         );
       // usage 由 useSession query 自动 fetch + lastUsage effect 恢复，不再手 fetch
     },
-    [setLastSessionMutation.mutateAsync, t],
+    [activeSid, resetHistory, setLastSessionMutation.mutateAsync, t],
   );
 
   const handleNewChat = useCallback(() => {
+    resetHistory();
     setActiveSessionId(null);
     setTurns([]);
     setSessionId("");
@@ -327,7 +304,7 @@ export default function ChatPanel({
         toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
       );
     qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
-  }, [novelId, qc, setLastSessionMutation.mutateAsync, t]);
+  }, [novelId, qc, resetHistory, setLastSessionMutation.mutateAsync, t]);
 
   const handleOpenHistory = useCallback(() => {
     setShowHistoryPanel(true);
@@ -994,6 +971,7 @@ export default function ChatPanel({
     setIsCompressing(true);
     // 创建压缩中 turn（用于动画展示）
     const compTurnId = `comp_${++counterRef.current}`;
+    registerLocalTurn(compTurnId);
     const compressingTurn: Turn = {
       id: compTurnId,
       turnId: 0,
@@ -1042,7 +1020,13 @@ export default function ChatPanel({
       setIsCompressing(false);
       compressingRef.current = false;
     }
-  }, [sessionId, modelSelection, compressMutation.mutateAsync, t]);
+  }, [
+    sessionId,
+    modelSelection,
+    registerLocalTurn,
+    compressMutation.mutateAsync,
+    t,
+  ]);
 
   const handleSend = useCallback(
     async (content: string) => {
@@ -1058,6 +1042,7 @@ export default function ChatPanel({
       setIsLoading(true);
 
       const turnId = `turn_${++counterRef.current}`;
+      registerLocalTurn(turnId);
       const newTurn: Turn = {
         id: turnId,
         turnId: 0,
@@ -1179,6 +1164,7 @@ export default function ChatPanel({
       sessionId,
       novelId,
       modelSelection,
+      registerLocalTurn,
       handleAgentEvent,
       applyAgentEvent,
       activeSessionId,
@@ -1226,27 +1212,19 @@ export default function ChatPanel({
         />
       </div>
 
-      <div
-        ref={scrollContainerRef}
-        onScroll={handleMessagesScroll}
-        className="flex-1 overflow-y-auto overscroll-contain px-3 py-3 relative"
-      >
-        <ChatMessageList
-          hasNovel={hasNovel}
-          hasTurns={hasTurns}
-          showRecent={showRecent}
-          isLoading={isLoading}
-          turns={turns}
-          sessionsQuery={sessionsQuery}
-          messagesQuery={messagesQuery}
-          onSelectSession={handleSelectSession}
-          onViewAll={handleOpenHistory}
-          onApprove={onApprove}
-          onReject={onReject}
-        />
-
-        <div ref={messagesEndRef} />
-      </div>
+      <ChatHistoryView
+        history={history}
+        hasNovel={hasNovel}
+        hasTurns={hasTurns}
+        showRecent={showRecent}
+        isLoading={isLoading}
+        turns={turns}
+        sessionsQuery={sessionsQuery}
+        onSelectSession={handleSelectSession}
+        onViewAll={handleOpenHistory}
+        onApprove={onApprove}
+        onReject={onReject}
+      />
 
       <ChatInput
         disabled={!hasNovel || !selectedKey}

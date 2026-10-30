@@ -35,7 +35,7 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
     );
 
   return (
-    <div className="space-y-2">
+    <div className="space-y-2" data-turn-id={turn.turnId}>
       {turn.userMessage && (
         <MessageBubble role="user" content={turn.userMessage} />
       )}

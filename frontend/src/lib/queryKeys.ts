@@ -138,6 +138,8 @@ export const slashCommandKeys = {
 
 export const sessionMessagesKeys = {
   detail: (sessionId: string) => ["session-messages", sessionId] as const,
+  infiniteList: (sessionId: string, size: number) =>
+    ["session-messages", sessionId, "infinite", size] as const,
 };
 
 export const sessionKeys = {

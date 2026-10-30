@@ -19,6 +19,19 @@ const fixture = vi.hoisted(() => ({
   toastError: vi.fn(),
   listeners: new Map<string, Set<(data: unknown) => void>>(),
   messages: undefined as session.Message[] | undefined,
+  messagesBySession: {} as Record<string, session.Message[]>,
+  olderInView: false,
+  selectSession: undefined as ((id: string) => void) | undefined,
+  historyQuery: {
+    hasNextPage: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    isLoading: false,
+    isError: false,
+    fetchNextPage: vi.fn(),
+    refetch: vi.fn(),
+  },
   settings: undefined as { last_session_id: string } | undefined,
   models: [],
   selection: {
@@ -55,7 +68,14 @@ vi.mock("@/components/settings/useSettings", () => ({
 vi.mock("./useSessions", () => ({ useSessions: () => ({}) }));
 vi.mock("./useSession", () => ({ useSession: () => ({}) }));
 vi.mock("./useSessionMessages", () => ({
-  useSessionMessages: () => ({ data: fixture.messages }),
+  useSessionMessages: (id: string) => ({
+    ...fixture.historyQuery,
+    data: id ? (fixture.messagesBySession[id] ?? fixture.messages) : undefined,
+    hasNextPage: !!id && fixture.historyQuery.hasNextPage,
+  }),
+}));
+vi.mock("react-intersection-observer", () => ({
+  useInView: () => ({ ref: () => {}, inView: fixture.olderInView }),
 }));
 vi.mock("./useSlashCommands", () => ({ useSlashCommands: () => ({}) }));
 vi.mock("./useChatModelSelection", () => ({
@@ -98,7 +118,12 @@ vi.mock("./MessageBubble", () => ({
 vi.mock("./ChatControls", () => ({ default: () => null }));
 vi.mock("./DeleteSessionDialog", () => ({ default: () => null }));
 vi.mock("./RecentSessions", () => ({ default: () => null }));
-vi.mock("./SessionHistory", () => ({ default: () => null }));
+vi.mock("./SessionHistory", () => ({
+  default: ({ onSelectSession }: { onSelectSession: (id: string) => void }) => {
+    fixture.selectSession = onSelectSession;
+    return null;
+  },
+}));
 vi.mock("@/components/settings/SettingsDialog", () => ({
   default: () => null,
 }));
@@ -121,7 +146,7 @@ function renderPanel() {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
-  return render(
+  const panel = () => (
     <QueryClientProvider client={client}>
       <ChatPanel
         novelId={1}
@@ -130,8 +155,10 @@ function renderPanel() {
         onApprove={vi.fn()}
         onReject={vi.fn()}
       />
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
+  const view = render(panel());
+  return { ...view, refresh: () => view.rerender(panel()) };
 }
 
 async function startChat() {
@@ -150,6 +177,17 @@ beforeEach(() => {
   vi.clearAllMocks();
   fixture.listeners.clear();
   fixture.messages = undefined;
+  fixture.messagesBySession = {};
+  fixture.olderInView = false;
+  fixture.selectSession = undefined;
+  Object.assign(fixture.historyQuery, {
+    hasNextPage: false,
+    isFetching: false,
+    isFetchingNextPage: false,
+    isFetchNextPageError: false,
+    isLoading: false,
+    isError: false,
+  });
   fixture.settings = undefined;
   fixture.CancelChat.mockResolvedValue(undefined);
   fixture.SetLastSession.mockResolvedValue(undefined);
@@ -361,3 +399,159 @@ it.each(["error", "system_interrupted"])(
     expect(await screen.findByText("历史结局原因")).toBeInTheDocument();
   },
 );
+
+function storedTurn(turnId: number, answer: string): session.Message[] {
+  return [
+    {
+      role: "user",
+      content: `问题${turnId}`,
+      turn_id: turnId,
+      agent_type: "main",
+    },
+    { role: "assistant", content: answer, turn_id: turnId, agent_type: "main" },
+  ] as session.Message[];
+}
+
+it("jumps to the latest message and resumes following subsequent output", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      type: AgentEventType.Content,
+      data: "最新回复",
+    }),
+  );
+  const container = screen.getByText("最新回复").closest(".overflow-y-auto")!;
+  Object.defineProperties(container, {
+    scrollHeight: { configurable: true, value: 1000 },
+    clientHeight: { configurable: true, value: 400 },
+    scrollTop: { configurable: true, writable: true, value: 100 },
+  });
+  fireEvent.scroll(container);
+  vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      type: AgentEventType.Content,
+      data: "继续输出",
+    }),
+  );
+  expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "chat.scrollToBottom" }));
+  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+    behavior: "instant",
+  });
+  expect(
+    screen.queryByRole("button", { name: "chat.scrollToBottom" }),
+  ).not.toBeInTheDocument();
+  vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+  await act(async () => request.resolve());
+  expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({
+    behavior: "instant",
+  });
+});
+
+it("prepends older turns without replacing live output or moving the reading position", async () => {
+  fixture.settings = { last_session_id: "session" };
+  fixture.messages = storedTurn(2, "历史回复");
+  fixture.historyQuery.hasNextPage = true;
+  const view = renderPanel();
+  const answer = await screen.findByText("历史回复");
+  const request = deferred();
+  fixture.Chat.mockReturnValueOnce(request.promise);
+  fireEvent.click(screen.getByRole("button", { name: "发送" }));
+  await act(async () => {
+    emit("chat:started", { session_id: "session", turn_id: 3 });
+    emit("agent:3", {
+      turn_id: 3,
+      type: AgentEventType.Content,
+      data: "实时输出",
+    });
+  });
+  expect(screen.getByText("实时输出")).toBeInTheDocument();
+  const container = answer.closest(".overflow-y-auto")!;
+  Object.defineProperties(container, {
+    scrollHeight: {
+      configurable: true,
+      get: () =>
+        1000 + container.querySelectorAll("[data-turn-id]").length * 300,
+    },
+    clientHeight: { configurable: true, value: 400 },
+    scrollTop: { configurable: true, writable: true, value: 100 },
+  });
+  const anchor = answer.closest<HTMLElement>("[data-turn-id]")!;
+  vi.spyOn(anchor, "getBoundingClientRect").mockImplementation(
+    () =>
+      new DOMRect(
+        0,
+        20 +
+          (container.querySelectorAll("[data-turn-id]").length - 2) * 300 -
+          (container.scrollTop - 100),
+        400,
+        200,
+      ),
+  );
+  fireEvent.scroll(container);
+  vi.mocked(HTMLElement.prototype.scrollIntoView).mockClear();
+  fixture.messages = [
+    ...storedTurn(1, "更早的回复"),
+    ...fixture.messages,
+    ...storedTurn(3, "落后的数据库快照"),
+  ];
+  view.refresh();
+  expect(await screen.findByText("更早的回复")).toBeInTheDocument();
+  expect(screen.getByText("实时输出")).toBeInTheDocument();
+  expect(screen.queryByText("落后的数据库快照")).not.toBeInTheDocument();
+  expect(
+    Array.from(container.querySelectorAll("[data-turn-id]")).map((element) =>
+      element.getAttribute("data-turn-id"),
+    ),
+  ).toEqual(["1", "2", "3"]);
+  expect(container.scrollTop).toBe(400);
+  expect(anchor.getBoundingClientRect().top).toBe(20);
+  expect(HTMLElement.prototype.scrollIntoView).not.toHaveBeenCalled();
+  await act(async () => request.resolve());
+});
+
+it("loads older history when its sentinel is visible and offers retry without hiding existing turns", async () => {
+  fixture.settings = { last_session_id: "session" };
+  fixture.messages = storedTurn(2, "保留的历史");
+  fixture.historyQuery.hasNextPage = true;
+  fixture.olderInView = true;
+  const view = renderPanel();
+  await screen.findByText("保留的历史");
+  expect(fixture.historyQuery.fetchNextPage).toHaveBeenCalledWith({
+    cancelRefetch: false,
+  });
+  fixture.historyQuery.fetchNextPage.mockClear();
+  fixture.historyQuery.isFetchNextPageError = true;
+  fixture.historyQuery.isError = true;
+  view.refresh();
+  expect(screen.getByText("保留的历史")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent(
+    "chat.loadOlderMessagesFailed",
+  );
+  expect(fixture.historyQuery.fetchNextPage).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "chat.retry" }));
+  expect(fixture.historyQuery.fetchNextPage).toHaveBeenCalledTimes(1);
+});
+
+it("clears the previous conversation and ignores its later page updates after switching sessions", async () => {
+  fixture.settings = { last_session_id: "session" };
+  fixture.messagesBySession = {
+    session: storedTurn(3, "会话一的回复"),
+    other: storedTurn(1, "会话二的回复"),
+  };
+  const view = renderPanel();
+  await screen.findByText("会话一的回复");
+  await act(async () => fixture.selectSession?.("other"));
+  expect(await screen.findByText("会话二的回复")).toBeInTheDocument();
+  expect(screen.queryByText("会话一的回复")).not.toBeInTheDocument();
+  fixture.messagesBySession.session = [
+    ...storedTurn(2, "会话一的旧页"),
+    ...fixture.messagesBySession.session,
+  ];
+  view.refresh();
+  expect(screen.queryByText("会话一的旧页")).not.toBeInTheDocument();
+  expect(screen.getByText("会话二的回复")).toBeInTheDocument();
+});
