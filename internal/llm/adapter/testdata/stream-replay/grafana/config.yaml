@@ -1,0 +1,23 @@
+model: o4-mini
+prompt: "I need to know the current weather to decide what to wear. Check the weather in Portland and recommend an outfit."
+stopWhenStepCount: 2
+providerOptions:
+  openai:
+    store: false
+    reasoningEffort: low
+    reasoningSummary: auto
+tools:
+  get_weather:
+    description: "Get current weather conditions for a city"
+    inputSchema:
+      type: object
+      properties:
+        city:
+          type: string
+          description: "City name"
+      required:
+        - city
+    mockResults:
+      - temperature: 55
+        conditions: "overcast with light rain"
+        humidity: 82

@@ -1,0 +1,53 @@
+{
+  "model": "claude-sonnet-5-5",
+  "max_tokens": 2048,
+  "tools": [
+    {
+      "name": "get_weather",
+      "description": "Look up the current weather in a city.",
+      "input_schema": {
+        "type": "object",
+        "properties": {
+          "city": {
+            "type": "string",
+            "description": "the city to look up, such as Paris"
+          },
+          "unit": {
+            "type": "string",
+            "description": "celsius or fahrenheit",
+            "enum": [
+              "celsius",
+              "fahrenheit"
+            ]
+          }
+        },
+        "required": [
+          "city"
+        ],
+        "additionalProperties": false
+      }
+    }
+  ],
+  "thinking": {
+    "type": "adaptive",
+    "display": "summarized"
+  },
+  "output_config": {
+    "effort": "high"
+  },
+  "cache_control": {
+    "type": "ephemeral"
+  },
+  "stream": true,
+  "messages": [
+    {
+      "role": "user",
+      "content": [
+        {
+          "type": "text",
+          "text": "A cyclist in Paris will ride 137 km at 23.4 km/h with two 18-minute stops, starting at 13:47. Work out to the minute when they finish, look up the weather there, and tell me whether they should expect rain during the ride."
+        }
+      ]
+    }
+  ]
+}
