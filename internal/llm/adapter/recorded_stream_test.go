@@ -33,6 +33,10 @@ type replayExchange struct {
 	Wire    string
 }
 
+type replaySource struct{ File, URL, SHA256 string }
+
+type replayManifest struct{ Files []replaySource }
+
 func readReplay(t *testing.T, name string) []byte {
 	t.Helper()
 	b, err := os.ReadFile(filepath.Join(replayRoot, name))
@@ -174,6 +178,13 @@ func replayBackend(t *testing.T, protocol adapter.Protocol, wires []string) (ada
 		if r.URL.String() != url || r.Method != http.MethodPost {
 			return nil, fmt.Errorf("unexpected replay route: %s %s", r.Method, r.URL)
 		}
+		if protocol == adapter.ProtocolOpenAIResponses && r.Header.Get("Accept") != "text/event-stream" {
+			return nil, fmt.Errorf("replay request did not negotiate SSE")
+		}
+		if protocol == adapter.ProtocolOpenAIResponses && r.Header.Get("Authorization") != "Bearer offline-only" ||
+			protocol == adapter.ProtocolAnthropicMessages && r.Header.Get("X-Api-Key") != "offline-only" {
+			return nil, fmt.Errorf("replay request lost configured credentials")
+		}
 		var body replayObject
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 			return nil, err
@@ -282,19 +293,24 @@ func assertReplayRequest(t *testing.T, protocol adapter.Protocol, got replayObje
 	}
 }
 
-func TestRecordedStreamSources(t *testing.T) {
-	var manifest struct {
-		Files []struct{ File, URL, SHA256 string }
-	}
-	require.NoError(t, json.Unmarshal(readReplay(t, "sources.json"), &manifest))
-	require.NotEmpty(t, manifest.Files)
+func assertReplaySources(t *testing.T, root string, sources []replaySource) map[string]bool {
+	t.Helper()
+	require.NotEmpty(t, sources)
 	listed := map[string]bool{}
-	for _, file := range manifest.Files {
+	for _, file := range sources {
 		require.False(t, listed[file.File], "duplicate source: %s", file.File)
 		listed[file.File] = true
-		assert.Equal(t, file.SHA256, fmt.Sprintf("%x", sha256.Sum256(readReplay(t, file.File))), file.File)
+		body, err := os.ReadFile(filepath.Join(root, file.File))
+		require.NoError(t, err)
+		assert.Equal(t, file.SHA256, fmt.Sprintf("%x", sha256.Sum256(body)), file.File)
 		assert.Contains(t, file.URL, "raw.githubusercontent.com/")
 	}
+	return listed
+}
+
+func TestRecordedStreamSources(t *testing.T) {
+	manifest := replayDecode[replayManifest](t, readReplay(t, "sources.json"))
+	listed := assertReplaySources(t, replayRoot, manifest.Files)
 	require.NoError(t, filepath.WalkDir(replayRoot, func(path string, entry os.DirEntry, err error) error {
 		if err != nil || entry.IsDir() {
 			return err

@@ -46,4 +46,6 @@ LLM、Grafana、Vercel 保留 Apache 2.0 许可，Grafana 同时保留上游 NOT
 
 公共入口还直接读取已有 `openairesponses/testdata/rig/responses-stateless-tools.yaml` 和 `internal/llm/testdata/sse/anthropic/*.sse`，不复制这些文件。老 Claude 目录既有真实录制，也有官方 SDK 手工 fixture，沿用各自来源说明。这里统一 SDK 读取、usage/state/工具发布顺序及续接检查；原协议包的非法参数、取消、未知事件、HTTP 错误和细节回归仍留在各包。
 
+旧 Claude 的三样本基础回放已由公共入口的六样本回放替代。旧 Responses 独立录制测试中的 HTTP 方法/路径/状态、认证及 Accept、原录制请求逐项对照、固定 usage、空摘要 thinking、逆序工具结果配对和资料/许可 SHA256 校验均迁入公共入口；旧文件已移除。公共来源校验复用同一实现读取各自 manifest，工具结果按调用声明顺序核对，不能按传入结果顺序错误配对。
+
 本组验证范围是 HTTP/SSE → SDK → 适配器 → Message JSON → 下一轮请求，不包含 Agent、数据库、Wails UI 或真实服务端签名验证。

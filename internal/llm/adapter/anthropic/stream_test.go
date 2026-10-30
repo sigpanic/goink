@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -160,34 +159,6 @@ func TestStreamReplaysNativeStateAndPublishesCompleteToolGroup(t *testing.T) {
 	}
 	if !sameJSONArray(replayed, payload.Content) {
 		t.Fatalf("streamed state changed on the next SDK request: %s", replayed)
-	}
-}
-
-func TestStreamReplaysRecordedFixtures(t *testing.T) {
-	for _, name := range []string{"anthropic-tool_runner_streaming_all-01.sse", "anthropic-tool_runner_streaming_all-02.sse", "anthropic-refusal-01.sse"} {
-		t.Run(name, func(t *testing.T) {
-			data, err := os.ReadFile("../../testdata/sse/anthropic/" + name)
-			if err != nil {
-				t.Fatal(err)
-			}
-			backend := generateAdapter(t, func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Type", "text/event-stream")
-				w.Write(data)
-			})
-			_, req := testRequest()
-			var state *adapter.ResponseState
-			for _, event := range collectStream(t, backend, req) {
-				if event.Type == adapter.EventError {
-					t.Fatal(event.Error)
-				}
-				if event.Type == adapter.EventResponseState {
-					state = event.State
-				}
-			}
-			if state == nil || !state.Complete {
-				t.Fatal("recorded Messages stream did not finish")
-			}
-		})
 	}
 }
 

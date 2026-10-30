@@ -145,10 +145,18 @@ func assertNativeResponsesHistory(t *testing.T, got replayObject, messages []ada
 			results = append(results, item)
 		}
 	}
-	var tools []adapter.Message
+	byID := map[string]adapter.Message{}
 	for _, message := range messages {
 		if message.Role == "tool" {
-			tools = append(tools, message)
+			byID[message.ToolCallID] = message
+		}
+	}
+	var tools []adapter.Message
+	for _, message := range messages {
+		for _, call := range message.ToolCalls {
+			result, found := byID[call.ID]
+			require.True(t, found, "missing result for tool %s", call.ID)
+			tools = append(tools, result)
 		}
 	}
 	require.Len(t, results, len(tools))
