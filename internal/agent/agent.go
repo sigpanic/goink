@@ -220,6 +220,11 @@ func (a *Agent) run(
 		// tool_args_invalid 首次提醒标志：同一 turn 内只加一次 reminder，
 		// 避免重试耗尽后 DB 残留多条孤立 user reminder 污染下轮 LLM 上下文
 		reminderAdded := false
+		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.95 {
+			return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount},
+				fmt.Errorf("当前上下文约 %d tokens，已达到模型 %s 上下文窗口（%d tokens）的 95%%，请换用上下文窗口更大的模型压缩后再继续",
+					sumRunningTokens(runningTokens), opts.Model.ID, opts.Model.ContextWindow)
+		}
 		// token 预算检查：每轮开始时，超限触发压缩
 		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.8 {
 			a.logger.Warn("token budget exceeded, triggering compression",
