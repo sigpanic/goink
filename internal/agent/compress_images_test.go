@@ -15,7 +15,8 @@ func TestPersistCompressionPreservesImageReferences(t *testing.T) {
 	const sessionID = "compress-images"
 	a := newCompressTestAgent(t, sessionID)
 	ctx := context.Background()
-	images := []attachment.Ref{{AttachmentID: "picture", Variant: attachment.Standard}}
+	ref := importAgentImage(t)
+	images := []attachment.Ref{ref}
 	messages := []llm.Message{
 		{Role: "system", Content: "system"},
 		{Role: "user", Images: images},
@@ -24,7 +25,7 @@ func TestPersistCompressionPreservesImageReferences(t *testing.T) {
 	}
 	retained := retainMessages(messages)
 	retained[0].Images[0].AttachmentID = "copy-only"
-	require.Equal(t, "picture", messages[1].Images[0].AttachmentID)
+	require.Equal(t, ref.AttachmentID, messages[1].Images[0].AttachmentID)
 	retained = retainMessages(messages)
 	opts := &RunOptions{SessionID: sessionID, TurnID: 2, ActiveVersion: 1, AgentType: "main"}
 	version, err := a.persistCompression(ctx, opts, &agentcfg.SystemMessages{Identity: "system"}, "summary", retained)
@@ -41,4 +42,12 @@ func TestPersistCompressionPreservesImageReferences(t *testing.T) {
 		}
 	}
 	require.Equal(t, []llm.Message{messages[1], messages[3]}, restored)
+	prepared, err := llm.PrepareImageMessages(7, llm.ModelInfo{ID: "vision", SupportsVision: true}, restored)
+	require.NoError(t, err)
+	for _, message := range prepared {
+		require.Len(t, message.ImageInputs, 1)
+		tokens, err := llm.CountMessageTokens(message)
+		require.NoError(t, err)
+		require.Positive(t, tokens)
+	}
 }

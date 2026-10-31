@@ -21,6 +21,9 @@ func (c *Client) ChatStream(
 	opts *CallOptions,
 ) <-chan StreamEvent {
 	backend, err := c.protocolAdapter(adapterName)
+	if err == nil {
+		messages, err = prepareRequestImages(backend, providerName, model, messages, opts)
+	}
 	if err != nil {
 		ch := make(chan StreamEvent, 1)
 		ch <- StreamEvent{Type: EventError, Error: err}

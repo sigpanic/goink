@@ -14,6 +14,7 @@ type Message struct {
 	Role            string           `json:"role"`
 	Content         string           `json:"content"`
 	Images          []attachment.Ref `json:"images,omitempty"`
+	ImageInputs     []ImageInput     `json:"-"`
 	ThinkingContent string           `json:"thinking_content,omitempty"`
 	HasThinking     bool             `json:"has_thinking,omitempty"` // 发生过思考，允许没有可展示文本。
 	ToolCalls       []ToolCall       `json:"tool_calls,omitempty"`
@@ -25,6 +26,7 @@ type Message struct {
 // Clone 返回独立副本，复制工具参数和原生响应 payload。
 func (m Message) Clone() Message {
 	m.Images = slices.Clone(m.Images)
+	m.ImageInputs = slices.Clone(m.ImageInputs)
 	m.ToolCalls = slices.Clone(m.ToolCalls)
 	for i := range m.ToolCalls {
 		m.ToolCalls[i] = m.ToolCalls[i].Clone()

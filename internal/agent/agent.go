@@ -180,6 +180,11 @@ func (a *Agent) run(
 	if opts.Model == nil {
 		return AgentLoopResult{}, errors.New("agent: Model is required in RunOptions")
 	}
+	messages, err := llm.PrepareImageMessages(opts.NovelID, *opts.Model, opts.Messages)
+	if err != nil {
+		return AgentLoopResult{}, err
+	}
+	opts.Messages = messages
 
 	ctx = storage.WithTurn(ctx, opts.SessionID, opts.TurnID)
 
@@ -244,7 +249,7 @@ func (a *Agent) run(
 			}
 		}
 
-		callOpts := &llm.CallOptions{}
+		callOpts := &llm.CallOptions{NovelID: opts.NovelID}
 		callOpts.SessionID = opts.SessionID // 会话标识，供需要会话感知的服务商（如 OpenCode Go 的 x-opencode-session）使用
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
@@ -661,6 +666,17 @@ func (a *Agent) run(
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
 // opts 必须传指针，因为 opts.Messages 需要被追加（Go 切片传值会丢失 append）。
 func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) error {
+	if len(message.Images) > 0 {
+		if opts.Model == nil {
+			return fmt.Errorf("agent: 图片输入需要指定模型")
+		}
+		prepared, err := llm.PrepareImageMessages(opts.NovelID, *opts.Model, []llm.Message{message})
+		if err != nil {
+			return fmt.Errorf("agent: prepare %s images: %w", message.Role, err)
+		}
+		message = prepared[0]
+	}
+	imageInputs := message.ImageInputs
 	role := message.Role
 	metadata, err := extraJSON(extra)
 	if err != nil {
@@ -693,6 +709,7 @@ func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOp
 		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 		return fmt.Errorf("agent: render %s message: %w", role, err)
 	}
+	message.ImageInputs = imageInputs
 	opts.Messages = append(opts.Messages, message)
 	n, err := llm.CountMessageTokens(message)
 	if err != nil {

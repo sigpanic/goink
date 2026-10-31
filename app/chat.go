@@ -391,6 +391,10 @@ func (a *App) CompressContext(input CompressInput) (*CompressResult, error) {
 	defer a.agent.UnregisterCancel(sess.SessionID)
 
 	// 6. 初始化 runningTokens
+	messages, err = llm.PrepareImageMessages(sess.NovelID, *model, messages)
+	if err != nil {
+		return nil, err
+	}
 	runningTokens := a.agent.InitRunningTokens(messages)
 
 	// 7. 执行压缩

@@ -105,6 +105,13 @@ func CountMessageTokens(msg Message) (int, error) {
 	if msg.ThinkingContent != "" {
 		n += len(enc.Encode(msg.ThinkingContent, nil, nil))
 	}
+	if err := msg.ValidateImages(); err != nil {
+		return 0, err
+	}
+	for _, image := range msg.ImageInputs {
+		// 按 32px 分块乘 2 做本地预算估算，不代表厂商计费规则，不统计 Base64 字符。
+		n += ((image.Width + 31) / 32) * ((image.Height + 31) / 32) * 2
+	}
 	return n, nil
 }
 
