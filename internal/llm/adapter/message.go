@@ -4,23 +4,27 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+
+	"github.com/sigpanic/goink/internal/attachment"
 )
 
 // Message 是模型调用所需的业务消息，不包含数据库身份、可见性或 SDK 类型。
 // 工具结果使用 Content，ToolCallID 关联声明；State 只由目标适配器解释。
 type Message struct {
-	Role            string         `json:"role"`
-	Content         string         `json:"content"`
-	ThinkingContent string         `json:"thinking_content,omitempty"`
-	HasThinking     bool           `json:"has_thinking,omitempty"` // 发生过思考，允许没有可展示文本。
-	ToolCalls       []ToolCall     `json:"tool_calls,omitempty"`
-	ToolCallID      string         `json:"tool_call_id,omitempty"`
-	ToolName        string         `json:"tool_name,omitempty"`
-	State           *ResponseState `json:"llm_state,omitempty"`
+	Role            string           `json:"role"`
+	Content         string           `json:"content"`
+	Images          []attachment.Ref `json:"images,omitempty"`
+	ThinkingContent string           `json:"thinking_content,omitempty"`
+	HasThinking     bool             `json:"has_thinking,omitempty"` // 发生过思考，允许没有可展示文本。
+	ToolCalls       []ToolCall       `json:"tool_calls,omitempty"`
+	ToolCallID      string           `json:"tool_call_id,omitempty"`
+	ToolName        string           `json:"tool_name,omitempty"`
+	State           *ResponseState   `json:"llm_state,omitempty"`
 }
 
 // Clone 返回独立副本，复制工具参数和原生响应 payload。
 func (m Message) Clone() Message {
+	m.Images = slices.Clone(m.Images)
 	m.ToolCalls = slices.Clone(m.ToolCalls)
 	for i := range m.ToolCalls {
 		m.ToolCalls[i] = m.ToolCalls[i].Clone()

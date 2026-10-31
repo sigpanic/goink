@@ -47,6 +47,10 @@ func DataDirPath() string {
 	return platform.DataDir()
 }
 
+func AttachmentsDirPath() string {
+	return filepath.Join(DataDirPath(), "attachments")
+}
+
 // GlobalDBPath 返回全局数据库路径。
 func GlobalDBPath() string {
 	return filepath.Join(platform.DataDir(), "novel-agent.db")

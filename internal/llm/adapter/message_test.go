@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
@@ -87,6 +88,7 @@ func TestMessageRoundTripPreservesNativeBlocks(t *testing.T) {
 func TestMessageCloneIsolatesMutableHistory(t *testing.T) {
 	original := adapter.Message{
 		Role:      "assistant",
+		Images:    []attachment.Ref{{AttachmentID: "original", Variant: attachment.Standard}},
 		ToolCalls: []adapter.ToolCall{{ID: "call_1", Name: "read", Arguments: json.RawMessage(`{"chapter":3}`)}},
 		State: &adapter.ResponseState{
 			Origin:  adapter.MessageOrigin{ProviderName: "original"},
@@ -98,6 +100,7 @@ func TestMessageCloneIsolatesMutableHistory(t *testing.T) {
 		t.Fatal(err)
 	}
 	cloned := original.Clone()
+	cloned.Images[0].AttachmentID = "changed"
 	cloned.ToolCalls[0].ID = "changed"
 	cloned.ToolCalls[0].Arguments[0] = '['
 	cloned.State.Origin.ProviderName = "changed"

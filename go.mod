@@ -11,6 +11,7 @@ require (
 	github.com/anthropics/anthropic-sdk-go v1.81.0
 	github.com/asg017/sqlite-vec-go-bindings v0.1.6
 	github.com/bmaupin/go-epub v1.1.0
+	github.com/disintegration/imaging v1.6.2
 	github.com/go-playground/validator/v10 v10.30.2
 	github.com/invopop/jsonschema v0.14.0
 	github.com/mattn/go-sqlite3 v1.14.44
@@ -49,6 +50,7 @@ require (
 	go.opentelemetry.io/otel v1.33.0 // indirect
 	go.opentelemetry.io/otel/metric v1.33.0 // indirect
 	go.opentelemetry.io/otel/trace v1.33.0 // indirect
+	golang.org/x/image v0.12.0 // indirect
 	golang.org/x/oauth2 v0.35.0 // indirect
 	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
