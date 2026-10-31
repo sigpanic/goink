@@ -17,6 +17,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 
 	"github.com/sigpanic/goink/app"
+	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/logger"
 	"github.com/sigpanic/goink/internal/platform"
@@ -41,6 +42,7 @@ func main() {
 	}
 
 	wapp := app.New(log)
+	attachments := attachment.Handler(attachment.NewStore(config.AttachmentsDirPath()))
 
 	err := wails.Run(&options.App{
 		Title:     "Goink",
@@ -53,6 +55,10 @@ func main() {
 			Assets: assets,
 			Middleware: func(next http.Handler) http.Handler {
 				return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+					if strings.HasPrefix(r.URL.Path, "/attachments/") {
+						attachments.ServeHTTP(w, r)
+						return
+					}
 					if idStr, ok := strings.CutPrefix(r.URL.Path, "/covers/"); ok {
 						novelID, err := strconv.ParseInt(idStr, 10, 64)
 						if err != nil || novelID <= 0 {

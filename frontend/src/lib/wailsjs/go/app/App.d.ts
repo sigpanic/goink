@@ -16,6 +16,7 @@ import {llm} from '../models';
 import {adapter} from '../models';
 import {pattern} from '../models';
 import {storage} from '../models';
+import {attachment} from '../models';
 import {git} from '../models';
 import {mcpserver} from '../models';
 import {mcpclient} from '../models';
@@ -137,6 +138,8 @@ export function GetCharacterRelations(arg1:number):Promise<Array<character.Chara
 
 export function GetCharacters(arg1:number):Promise<Array<character.Character>>;
 
+export function GetChatImage(arg1:number,arg2:string):Promise<attachment.Image>;
+
 export function GetCommitFileList(arg1:number,arg2:string):Promise<app.CommitFileListResult>;
 
 export function GetCommitLog(arg1:number,arg2:number,arg3:string):Promise<Array<git.CommitInfo>>;
@@ -196,6 +199,8 @@ export function GetVolumes(arg1:number):Promise<Array<volume.Volume>>;
 export function GetWritingActivity(arg1:number):Promise<Array<writing.DailyActivity>>;
 
 export function GetWritingStats():Promise<writing.WritingStats>;
+
+export function ImportChatImage(arg1:app.ChatImageInput):Promise<attachment.Image>;
 
 export function ImportNovel(arg1:app.ImportNovelInput):Promise<imp.ImportResult>;
 

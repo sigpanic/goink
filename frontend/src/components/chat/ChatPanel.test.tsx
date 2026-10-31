@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { session } from "@/lib/wailsjs/go/models";
+import type { attachment, session } from "@/lib/wailsjs/go/models";
 import ChatPanel from "./ChatPanel";
 import { AgentEventType } from "./types";
 
@@ -34,6 +34,7 @@ const fixture = vi.hoisted(() => ({
   },
   settings: undefined as { last_session_id: string } | undefined,
   models: [],
+  supportsVision: true,
   selection: {
     adapter_name: "openai_chat",
     provider_name: "test",
@@ -80,7 +81,10 @@ vi.mock("react-intersection-observer", () => ({
 vi.mock("./useSlashCommands", () => ({ useSlashCommands: () => ({}) }));
 vi.mock("./useChatModelSelection", () => ({
   useChatModelSelection: () => ({
-    selectedModel: { Key: "test" },
+    selectedModel: {
+      Key: "test",
+      model: { supports_vision: fixture.supportsVision },
+    },
     modelSelection: fixture.selection,
     handleSelectModel: vi.fn(),
     handleSelectEffort: vi.fn(),
@@ -97,12 +101,20 @@ vi.mock("./ChatInput", () => ({
     disabled: boolean;
     isLoading: boolean;
     isCancelling: boolean;
-    onSend: (message: string) => void;
+    onSend: (message: string, images?: attachment.Ref[]) => void;
     onStop: () => void;
   }) => (
     <div>
       <button disabled={disabled || isLoading} onClick={() => onSend("继续")}>
         发送
+      </button>
+      <button
+        disabled={disabled || isLoading}
+        onClick={() =>
+          onSend("", [{ attachment_id: "picture-id", variant: "standard-v1" }])
+        }
+      >
+        发送图片
       </button>
       {isLoading && (
         <button disabled={isCancelling} onClick={onStop}>
@@ -175,6 +187,7 @@ async function startChat() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fixture.supportsVision = true;
   fixture.listeners.clear();
   fixture.messages = undefined;
   fixture.messagesBySession = {};
@@ -193,6 +206,26 @@ beforeEach(() => {
   fixture.SetLastSession.mockResolvedValue(undefined);
   fixture.GetSession.mockResolvedValue({ session_id: "session", novel_id: 1 });
   HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+it("sends image references with an empty user message", async () => {
+  fixture.Chat.mockResolvedValueOnce({ session_id: "session", turn_id: 1 });
+  renderPanel();
+  fireEvent.click(screen.getByRole("button", { name: "发送图片" }));
+  await waitFor(() => expect(fixture.Chat).toHaveBeenCalledTimes(1));
+  expect(fixture.Chat.mock.calls[0][0]).toMatchObject({
+    novel_id: 1,
+    message: "",
+    images: [{ attachment_id: "picture-id", variant: "standard-v1" }],
+  });
+});
+
+it("rejects image sends to a text-only model before calling Chat", () => {
+  fixture.supportsVision = false;
+  renderPanel();
+  fireEvent.click(screen.getByRole("button", { name: "发送图片" }));
+  expect(fixture.Chat).not.toHaveBeenCalled();
+  expect(fixture.toastError).toHaveBeenCalledWith("chat.visionRequired");
 });
 
 it("retains opaque thinking after its end event and subsequent answer", async () => {

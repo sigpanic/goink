@@ -8,6 +8,20 @@ vi.mock("@/components/Markdown", () => ({
   default: ({ content }: { content: string }) => <div>{content}</div>,
 }));
 
+vi.mock("./ChatImages", () => ({
+  default: ({
+    novelId,
+    images,
+  }: {
+    novelId: number;
+    images: { attachment_id: string }[];
+  }) => (
+    <div data-testid="images" data-novel-id={novelId}>
+      {images.map((image) => image.attachment_id).join(",")}
+    </div>
+  ),
+}));
+
 function makeTurn(status: Turn["status"]): Turn {
   return {
     id: "turn_1",
@@ -35,7 +49,27 @@ function makeTurn(status: Turn["status"]): Turn {
   };
 }
 
-const callbacks = { onApprove: vi.fn(), onReject: vi.fn() };
+const callbacks = { novelId: 1, onApprove: vi.fn(), onReject: vi.fn() };
+
+it("restores and displays an image-only user message", () => {
+  const [turn] = rebuildTurns([
+    {
+      role: "user",
+      content: "",
+      turn_id: 1,
+      agent_type: "main",
+      extra_metadata: JSON.stringify({
+        images: [{ attachment_id: "picture", variant: "standard-v1" }],
+      }),
+    },
+  ] as session.Message[]);
+  expect(turn.userImages).toEqual([
+    { attachment_id: "picture", variant: "standard-v1" },
+  ]);
+  render(<ChatTurn turn={turn} {...callbacks} />);
+  expect(screen.getByTestId("images")).toHaveTextContent("picture");
+  expect(screen.getByTestId("images")).toHaveAttribute("data-novel-id", "1");
+});
 
 it("collapses only on completion and keeps the final answer outside manually expandable history", () => {
   const { rerender } = render(

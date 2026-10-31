@@ -218,6 +218,10 @@ export function GetCharacters(arg1) {
   return window['go']['app']['App']['GetCharacters'](arg1);
 }
 
+export function GetChatImage(arg1, arg2) {
+  return window['go']['app']['App']['GetChatImage'](arg1, arg2);
+}
+
 export function GetCommitFileList(arg1, arg2) {
   return window['go']['app']['App']['GetCommitFileList'](arg1, arg2);
 }
@@ -336,6 +340,10 @@ export function GetWritingActivity(arg1) {
 
 export function GetWritingStats() {
   return window['go']['app']['App']['GetWritingStats']();
+}
+
+export function ImportChatImage(arg1) {
+  return window['go']['app']['App']['ImportChatImage'](arg1);
 }
 
 export function ImportNovel(arg1) {

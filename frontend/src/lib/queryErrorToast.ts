@@ -29,6 +29,7 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   session: "chat.sessionLoadFailed",
   "session-messages": "chat.messagesLoadFailed",
   "slash-commands": "chat.slashCommandsLoadFailed",
+  attachment: "chat.imageUnavailable",
   // 5.2 commit 1：content 领域 GET 端点
   chapters: "chapter.loadFailed",
   content: "content.loadFailed",

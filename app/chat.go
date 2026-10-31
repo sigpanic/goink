@@ -9,11 +9,11 @@ import (
 
 	wails "github.com/wailsapp/wails/v2/pkg/runtime"
 
-	"gorm.io/gorm"
-
 	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/agentcfg"
+	"github.com/sigpanic/goink/internal/attachment"
+	"github.com/sigpanic/goink/internal/chat"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/llm"
@@ -27,6 +27,7 @@ type ChatInput struct {
 	SessionID      string             `json:"session_id"` // 空=新建会话
 	NovelID        int64              `json:"novel_id"`
 	Message        string             `json:"message"`
+	Images         []attachment.Ref   `json:"images,omitempty"`
 	ModelSelection llm.ModelSelection `json:"model_selection"`
 }
 
@@ -44,6 +45,9 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	model, ok := a.llmClient.ProviderModel(selection.AdapterName, selection.ProviderName, selection.ModelID)
 	if !ok {
 		return nil, fmt.Errorf("模型未找到: %s/%s/%s", selection.AdapterName, selection.ProviderName, selection.ModelID)
+	}
+	if len(input.Images) > 0 && !model.SupportsVision {
+		return nil, fmt.Errorf("模型 %s 不支持图片输入，请切换支持视觉的模型", model.ID)
 	}
 
 	ctx, cancel := context.WithCancel(a.ctx)
@@ -65,7 +69,13 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 
 	// 3. 新会话自动生成标题（异步，与 agent LLM 调用并发）
 	if isNew && sess.Title == "" {
-		go a.generateTitle(sess.SessionID, input.Message, selection.AdapterName, selection.ProviderName, selection.ModelID)
+		if strings.TrimSpace(input.Message) == "" && len(input.Images) > 0 {
+			if err := a.session.UpdateSessionTitle(ctx, sess.SessionID, "图片会话"); err != nil {
+				return nil, err
+			}
+		} else {
+			go a.generateTitle(sess.SessionID, input.Message, selection.AdapterName, selection.ProviderName, selection.ModelID)
+		}
 	}
 
 	// 4. 获取下一个 turn ID
@@ -118,27 +128,9 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 		ToFrontend: true,
 		AgentType:  "main",
 	}
-	if err := a.session.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if isNew && sysMsgs != nil {
-			if err := writeSystemMessages(tx, sess.SessionID, turnID, sysMsgs); err != nil {
-				return err
-			}
-		}
-		if slashInject != "" {
-			if err := tx.Create(&session.Message{
-				SessionID:  sess.SessionID,
-				TurnID:     turnID,
-				Role:       "user",
-				Content:    slashInject,
-				Version:    sess.ActiveVersion,
-				ToAPI:      true,
-				ToFrontend: false,
-				AgentType:  "main",
-			}).Error; err != nil {
-				return err
-			}
-		}
-		return tx.Create(userMsg).Error
+	if err := chat.NewService(a.session.DB).SaveTurn(ctx, chat.TurnInput{
+		NovelID: sess.NovelID, Model: *model, User: *userMsg, Images: input.Images,
+		SystemMessages: sysMsgs, SlashInject: slashInject,
 	}); err != nil {
 		return nil, fmt.Errorf("持久化消息失败: %w", err)
 	}
@@ -230,6 +222,9 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 			Where("session_id = ?", input.SessionID).
 			First(&sess).Error
 		if err == nil {
+			if sess.NovelID != input.NovelID {
+				return nil, false, fmt.Errorf("会话不属于当前小说")
+			}
 			return &sess, false, nil
 		}
 	}
@@ -246,26 +241,6 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 
 	wails.EventsEmit(ctx, "chat:session_created", sess)
 	return sess, true, nil
-}
-
-// writeSystemMessages 在新 session 的事务内写入预构建的 system 消息到 messages 表。
-// sysMsgs 应在事务外通过 BuildSystemMessages 构建完成（compress 模式，避免死锁）。
-func writeSystemMessages(tx *gorm.DB, sessionID string, turnID int, msgs *agentcfg.SystemMessages) error {
-	sysMsg := func(content string) *session.Message {
-		return &session.Message{
-			SessionID: sessionID, TurnID: turnID, Role: "system", Content: content,
-			Version: 1, ToAPI: true, ToFrontend: false, AgentType: "main",
-		}
-	}
-
-	for _, c := range []string{msgs.Identity, msgs.Always, msgs.Catalog, msgs.Profile, msgs.State} {
-		if c != "" {
-			if err := tx.Create(sysMsg(c)).Error; err != nil {
-				return err
-			}
-		}
-	}
-	return nil
 }
 
 // loadLLMMessages 加载当前版本的模型请求历史，只执行 Session 的结构化映射。

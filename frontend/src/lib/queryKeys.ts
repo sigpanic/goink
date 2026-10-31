@@ -196,3 +196,7 @@ export const writingActivityKeys = {
 export const writingStatsKeys = {
   all: ["writing-stats"] as const,
 };
+
+export const attachmentKeys = {
+  detail: (novelId: number, id: string) => ["attachment", novelId, id] as const,
+};
