@@ -5,6 +5,7 @@ on:
     branches: [master, dev]
   pull_request:
     branches: [master]
+  workflow_dispatch:
 
 jobs:
   secret-scan:

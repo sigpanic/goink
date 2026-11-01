@@ -21,6 +21,7 @@ on:
       - 'frontend/tsconfig.app.json'
       - 'frontend/scripts/**'
       - 'frontend/vite.config.ts'
+  workflow_dispatch:
 
 jobs:
   i18n-check:
