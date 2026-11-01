@@ -19,9 +19,9 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 
 ## 2. 提 PR 并合并（仅当发布分支领先 master）
 
-- 走 `pr` skill 的完整流程：读取 `git log origin/master..HEAD --format=full` 的全部 commit body，用**中文**标题和描述起草，给用户 review 通过后再创建
+- 走 `pr` skill 的完整流程：读取 `git log origin/master..HEAD --format=full` 的全部 commit body，用**英文标题 + 中文描述**起草，给用户 review 通过后再创建
 - 分支不对等：head 为发布分支（由用户指定），base 为 `master`，不要自行套用其他分支
-- 创建：`gh pr create --base master --head <发布分支> --title "<中文标题>" --body "<中文描述>"`
+- 创建：`gh pr create --base master --head <发布分支> --title "<英文标题>" --body "<中文描述>"`
 - 合并：保留完整历史，**不 squash、不 rebase**，用 `gh pr merge <发布分支> --merge`，产生 merge commit
 - 发布分支**不删除**
 - 合并后 main 工作区 `git pull`，副工作区按 worktree 规则 `git merge origin/master` 同步
@@ -66,5 +66,5 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 - **禁止 force push 已发布的 tag**：会重新触发 release workflow（匹配 `v*`），用不可复现的新构建覆盖现有 release 产物并重置下载计数。若确有必要动旧 tag，必须先临时禁用 Release workflow（GitHub → Settings → Actions），操作完再启用。
 - **辨识版本内 fix**：区分「修复上个版本已存在的问题」（应写入 notes）与「开发过程中先 feat 后 fix 的新问题」（属本版本内部迭代，不算与上个版本的差异，不应写入 notes）。只记录面向用户的、相对上个版本的真实变化。务必结合 `Refs #NN` 的 issue 讨论确认每个 fix 到底修的是什么。
 - **Commit 规范**：英文、具体描述、无 emoji、无 Co-Authored-By
-- **PR 规范**：中文标题和描述，流程见 `pr` skill
+- **PR 规范**：英文标题、中文描述，流程见 `pr` skill
 - **Release notes 规范**：中文

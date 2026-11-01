@@ -1,11 +1,11 @@
 ---
 name: pr
-description: 创建中文 PR，读取全部领先 commit 的完整 body 起草描述，分支由用户指定，确认后再用 gh 创建。用户要求提 PR、开 Pull Request 时使用，不用于发版或合并已有 PR。
+description: 创建 PR，读取全部领先 commit 的完整 body 起草英文标题与中文描述，分支由用户指定，确认后再用 gh 创建。用户要求提 PR、开 Pull Request 时使用，不用于发版或合并已有 PR。
 ---
 
 # PR 创建流程
 
-PR 标题与描述一律中文，commit message 保持英文不动。来源分支（head）和目标分支（base）由用户指定，不要预设 dev → master，也不要自行猜测。
+PR 标题用英文，描述用中文；commit message 保持英文不动。来源分支（head）和目标分支（base）由用户指定，不要预设 dev → master，也不要自行猜测。
 
 按顺序执行，每步完成后向用户报告结果。任何 git 写操作（fetch / merge / push / gh pr create）执行前都要先说明具体命令。
 
@@ -30,11 +30,11 @@ PR 标题与描述一律中文，commit message 保持英文不动。来源分�
 - 每个 `Refs #NN` 都用 `gh issue view NN --comments` 读上下文，弄清这个提交到底修了什么
 - 先向用户汇报：提交数量、每条 subject 与 body 要点，确认没有遗漏或被误判的提交
 
-## 4. 起草 PR（中文）
+## 4. 起草 PR（英文标题 + 中文正文）
 
-标题：中文，具体，60 字以内；不使用 `fixes` / `closes` / `resolves` 等自动关闭关键词。
+标题：英文，遵循 pre-commit hook 校验的 Conventional Commits 规范，格式 `<type>(<scope>): <description>`。type 取 `feat` `fix` `docs` `style` `refactor` `perf` `test` `build` `ci` `chore` `revert` 之一（小写）；scope 可选，写主要影响模块；description 小写开头、不加句号、控制在 72 字符以内，不使用 `fixes` / `closes` / `resolves` 等自动关闭关键词。
 
-正文模板：
+正文：中文，按下方模板组织。
 
 ```
 ## 概述
@@ -70,7 +70,7 @@ Refs #NN
 - 用 heredoc 传正文，避免换行丢失：
 
   ```
-  gh pr create --base <base> --head <head> --title "<中文标题>" --body "$(cat <<'EOF'
+  gh pr create --base <base> --head <head> --title "<英文标题>" --body "$(cat <<'EOF'
   <正文>
   EOF
   )"
