@@ -1055,6 +1055,7 @@ export default function ChatPanel({
         turnId: 0,
         userMessage: content,
         userImages: images,
+        userSentAt: new Date().toISOString(),
         segments: [],
         status: "streaming",
       };
@@ -1147,6 +1148,7 @@ export default function ChatPanel({
           }
         });
         eventQueuesRef.current.clear();
+        const completedAt = new Date().toISOString();
         setTurns((prev) =>
           prev.map((t) =>
             t.id === turnId
@@ -1154,6 +1156,8 @@ export default function ChatPanel({
                   ...t,
                   status:
                     t.status === "streaming" ? ("done" as const) : t.status,
+                  assistantSentAt:
+                    t.status === "streaming" ? completedAt : t.assistantSentAt,
                   segments: t.segments.map((seg) =>
                     seg.type === "text" ? { ...seg, isStreaming: false } : seg,
                   ),

@@ -143,6 +143,9 @@
   "chat": {
     "addImages": "上传图片",
     "moreActions": "更多操作",
+    "copyMessage": "复制消息",
+    "messageCopied": "已复制",
+    "copyMessageFailed": "复制失败，请重试",
     "sendMessage": "发送消息",
     "stopGeneration": "停止生成",
     "previewImage": "预览 {{name}}",

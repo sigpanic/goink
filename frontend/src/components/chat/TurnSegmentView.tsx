@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import type { TurnSegment } from "./types";
 import MessageBubble from "./MessageBubble";
 import ThinkingBlock from "./ThinkingBlock";
@@ -7,7 +8,10 @@ import WebFetchCard from "./WebFetchCard";
 import SubagentCard from "./SubagentCard";
 import CompressionBlock from "./CompressionBlock";
 
-interface Props {
+interface Props extends Pick<
+  ComponentProps<typeof MessageBubble>,
+  "copyable" | "sentAt"
+> {
   segment: TurnSegment;
   isTurnStreaming: boolean;
   hideContent?: boolean;
@@ -19,6 +23,8 @@ export default function TurnSegmentView({
   segment: seg,
   isTurnStreaming,
   hideContent = false,
+  copyable,
+  sentAt,
   onApprove,
   onReject,
 }: Props) {
@@ -103,7 +109,12 @@ export default function TurnSegmentView({
         </div>
       )}
       {!hideContent && seg.content && (
-        <MessageBubble role="assistant" content={seg.content} />
+        <MessageBubble
+          role="assistant"
+          content={seg.content}
+          copyable={copyable}
+          sentAt={sentAt}
+        />
       )}
     </div>
   );

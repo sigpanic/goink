@@ -125,7 +125,12 @@ vi.mock("./ChatComposer", () => ({
   ),
 }));
 vi.mock("./MessageBubble", () => ({
-  default: ({ content }: { content: string }) => <div>{content}</div>,
+  default: ({ content, sentAt }: { content: string; sentAt?: string }) => (
+    <div>
+      {content}
+      {sentAt && <time dateTime={sentAt} />}
+    </div>
+  ),
 }));
 vi.mock("./DeleteSessionDialog", () => ({ default: () => null }));
 vi.mock("./RecentSessions", () => ({ default: () => null }));
@@ -217,6 +222,26 @@ it("sends image references with an empty user message", async () => {
     message: "",
     images: [{ attachment_id: "picture-id", variant: "standard-v1" }],
   });
+});
+
+it("records the live user send time and assigns reply time only on completion", async () => {
+  const before = Date.now();
+  const request = await startChat();
+  const userTime = screen.getByText("继续").querySelector("time")!;
+  expect(new Date(userTime.dateTime).getTime()).toBeGreaterThanOrEqual(before);
+  await act(async () => {
+    emit("agent:1", { turn_id: 1, type: AgentEventType.Content, data: "回答" });
+  });
+  expect(screen.getByText("回答").querySelector("time")).toBeNull();
+  const completing = Date.now();
+  await act(async () => request.resolve());
+  const replyTime = screen.getByText("回答").querySelector("time")!;
+  expect(new Date(replyTime.dateTime).getTime()).toBeGreaterThanOrEqual(
+    completing,
+  );
+  expect(new Date(replyTime.dateTime).getTime()).toBeLessThanOrEqual(
+    Date.now(),
+  );
 });
 
 it("rejects image sends to a text-only model before calling Chat", () => {

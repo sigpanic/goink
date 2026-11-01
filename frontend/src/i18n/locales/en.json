@@ -151,6 +151,9 @@
   "chat": {
     "addImages": "Upload images",
     "moreActions": "More actions",
+    "copyMessage": "Copy message",
+    "messageCopied": "Copied",
+    "copyMessageFailed": "Failed to copy. Please try again",
     "sendMessage": "Send message",
     "stopGeneration": "Stop generation",
     "previewImage": "Preview {{name}}",

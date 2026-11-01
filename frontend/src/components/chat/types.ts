@@ -124,6 +124,8 @@ export interface Turn {
   turnId: number;
   userMessage: string;
   userImages?: attachment.Ref[];
+  userSentAt?: string;
+  assistantSentAt?: string;
   segments: TurnSegment[];
   status:
     "streaming" | "done" | "error" | "system_interrupted" | "user_stopped";
@@ -203,6 +205,7 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
         turnId: msg.turn_id,
         userMessage: msg.content,
         ...(images.length > 0 ? { userImages: images } : {}),
+        ...(msg.created_at ? { userSentAt: msg.created_at } : {}),
         segments: [],
         status: "done",
       };
@@ -280,6 +283,10 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
 
       // 主 Agent 消息
       if (!current) continue;
+
+      if (msg.content?.trim() && msg.created_at) {
+        current.assistantSentAt = msg.created_at;
+      }
 
       const thinkingContent = msg.thinking_content || "";
 

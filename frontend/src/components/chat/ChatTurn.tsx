@@ -25,11 +25,13 @@ export default function ChatTurn({
   const finalIndex = turn.segments.findLastIndex(
     (seg) => seg.type === "text" && seg.content.trim() !== "",
   );
-  const canCollapse =
+  const hasFinalReply =
     turn.status === "done" &&
     !turn.compressionOnly &&
     finalIndex >= 0 &&
-    turn.segments.slice(finalIndex + 1).every((seg) => seg.type === "text") &&
+    turn.segments.slice(finalIndex + 1).every((seg) => seg.type === "text");
+  const canCollapse =
+    hasFinalReply &&
     turn.segments.some((seg, index) =>
       seg.type === "text"
         ? !!(
@@ -48,6 +50,8 @@ export default function ChatTurn({
           content={turn.userMessage}
           novelId={novelId}
           images={turn.userImages}
+          copyable
+          sentAt={turn.userSentAt}
         />
       )}
 
@@ -78,6 +82,8 @@ export default function ChatTurn({
               segment={segment}
               isTurnStreaming={turn.status === "streaming"}
               hideContent={canCollapse && index === finalIndex}
+              copyable={hasFinalReply && !canCollapse && index === finalIndex}
+              sentAt={index === finalIndex ? turn.assistantSentAt : undefined}
               onApprove={onApprove}
               onReject={onReject}
             />
@@ -89,6 +95,8 @@ export default function ChatTurn({
         <MessageBubble
           role="assistant"
           content={turn.segments[finalIndex].content}
+          copyable
+          sentAt={turn.assistantSentAt}
         />
       )}
 
