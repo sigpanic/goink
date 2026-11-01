@@ -134,6 +134,10 @@ func (a *App) Chat(input ChatInput) (*ChatResult, error) {
 	}); err != nil {
 		return nil, fmt.Errorf("持久化消息失败: %w", err)
 	}
+	a.emitEvent(ctx, "chat:message_saved", map[string]any{
+		"session_id": sess.SessionID,
+		"turn_id":    turnID,
+	})
 	if a.activity != nil {
 		a.activity.AddActivity(ctx, activity.ActivityDelta{ConversationTurns: 1})
 	}

@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -48,10 +49,26 @@ func requireConversationTurns(t *testing.T, a *App, want int64) {
 
 func TestChatActivityCountsAcceptedRequestsDespiteLaterFailure(t *testing.T) {
 	a, input := setupChatActivityTest(t)
+	var saved []map[string]any
+	a.emitEvent = func(ctx context.Context, name string, data ...any) {
+		require.Equal(t, "chat:message_saved", name)
+		require.Len(t, data, 1)
+		payload := data[0].(map[string]any)
+		var count int64
+		require.NoError(t, a.db.WithContext(ctx).Raw(
+			"SELECT COUNT(*) FROM messages WHERE session_id = ? AND turn_id = ? AND role = 'user'",
+			payload["session_id"], payload["turn_id"],
+		).Scan(&count).Error)
+		require.Equal(t, int64(1), count)
+		saved = append(saved, payload)
+	}
 	for i := int64(1); i <= 2; i++ {
 		_, err := a.Chat(input)
 		require.ErrorContains(t, err, "API messages unavailable")
 		requireConversationTurns(t, a, i)
+		require.Len(t, saved, int(i))
+		require.Equal(t, input.SessionID, saved[i-1]["session_id"])
+		require.Equal(t, int(i), saved[i-1]["turn_id"])
 	}
 	var messages int64
 	require.NoError(t, a.db.Raw("SELECT COUNT(*) FROM messages WHERE role = 'user'").Scan(&messages).Error)
@@ -60,6 +77,9 @@ func TestChatActivityCountsAcceptedRequestsDespiteLaterFailure(t *testing.T) {
 
 func TestChatActivitySkipsRejectedRequests(t *testing.T) {
 	a, input := setupChatActivityTest(t)
+	a.emitEvent = func(context.Context, string, ...any) {
+		t.Error("rejected messages must not emit a saved event")
+	}
 	invalid := input
 	invalid.ModelSelection.ModelID = "missing"
 	_, err := a.Chat(invalid)

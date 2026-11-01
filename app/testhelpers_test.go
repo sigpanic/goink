@@ -120,6 +120,7 @@ func setupTestApp(t *testing.T) *App {
 	t.Cleanup(cancel)
 
 	app := &App{
+		emitEvent: func(context.Context, string, ...any) {},
 		ctx:       ctx,
 		cancel:    cancel,
 		logger:    logger,

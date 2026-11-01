@@ -2,6 +2,7 @@ import type { attachment, session } from "@/lib/wailsjs/go/models";
 
 export interface SendResult {
   success: boolean;
+  messageSaved: boolean;
   sessionId: string;
 }
 

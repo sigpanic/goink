@@ -9,6 +9,7 @@ import { beforeEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import type { attachment } from "@/lib/wailsjs/go/models";
 import ChatComposer from "./ChatComposer";
+import type { SendResult } from "./types";
 
 const fixture = vi.hoisted(() => ({
   importImage: vi.fn(),
@@ -64,7 +65,11 @@ function renderInput(extra: Partial<ComponentProps<typeof ChatComposer>> = {}) {
     slashItems: [],
     onSend: vi
       .fn()
-      .mockResolvedValue({ success: true, sessionId: "session_7" }),
+      .mockResolvedValue({
+        success: true,
+        messageSaved: true,
+        sessionId: "session_7",
+      }),
     onStop: vi.fn(),
     onListSlash: vi.fn(),
     onSelectModel: vi.fn(),
@@ -224,29 +229,41 @@ it("keeps an import in its original novel draft when the user switches novels", 
   expect(screen.getByText("picture-id")).toBeVisible();
 });
 
-it("restores a failed send into the newly created session draft", async () => {
-  let resolve!: (result: { success: boolean; sessionId: string }) => void;
-  const onSend = vi.fn().mockReturnValue(
-    new Promise((done) => {
-      resolve = done;
-    }),
-  );
-  const view = renderInput({ onSend });
-  view.upload([picture()]);
-  await screen.findByText("picture-id");
-  fireEvent.input(screen.getByRole("textbox"), {
-    target: { value: "describe this" },
-  });
-  fireEvent.click(screen.getByRole("button", { name: "chat.sendMessage" }));
-  view.update({ draftKey: "session_7" });
-  await act(async () => resolve({ success: false, sessionId: "session_7" }));
-  expect(screen.getByRole("textbox")).toHaveValue("describe this");
-  expect(screen.getByText("picture-id")).toBeVisible();
-  expect(localStorage.getItem(textKey + "session_7")).toBe("describe this");
-  expect(JSON.parse(localStorage.getItem(refsKey + "session_7")!)).toHaveLength(
-    1,
-  );
-});
+it.each([false, true])(
+  "restores a failed send only if the message was not saved (saved=%s)",
+  async (messageSaved) => {
+    let resolve!: (result: SendResult) => void;
+    const onSend = vi.fn().mockReturnValue(
+      new Promise((done) => {
+        resolve = done;
+      }),
+    );
+    const view = renderInput({ onSend });
+    view.upload([picture()]);
+    await screen.findByText("picture-id");
+    fireEvent.input(screen.getByRole("textbox"), {
+      target: { value: "describe this" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "chat.sendMessage" }));
+    view.update({ draftKey: "session_7" });
+    await act(async () =>
+      resolve({ success: false, messageSaved, sessionId: "session_7" }),
+    );
+    if (messageSaved) {
+      expect(screen.getByRole("textbox")).toHaveValue("");
+      expect(screen.queryByText("picture-id")).toBeNull();
+      expect(localStorage.getItem(textKey + "session_7")).toBeNull();
+      expect(localStorage.getItem(refsKey + "session_7")).toBeNull();
+      return;
+    }
+    expect(screen.getByRole("textbox")).toHaveValue("describe this");
+    expect(screen.getByText("picture-id")).toBeVisible();
+    expect(localStorage.getItem(textKey + "session_7")).toBe("describe this");
+    expect(
+      JSON.parse(localStorage.getItem(refsKey + "session_7")!),
+    ).toHaveLength(1);
+  },
+);
 
 it("restores session image drafts and prevents sends to a text-only model", () => {
   localStorage.setItem(
@@ -305,7 +322,7 @@ it("saves text before switching drafts and flushes the current draft on unload",
 });
 
 it("keeps a new draft when an earlier send fails", async () => {
-  let resolve!: (result: { success: boolean; sessionId: string }) => void;
+  let resolve!: (result: SendResult) => void;
   const onSend = vi.fn().mockReturnValue(
     new Promise((done) => {
       resolve = done;
@@ -316,8 +333,23 @@ it("keeps a new draft when an earlier send fails", async () => {
   fireEvent.input(textarea, { target: { value: "sent draft" } });
   fireEvent.keyDown(textarea, { key: "Enter" });
   fireEvent.input(textarea, { target: { value: "new draft" } });
-  await act(async () => resolve({ success: false, sessionId: "" }));
+  await act(async () =>
+    resolve({ success: false, messageSaved: false, sessionId: "" }),
+  );
   expect(textarea).toHaveValue("new draft");
+});
+
+it("does not restore an unconfirmed send when onSend unexpectedly rejects", async () => {
+  renderInput({ onSend: vi.fn().mockRejectedValue("connection lost") });
+  fireEvent.input(screen.getByRole("textbox"), {
+    target: { value: "sent text" },
+  });
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+  await waitFor(() =>
+    expect(fixture.toastError).toHaveBeenCalledWith("connection lost"),
+  );
+  expect(screen.getByRole("textbox")).toHaveValue("");
+  expect(localStorage.getItem(textKey + "new_7")).toBeNull();
 });
 
 it("rejects invalid files and limits a batch to four imported images", async () => {

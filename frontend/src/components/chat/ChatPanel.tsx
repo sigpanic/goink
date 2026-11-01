@@ -106,6 +106,7 @@ export default function ChatPanel({
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
   const counterRef = useRef(0);
   const startedUnsubRef = useRef<(() => void) | null>(null);
+  const savedUnsubRef = useRef<(() => void) | null>(null);
   const agentUnsubRef = useRef<(() => void) | null>(null);
   const eventQueuesRef = useRef<Map<number, EventQueue>>(new Map());
   const onApprovalFileEditRef = useRef(onApprovalFileEdit);
@@ -236,6 +237,7 @@ export default function ChatPanel({
     const eventQueues = eventQueuesRef.current;
     return () => {
       startedUnsubRef.current?.();
+      savedUnsubRef.current?.();
       agentUnsubRef.current?.();
       eventQueues.forEach((queue) => {
         if (queue.flushTimer) clearTimeout(queue.flushTimer);
@@ -1032,12 +1034,14 @@ export default function ChatPanel({
       content: string,
       images: attachment.Ref[] = [],
     ): Promise<SendResult> => {
-      if (!modelSelection) return { success: false, sessionId };
+      if (!modelSelection)
+        return { success: false, messageSaved: false, sessionId };
       if (images.length > 0 && !selectedModel?.model?.supports_vision) {
         toastError(t("chat.visionRequired"));
-        return { success: false, sessionId };
+        return { success: false, messageSaved: false, sessionId };
       }
       let requestSessionId = sessionId;
+      let messageSaved = false;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
         cancelChatMutation
@@ -1067,28 +1071,36 @@ export default function ChatPanel({
 
       setTurns((prev) => [...prev, newTurn]);
 
+      const onMessageSaved = (data: ChatStartedEvent) => {
+        if (messageSaved) return;
+        messageSaved = true;
+        if (data.session_id) {
+          requestSessionId = data.session_id;
+          setSessionId(data.session_id);
+          setActiveSessionId(data.session_id);
+          setLastSessionMutation
+            .mutateAsync(data.session_id)
+            .catch((err) =>
+              toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
+            );
+        }
+        // 更新 turn 的 turnId 为后端分配的真实值
+        setTurns((prev) =>
+          prev.map((turn) =>
+            turn.id === turnId ? { ...turn, turnId: data.turn_id } : turn,
+          ),
+        );
+      };
+      savedUnsubRef.current?.();
+      const savedCleanup = EventsOn("chat:message_saved", onMessageSaved);
+      savedUnsubRef.current = savedCleanup;
+
       // 监听 chat:started，拿到 turnId 后订阅 agent 事件流
       startedUnsubRef.current?.();
       const startedCleanup = EventsOn(
         "chat:started",
         (data: ChatStartedEvent) => {
-          if (data.session_id) {
-            requestSessionId = data.session_id;
-            setSessionId(data.session_id);
-            setActiveSessionId(data.session_id);
-            setLastSessionMutation
-              .mutateAsync(data.session_id)
-              .catch((err) =>
-                toastError(toErrorMessage(err, t("chat.setLastSessionFailed"))),
-              );
-          }
-
-          // 更新 turn 的 turnId 为后端分配的真实值
-          setTurns((prev) =>
-            prev.map((t) =>
-              t.id === turnId ? { ...t, turnId: data.turn_id } : t,
-            ),
-          );
+          onMessageSaved(data);
 
           agentUnsubRef.current?.();
           const agentCleanup = EventsOn(
@@ -1112,7 +1124,11 @@ export default function ChatPanel({
         );
         // 刷新会话列表（invalidate 触发 useSessions refetch）
         qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
-        return { success: true, sessionId: requestSessionId };
+        return {
+          success: true,
+          messageSaved: true,
+          sessionId: requestSessionId,
+        };
       } catch (err) {
         const reason = toErrorMessage(err, t("chat.chatError"));
         setTurns((prev) =>
@@ -1132,7 +1148,7 @@ export default function ChatPanel({
             };
           }),
         );
-        return { success: false, sessionId: requestSessionId };
+        return { success: false, messageSaved, sessionId: requestSessionId };
       } finally {
         eventQueuesRef.current.forEach((queue, queuedTurnId) => {
           if (queue.flushTimer) clearTimeout(queue.flushTimer);
@@ -1172,6 +1188,9 @@ export default function ChatPanel({
         }
         startedUnsubRef.current?.();
         startedUnsubRef.current = null;
+        savedCleanup();
+        if (savedUnsubRef.current === savedCleanup)
+          savedUnsubRef.current = null;
         agentUnsubRef.current?.();
         agentUnsubRef.current = null;
       }

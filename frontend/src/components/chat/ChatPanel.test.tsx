@@ -9,7 +9,7 @@ import {
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { attachment, session } from "@/lib/wailsjs/go/models";
 import ChatPanel from "./ChatPanel";
-import { AgentEventType } from "./types";
+import { AgentEventType, type SendResult } from "./types";
 
 const fixture = vi.hoisted(() => ({
   Chat: vi.fn(),
@@ -17,6 +17,7 @@ const fixture = vi.hoisted(() => ({
   GetSession: vi.fn(),
   SetLastSession: vi.fn(),
   toastError: vi.fn(),
+  sendResult: vi.fn(),
   listeners: new Map<string, Set<(data: unknown) => void>>(),
   messages: undefined as session.Message[] | undefined,
   messagesBySession: {} as Record<string, session.Message[]>,
@@ -101,17 +102,22 @@ vi.mock("./ChatComposer", () => ({
     disabled: boolean;
     isLoading: boolean;
     isCancelling: boolean;
-    onSend: (message: string, images?: attachment.Ref[]) => void;
+    onSend: (message: string, images?: attachment.Ref[]) => Promise<SendResult>;
     onStop: () => void;
   }) => (
     <div>
-      <button disabled={disabled || isLoading} onClick={() => onSend("继续")}>
+      <button
+        disabled={disabled || isLoading}
+        onClick={() => void onSend("继续").then(fixture.sendResult)}
+      >
         发送
       </button>
       <button
         disabled={disabled || isLoading}
         onClick={() =>
-          onSend("", [{ attachment_id: "picture-id", variant: "standard-v1" }])
+          void onSend("", [
+            { attachment_id: "picture-id", variant: "standard-v1" },
+          ]).then(fixture.sendResult)
         }
       >
         发送图片
@@ -183,9 +189,10 @@ async function startChat() {
   renderPanel();
   fireEvent.click(screen.getByRole("button", { name: "发送" }));
   await waitFor(() => expect(fixture.Chat).toHaveBeenCalledTimes(1));
-  await act(async () =>
-    emit("chat:started", { session_id: "session", turn_id: 1 }),
-  );
+  await act(async () => {
+    emit("chat:message_saved", { session_id: "session", turn_id: 1 });
+    emit("chat:started", { session_id: "session", turn_id: 1 });
+  });
   return request;
 }
 
@@ -250,6 +257,40 @@ it("rejects image sends to a text-only model before calling Chat", () => {
   fireEvent.click(screen.getByRole("button", { name: "发送图片" }));
   expect(fixture.Chat).not.toHaveBeenCalled();
   expect(fixture.toastError).toHaveBeenCalledWith("chat.visionRequired");
+});
+
+it.each([false, true])(
+  "reports whether the message was saved when Chat fails before agent start (saved=%s)",
+  async (messageSaved) => {
+    const request = deferred();
+    fixture.Chat.mockReturnValueOnce(request.promise);
+    const view = renderPanel();
+    fireEvent.click(screen.getByRole("button", { name: "发送" }));
+    if (messageSaved) {
+      await act(async () => {
+        emit("chat:message_saved", { session_id: "session", turn_id: 1 });
+      });
+      expect(view.container.querySelector('[data-turn-id="1"]')).not.toBeNull();
+      expect(fixture.listeners.get("agent:1")?.size ?? 0).toBe(0);
+    }
+    await act(async () => request.reject("request failed"));
+    expect(fixture.sendResult).toHaveBeenCalledWith({
+      success: false,
+      messageSaved,
+      sessionId: messageSaved ? "session" : "",
+    });
+    expect(fixture.listeners.get("chat:message_saved")?.size).toBe(0);
+  },
+);
+
+it("keeps the saved acknowledgement when the model fails after starting", async () => {
+  const request = await startChat();
+  await act(async () => request.reject("model unavailable"));
+  expect(fixture.sendResult).toHaveBeenCalledWith({
+    success: false,
+    messageSaved: true,
+    sessionId: "session",
+  });
 });
 
 it("retains opaque thinking after its end event and subsequent answer", async () => {

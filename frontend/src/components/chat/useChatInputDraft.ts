@@ -138,11 +138,10 @@ export default function useChatInputDraft({
       };
       void onSend(value, sentImages)
         .then((result) => {
-          if (!result.success) restore(result.sessionId);
+          if (!result.messageSaved) restore(result.sessionId);
         })
         .catch((err) => {
           toastError(toErrorMessage(err, t("chat.chatError")));
-          restore("");
         });
       const textarea = textareaRef.current;
       if (textarea) {
@@ -168,7 +167,10 @@ export default function useChatInputDraft({
     if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
     draftTimerRef.current = setTimeout(() => {
       draftTimerRef.current = null;
-      localStorage.setItem(DRAFT_PREFIX + lastDraftKeyRef.current, target.value);
+      localStorage.setItem(
+        DRAFT_PREFIX + lastDraftKeyRef.current,
+        target.value,
+      );
     }, 300);
   }, []);
 
