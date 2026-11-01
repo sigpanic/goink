@@ -16,6 +16,7 @@ type streamItem struct {
 	id, kind, callID, name string
 	arguments              string
 	done                   json.RawMessage
+	thinkingSource         string
 }
 
 type streamState struct {
@@ -34,7 +35,7 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 	switch event.Type {
 	case "response.content_part.done", "response.output_text.done", "response.refusal.done",
 		"response.reasoning_summary_part.done", "response.reasoning_summary_text.done",
-		"response.reasoning_text.delta", "response.reasoning_text.done", "response.output_text.annotation.added":
+		"response.reasoning_text.done", "response.output_text.annotation.added":
 		return nil
 	}
 	switch event.Type {
@@ -71,6 +72,18 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 			emit(adapter.StreamEvent{Type: kind, Data: text})
 		}
 	}
+	publishThinking := func(item *streamItem, source, text string) {
+		if text == "" {
+			return
+		}
+		// 每个 item 沿用最先出现非空文本的通道，避免摘要和明文推理重复展示。
+		if item.thinkingSource == "" {
+			item.thinkingSource = source
+		}
+		if item.thinkingSource == source {
+			publish(adapter.EventThinking, text)
+		}
+	}
 	switch event.Type {
 	case "response.created":
 		if s.started || len(event.Response.Output) != 0 {
@@ -104,11 +117,8 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 			}
 		case "reasoning":
 			emit(adapter.StreamEvent{Type: adapter.EventThinking})
-			text, err := reasoningSummary([]responses.ResponseOutputItemUnion{item})
-			if err != nil {
-				return err
-			}
-			publish(adapter.EventThinking, text)
+			source, text := reasoningDisplay(item)
+			publishThinking(tracked, source, text)
 		case "function_call":
 			if strings.TrimSpace(item.CallID) == "" || strings.TrimSpace(item.Name) == "" {
 				return invalidResponse("streamed function requires call_id and name")
@@ -140,6 +150,10 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 		}
 		item.done = json.RawMessage(event.Item.RawJSON())
 		if item.kind == "reasoning" {
+			if item.thinkingSource == "" {
+				source, text := reasoningDisplay(event.Item)
+				publishThinking(item, source, text)
+			}
 			emit(adapter.StreamEvent{Type: adapter.EventThinkingDone})
 		}
 	case "response.function_call_arguments.delta", "response.function_call_arguments.done":
@@ -168,15 +182,20 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 			item.arguments = event.Arguments
 		}
 		emit(adapter.StreamEvent{Type: adapter.EventToolCallArguments, Delta: item.delta()})
-	case "response.output_text.delta", "response.refusal.delta", "response.reasoning_summary_text.delta":
-		if event.Type == "response.reasoning_summary_text.delta" && (!wireString(event.JSON.Delta) || item.kind != "reasoning") {
+	case "response.output_text.delta", "response.refusal.delta", "response.reasoning_summary_text.delta", "response.reasoning_text.delta":
+		isThinking := event.Type == "response.reasoning_summary_text.delta" || event.Type == "response.reasoning_text.delta"
+		if isThinking && (!wireString(event.JSON.Delta) || item.kind != "reasoning") {
 			return nil
 		}
 		if !wireString(event.JSON.Delta) {
 			return invalidResponse("stream delta requires a string")
 		}
-		if event.Type == "response.reasoning_summary_text.delta" {
-			publish(adapter.EventThinking, event.Delta)
+		if isThinking {
+			source := "summary_text"
+			if event.Type == "response.reasoning_text.delta" {
+				source = "reasoning_text"
+			}
+			publishThinking(item, source, event.Delta)
 		} else {
 			if item.kind != "message" || !wireIndex(event.JSON.ContentIndex) {
 				return invalidResponse("invalid message content delta")
@@ -188,9 +207,12 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 			if item.kind != "reasoning" || event.Part.Type != "summary_text" || !wireString(event.Part.JSON.Text) {
 				return nil
 			}
-			publish(adapter.EventThinking, event.Part.Text)
+			publishThinking(item, "summary_text", event.Part.Text)
 		} else {
-			if item.kind == "reasoning" && event.Part.Type == "reasoning_text" && wireIndex(event.JSON.ContentIndex) && wireString(event.Part.JSON.Text) {
+			if item.kind == "reasoning" {
+				if event.Part.Type == "reasoning_text" && wireIndex(event.JSON.ContentIndex) && wireString(event.Part.JSON.Text) {
+					publishThinking(item, "reasoning_text", event.Part.Text)
+				}
 				return nil
 			}
 			if item.kind != "message" || !wireIndex(event.JSON.ContentIndex) {
@@ -209,7 +231,7 @@ func (s *streamState) consume(event responses.ResponseStreamEventUnion, emit fun
 		}
 	case "response.content_part.done", "response.output_text.done", "response.refusal.done",
 		"response.reasoning_summary_part.done", "response.reasoning_summary_text.done",
-		"response.reasoning_text.delta", "response.reasoning_text.done", "response.output_text.annotation.added":
+		"response.reasoning_text.done", "response.output_text.annotation.added":
 		// 完整 item 和终态仍须与实际发布的正文、摘要一致；私有 reasoning 文本不作为摘要显示。
 	default:
 	}

@@ -68,9 +68,10 @@ func (p Provider) convertResponse(params responses.ResponseNewParams, result *re
 		}
 		return adapter.Response{}, invalidResponse(err.Error())
 	}
-	thinking, err := reasoningSummary(result.Output)
-	if err != nil {
-		return adapter.Response{}, err
+	var thinking strings.Builder
+	for _, item := range result.Output {
+		_, text := reasoningDisplay(item)
+		thinking.WriteString(text)
 	}
 	usage, err := normalizeUsage(native.Usage)
 	if err != nil {
@@ -84,7 +85,7 @@ func (p Provider) convertResponse(params responses.ResponseNewParams, result *re
 	if err != nil {
 		return adapter.Response{}, fmt.Errorf("encode OpenAI Responses response state: %w", err)
 	}
-	response := adapter.Response{Content: text, ThinkingContent: thinking, Usage: usage, StopReason: native.Status}
+	response := adapter.Response{Content: text, ThinkingContent: thinking.String(), Usage: usage, StopReason: native.Status}
 	for _, call := range calls {
 		response.ToolCalls = append(response.ToolCalls, adapter.ToolCallDelta{
 			ToolID:        call.ID,
@@ -108,28 +109,43 @@ func (p Provider) convertResponse(params responses.ResponseNewParams, result *re
 	return response, nil
 }
 
-func reasoningSummary(output []responses.ResponseOutputItemUnion) (string, error) {
-	var thinking strings.Builder
-	for _, item := range output {
-		if item.Type != "reasoning" {
+func reasoningDisplay(item responses.ResponseOutputItemUnion) (string, string) {
+	if item.Type != "reasoning" {
+		return "", ""
+	}
+	var native struct {
+		Content json.RawMessage `json:"content"`
+		Summary json.RawMessage `json:"summary"`
+	}
+	if err := json.Unmarshal([]byte(item.RawJSON()), &native); err != nil {
+		return "", ""
+	}
+	for _, source := range []struct {
+		kind  string
+		parts json.RawMessage
+	}{
+		{"reasoning_text", native.Content},
+		{"summary_text", native.Summary},
+	} {
+		var parts []json.RawMessage
+		if err := json.Unmarshal(source.parts, &parts); err != nil {
 			continue
 		}
-		var native struct {
-			Summary []struct {
+		var text strings.Builder
+		for _, raw := range parts {
+			var part struct {
 				Type string  `json:"type"`
 				Text *string `json:"text"`
-			} `json:"summary"`
-		}
-		if err := json.Unmarshal([]byte(item.RawJSON()), &native); err != nil {
-			continue
-		}
-		for _, part := range native.Summary {
-			if part.Type == "summary_text" && part.Text != nil {
-				thinking.WriteString(*part.Text)
+			}
+			if json.Unmarshal(raw, &part) == nil && part.Type == source.kind && part.Text != nil {
+				text.WriteString(*part.Text)
 			}
 		}
+		if text.Len() > 0 {
+			return source.kind, text.String()
+		}
 	}
-	return thinking.String(), nil
+	return "", ""
 }
 
 // normalizeUsage 保留服务端总量；output_tokens 已包含 reasoning，缓存及推理明细均不再次累加。
