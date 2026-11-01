@@ -149,7 +149,8 @@
     "wordCount_other": "{{count}} chars"
   },
   "chat": {
-    "addImages": "Add images",
+    "addImages": "Upload images",
+    "moreActions": "More actions",
     "sendMessage": "Send message",
     "stopGeneration": "Stop generation",
     "previewImage": "Preview {{name}}",

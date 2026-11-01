@@ -141,7 +141,8 @@
     "wordCount": "{{count}}字"
   },
   "chat": {
-    "addImages": "添加图片",
+    "addImages": "上传图片",
+    "moreActions": "更多操作",
     "sendMessage": "发送消息",
     "stopGeneration": "停止生成",
     "previewImage": "预览 {{name}}",

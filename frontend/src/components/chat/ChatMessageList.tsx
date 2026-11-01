@@ -8,6 +8,7 @@ import RecentSessions from "./RecentSessions";
 import ChatTurn from "./ChatTurn";
 
 interface Props {
+  novelId: number;
   hasNovel: boolean;
   hasTurns: boolean;
   showRecent: boolean;
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export default function ChatMessageList({
+  novelId,
   hasNovel,
   hasTurns,
   showRecent,
@@ -128,6 +130,7 @@ export default function ChatMessageList({
           )}
           {turns.map((turn) => (
             <ChatTurn
+              novelId={novelId}
               key={turn.id}
               turn={turn}
               onApprove={onApprove}

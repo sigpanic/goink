@@ -1,4 +1,9 @@
-import type { session } from "@/lib/wailsjs/go/models";
+import type { attachment, session } from "@/lib/wailsjs/go/models";
+
+export interface SendResult {
+  success: boolean;
+  sessionId: string;
+}
 
 // 与 Go 端 internal/agent/events.go 的 AgentEventType 枚举一一对应
 export enum AgentEventType {
@@ -118,6 +123,7 @@ export interface Turn {
   id: string;
   turnId: number;
   userMessage: string;
+  userImages?: attachment.Ref[];
   segments: TurnSegment[];
   status:
     "streaming" | "done" | "error" | "system_interrupted" | "user_stopped";
@@ -191,10 +197,12 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
     }
 
     if (msg.role === "user") {
+      const images = parseImages(msg.extra_metadata);
       current = {
         id: `hist_${msg.turn_id}`,
         turnId: msg.turn_id,
         userMessage: msg.content,
+        ...(images.length > 0 ? { userImages: images } : {}),
         segments: [],
         status: "done",
       };
@@ -340,6 +348,20 @@ interface ToolDisplay {
   phase: string;
   result?: Record<string, unknown>;
   error?: string;
+}
+
+function parseImages(extraMetadata?: string): attachment.Ref[] {
+  try {
+    const images: unknown = JSON.parse(extraMetadata || "{}").images;
+    if (!Array.isArray(images)) return [];
+    return images.filter(
+      (image): image is attachment.Ref =>
+        typeof image?.attachment_id === "string" &&
+        (image.variant === "original" || image.variant === "standard-v1"),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function parseToolDisplays(extraMetadata?: string): ToolDisplay[] {

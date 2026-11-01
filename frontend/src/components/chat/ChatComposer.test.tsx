@@ -8,7 +8,7 @@ import {
 import { beforeEach, expect, it, vi } from "vitest";
 import type { ComponentProps } from "react";
 import type { attachment } from "@/lib/wailsjs/go/models";
-import ChatInput from "./ChatInput";
+import ChatComposer from "./ChatComposer";
 
 const fixture = vi.hoisted(() => ({
   importImage: vi.fn(),
@@ -18,6 +18,9 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   ImportChatImage: fixture.importImage,
 }));
 vi.mock("@/utils/toast", () => ({ toastError: fixture.toastError }));
+vi.mock("@/components/settings/useModels", () => ({
+  useModels: () => ({ data: [] }),
+}));
 vi.mock("./ChatImages", () => ({
   default: ({
     images,
@@ -49,8 +52,8 @@ vi.mock("./ChatImages", () => ({
   ),
 }));
 
-function renderInput(extra: Partial<ComponentProps<typeof ChatInput>> = {}) {
-  const props: ComponentProps<typeof ChatInput> = {
+function renderInput(extra: Partial<ComponentProps<typeof ChatComposer>> = {}) {
+  const props: ComponentProps<typeof ChatComposer> = {
     novelId: 7,
     supportsVision: true,
     disabled: false,
@@ -64,9 +67,14 @@ function renderInput(extra: Partial<ComponentProps<typeof ChatInput>> = {}) {
       .mockResolvedValue({ success: true, sessionId: "session_7" }),
     onStop: vi.fn(),
     onListSlash: vi.fn(),
+    onSelectModel: vi.fn(),
+    onSelectEffort: vi.fn(),
+    onToggleApproval: vi.fn(),
+    onConfigModel: vi.fn(),
+    usage: null,
     ...extra,
   };
-  const view = render(<ChatInput {...props} />);
+  const view = render(<ChatComposer {...props} />);
   const upload = (files: File[]) =>
     fireEvent.change(view.container.querySelector('input[type="file"]')!, {
       target: { files },
@@ -76,7 +84,7 @@ function renderInput(extra: Partial<ComponentProps<typeof ChatInput>> = {}) {
     props,
     upload,
     update: (next: Partial<typeof props>) =>
-      view.rerender(<ChatInput {...props} {...next} />),
+      view.rerender(<ChatComposer {...props} {...next} />),
   };
 }
 
@@ -89,6 +97,43 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   fixture.importImage.mockResolvedValue({ id: "picture-id" });
+});
+
+it("opens the upload picker from the actions menu beside the model selector", async () => {
+  const view = renderInput();
+  const actions = screen.getByRole("button", { name: "chat.moreActions" });
+  const model = screen.getByRole("button", { name: "chat.noModelAvailable" });
+  expect(actions.parentElement).toContainElement(model);
+  expect(screen.getByRole("textbox").parentElement).not.toContainElement(
+    actions,
+  );
+  expect(
+    actions.compareDocumentPosition(model) & Node.DOCUMENT_POSITION_FOLLOWING,
+  ).toBeTruthy();
+  const input =
+    view.container.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const openPicker = vi.spyOn(input, "click");
+
+  fireEvent.keyDown(actions, { key: "Enter" });
+  fireEvent.click(
+    await screen.findByRole("menuitem", { name: "chat.addImages" }),
+  );
+  expect(openPicker).toHaveBeenCalledOnce();
+  expect(fixture.importImage).not.toHaveBeenCalled();
+
+  view.upload([picture()]);
+  expect(await screen.findByText("picture-id")).toBeVisible();
+});
+
+it("disables the upload item when the composer is disabled", async () => {
+  const view = renderInput({ disabled: true });
+  fireEvent.keyDown(screen.getByRole("button", { name: "chat.moreActions" }), {
+    key: "Enter",
+  });
+  expect(
+    await screen.findByRole("menuitem", { name: "chat.addImages" }),
+  ).toHaveAttribute("aria-disabled", "true");
+  expect(view.container.querySelector('input[type="file"]')).toBeDisabled();
 });
 
 it("imports files separately, switches quality, and sends an image-only reference", async () => {
@@ -147,6 +192,7 @@ it("retains text when import fails and blocks sending during an import", async (
   expect(
     screen.getByRole("button", { name: "chat.sendMessage" }),
   ).toBeDisabled();
+  expect(view.container.querySelector('input[type="file"]')).toBeDisabled();
   await act(async () => reject("image decode failed"));
   expect(fixture.toastError).toHaveBeenCalledWith("image decode failed");
   expect(screen.getByRole("textbox")).toHaveValue("describe this");
@@ -221,6 +267,59 @@ it("restores session image drafts and prevents sends to a text-only model", () =
   expect(screen.getByText("saved-id")).toBeVisible();
 });
 
+it.each(["enter", "button"])(
+  "sends text and clears its pending draft through %s",
+  async (trigger) => {
+    const view = renderInput();
+    const textarea = screen.getByRole("textbox");
+    fireEvent.input(textarea, { target: { value: "  hello  " } });
+    if (trigger === "enter") {
+      fireEvent.keyDown(textarea, { key: "Enter" });
+    } else {
+      fireEvent.click(screen.getByRole("button", { name: "chat.sendMessage" }));
+    }
+    expect(view.props.onSend).toHaveBeenCalledExactlyOnceWith("hello", []);
+    expect(textarea).toHaveValue("");
+    expect(localStorage.getItem(textKey + "new_7")).toBeNull();
+    await act(async () => {});
+    view.update({ draftKey: "session_8" });
+    view.update({ draftKey: "new_7" });
+    expect(textarea).toHaveValue("");
+  },
+);
+
+it("saves text before switching drafts and flushes the current draft on unload", () => {
+  const view = renderInput();
+  const textarea = screen.getByRole("textbox");
+  fireEvent.input(textarea, { target: { value: "first draft" } });
+  view.update({ draftKey: "session_8" });
+  expect(localStorage.getItem(textKey + "new_7")).toBe("first draft");
+  expect(textarea).toHaveValue("");
+  fireEvent.input(textarea, { target: { value: "second draft" } });
+  fireEvent(window, new Event("beforeunload"));
+  expect(localStorage.getItem(textKey + "session_8")).toBe("second draft");
+  view.update({ draftKey: "new_7" });
+  expect(textarea).toHaveValue("first draft");
+  view.update({ draftKey: "session_8" });
+  expect(textarea).toHaveValue("second draft");
+});
+
+it("keeps a new draft when an earlier send fails", async () => {
+  let resolve!: (result: { success: boolean; sessionId: string }) => void;
+  const onSend = vi.fn().mockReturnValue(
+    new Promise((done) => {
+      resolve = done;
+    }),
+  );
+  renderInput({ onSend });
+  const textarea = screen.getByRole("textbox");
+  fireEvent.input(textarea, { target: { value: "sent draft" } });
+  fireEvent.keyDown(textarea, { key: "Enter" });
+  fireEvent.input(textarea, { target: { value: "new draft" } });
+  await act(async () => resolve({ success: false, sessionId: "" }));
+  expect(textarea).toHaveValue("new draft");
+});
+
 it("rejects invalid files and limits a batch to four imported images", async () => {
   const view = renderInput();
   const large = picture();
@@ -238,4 +337,10 @@ it("rejects invalid files and limits a batch to four imported images", async () 
     expect(fixture.toastError).toHaveBeenCalledWith("chat.imageLimit"),
   );
   expect(fixture.importImage).toHaveBeenCalledTimes(4);
+  fireEvent.keyDown(screen.getByRole("button", { name: "chat.moreActions" }), {
+    key: "Enter",
+  });
+  expect(
+    await screen.findByRole("menuitem", { name: "chat.addImages" }),
+  ).toHaveAttribute("aria-disabled", "true");
 });

@@ -1,10 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import { ArrowUp, Square, Zap, Play, Star, Loader2 } from "lucide-react";
+import { useTranslation } from "react-i18next";
 import type { app } from "@/lib/wailsjs/go/models";
+import ChatImages from "./ChatImages";
 import SlashMenu from "./SlashMenu";
-
-// 草稿 localStorage key 前缀（per-session 持久化，沿用 goink_ 惯例）
-const DRAFT_PREFIX = "goink_chat_draft_";
+import type useChatInputDraft from "./useChatInputDraft";
 
 // charMatch 检查 q 的所有字符是否按顺序出现在 s 中（模糊匹配）
 const charMatch = (s: string, q: string): boolean => {
@@ -27,84 +27,42 @@ const score = (c: app.SlashCommand, q: string): number => {
 };
 
 interface Props {
+  novelId: number;
+  supportsVision: boolean;
   disabled: boolean;
   isLoading: boolean;
   isCancelling: boolean;
   placeholder: string;
-  draftKey: string;
+  draft: ReturnType<typeof useChatInputDraft>;
   slashItems: app.SlashCommand[];
-  onSend: (message: string) => void;
   onStop: () => void;
   onListSlash: () => void;
 }
 
 export default function ChatInput({
+  novelId,
+  supportsVision,
   disabled,
   isLoading,
   isCancelling,
   placeholder,
-  draftKey,
+  draft,
   slashItems,
-  onSend,
   onStop,
   onListSlash,
 }: Props) {
-  const [hasContent, setHasContent] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastDraftKeyRef = useRef(draftKey);
-
-  // 草稿恢复：draftKey 变化时先落盘旧 key 的当前内容，再恢复新 key 的草稿。
-  useEffect(() => {
-    const key = draftKey;
-    const prevKey = lastDraftKeyRef.current;
-    lastDraftKeyRef.current = key;
-
-    if (draftTimerRef.current) {
-      clearTimeout(draftTimerRef.current);
-      draftTimerRef.current = null;
-    }
-
-    const textarea = textareaRef.current;
-    if (prevKey && prevKey !== key) {
-      const current = textarea?.value ?? "";
-      if (current) localStorage.setItem(DRAFT_PREFIX + prevKey, current);
-      else localStorage.removeItem(DRAFT_PREFIX + prevKey);
-    }
-
-    const saved = localStorage.getItem(DRAFT_PREFIX + key);
-    if (textarea) {
-      textarea.value = saved ?? "";
-      textarea.style.height = "auto";
-      textarea.style.height = Math.min(textarea.scrollHeight, 180) + "px";
-      setHasContent((saved ?? "").trim().length > 0);
-    }
-  }, [draftKey]);
-
-  // 草稿兜底：关窗前 flush 一次；卸载时清掉待写入 timer。
-  useEffect(() => {
-    const flush = () => {
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current);
-        draftTimerRef.current = null;
-      }
-      const textarea = textareaRef.current;
-      if (textarea?.value) {
-        localStorage.setItem(
-          DRAFT_PREFIX + lastDraftKeyRef.current,
-          textarea.value,
-        );
-      }
-    };
-    window.addEventListener("beforeunload", flush);
-    return () => {
-      window.removeEventListener("beforeunload", flush);
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current);
-        draftTimerRef.current = null;
-      }
-    };
-  }, []);
+  const { t } = useTranslation();
+  const {
+    textareaRef,
+    hasContent,
+    setHasContent,
+    images,
+    isImporting,
+    updateImages,
+    importImages,
+    updateText,
+    submit,
+  } = draft;
 
   // slash menu state
   const [slashOpen, setSlashOpen] = useState(false);
@@ -147,7 +105,7 @@ export default function ChatInput({
       setActiveCommand(cmd);
       closeSlash();
     },
-    [closeSlash],
+    [closeSlash, setHasContent, textareaRef],
   );
 
   const updateSlashPos = useCallback(() => {
@@ -155,7 +113,7 @@ export default function ChatInput({
     if (!textarea) return;
     const rect = textarea.getBoundingClientRect();
     setSlashPos({ top: rect.top, left: rect.left, width: rect.width });
-  }, []);
+  }, [textareaRef]);
 
   const checkSlash = useCallback(
     (value: string) => {
@@ -197,6 +155,30 @@ export default function ChatInput({
     };
   }, [slashOpen, updateSlashPos]);
 
+  const handleSendClick = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const value = textarea.value.trim();
+    if (
+      (value || images.length > 0) &&
+      !disabled &&
+      !isImporting &&
+      (images.length === 0 || supportsVision)
+    ) {
+      submit(value);
+      setActiveCommand(null);
+      closeSlash();
+    }
+  }, [
+    textareaRef,
+    disabled,
+    images.length,
+    isImporting,
+    supportsVision,
+    submit,
+    closeSlash,
+  ]);
+
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
       if (slashOpen && filteredItems.length > 0) {
@@ -226,30 +208,14 @@ export default function ChatInput({
 
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        const textarea = e.currentTarget as HTMLTextAreaElement;
-        const value = textarea.value.trim();
-        if (value && !disabled) {
-          onSend(value);
-          textarea.value = "";
-          textarea.style.height = "auto";
-          setHasContent(false);
-          setActiveCommand(null);
-          closeSlash();
-          // 发送成功：清掉已落盘/待写入的草稿
-          if (draftTimerRef.current) {
-            clearTimeout(draftTimerRef.current);
-            draftTimerRef.current = null;
-          }
-          localStorage.removeItem(DRAFT_PREFIX + lastDraftKeyRef.current);
-        }
+        handleSendClick();
       }
     },
     [
       slashOpen,
       filteredItems,
       slashIndex,
-      disabled,
-      onSend,
+      handleSendClick,
       applySlashSelection,
       closeSlash,
     ],
@@ -258,42 +224,11 @@ export default function ChatInput({
   const handleInput = useCallback(
     (e: React.FormEvent<HTMLTextAreaElement>) => {
       const target = e.currentTarget;
-      target.style.height = "auto";
-      target.style.height = Math.min(target.scrollHeight, 180) + "px";
-      setHasContent(target.value.trim().length > 0);
+      updateText(target);
       checkSlash(target.value);
-      // 草稿持久化：防抖 300ms 落盘（与 useLayoutState 同风格）
-      if (draftTimerRef.current) clearTimeout(draftTimerRef.current);
-      draftTimerRef.current = setTimeout(() => {
-        draftTimerRef.current = null;
-        localStorage.setItem(
-          DRAFT_PREFIX + lastDraftKeyRef.current,
-          target.value,
-        );
-      }, 300);
     },
-    [checkSlash],
+    [checkSlash, updateText],
   );
-
-  const handleSendClick = useCallback(() => {
-    const textarea = textareaRef.current;
-    if (!textarea) return;
-    const value = textarea.value.trim();
-    if (value && !disabled) {
-      onSend(value);
-      textarea.value = "";
-      textarea.style.height = "auto";
-      setHasContent(false);
-      setActiveCommand(null);
-      closeSlash();
-      // 发送成功：清掉已落盘/待写入的草稿
-      if (draftTimerRef.current) {
-        clearTimeout(draftTimerRef.current);
-        draftTimerRef.current = null;
-      }
-      localStorage.removeItem(DRAFT_PREFIX + lastDraftKeyRef.current);
-    }
-  }, [disabled, onSend, closeSlash]);
 
   const handleStopClick = useCallback(() => {
     onStop();
@@ -301,6 +236,34 @@ export default function ChatInput({
 
   return (
     <div className="px-4 pt-2 shrink-0">
+      {images.length > 0 && (
+        <div className="mb-2">
+          <ChatImages
+            novelId={novelId}
+            images={images}
+            onRemove={(index) =>
+              updateImages(images.filter((_, i) => i !== index))
+            }
+            onVariantChange={(index, variant) =>
+              updateImages(
+                images.map((image, i) =>
+                  i === index ? { ...image, variant } : image,
+                ),
+              )
+            }
+          />
+          {!supportsVision && (
+            <p role="status" className="mt-1 text-xs text-destructive">
+              {t("chat.visionRequired")}
+            </p>
+          )}
+        </div>
+      )}
+      {isImporting && (
+        <p role="status" className="mb-1 text-xs text-muted-foreground">
+          {t("chat.importingImages")}
+        </p>
+      )}
       {activeCommand && (
         <div className="flex items-center mb-1 px-1">
           <span
@@ -331,10 +294,24 @@ export default function ChatInput({
           rows={1}
           onKeyDown={handleKeyDown}
           onInput={handleInput}
+          onPaste={(e) => {
+            const files = Array.from(e.clipboardData.items)
+              .filter(
+                (item) =>
+                  item.kind === "file" && item.type.startsWith("image/"),
+              )
+              .map((item) => item.getAsFile())
+              .filter((file): file is File => file !== null);
+            if (files.length) {
+              e.preventDefault();
+              void importImages(files);
+            }
+          }}
           className="flex-1 bg-transparent resize-none text-sm leading-relaxed text-foreground outline-none placeholder:text-muted-foreground/50 disabled:text-muted-foreground/40 py-2 px-2 min-h-[28px] max-h-[180px]"
         />
-        {isLoading && !hasContent ? (
+        {isLoading && !hasContent && images.length === 0 ? (
           <button
+            aria-label={t("chat.stopGeneration")}
             onClick={handleStopClick}
             disabled={isCancelling}
             className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-destructive text-destructive-foreground shadow-md transition-all hover:bg-destructive/85 disabled:opacity-70 shrink-0"
@@ -347,7 +324,13 @@ export default function ChatInput({
           </button>
         ) : (
           <button
-            disabled={disabled || !hasContent}
+            aria-label={t("chat.sendMessage")}
+            disabled={
+              disabled ||
+              isImporting ||
+              (!hasContent && images.length === 0) ||
+              (images.length > 0 && !supportsVision)
+            }
             onClick={handleSendClick}
             className="w-[52px] h-[36px] min-w-[52px] flex items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-md shadow-primary/20 transition-all hover:-translate-y-px hover:shadow-lg hover:shadow-primary/30 disabled:bg-muted disabled:text-muted-foreground/40 disabled:shadow-none disabled:hover:translate-y-0 shrink-0"
           >

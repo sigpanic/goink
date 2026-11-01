@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { EventsOn } from "@/lib/wailsjs/runtime/runtime";
 import { useQueryClient } from "@tanstack/react-query";
 import { GetSession, Chat } from "@/lib/wailsjs/go/app/App";
-import { app } from "@/lib/wailsjs/go/models";
+import { app, type attachment } from "@/lib/wailsjs/go/models";
 import { cachedFileDescription } from "@/components/content/fileDescription";
 import { modelKeys, sessionKeys, slashCommandKeys } from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
@@ -12,11 +12,10 @@ import { useSessions } from "./useSessions";
 import { useSession } from "./useSession";
 import { useChatHistory } from "./useChatHistory";
 import { useSlashCommands } from "./useSlashCommands";
-import type { AgentEvent, Turn } from "./types";
+import type { AgentEvent, Turn, SendResult } from "./types";
 import { AgentEventType, emptySegment, filterSegmentsBySeq } from "./types";
-import ChatInput from "./ChatInput";
+import ChatComposer from "./ChatComposer";
 import ChatHeader from "./ChatHeader";
-import ChatControls from "./ChatControls";
 import DeleteSessionDialog from "./DeleteSessionDialog";
 import ChatHistoryView from "./ChatHistoryView";
 import type { UsageInfo } from "./ContextRing";
@@ -1029,8 +1028,16 @@ export default function ChatPanel({
   ]);
 
   const handleSend = useCallback(
-    async (content: string) => {
-      if (!modelSelection) return;
+    async (
+      content: string,
+      images: attachment.Ref[] = [],
+    ): Promise<SendResult> => {
+      if (!modelSelection) return { success: false, sessionId };
+      if (images.length > 0 && !selectedModel?.model?.supports_vision) {
+        toastError(t("chat.visionRequired"));
+        return { success: false, sessionId };
+      }
+      let requestSessionId = sessionId;
       activeCountRef.current++;
       if (activeCountRef.current > 1) {
         cancelChatMutation
@@ -1047,6 +1054,7 @@ export default function ChatPanel({
         id: turnId,
         turnId: 0,
         userMessage: content,
+        userImages: images,
         segments: [],
         status: "streaming",
       };
@@ -1064,6 +1072,7 @@ export default function ChatPanel({
         "chat:started",
         (data: ChatStartedEvent) => {
           if (data.session_id) {
+            requestSessionId = data.session_id;
             setSessionId(data.session_id);
             setActiveSessionId(data.session_id);
             setLastSessionMutation
@@ -1096,11 +1105,13 @@ export default function ChatPanel({
             session_id: sessionId,
             novel_id: novelId,
             message: content,
+            images,
             model_selection: modelSelection,
           }),
         );
         // 刷新会话列表（invalidate 触发 useSessions refetch）
         qc.invalidateQueries({ queryKey: sessionKeys.list(novelId, 1, 5, "") });
+        return { success: true, sessionId: requestSessionId };
       } catch (err) {
         const reason = toErrorMessage(err, t("chat.chatError"));
         setTurns((prev) =>
@@ -1120,6 +1131,7 @@ export default function ChatPanel({
             };
           }),
         );
+        return { success: false, sessionId: requestSessionId };
       } finally {
         eventQueuesRef.current.forEach((queue, queuedTurnId) => {
           if (queue.flushTimer) clearTimeout(queue.flushTimer);
@@ -1164,6 +1176,7 @@ export default function ChatPanel({
       sessionId,
       novelId,
       modelSelection,
+      selectedModel,
       registerLocalTurn,
       handleAgentEvent,
       applyAgentEvent,
@@ -1213,6 +1226,7 @@ export default function ChatPanel({
       </div>
 
       <ChatHistoryView
+        novelId={novelId}
         history={history}
         hasNovel={hasNovel}
         hasTurns={hasTurns}
@@ -1226,7 +1240,9 @@ export default function ChatPanel({
         onReject={onReject}
       />
 
-      <ChatInput
+      <ChatComposer
+        novelId={novelId}
+        supportsVision={selectedModel?.model?.supports_vision ?? false}
         disabled={!hasNovel || !selectedKey}
         isLoading={isLoading}
         isCancelling={cancelRequested || cancelChatMutation.isPending}
@@ -1242,11 +1258,6 @@ export default function ChatPanel({
             toastError(toErrorMessage(err, t("chat.cancelFailed")));
           });
         }}
-      />
-
-      <div className="border-t mx-4" />
-
-      <ChatControls
         onSelectModel={handleSelectModel}
         onRefreshModels={refreshModels}
         onSelectEffort={handleSelectEffort}

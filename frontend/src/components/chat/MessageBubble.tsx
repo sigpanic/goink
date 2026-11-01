@@ -1,12 +1,21 @@
 import { memo } from "react";
 import Markdown from "@/components/Markdown";
+import type { attachment } from "@/lib/wailsjs/go/models";
+import ChatImages from "./ChatImages";
 
 interface Props {
   role: "user" | "assistant";
   content: string;
+  novelId?: number;
+  images?: attachment.Ref[];
 }
 
-export default memo(function MessageBubble({ role, content }: Props) {
+export default memo(function MessageBubble({
+  role,
+  content,
+  novelId = 0,
+  images = [],
+}: Props) {
   const isUser = role === "user";
 
   return (
@@ -18,6 +27,7 @@ export default memo(function MessageBubble({ role, content }: Props) {
             : "bg-card border border-border/30 text-foreground rounded-bl-sm shadow-xs"
         }`}
       >
+        {images.length > 0 && <ChatImages novelId={novelId} images={images} />}
         <Markdown
           content={content}
           className={isUser ? "markdown-user" : undefined}

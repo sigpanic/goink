@@ -7,12 +7,18 @@ import TurnSegmentView from "./TurnSegmentView";
 import TurnOutcome from "./TurnOutcome";
 
 interface Props {
+  novelId: number;
   turn: Turn;
   onApprove: (toolId: string, feedback: string) => Promise<void>;
   onReject: (toolId: string, feedback: string) => Promise<void>;
 }
 
-export default function ChatTurn({ turn, onApprove, onReject }: Props) {
+export default function ChatTurn({
+  novelId,
+  turn,
+  onApprove,
+  onReject,
+}: Props) {
   const { t } = useTranslation();
   const historyId = useId();
   const [historyExpanded, setHistoryExpanded] = useState(false);
@@ -36,8 +42,13 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
 
   return (
     <div className="space-y-2" data-turn-id={turn.turnId}>
-      {turn.userMessage && (
-        <MessageBubble role="user" content={turn.userMessage} />
+      {(turn.userMessage || turn.userImages?.length) && (
+        <MessageBubble
+          role="user"
+          content={turn.userMessage}
+          novelId={novelId}
+          images={turn.userImages}
+        />
       )}
 
       <div className="space-y-2">

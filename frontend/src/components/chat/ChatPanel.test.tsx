@@ -90,7 +90,7 @@ vi.mock("./useChatModelSelection", () => ({
     handleSelectEffort: vi.fn(),
   }),
 }));
-vi.mock("./ChatInput", () => ({
+vi.mock("./ChatComposer", () => ({
   default: ({
     disabled,
     isLoading,
@@ -127,7 +127,6 @@ vi.mock("./ChatInput", () => ({
 vi.mock("./MessageBubble", () => ({
   default: ({ content }: { content: string }) => <div>{content}</div>,
 }));
-vi.mock("./ChatControls", () => ({ default: () => null }));
 vi.mock("./DeleteSessionDialog", () => ({ default: () => null }));
 vi.mock("./RecentSessions", () => ({ default: () => null }));
 vi.mock("./SessionHistory", () => ({
