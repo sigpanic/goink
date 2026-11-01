@@ -40,7 +40,9 @@ it("loads a scoped preview and displays an image dialog", async () => {
   const image = await screen.findByRole("img", { name: "reference.png" });
   expect(fixture.getImage).toHaveBeenCalledWith(7, "picture-id");
   expect(image).toHaveAttribute("src", "/attachments/7/picture-id/standard-v1");
-  expect(screen.queryByRole("combobox")).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "chat.imageQuality" }),
+  ).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "chat.previewImage" }));
   expect(screen.getByRole("dialog")).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "common.close" }));
@@ -52,10 +54,13 @@ it("provides draft removal and quality controls", async () => {
   const onVariantChange = vi.fn();
   renderImages({ onRemove, onVariantChange });
   await screen.findByText("reference.png");
-  fireEvent.change(screen.getByRole("combobox"), {
-    target: { value: "original" },
-  });
+  fireEvent.click(screen.getByRole("button", { name: "chat.imageQuality" }));
+  expect(
+    screen.getByRole("option", { name: "chat.standardImage" }),
+  ).toHaveAttribute("aria-selected", "true");
+  fireEvent.click(screen.getByRole("option", { name: "chat.originalImage" }));
   expect(onVariantChange).toHaveBeenCalledWith(0, "original");
+  expect(screen.queryByRole("listbox")).toBeNull();
   fireEvent.click(screen.getByRole("button", { name: "chat.removeImage" }));
   expect(onRemove).toHaveBeenCalledWith(0);
 });
@@ -76,7 +81,9 @@ it("disables draft edits while keeping image preview available", async () => {
   expect(
     screen.getByRole("button", { name: "chat.removeImage" }),
   ).toBeDisabled();
-  expect(screen.getByRole("combobox")).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "chat.imageQuality" }),
+  ).toBeDisabled();
   expect(
     screen.getByRole("button", { name: "chat.previewImage" }),
   ).toBeEnabled();

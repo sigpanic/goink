@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { X, ImageOff } from "lucide-react";
+import PopSelect from "@/components/shared/PopSelect";
 import { GetChatImage } from "@/lib/wailsjs/go/app/App";
 import type { attachment } from "@/lib/wailsjs/go/models";
 import { attachmentKeys } from "@/lib/queryKeys";
@@ -83,16 +84,18 @@ function ChatImage({
         </button>
       )}
       {onVariantChange && (
-        <select
+        <PopSelect
           value={image.variant}
           disabled={disabled}
-          onChange={(e) => onVariantChange(e.target.value)}
-          aria-label={t("chat.imageQuality", { name })}
-          className="mt-1 w-full rounded bg-background text-xs"
-        >
-          <option value="standard-v1">{t("chat.standardImage")}</option>
-          <option value="original">{t("chat.originalImage")}</option>
-        </select>
+          onChange={onVariantChange}
+          ariaLabel={t("chat.imageQuality", { name })}
+          className="mt-1 w-full"
+          minWidth="100%"
+          options={[
+            { value: "standard-v1", label: t("chat.standardImage") },
+            { value: "original", label: t("chat.originalImage") },
+          ]}
+        />
       )}
       {open && (
         <Dialog.Root open={open} onOpenChange={setOpen}>
