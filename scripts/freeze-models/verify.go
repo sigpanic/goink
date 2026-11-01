@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"go/format"
 	"os"
@@ -49,9 +50,13 @@ func verify(root, module string, source []byte, models []model) ([]byte, error) 
 	}
 	cmd := exec.Command("go", "run", "freeze_verify.go")
 	cmd.Dir = root
-	out, err := cmd.CombinedOutput()
+	// 只把程序 stdout 中的 schema JSON 作为哈希输入。stderr 可能包含模块下载、
+	// 工具链下载和编译诊断，冷缓存下会混入哈希，导致快照校验随环境漂移。
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("verify frozen models: %w\n%s", err, out)
+		return nil, fmt.Errorf("verify frozen models: %w\n%s", err, stderr.String())
 	}
 	return out, nil
 }
