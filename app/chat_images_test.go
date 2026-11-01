@@ -27,6 +27,14 @@ func TestChatImageBindings(t *testing.T) {
 	require.Error(t, err)
 	_, err = a.ImportChatImage(ChatImageInput{NovelID: 7, Data: "not base64"})
 	require.Error(t, err)
+	require.NoError(t, a.DeleteChatImage(8, meta.ID))
+	_, err = a.GetChatImage(7, meta.ID)
+	require.NoError(t, err)
+	require.Error(t, a.DeleteChatImage(7, "../outside"))
+	require.NoError(t, a.DeleteChatImage(7, meta.ID))
+	_, err = a.GetChatImage(7, meta.ID)
+	require.Error(t, err)
+	require.NoError(t, a.DeleteChatImage(7, meta.ID))
 }
 
 func TestChatRejectsSessionFromAnotherNovel(t *testing.T) {

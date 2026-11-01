@@ -82,6 +82,8 @@ export function DeleteCharacter(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteCharacterGroup(arg1:number,arg2:number):Promise<void>;
 
+export function DeleteChatImage(arg1:number,arg2:string):Promise<void>;
+
 export function DeleteCover(arg1:number):Promise<void>;
 
 export function DeleteLocation(arg1:number,arg2:number):Promise<void>;

@@ -31,3 +31,7 @@ func (a *App) GetChatImage(novelID int64, id string) (*attachment.Image, error) 
 	}
 	return &image, nil
 }
+
+func (a *App) DeleteChatImage(novelID int64, id string) error {
+	return attachment.NewStore(config.AttachmentsDirPath()).Delete(novelID, id)
+}

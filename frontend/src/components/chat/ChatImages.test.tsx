@@ -17,6 +17,7 @@ beforeEach(() => {
 
 function renderImages(
   props: {
+    disabled?: boolean;
     onRemove?: (index: number) => void;
     onVariantChange?: (index: number, variant: string) => void;
   } = {},
@@ -67,4 +68,16 @@ it("keeps a missing image placeholder without blocking the rest of the history",
     screen.getByRole("button", { name: "chat.previewImage" }),
   ).toBeDisabled();
   expect(screen.getByText("reference.png")).toBeVisible();
+});
+
+it("disables draft edits while keeping image preview available", async () => {
+  renderImages({ disabled: true, onRemove: vi.fn(), onVariantChange: vi.fn() });
+  await screen.findByText("reference.png");
+  expect(
+    screen.getByRole("button", { name: "chat.removeImage" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("combobox")).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "chat.previewImage" }),
+  ).toBeEnabled();
 });

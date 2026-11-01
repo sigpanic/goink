@@ -3,6 +3,7 @@ package attachment
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -152,6 +153,28 @@ func (s *Store) Read(novelID int64, ref Ref) ([]byte, ImageInfo, error) {
 		return nil, ImageInfo{}, fmt.Errorf("attachment: 图片大小与记录不符")
 	}
 	return data, info, nil
+}
+
+func (s *Store) Delete(novelID int64, id string) error {
+	if parsed, err := uuid.Parse(id); err != nil || parsed.String() != id {
+		return fmt.Errorf("attachment: 无效附件 ID")
+	}
+	dir, err := s.novelDir(novelID)
+	if err != nil {
+		return err
+	}
+	root, err := os.OpenRoot(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("attachment: open novel directory: %w", err)
+	}
+	defer root.Close()
+	if err := root.RemoveAll(id); err != nil {
+		return fmt.Errorf("attachment: delete image: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) novelDir(novelID int64) (string, error) {

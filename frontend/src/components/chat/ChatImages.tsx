@@ -10,6 +10,7 @@ import { Dialog } from "radix-ui";
 interface Props {
   novelId: number;
   images: attachment.Ref[];
+  disabled?: boolean;
   onRemove?: (index: number) => void;
   onVariantChange?: (index: number, variant: string) => void;
 }
@@ -17,11 +18,13 @@ interface Props {
 function ChatImage({
   novelId,
   image,
+  disabled,
   onRemove,
   onVariantChange,
 }: {
   novelId: number;
   image: attachment.Ref;
+  disabled?: boolean;
   onRemove?: () => void;
   onVariantChange?: (variant: string) => void;
 }) {
@@ -72,8 +75,9 @@ function ChatImage({
         <button
           type="button"
           aria-label={t("chat.removeImage", { name })}
+          disabled={disabled}
           onClick={onRemove}
-          className="absolute -right-1 -top-1 rounded-full border bg-background p-0.5"
+          className="absolute -right-1 -top-1 rounded-full border bg-background p-0.5 disabled:opacity-40"
         >
           <X className="h-3.5 w-3.5" />
         </button>
@@ -81,6 +85,7 @@ function ChatImage({
       {onVariantChange && (
         <select
           value={image.variant}
+          disabled={disabled}
           onChange={(e) => onVariantChange(e.target.value)}
           aria-label={t("chat.imageQuality", { name })}
           className="mt-1 w-full rounded bg-background text-xs"
@@ -122,6 +127,7 @@ function ChatImage({
 export default function ChatImages({
   novelId,
   images,
+  disabled,
   onRemove,
   onVariantChange,
 }: Props) {
@@ -132,6 +138,7 @@ export default function ChatImages({
           key={`${image.attachment_id}:${image.variant}:${index}`}
           novelId={novelId}
           image={image}
+          disabled={disabled}
           onRemove={onRemove ? () => onRemove(index) : undefined}
           onVariantChange={
             onVariantChange

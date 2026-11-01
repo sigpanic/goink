@@ -166,6 +166,8 @@
     "invalidImage": "Choose a PNG or JPEG image no larger than 20 MiB",
     "imageImportFailed": "Failed to import image",
     "importingImages": "Importing images…",
+    "removingImages": "Deleting image…",
+    "imageRemoveFailed": "Failed to delete image",
     "visionRequired": "Select a model that supports images",
     "aiChat": "AI Chat",
     "history": "History",

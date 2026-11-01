@@ -45,7 +45,10 @@ export default function ChatComposer({
         {...controls}
         onImportImages={draft.importImages}
         uploadDisabled={
-          disabled || draft.isImporting || draft.images.length >= 4
+          disabled ||
+          draft.isImporting ||
+          draft.isRemoving ||
+          draft.images.length >= 4
         }
       />
     </>

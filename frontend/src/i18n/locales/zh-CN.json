@@ -158,6 +158,8 @@
     "invalidImage": "请选择不超过 20 MiB 的 PNG 或 JPEG 图片",
     "imageImportFailed": "导入图片失败",
     "importingImages": "正在导入图片…",
+    "removingImages": "正在删除图片…",
+    "imageRemoveFailed": "删除图片失败",
     "visionRequired": "当前模型不支持图片，请切换支持视觉的模型",
     "aiChat": "AI 对话",
     "history": "历史",

@@ -58,8 +58,10 @@ export default function ChatInput({
     setHasContent,
     images,
     isImporting,
+    isRemoving,
     updateImages,
     importImages,
+    removeImage,
     updateText,
     submit,
   } = draft;
@@ -163,6 +165,7 @@ export default function ChatInput({
       (value || images.length > 0) &&
       !disabled &&
       !isImporting &&
+      !isRemoving &&
       (images.length === 0 || supportsVision)
     ) {
       submit(value);
@@ -174,6 +177,7 @@ export default function ChatInput({
     disabled,
     images.length,
     isImporting,
+    isRemoving,
     supportsVision,
     submit,
     closeSlash,
@@ -241,9 +245,8 @@ export default function ChatInput({
           <ChatImages
             novelId={novelId}
             images={images}
-            onRemove={(index) =>
-              updateImages(images.filter((_, i) => i !== index))
-            }
+            disabled={disabled || isImporting || isRemoving}
+            onRemove={(index) => void removeImage(index)}
             onVariantChange={(index, variant) =>
               updateImages(
                 images.map((image, i) =>
@@ -259,9 +262,9 @@ export default function ChatInput({
           )}
         </div>
       )}
-      {isImporting && (
+      {(isImporting || isRemoving) && (
         <p role="status" className="mb-1 text-xs text-muted-foreground">
-          {t("chat.importingImages")}
+          {t(isRemoving ? "chat.removingImages" : "chat.importingImages")}
         </p>
       )}
       {activeCommand && (
@@ -328,6 +331,7 @@ export default function ChatInput({
             disabled={
               disabled ||
               isImporting ||
+              isRemoving ||
               (!hasContent && images.length === 0) ||
               (images.length > 0 && !supportsVision)
             }

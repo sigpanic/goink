@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
-import { ImportChatImage } from "@/lib/wailsjs/go/app/App";
+import { ImportChatImage, DeleteChatImage } from "@/lib/wailsjs/go/app/App";
 import { app, type attachment } from "@/lib/wailsjs/go/models";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
@@ -49,6 +49,8 @@ export default function useChatInputDraft({
   const imagesRef = useRef<attachment.Ref[]>([]);
   const [isImporting, setIsImporting] = useState(false);
   const importingRef = useRef(false);
+  const [isRemoving, setIsRemoving] = useState(false);
+  const removingRef = useRef(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const draftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastDraftKeyRef = useRef(draftKey);
@@ -70,7 +72,7 @@ export default function useChatInputDraft({
 
   const importImages = useCallback(
     async (files: File[]) => {
-      if (disabled || importingRef.current) return;
+      if (disabled || importingRef.current || removingRef.current) return;
       importingRef.current = true;
       setIsImporting(true);
       const scope = lastDraftKeyRef.current;
@@ -111,8 +113,35 @@ export default function useChatInputDraft({
     [disabled, novelId, saveImages, t],
   );
 
+  const removeImage = useCallback(
+    async (index: number) => {
+      if (disabled || importingRef.current || removingRef.current) return;
+      const image = imagesRef.current[index];
+      if (!image) return;
+      const scope = lastDraftKeyRef.current;
+      removingRef.current = true;
+      setIsRemoving(true);
+      try {
+        await DeleteChatImage(novelId, image.attachment_id);
+        saveImages(
+          scope,
+          loadImageDraft(scope).filter(
+            (ref) => ref.attachment_id !== image.attachment_id,
+          ),
+        );
+      } catch (err) {
+        toastError(toErrorMessage(err, t("chat.imageRemoveFailed")));
+      } finally {
+        removingRef.current = false;
+        setIsRemoving(false);
+      }
+    },
+    [disabled, novelId, saveImages, t],
+  );
+
   const submit = useCallback(
     (value: string) => {
+      if (removingRef.current) return;
       const sentImages = imagesRef.current;
       const scope = lastDraftKeyRef.current;
       saveImages(scope, []);
@@ -235,8 +264,10 @@ export default function useChatInputDraft({
     setHasContent,
     images,
     isImporting,
+    isRemoving,
     updateImages,
     importImages,
+    removeImage,
     updateText,
     submit,
   };

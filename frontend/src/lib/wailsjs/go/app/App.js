@@ -106,6 +106,10 @@ export function DeleteCharacterGroup(arg1, arg2) {
   return window['go']['app']['App']['DeleteCharacterGroup'](arg1, arg2);
 }
 
+export function DeleteChatImage(arg1, arg2) {
+  return window['go']['app']['App']['DeleteChatImage'](arg1, arg2);
+}
+
 export function DeleteCover(arg1) {
   return window['go']['app']['App']['DeleteCover'](arg1);
 }

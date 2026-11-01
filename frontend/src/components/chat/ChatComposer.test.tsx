@@ -13,10 +13,12 @@ import type { SendResult } from "./types";
 
 const fixture = vi.hoisted(() => ({
   importImage: vi.fn(),
+  deleteImage: vi.fn(),
   toastError: vi.fn(),
 }));
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   ImportChatImage: fixture.importImage,
+  DeleteChatImage: fixture.deleteImage,
 }));
 vi.mock("@/utils/toast", () => ({ toastError: fixture.toastError }));
 vi.mock("@/components/settings/useModels", () => ({
@@ -25,10 +27,12 @@ vi.mock("@/components/settings/useModels", () => ({
 vi.mock("./ChatImages", () => ({
   default: ({
     images,
+    disabled,
     onRemove,
     onVariantChange,
   }: {
     images: attachment.Ref[];
+    disabled?: boolean;
     onRemove: (index: number) => void;
     onVariantChange: (index: number, variant: string) => void;
   }) => (
@@ -36,12 +40,13 @@ vi.mock("./ChatImages", () => ({
       {images.map((image, index) => (
         <div key={image.attachment_id}>
           <span>{image.attachment_id}</span>
-          <button onClick={() => onRemove(index)}>
+          <button disabled={disabled} onClick={() => onRemove(index)}>
             remove {image.attachment_id}
           </button>
           <select
             aria-label={`quality ${image.attachment_id}`}
             value={image.variant}
+            disabled={disabled}
             onChange={(e) => onVariantChange(index, e.target.value)}
           >
             <option value="standard-v1">standard</option>
@@ -63,13 +68,11 @@ function renderInput(extra: Partial<ComponentProps<typeof ChatComposer>> = {}) {
     placeholder: "message",
     draftKey: "new_7",
     slashItems: [],
-    onSend: vi
-      .fn()
-      .mockResolvedValue({
-        success: true,
-        messageSaved: true,
-        sessionId: "session_7",
-      }),
+    onSend: vi.fn().mockResolvedValue({
+      success: true,
+      messageSaved: true,
+      sessionId: "session_7",
+    }),
     onStop: vi.fn(),
     onListSlash: vi.fn(),
     onSelectModel: vi.fn(),
@@ -102,6 +105,7 @@ beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
   fixture.importImage.mockResolvedValue({ id: "picture-id" });
+  fixture.deleteImage.mockResolvedValue(undefined);
 });
 
 it("opens the upload picker from the actions menu beside the model selector", async () => {
@@ -162,11 +166,12 @@ it("imports files separately, switches quality, and sends an image-only referenc
   expect(view.props.onSend).toHaveBeenCalledWith("", [
     { attachment_id: "picture-id", variant: "original" },
   ]);
+  expect(fixture.deleteImage).not.toHaveBeenCalled();
   await waitFor(() => expect(screen.queryByText("picture-id")).toBeNull());
   expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
 });
 
-it("imports pasted images and removes only their draft references", async () => {
+it("deletes a pasted draft image before removing its reference and keeps text", async () => {
   const view = renderInput();
   const file = picture();
   fireEvent.paste(screen.getByRole("textbox"), {
@@ -175,10 +180,88 @@ it("imports pasted images and removes only their draft references", async () => 
     },
   });
   await screen.findByText("picture-id");
+  fireEvent.input(screen.getByRole("textbox"), {
+    target: { value: "keep text" },
+  });
   fireEvent.click(screen.getByRole("button", { name: "remove picture-id" }));
-  expect(screen.queryByText("picture-id")).toBeNull();
+  expect(fixture.deleteImage).toHaveBeenCalledWith(7, "picture-id");
+  await waitFor(() => expect(screen.queryByText("picture-id")).toBeNull());
+  expect(screen.getByRole("textbox")).toHaveValue("keep text");
   expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
   expect(view.props.onSend).not.toHaveBeenCalled();
+});
+
+it("retains an image after a failed delete and allows retry", async () => {
+  fixture.deleteImage.mockRejectedValueOnce("image is locked");
+  const view = renderInput();
+  view.upload([picture()]);
+  await screen.findByText("picture-id");
+  fireEvent.click(screen.getByRole("button", { name: "remove picture-id" }));
+  await waitFor(() =>
+    expect(fixture.toastError).toHaveBeenCalledWith("image is locked"),
+  );
+  expect(screen.getByText("picture-id")).toBeVisible();
+  expect(JSON.parse(localStorage.getItem(refsKey + "new_7")!)).toHaveLength(1);
+  fireEvent.click(screen.getByRole("button", { name: "remove picture-id" }));
+  await waitFor(() => expect(screen.queryByText("picture-id")).toBeNull());
+  expect(fixture.deleteImage).toHaveBeenCalledTimes(2);
+});
+
+it("blocks duplicate removal, imports, and sending while deletion is pending", async () => {
+  let resolve!: () => void;
+  fixture.deleteImage.mockReturnValueOnce(
+    new Promise<void>((done) => {
+      resolve = done;
+    }),
+  );
+  const view = renderInput();
+  view.upload([picture()]);
+  await screen.findByText("picture-id");
+  fireEvent.input(screen.getByRole("textbox"), {
+    target: { value: "pending text" },
+  });
+  const remove = screen.getByRole("button", { name: "remove picture-id" });
+  fireEvent.click(remove);
+  expect(remove).toBeDisabled();
+  expect(screen.getByLabelText("quality picture-id")).toBeDisabled();
+  expect(
+    screen.getByRole("button", { name: "chat.sendMessage" }),
+  ).toBeDisabled();
+  expect(view.container.querySelector('input[type="file"]')).toBeDisabled();
+  fireEvent.click(remove);
+  fireEvent.keyDown(screen.getByRole("textbox"), { key: "Enter" });
+  view.upload([picture()]);
+  expect(fixture.deleteImage).toHaveBeenCalledTimes(1);
+  expect(fixture.importImage).toHaveBeenCalledTimes(1);
+  expect(view.props.onSend).not.toHaveBeenCalled();
+  await act(async () => resolve());
+  expect(screen.queryByText("picture-id")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "chat.sendMessage" }),
+  ).toBeEnabled();
+});
+
+it("finishes deletion in the original novel draft after switching novels", async () => {
+  let resolve!: () => void;
+  fixture.deleteImage.mockReturnValueOnce(
+    new Promise<void>((done) => {
+      resolve = done;
+    }),
+  );
+  const view = renderInput();
+  view.upload([picture()]);
+  await screen.findByText("picture-id");
+  fireEvent.click(screen.getByRole("button", { name: "remove picture-id" }));
+  view.update({ novelId: 8, draftKey: "new_8" });
+  fireEvent.input(screen.getByRole("textbox"), {
+    target: { value: "other novel" },
+  });
+  await act(async () => resolve());
+  expect(fixture.deleteImage).toHaveBeenCalledWith(7, "picture-id");
+  expect(screen.getByRole("textbox")).toHaveValue("other novel");
+  expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
+  view.update({ novelId: 7, draftKey: "new_7" });
+  expect(screen.queryByText("picture-id")).toBeNull();
 });
 
 it("retains text when import fails and blocks sending during an import", async () => {

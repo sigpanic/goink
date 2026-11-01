@@ -189,6 +189,65 @@ func TestMissingAndTruncatedImageAreReported(t *testing.T) {
 	require.ErrorIs(t, err, os.ErrNotExist)
 }
 
+func TestDeleteRemovesAttachmentAndPreservesOtherFiles(t *testing.T) {
+	dir := t.TempDir()
+	store := attachment.NewStore(dir)
+	var encoded bytes.Buffer
+	require.NoError(t, png.Encode(&encoded, image.NewGray(image.Rect(0, 0, 2, 2))))
+	source := filepath.Join(t.TempDir(), "source.png")
+	require.NoError(t, os.WriteFile(source, encoded.Bytes(), 0600))
+	meta, err := store.Import(7, "source.png", bytes.NewReader(encoded.Bytes()))
+	require.NoError(t, err)
+	other, err := store.Import(7, "other.png", bytes.NewReader(encoded.Bytes()))
+	require.NoError(t, err)
+	foreign, err := store.Import(8, "foreign.png", bytes.NewReader(encoded.Bytes()))
+	require.NoError(t, err)
+	entries, err := os.ReadDir(filepath.Join(dir, "7", meta.ID))
+	require.NoError(t, err)
+	require.Len(t, entries, 3)
+
+	require.NoError(t, store.Delete(8, meta.ID))
+	_, err = store.Get(7, meta.ID)
+	require.NoError(t, err)
+	require.NoError(t, store.Delete(7, meta.ID))
+	require.NoDirExists(t, filepath.Join(dir, "7", meta.ID))
+	_, err = store.Get(7, meta.ID)
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = store.Get(7, other.ID)
+	require.NoError(t, err)
+	_, err = store.Get(8, foreign.ID)
+	require.NoError(t, err)
+	require.FileExists(t, source)
+	require.NoError(t, store.Delete(7, meta.ID))
+	require.NoError(t, store.Delete(9, uuid.NewString()))
+}
+
+func TestDeleteRejectsInvalidPathsAndDoesNotFollowLinks(t *testing.T) {
+	dir := t.TempDir()
+	store := attachment.NewStore(dir)
+	for _, id := range []string{"", "../outside", uuid.NewString() + "/../outside"} {
+		require.Error(t, store.Delete(1, id))
+	}
+	require.Error(t, store.Delete(0, uuid.NewString()))
+	require.Error(t, store.Delete(-1, uuid.NewString()))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "2"), []byte("not a directory"), 0600))
+	require.Error(t, store.Delete(2, uuid.NewString()))
+
+	outside := t.TempDir()
+	keep := filepath.Join(outside, "keep.png")
+	require.NoError(t, os.WriteFile(keep, []byte("keep"), 0600))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "1"), 0700))
+	id := uuid.NewString()
+	link := filepath.Join(dir, "1", id)
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	require.NoError(t, store.Delete(1, id))
+	require.FileExists(t, keep)
+	_, err := os.Lstat(link)
+	require.ErrorIs(t, err, os.ErrNotExist)
+}
+
 type zeroReader struct{}
 
 func (zeroReader) Read(p []byte) (int, error) {
