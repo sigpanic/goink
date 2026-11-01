@@ -3,6 +3,7 @@ package attachment_test
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -13,10 +14,12 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"testing/iotest"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 
+	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/attachment"
 )
 
@@ -134,24 +137,48 @@ func TestInvalidImportsDoNotPublishAttachments(t *testing.T) {
 		novel  int64
 		reader io.Reader
 		want   string
+		code   apperr.Code
 	}{
-		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID"},
-		{"unsupported format", 1, bytes.NewReader(unsupported.Bytes()), "仅支持 PNG 和 JPEG"},
-		{"empty image", 1, bytes.NewReader(nil), "decode image header"},
-		{"corrupt image", 1, bytes.NewReader(pngImage.Bytes()[:33]), "decode image:"},
-		{"oversized dimensions", 1, bytes.NewReader(oversized), "4000 万像素"},
-		{"oversized file", 1, io.LimitReader(zeroReader{}, attachment.MaxFileSize+1), "20 MiB"},
+		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID", apperr.CodeInvalid},
+		{"unsupported format", 1, bytes.NewReader(unsupported.Bytes()), "仅支持 PNG 和 JPEG", apperr.CodeAttachmentInvalidImage},
+		{"empty image", 1, bytes.NewReader(nil), "decode image header", apperr.CodeAttachmentInvalidImage},
+		{"corrupt image", 1, bytes.NewReader(pngImage.Bytes()[:33]), "decode image:", apperr.CodeAttachmentInvalidImage},
+		{"oversized dimensions", 1, bytes.NewReader(oversized), "4000 万像素", apperr.CodeAttachmentTooManyPixels},
+		{"oversized file", 1, io.LimitReader(zeroReader{}, attachment.MaxFileSize+1), "20 MiB", apperr.CodeAttachmentFileTooLarge},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := t.TempDir()
 			_, err := attachment.NewStore(dir).Import(tt.novel, "test.png", tt.reader)
 			require.ErrorContains(t, err, tt.want)
+			require.Equal(t, tt.code, apperr.CodeFromError(err))
 			entries, err := os.ReadDir(dir)
 			require.NoError(t, err)
 			require.Empty(t, entries)
 		})
 	}
+}
+
+func TestImportPreservesUnderlyingErrors(t *testing.T) {
+	store := attachment.NewStore(t.TempDir())
+	cause := errors.New("reader unavailable")
+	_, err := store.Import(1, "picture.png", iotest.ErrReader(cause))
+	require.ErrorIs(t, err, cause)
+	require.Equal(t, apperr.CodeInternal, apperr.CodeFromError(err))
+
+	_, err = store.Import(1, "picture.png", bytes.NewReader([]byte("not an image")))
+	require.ErrorIs(t, err, image.ErrFormat)
+	require.Equal(t, apperr.CodeAttachmentInvalidImage, apperr.CodeFromError(err))
+
+	dir := filepath.Join(t.TempDir(), "blocked")
+	require.NoError(t, os.WriteFile(dir, []byte("not a directory"), 0600))
+	var encoded bytes.Buffer
+	require.NoError(t, png.Encode(&encoded, image.NewGray(image.Rect(0, 0, 2, 2))))
+	_, err = attachment.NewStore(dir).Import(1, "picture.png", &encoded)
+	require.ErrorContains(t, err, "create novel directory")
+	var pathErr *os.PathError
+	require.ErrorAs(t, err, &pathErr)
+	require.Equal(t, apperr.CodeInternal, apperr.CodeFromError(err))
 }
 
 func TestReadRejectsInvalidReferencesAndEscapingLinks(t *testing.T) {

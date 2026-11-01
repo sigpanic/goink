@@ -15,6 +15,8 @@ import (
 
 	"github.com/disintegration/imaging"
 	"github.com/google/uuid"
+
+	"github.com/sigpanic/goink/internal/apperr"
 )
 
 const (
@@ -35,28 +37,31 @@ func NewStore(dir string) *Store {
 func (s *Store) Import(novelID int64, name string, src io.Reader) (Image, error) {
 	dir, err := s.novelDir(novelID)
 	if err != nil {
-		return Image{}, err
+		return Image{}, apperr.NewInvalid(err.Error())
 	}
 	data, err := io.ReadAll(io.LimitReader(src, MaxFileSize+1))
 	if err != nil {
 		return Image{}, fmt.Errorf("attachment: read image: %w", err)
 	}
 	if len(data) > MaxFileSize {
-		return Image{}, fmt.Errorf("attachment: 图片不能超过 20 MiB")
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentFileTooLarge, Msg: "attachment: 图片不能超过 20 MiB"}
 	}
 	info, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
-		return Image{}, fmt.Errorf("attachment: decode image header: %w", err)
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentInvalidImage, Msg: "attachment: decode image header", Cause: err}
 	}
 	if format != "png" && format != "jpeg" {
-		return Image{}, fmt.Errorf("attachment: 仅支持 PNG 和 JPEG 图片")
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentInvalidImage, Msg: "attachment: 仅支持 PNG 和 JPEG 图片"}
 	}
-	if info.Width <= 0 || info.Height <= 0 || int64(info.Width)*int64(info.Height) > MaxPixels {
-		return Image{}, fmt.Errorf("attachment: 图片不能超过 4000 万像素")
+	if info.Width <= 0 || info.Height <= 0 {
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentInvalidImage, Msg: "attachment: 图片尺寸无效"}
+	}
+	if int64(info.Width)*int64(info.Height) > MaxPixels {
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentTooManyPixels, Msg: "attachment: 图片不能超过 4000 万像素"}
 	}
 	decoded, err := imaging.Decode(bytes.NewReader(data), imaging.AutoOrientation(true))
 	if err != nil {
-		return Image{}, fmt.Errorf("attachment: decode image: %w", err)
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentInvalidImage, Msg: "attachment: decode image", Cause: err}
 	}
 	if decoded.Bounds().Dx() > standardEdge || decoded.Bounds().Dy() > standardEdge {
 		decoded = imaging.Fit(decoded, standardEdge, standardEdge, imaging.Lanczos)
@@ -71,7 +76,7 @@ func (s *Store) Import(novelID int64, name string, src io.Reader) (Image, error)
 		return Image{}, fmt.Errorf("attachment: encode standard image: %w", err)
 	}
 	if standard.Len() > MaxFileSize {
-		return Image{}, fmt.Errorf("attachment: 处理后的图片不能超过 20 MiB")
+		return Image{}, &apperr.BusinessError{CodeVal: apperr.CodeAttachmentFileTooLarge, Msg: "attachment: 处理后的图片不能超过 20 MiB"}
 	}
 	meta := Image{
 		ID: uuid.NewString(), Name: name,

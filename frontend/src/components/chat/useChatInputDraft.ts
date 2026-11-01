@@ -4,11 +4,17 @@ import { ImportChatImage, DeleteChatImage } from "@/lib/wailsjs/go/app/App";
 import { app, type attachment } from "@/lib/wailsjs/go/models";
 import { toastError } from "@/utils/toast";
 import { toErrorMessage } from "@/utils/error";
+import { AppErr, unwrapResult } from "@/utils/wailsResult";
 import type { SendResult } from "./types";
 
 // 草稿 localStorage key 前缀（per-session 持久化，沿用 goink_ 惯例）
 const DRAFT_PREFIX = "goink_chat_draft_";
 const IMAGE_DRAFT_PREFIX = "goink_chat_images_";
+const IMAGE_IMPORT_ERRORS: Record<string, string> = {
+  "attachment.file_too_large": "chat.imageFileTooLarge",
+  "attachment.too_many_pixels": "chat.imageTooManyPixels",
+  "attachment.invalid_image": "chat.invalidImageData",
+};
 
 function loadImageDraft(key: string): attachment.Ref[] {
   try {
@@ -82,27 +88,36 @@ export default function useChatInputDraft({
             toastError(t("chat.imageLimit"));
             break;
           }
-          if (
-            file.size > 20 * 1024 * 1024 ||
-            !["image/png", "image/jpeg"].includes(file.type)
-          ) {
-            toastError(t("chat.invalidImage"));
+          if (file.size > 20 * 1024 * 1024) {
+            toastError(t("chat.imageFileTooLarge"));
+            continue;
+          }
+          if (!["image/png", "image/jpeg"].includes(file.type)) {
+            toastError(t("chat.invalidImageData"));
             continue;
           }
           try {
-            const image = await ImportChatImage(
-              new app.ChatImageInput({
-                novel_id: novelId,
-                name: file.name,
-                data: await readImage(file),
-              }),
+            const image = unwrapResult<attachment.Image>(
+              await ImportChatImage(
+                new app.ChatImageInput({
+                  novel_id: novelId,
+                  name: file.name,
+                  data: await readImage(file),
+                }),
+              ),
             );
             saveImages(scope, [
               ...loadImageDraft(scope),
               { attachment_id: image.id, variant: "standard-v1" },
             ]);
           } catch (err) {
-            toastError(toErrorMessage(err, t("chat.imageImportFailed")));
+            const key =
+              err instanceof AppErr
+                ? IMAGE_IMPORT_ERRORS[err.errCode]
+                : undefined;
+            toastError(
+              key ? t(key) : toErrorMessage(err, t("chat.imageImportFailed")),
+            );
           }
         }
       } finally {

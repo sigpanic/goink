@@ -104,7 +104,10 @@ const textKey = "goink_chat_draft_";
 beforeEach(() => {
   localStorage.clear();
   vi.clearAllMocks();
-  fixture.importImage.mockResolvedValue({ id: "picture-id" });
+  fixture.importImage.mockResolvedValue({
+    data: { id: "picture-id" },
+    err_code: "",
+  });
   fixture.deleteImage.mockResolvedValue(undefined);
 });
 
@@ -289,11 +292,55 @@ it("retains text when import fails and blocks sending during an import", async (
   ).toBeEnabled();
 });
 
+it.each([
+  ["attachment.file_too_large", "chat.imageFileTooLarge"],
+  ["attachment.too_many_pixels", "chat.imageTooManyPixels"],
+  ["attachment.invalid_image", "chat.invalidImageData"],
+])(
+  "localizes the backend import error %s and retains the text draft",
+  async (code, key) => {
+    fixture.importImage.mockResolvedValueOnce({
+      data: null,
+      err_code: code,
+      err_msg: "backend validation detail",
+    });
+    const view = renderInput();
+    fireEvent.input(screen.getByRole("textbox"), {
+      target: { value: "keep text" },
+    });
+    view.upload([picture()]);
+    await waitFor(() => expect(fixture.toastError).toHaveBeenCalledWith(key));
+    expect(screen.getByRole("textbox")).toHaveValue("keep text");
+    expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "chat.sendMessage" }),
+    ).toBeEnabled();
+  },
+);
+
+it.each(["internal", "attachment.future_error"])(
+  "preserves the backend error text for %s",
+  async (code) => {
+    const message = "attachment: write original.png: permission denied";
+    fixture.importImage.mockResolvedValueOnce({
+      data: null,
+      err_code: code,
+      err_msg: message,
+    });
+    const view = renderInput();
+    view.upload([picture()]);
+    await waitFor(() =>
+      expect(fixture.toastError).toHaveBeenCalledWith(message),
+    );
+    expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
+  },
+);
+
 it("keeps an import in its original novel draft when the user switches novels", async () => {
   let resolve!: (image: { id: string }) => void;
   fixture.importImage.mockReturnValue(
     new Promise((done) => {
-      resolve = done;
+      resolve = (image) => done({ data: image, err_code: "" });
     }),
   );
   const view = renderInput();
@@ -441,10 +488,19 @@ it("rejects invalid files and limits a batch to four imported images", async () 
   Object.defineProperty(large, "size", { value: 20 * 1024 * 1024 + 1 });
   view.upload([large, new File(["gif"], "picture.gif", { type: "image/gif" })]);
   await waitFor(() => expect(fixture.toastError).toHaveBeenCalledTimes(2));
+  expect(fixture.toastError).toHaveBeenNthCalledWith(
+    1,
+    "chat.imageFileTooLarge",
+  );
+  expect(fixture.toastError).toHaveBeenNthCalledWith(
+    2,
+    "chat.invalidImageData",
+  );
   expect(fixture.importImage).not.toHaveBeenCalled();
   let id = 0;
   fixture.importImage.mockImplementation(async () => ({
-    id: `picture-${++id}`,
+    data: { id: `picture-${++id}` },
+    err_code: "",
   }));
   view.upload(Array.from({ length: 5 }, picture));
   await screen.findByText("picture-4");

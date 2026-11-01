@@ -1158,6 +1158,40 @@ export namespace apperr {
 		    return a;
 		}
 	}
+	export class Result_github_com_sigpanic_goink_internal_attachment_Image_ {
+	    data: attachment.Image;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_github_com_sigpanic_goink_internal_attachment_Image_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], attachment.Image);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_string_ {
 	    data: string;
 	    err_code: string;

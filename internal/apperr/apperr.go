@@ -72,6 +72,15 @@ const (
 	CodeLLMClientError Code = "llm.client_error"
 )
 
+const (
+	// CodeAttachmentFileTooLarge 原图或处理后的图片超过文件体积限制。
+	CodeAttachmentFileTooLarge Code = "attachment.file_too_large"
+	// CodeAttachmentTooManyPixels 原图像素数超过解码限制。
+	CodeAttachmentTooManyPixels Code = "attachment.too_many_pixels"
+	// CodeAttachmentInvalidImage 图片格式不受支持、数据损坏或编码无效。
+	CodeAttachmentInvalidImage Code = "attachment.invalid_image"
+)
+
 // Result 是 Wails API 的统一返回包装，泛型 T 表示业务数据类型。
 //
 // 成功时 ErrCode=""，失败时 Data 为零值、ErrCode 非 ""、ErrMsg 含可读描述。

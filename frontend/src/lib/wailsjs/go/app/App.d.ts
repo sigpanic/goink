@@ -202,7 +202,7 @@ export function GetWritingActivity(arg1:number):Promise<Array<writing.DailyActiv
 
 export function GetWritingStats():Promise<writing.WritingStats>;
 
-export function ImportChatImage(arg1:app.ChatImageInput):Promise<attachment.Image>;
+export function ImportChatImage(arg1:app.ChatImageInput):Promise<apperr.Result_github_com_sigpanic_goink_internal_attachment_Image_>;
 
 export function ImportNovel(arg1:app.ImportNovelInput):Promise<imp.ImportResult>;
 
