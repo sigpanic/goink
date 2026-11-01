@@ -1,6 +1,7 @@
 import { memo, useEffect, useState } from "react";
 import { Check, Copy } from "lucide-react";
 import { useTranslation } from "react-i18next";
+import { useTimeAgo } from "@/hooks/useTimeAgo";
 import Markdown from "@/components/Markdown";
 import type { attachment } from "@/lib/wailsjs/go/models";
 import { ClipboardSetText } from "@/lib/wailsjs/runtime/runtime";
@@ -31,7 +32,8 @@ export default memo(function MessageBubble({
   const isUser = role === "user";
   const canCopy = copyable && content.trim().length > 0;
   const date = sentAt ? new Date(sentAt) : null;
-  const hasTime = date !== null && Number.isFinite(date.getTime());
+  const hasTime = !!sentAt && date !== null && Number.isFinite(date.getTime());
+  const timeAgo = useTimeAgo(copyable && hasTime, "message");
 
   useEffect(() => {
     if (copiedText === null) return;
@@ -90,11 +92,7 @@ export default memo(function MessageBubble({
                 title={date.toLocaleString(i18n.language)}
                 className="opacity-0 transition-opacity group-hover/message:opacity-100 group-focus-within/message:opacity-100"
               >
-                {date.toLocaleTimeString(i18n.language, {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  hourCycle: "h23",
-                })}
+                {timeAgo(sentAt)}
               </time>
             )}
             {canCopy && (

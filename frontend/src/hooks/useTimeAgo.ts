@@ -9,8 +9,11 @@ import { useTranslation } from "react-i18next";
 // 复用点：SessionHistory(open)、RecentSessions、GitHistoryList。
 //
 // i18n key 统一用 time.* 命名空间（原 chat.*/git.* 里的相对时间 key 已迁出）。
-export function useTimeAgo(enabled = true) {
-  const { t } = useTranslation();
+export function useTimeAgo(
+  enabled = true,
+  mode: "relative" | "message" = "relative",
+) {
+  const { t, i18n } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -21,7 +24,18 @@ export function useTimeAgo(enabled = true) {
 
   return useCallback(
     (iso: string) => {
-      const diff = now - new Date(iso).getTime();
+      const date = new Date(iso);
+      if (
+        mode === "message" &&
+        date.toDateString() === new Date(now).toDateString()
+      ) {
+        return date.toLocaleTimeString(i18n.language, {
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        });
+      }
+      const diff = now - date.getTime();
       const min = Math.floor(diff / 60000);
       if (min < 1) return t("time.justNow");
       if (min < 60) return t("time.minutesAgo", { count: min });
@@ -31,6 +45,6 @@ export function useTimeAgo(enabled = true) {
       if (day < 30) return t("time.daysAgo", { count: day });
       return t("time.monthsAgo", { count: Math.floor(day / 30) });
     },
-    [now, t],
+    [now, t, mode, i18n.language],
   );
 }

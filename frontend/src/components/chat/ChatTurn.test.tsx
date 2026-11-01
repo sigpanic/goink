@@ -197,6 +197,33 @@ it("omits invalid timestamps while keeping the copy button", () => {
   ).toBeVisible();
 });
 
+it.each([
+  [new Date(2026, 10, 1, 10, 30), "10:30"],
+  [new Date(2026, 9, 31, 23), "time.hoursAgo"],
+  [new Date(2026, 9, 30, 12), "time.daysAgo"],
+  [new Date(2026, 8, 2, 12), "time.monthsAgo"],
+])(
+  "formats the message time from %s and preserves its full hover time",
+  (date, expected) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 1, 12));
+    try {
+      const sentAt = date.toISOString();
+      const turn = { ...makeTurn("done"), userSentAt: sentAt, segments: [] };
+      const { container, unmount } = render(
+        <ChatTurn turn={turn} {...callbacks} />,
+      );
+      const time = container.querySelector("time");
+      expect(time).toHaveTextContent(expected);
+      expect(time).toHaveAttribute("datetime", sentAt);
+      expect(time).toHaveAttribute("title", date.toLocaleString("zh-CN"));
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
+
 it("collapses only on completion and keeps the final answer outside manually expandable history", () => {
   const { rerender } = render(
     <ChatTurn turn={makeTurn("streaming")} {...callbacks} />,
