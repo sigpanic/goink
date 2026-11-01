@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useMemo, type ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronUp } from "lucide-react";
 import type { llm } from "@/lib/wailsjs/go/models";
+import { createProviderLabeler, providerViewKey } from "@/lib/llmProviders";
 import ProviderIcon from "@/components/settings/ProviderIcon";
 
 interface FooterAction {
@@ -46,22 +47,25 @@ export default function ModelPicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = models.find((m) => m.Key === selectedKey);
-  const supportsReasoning =
-    !!selected?.ReasoningLevels && selected.ReasoningLevels.length > 0;
+  const supportsReasoning = !!selected?.model.reasoning_levels?.length;
   const showReasoning = supportsReasoning && !!onSelectEffort;
 
   // 按 ProviderKey 聚类，保持原始顺序。同一组内 providerKey/providerName 一致。
   const groups = useMemo(() => {
     const map = new Map<string, llm.AvailableModel[]>();
+    const providerLabel = createProviderLabeler(
+      models.map((m) => [m.ProviderName, m.AdapterName] as const),
+    );
     for (const m of models) {
-      const key = m.ProviderKey || "";
+      const key = providerViewKey(m.AdapterName, m.ProviderName);
       const arr = map.get(key) ?? [];
       arr.push(m);
       map.set(key, arr);
     }
     return Array.from(map.entries()).map(([providerKey, items]) => ({
       providerKey,
-      providerName: items[0]?.ProviderName || providerKey,
+      providerName: providerLabel(items[0].ProviderName, items[0].AdapterName),
+      providerType: items[0].ProviderType,
       items,
     }));
   }, [models]);
@@ -86,10 +90,18 @@ export default function ModelPicker({
   }, [open]);
 
   const reasoningOptions = supportsReasoning
-    ? selected!.ReasoningLevels!.map((level) => ({
+    ? selected!.model.reasoning_levels!.map((level) => ({
         value: level,
         label:
-          level === "high" ? t("chat.highReasoning") : t("chat.maxReasoning"),
+          {
+            none: t("chat.noReasoning"),
+            minimal: t("chat.minimalReasoning"),
+            low: t("chat.lowReasoning"),
+            medium: t("chat.mediumReasoning"),
+            high: t("chat.highReasoning"),
+            xhigh: t("chat.extraHighReasoning"),
+            max: t("chat.maxReasoning"),
+          }[level] ?? level,
       }))
     : [];
 
@@ -117,7 +129,7 @@ export default function ModelPicker({
         className="h-[30px] rounded-lg border bg-background px-2.5 text-xs text-muted-foreground flex items-center justify-between gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <span className="truncate">
-          {selected?.ModelName || placeholder || t("chat.noModelAvailable")}
+          {selected?.model.name || placeholder || t("chat.noModelAvailable")}
         </span>
         <ChevronUp
           className={`w-3 h-3 shrink-0 transition-transform ${open === dropUp ? "rotate-180" : ""}`}
@@ -133,7 +145,7 @@ export default function ModelPicker({
             {groups.map((g) => (
               <div key={g.providerKey} className="py-0.5">
                 <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-foreground">
-                  {renderProviderIcon(g.providerKey, g.providerName)}
+                  {renderProviderIcon(g.providerType, g.providerName)}
                   <span className="truncate">{g.providerName || "—"}</span>
                 </div>
                 {g.items.map((m) => (
@@ -149,7 +161,7 @@ export default function ModelPicker({
                         : "text-muted-foreground"
                     }`}
                   >
-                    {m.ModelName}
+                    {m.model.name}
                   </button>
                 ))}
               </div>
@@ -164,7 +176,7 @@ export default function ModelPicker({
                 <div className="text-[10px] uppercase tracking-wide text-muted-foreground/70 mb-1">
                   {t("chat.reasoning")}
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex flex-wrap gap-1.5">
                   {reasoningOptions.map((opt) => (
                     <button
                       key={opt.value}

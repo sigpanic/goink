@@ -1,0 +1,24 @@
+{
+  "repository": "https://github.com/0xPlaygrounds/rig",
+  "commit": "96e53f41eb8a489b58bd00fb6212dbb75a0750c1",
+  "license": "MIT",
+  "license_file": "LICENSE.txt",
+  "retrieval_date": "2026-10-28",
+  "source_kind": "third-party-recorded-http-cassette",
+  "recorded_path": "/v1/responses",
+  "replay_sdk": "github.com/openai/openai-go/v3 v3.74.0",
+  "files": [
+    {
+      "file": "responses-stateless-tools.yaml",
+      "upstream_path": "crates/rig-cassette/fixtures/cassettes/openai/corpus_matrix_responses/serving_concurrent_concurrency_one.yaml",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/96e53f41eb8a489b58bd00fb6212dbb75a0750c1/crates/rig-cassette/fixtures/cassettes/openai/corpus_matrix_responses/serving_concurrent_concurrency_one.yaml",
+      "sha256": "9e74fcd83613fbb4ec82285464ef8b0197202d225a09400bd821c720587dca34"
+    },
+    {
+      "file": "LICENSE.txt",
+      "upstream_path": "LICENSE",
+      "url": "https://raw.githubusercontent.com/0xPlaygrounds/rig/96e53f41eb8a489b58bd00fb6212dbb75a0750c1/LICENSE",
+      "sha256": "42cf0f78132fe1de338cbff947bf5b9f7d2d8a377cb827c9df9e90b4b9499ef7"
+    }
+  ]
+}

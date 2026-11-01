@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -9,6 +10,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/session"
 )
 
@@ -16,10 +18,14 @@ func setupChatActivityTest(t *testing.T) (*App, ChatInput) {
 	t.Helper()
 	a := setupTestApp(t)
 	n := createTestNovel(t, a)
-	a.llmClient.Reload(map[string]llm.Provider{
-		"test": {Models: []llm.ModelInfo{{ID: "test"}}},
-	})
-	input := ChatInput{SessionID: "activity-chat", NovelID: n.ID, ProviderName: "test", ModelID: "test", Message: "继续创作"}
+	require.NoError(t, a.llmClient.Reload(&llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{
+		adapter.ProtocolOpenAIChat: {Providers: []adapter.Provider{{
+			Name: "test", ProviderType: "openai", APIKey: "test-key", ChatURL: "https://example.invalid/v1/chat/completions",
+			Models: []llm.ModelInfo{{ID: "test"}},
+		}}},
+	}}))
+	input := ChatInput{SessionID: "activity-chat", NovelID: n.ID,
+		ModelSelection: llm.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "test", ModelID: "test"}, Message: "继续创作"}
 	require.NoError(t, a.db.Create(&session.Session{SessionID: input.SessionID, NovelID: n.ID, Title: "统计测试"}).Error)
 	// 在已接受消息之后模拟读取失败，避免测试依赖 Wails 事件运行时和真实模型。
 	require.NoError(t, a.db.Callback().Query().Before("gorm:query").Register("test:reject_api_messages", func(tx *gorm.DB) {
@@ -43,10 +49,26 @@ func requireConversationTurns(t *testing.T, a *App, want int64) {
 
 func TestChatActivityCountsAcceptedRequestsDespiteLaterFailure(t *testing.T) {
 	a, input := setupChatActivityTest(t)
+	var saved []map[string]any
+	a.emitEvent = func(ctx context.Context, name string, data ...any) {
+		require.Equal(t, "chat:message_saved", name)
+		require.Len(t, data, 1)
+		payload := data[0].(map[string]any)
+		var count int64
+		require.NoError(t, a.db.WithContext(ctx).Raw(
+			"SELECT COUNT(*) FROM messages WHERE session_id = ? AND turn_id = ? AND role = 'user'",
+			payload["session_id"], payload["turn_id"],
+		).Scan(&count).Error)
+		require.Equal(t, int64(1), count)
+		saved = append(saved, payload)
+	}
 	for i := int64(1); i <= 2; i++ {
 		_, err := a.Chat(input)
 		require.ErrorContains(t, err, "API messages unavailable")
 		requireConversationTurns(t, a, i)
+		require.Len(t, saved, int(i))
+		require.Equal(t, input.SessionID, saved[i-1]["session_id"])
+		require.Equal(t, int(i), saved[i-1]["turn_id"])
 	}
 	var messages int64
 	require.NoError(t, a.db.Raw("SELECT COUNT(*) FROM messages WHERE role = 'user'").Scan(&messages).Error)
@@ -55,8 +77,11 @@ func TestChatActivityCountsAcceptedRequestsDespiteLaterFailure(t *testing.T) {
 
 func TestChatActivitySkipsRejectedRequests(t *testing.T) {
 	a, input := setupChatActivityTest(t)
+	a.emitEvent = func(context.Context, string, ...any) {
+		t.Error("rejected messages must not emit a saved event")
+	}
 	invalid := input
-	invalid.ModelID = "missing"
+	invalid.ModelSelection.ModelID = "missing"
 	_, err := a.Chat(invalid)
 	require.ErrorContains(t, err, "模型未找到")
 	requireConversationTurns(t, a, 0)

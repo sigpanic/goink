@@ -8,6 +8,8 @@ import (
 	"io"
 	"net/http"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // WebSearchResult 是一次 web 搜索的结果。
@@ -83,7 +85,7 @@ func SearchWeb(ctx context.Context, apiKey, model, query string) (*WebSearchResu
 		return nil, &APIError{
 			StatusCode: resp.StatusCode,
 			Message:    parseAnthropicError(respBody),
-			Retryable:  statusRetryable(resp.StatusCode),
+			Retryable:  adapter.StatusRetryable(resp.StatusCode),
 		}
 	}
 

@@ -642,6 +642,7 @@ describe("WorkspaceView search navigation", () => {
       "workspace.skillLabeldraft",
       false,
       "edit",
+      undefined,
     );
     expect(screen.getByTestId("side-panel")).toHaveAttribute(
       "data-active-skill-name",

@@ -1,0 +1,39 @@
+{
+  "protocol": "openai_chat",
+  "provider_type": "openai",
+  "path": "/relay/v8/chat/completions",
+  "tools_response": {
+    "choices": [{"finish_reason": "tool_calls", "message": {
+      "content": "先读取两章。",
+      "reasoning_content": "private-thought",
+      "tool_calls": [
+        {"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{\"chapter\":9007199254740993}"}},
+        {"id": "call_2", "type": "function", "function": {"name": "read", "arguments": "{}"}}
+      ]
+    }}]
+  },
+  "text_response": {"choices": [{"finish_reason": "stop", "message": {"content": "续聊成功"}}]},
+  "stream_events": [
+    {"choices": [{"delta": {"content": "续聊"}}]},
+    {"choices": [{"delta": {"content": "成功"}}]},
+    {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+  ],
+  "expected_request": {
+    "model": "switch-model",
+    "messages": [
+      {"role": "system", "content": "你是网文助手。"},
+      {"role": "user", "content": "请比较这两章。"},
+      {"role": "assistant", "content": "先读取两章。", "tool_calls": [
+        {"id": "call_1", "type": "function", "function": {"name": "read", "arguments": "{\"chapter\":9007199254740993}"}},
+        {"id": "call_2", "type": "function", "function": {"name": "read", "arguments": "{}"}}
+      ]},
+      {"role": "tool", "tool_call_id": "call_2", "name": "read", "content": "第二章原文"},
+      {"role": "tool", "tool_call_id": "call_1", "name": "read", "content": ""},
+      {"role": "user", "content": "继续比较。"}
+    ],
+    "tools": [{"type": "function", "function": {
+      "name": "read", "description": "读取章节",
+      "parameters": {"type": "object", "properties": {"chapter": {"type": "integer"}}}
+    }}]
+  }
+}

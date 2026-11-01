@@ -3,3 +3,10 @@ python-master/** linguist-vendored
 
 # 第三方依赖（onnxruntime_go 上游源码及其补丁），排除在语言统计外
 third_party/** linguist-vendored
+
+# 录制资料按原始字节校验 SHA256，禁止自动换行转换。
+internal/llm/testdata/sse/** -text
+internal/llm/adapter/testdata/stream-replay/** -text
+internal/llm/adapter/anthropic/testdata/** -text
+internal/llm/adapter/gemini/testdata/** -text
+internal/llm/adapter/openairesponses/testdata/** -text

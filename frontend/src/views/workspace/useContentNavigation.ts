@@ -58,13 +58,14 @@ export function useContentNavigation({
     contentRef.current?.openFile(path, title, readOnly, "edit");
   }
 
-  function handleNewSkill(name: string) {
+  function handleNewSkill(name: string, initialContent?: string) {
     setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
     contentRef.current?.openFile(
       `skills/${name}.md`,
       `${t("workspace.skillLabel")}${name}`,
       false,
       "edit",
+      initialContent,
     );
   }
 

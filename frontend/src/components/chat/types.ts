@@ -1,4 +1,10 @@
-import type { session } from "@/lib/wailsjs/go/models";
+import type { attachment, session } from "@/lib/wailsjs/go/models";
+
+export interface SendResult {
+  success: boolean;
+  messageSaved: boolean;
+  sessionId: string;
+}
 
 // 与 Go 端 internal/agent/events.go 的 AgentEventType 枚举一一对应
 export enum AgentEventType {
@@ -44,6 +50,7 @@ export interface TurnSegment {
   type: "text" | "tool" | "subagent" | "compression";
   content: string;
   thinkingContent: string;
+  hasThinking: boolean;
   thinkingDone: boolean;
   isStreaming: boolean;
   // tool
@@ -87,6 +94,7 @@ export function emptySegment(id: string): TurnSegment {
     type: "text",
     content: "",
     thinkingContent: "",
+    hasThinking: false,
     thinkingDone: false,
     isStreaming: false,
     toolName: "",
@@ -116,8 +124,12 @@ export interface Turn {
   id: string;
   turnId: number;
   userMessage: string;
+  userImages?: attachment.Ref[];
+  userSentAt?: string;
+  assistantSentAt?: string;
   segments: TurnSegment[];
-  status: "streaming" | "done" | "failed" | "interrupted" | "stopped";
+  status:
+    "streaming" | "done" | "error" | "system_interrupted" | "user_stopped";
   errorMessage?: string;
   compressionOnly?: boolean; // 纯压缩 turn（手动压缩），无用户消息
   retrying?: {
@@ -143,15 +155,8 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
     ) {
       const target = turns.find((t) => t.turnId === msg.turn_id);
       if (target) {
-        if (msg.event_type === "user_stopped") {
-          target.status = "stopped";
-        } else if (msg.event_type === "error") {
-          target.status = "failed";
-          target.errorMessage = msg.content;
-        } else {
-          target.status = "interrupted";
-          target.errorMessage = msg.content;
-        }
+        target.status = msg.event_type;
+        target.errorMessage = msg.content;
       }
       continue;
     }
@@ -195,10 +200,13 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
     }
 
     if (msg.role === "user") {
+      const images = parseImages(msg.extra_metadata);
       current = {
         id: `hist_${msg.turn_id}`,
         turnId: msg.turn_id,
         userMessage: msg.content,
+        ...(images.length > 0 ? { userImages: images } : {}),
+        ...(msg.created_at ? { userSentAt: msg.created_at } : {}),
         segments: [],
         status: "done",
       };
@@ -226,12 +234,16 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
           })();
 
         // 追加子 agent 的文本内容
-        if ((msg.content || msg.thinking_content) && subSeg.segments) {
+        if (
+          (msg.content || msg.thinking_content || msg.has_thinking) &&
+          subSeg.segments
+        ) {
           subSeg.segments.push({
             ...emptySegment(`seg_${segCounter++}`),
             type: "text",
             content: msg.content || "",
             thinkingContent: msg.thinking_content || "",
+            hasThinking: msg.has_thinking || !!msg.thinking_content,
             thinkingDone: true,
             isStreaming: false,
           });
@@ -273,15 +285,20 @@ export function rebuildTurns(messages: session.Message[]): Turn[] {
       // 主 Agent 消息
       if (!current) continue;
 
+      if (msg.content?.trim() && msg.created_at) {
+        current.assistantSentAt = msg.created_at;
+      }
+
       const thinkingContent = msg.thinking_content || "";
 
       // 文本内容
-      if (msg.content || thinkingContent) {
+      if (msg.content || thinkingContent || msg.has_thinking) {
         current.segments.push({
           ...emptySegment(`seg_${segCounter++}`),
           type: "text",
           content: msg.content || "",
           thinkingContent,
+          hasThinking: msg.has_thinking || !!thinkingContent,
           thinkingDone: true,
           isStreaming: false,
         });
@@ -339,6 +356,20 @@ interface ToolDisplay {
   phase: string;
   result?: Record<string, unknown>;
   error?: string;
+}
+
+function parseImages(extraMetadata?: string): attachment.Ref[] {
+  try {
+    const images: unknown = JSON.parse(extraMetadata || "{}").images;
+    if (!Array.isArray(images)) return [];
+    return images.filter(
+      (image): image is attachment.Ref =>
+        typeof image?.attachment_id === "string" &&
+        (image.variant === "original" || image.variant === "standard-v1"),
+    );
+  } catch {
+    return [];
+  }
 }
 
 function parseToolDisplays(extraMetadata?: string): ToolDisplay[] {

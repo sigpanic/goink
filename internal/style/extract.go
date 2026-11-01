@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/skill"
 )
@@ -14,7 +15,7 @@ import (
 // Extract 分析样本文字的写作风格，生成仿写 skill。
 // 取消由调用方（app 层）通过 ctx 管理。
 func Extract(ctx context.Context, llmClient *llm.Client,
-	samples []Sample, providerName, modelID, reasoningEffort string) (*ExtractResult, error) {
+	samples []Sample, adapterName adapter.Protocol, providerName, modelID, reasoningEffort string) (*ExtractResult, error) {
 
 	// 计算 stats + 拼接全文
 	stats := ComputeStats(samples)
@@ -26,13 +27,10 @@ func Extract(ctx context.Context, llmClient *llm.Client,
 	}
 
 	// 组装工具：output_style_skill 返回结构化的风格仿写技能
-	tools := []map[string]any{{
-		"type": "function",
-		"function": map[string]any{
-			"name":        "output_style_skill",
-			"description": "返回风格仿写技能的结构化输出。",
-			"parameters":  mcp_tools.SchemaOf(StyleSkillOutput{}),
-		},
+	tools := []llm.ToolDefinition{{
+		Name:        "output_style_skill",
+		Description: "返回风格仿写技能的结构化输出。",
+		InputSchema: mcp_tools.SchemaOf(StyleSkillOutput{}),
 	}}
 
 	opts := &llm.CallToolOptions{
@@ -43,7 +41,7 @@ func Extract(ctx context.Context, llmClient *llm.Client,
 		opts.ReasoningEffort = reasoningEffort
 	}
 
-	raw, err := llmClient.CallTool(ctx, providerName, modelID,
+	raw, err := llmClient.CallTool(ctx, adapterName, providerName, modelID,
 		buildExtractMessages(combined.String()), tools, "output_style_skill", opts)
 	if err != nil {
 		return nil, fmt.Errorf("LLM 调用失败: %w", err)
@@ -82,10 +80,10 @@ func buildStyleSkillMarkdown(name, description, content string) string {
 	return b.String()
 }
 
-func buildExtractMessages(sample string) []map[string]any {
-	return []map[string]any{
-		{"role": "system", "content": extractSystemPrompt},
-		{"role": "user", "content": fmt.Sprintf("文本开头为【文本统计信息】（确定性测量数据），之后为原文样本。请基于统计数据分析风格，并调用 output_style_skill 工具提交结果：\n\n%s", sample)},
+func buildExtractMessages(sample string) []llm.Message {
+	return []llm.Message{
+		{Role: "system", Content: extractSystemPrompt},
+		{Role: "user", Content: fmt.Sprintf("文本开头为【文本统计信息】（确定性测量数据），之后为原文样本。请基于统计数据分析风格，并调用 output_style_skill 工具提交结果：\n\n%s", sample)},
 	}
 }
 

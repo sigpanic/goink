@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import StyleView from "./StyleView";
 import { toastError } from "@/utils/toast";
 import { installQueryErrorToast } from "@/lib/queryErrorToast";
+import { llm } from "@/lib/wailsjs/go/models";
+import { settingsKeys } from "@/lib/queryKeys";
 
 // Mock toastError（捕获调用）
 vi.mock("@/utils/toast", async (importOriginal) => {
@@ -67,6 +69,7 @@ const {
   mockUpdateStyleSample,
   mockGetModels,
   mockGetSettings,
+  mockSetSelectedModel,
   mockExtractStyle,
   mockGetContent,
   mockSaveContent,
@@ -79,6 +82,7 @@ const {
   mockUpdateStyleSample: vi.fn(),
   mockGetModels: vi.fn(),
   mockGetSettings: vi.fn(),
+  mockSetSelectedModel: vi.fn(),
   mockExtractStyle: vi.fn(),
   mockGetContent: vi.fn(),
   mockSaveContent: vi.fn(),
@@ -103,6 +107,7 @@ vi.mock("@/lib/wailsjs/go/app/App", async (importOriginal) => {
     DeleteStyleSample: mockDeleteStyleSample,
     GetModels: mockGetModels,
     GetSettings: mockGetSettings,
+    SetSelectedModel: mockSetSelectedModel,
     ExtractStyle: mockExtractStyle,
     CancelExtract: vi.fn(),
     GetContent: mockGetContent,
@@ -136,7 +141,14 @@ describe("StyleView", () => {
       total_pages: 0,
     });
     mockGetModels.mockResolvedValue([]);
-    mockGetSettings.mockResolvedValue({ selected_model_key: "" });
+    mockGetSettings.mockResolvedValue({
+      default_model_selection: {
+        adapter_name: "",
+        provider_name: "",
+        model_id: "",
+        reasoning_effort: "",
+      },
+    });
     mockSaveContent.mockResolvedValue(undefined);
   });
 
@@ -290,9 +302,10 @@ describe("StyleView", () => {
     mockGetModels.mockResolvedValue([
       {
         Key: "test/model",
-        ModelName: "Test",
+        AdapterName: "openai_chat",
         ProviderName: "test",
-        ModelID: "model",
+        ProviderType: "openai",
+        model: { id: "model", name: "Test" },
       },
     ]);
     mockExtractStyle.mockResolvedValue({
@@ -340,9 +353,10 @@ describe("StyleView", () => {
     mockGetModels.mockResolvedValue([
       {
         Key: "test/model",
-        ModelName: "Test",
+        AdapterName: "openai_chat",
         ProviderName: "test",
-        ModelID: "model",
+        ProviderType: "openai",
+        model: { id: "model", name: "Test" },
       },
     ]);
     mockExtractStyle.mockResolvedValue({
@@ -364,5 +378,106 @@ describe("StyleView", () => {
       await screen.findByText("skill.generatedTargetChanged"),
     ).toBeInTheDocument();
     expect(screen.getByText("styleSample.saveToUserSkill")).toBeInTheDocument();
+  });
+
+  it("restores the structured default and routes local model changes with the right reasoning effort", async () => {
+    const user = userEvent.setup();
+    mockListStyleSamples.mockResolvedValue({
+      items: [
+        {
+          id: 1,
+          name: "Sample",
+          content: "sample",
+          tags: [],
+          is_global: true,
+          novel_id: 0,
+        },
+      ],
+      total: 1,
+      total_pages: 1,
+    });
+    const models = [
+      ["openai_chat", "Chat", "openai"],
+      ["anthropic_messages", "Claude", "anthropic"],
+      ["gemini_interactions", "Gemini", "google"],
+    ].map(
+      ([protocol, name, type], i) =>
+        new llm.AvailableModel({
+          Key: `opaque-${i}`,
+          AdapterName: protocol,
+          ProviderName: "Relay",
+          ProviderType: type,
+          model: {
+            id: "shared",
+            name,
+            reasoning_levels: i === 0 ? undefined : ["medium", "high"],
+          },
+        }),
+    );
+    mockGetModels.mockResolvedValue(models);
+    const defaultSelection = {
+      adapter_name: "gemini_interactions",
+      provider_name: "Relay",
+      model_id: "shared",
+      reasoning_effort: "high",
+    };
+    mockGetSettings.mockResolvedValue({
+      default_model_selection: defaultSelection,
+    });
+    mockExtractStyle.mockResolvedValue({
+      name: "Generated",
+      file_path: "generated.md",
+      raw_content: "skill",
+    });
+    renderWithProvider(<StyleView novelId={1} />);
+    await user.click(await screen.findByText("select"));
+    await screen.findByRole("button", { name: "Gemini" });
+    await user.click(
+      screen.getByRole("button", { name: "styleSample.startExtract" }),
+    );
+    await screen.findByText("styleSample.reExtract");
+    expect(mockExtractStyle).toHaveBeenLastCalledWith({
+      task_id: expect.any(String),
+      sample_ids: [1],
+      ...defaultSelection,
+    });
+
+    for (const [index, effort] of [
+      [1, "medium"],
+      [0, ""],
+    ] as const) {
+      await user.click(screen.getByText("styleSample.reExtract"));
+      await user.click(screen.getByText("select"));
+      const previous = index === 1 ? "Gemini" : "Claude";
+      await user.click(screen.getByRole("button", { name: previous }));
+      await user.click(
+        screen.getByRole("button", { name: models[index].model.name }),
+      );
+      act(() => {
+        qc.setQueryData(settingsKeys.all, {
+          default_model_selection: {
+            ...defaultSelection,
+            adapter_name: "openai_chat",
+            reasoning_effort: "",
+          },
+        });
+      });
+      expect(
+        screen.getByRole("button", { name: models[index].model.name }),
+      ).toBeInTheDocument();
+      await user.click(
+        screen.getByRole("button", { name: "styleSample.startExtract" }),
+      );
+      await screen.findByText("styleSample.reExtract");
+      expect(mockExtractStyle).toHaveBeenLastCalledWith({
+        task_id: expect.any(String),
+        sample_ids: [1],
+        adapter_name: models[index].AdapterName,
+        provider_name: "Relay",
+        model_id: "shared",
+        reasoning_effort: effort,
+      });
+    }
+    expect(mockSetSelectedModel).not.toHaveBeenCalled();
   });
 });

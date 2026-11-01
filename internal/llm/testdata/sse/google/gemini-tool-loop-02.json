@@ -1,0 +1,123 @@
+{
+  "_fixture_notice": {
+    "modified_by": "Goink",
+    "changes": "Extracted the response status and body segments from the upstream recording, omitted request data, and added this notice. This metadata is not part of the API response.",
+    "source_url": "https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/AFC_Streaming_Tests_generateContentStream_afc_enabled_Google_AI_AFC_enabled.json",
+    "license": "Apache-2.0; see GOOGLE-LICENSE.txt."
+  },
+  "status_code": 200,
+  "body_segments": [
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "I"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "a9SfaPiKOv7Xn9kPr_f76AI",
+      "usageMetadata": {
+        "promptTokenCount": 101,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 101
+          }
+        ],
+        "totalTokenCount": 101
+      }
+    },
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": " cannot fulfill this request. The customDivide function does not return the correct result of "
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "a9SfaPiKOv7Xn9kPr_f76AI",
+      "usageMetadata": {
+        "promptTokenCount": 101,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 101
+          }
+        ],
+        "totalTokenCount": 101
+      }
+    },
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": "10 / 2. The function seems to be flawed and returns 42"
+              }
+            ],
+            "role": "model"
+          }
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "a9SfaPiKOv7Xn9kPr_f76AI",
+      "usageMetadata": {
+        "promptTokenCount": 101,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 101
+          }
+        ],
+        "totalTokenCount": 101
+      }
+    },
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "text": ".\n"
+              }
+            ],
+            "role": "model"
+          },
+          "finishReason": "STOP"
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "a9SfaPiKOv7Xn9kPr_f76AI",
+      "usageMetadata": {
+        "candidatesTokenCount": 37,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 37
+          }
+        ],
+        "promptTokenCount": 27,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 27
+          }
+        ],
+        "totalTokenCount": 64
+      }
+    }
+  ]
+}

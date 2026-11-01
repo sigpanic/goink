@@ -1,3 +1,64 @@
+export namespace adapter {
+	
+	export class ModelInfo {
+	    id: string;
+	    name: string;
+	    context_window: number;
+	    max_output_tokens: number;
+	    supports_thinking: boolean;
+	    reasoning_levels?: string[];
+	    supports_vision: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.context_window = source["context_window"];
+	        this.max_output_tokens = source["max_output_tokens"];
+	        this.supports_thinking = source["supports_thinking"];
+	        this.reasoning_levels = source["reasoning_levels"];
+	        this.supports_vision = source["supports_vision"];
+	    }
+	}
+	export class ModelSelection {
+	    adapter_name: string;
+	    provider_name: string;
+	    model_id: string;
+	    reasoning_effort: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelSelection(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.adapter_name = source["adapter_name"];
+	        this.provider_name = source["provider_name"];
+	        this.model_id = source["model_id"];
+	        this.reasoning_effort = source["reasoning_effort"];
+	    }
+	}
+	export class TestConnectionResult {
+	    URL: string;
+	    Warning: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestConnectionResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.URL = source["URL"];
+	        this.Warning = source["Warning"];
+	    }
+	}
+
+}
+
 export namespace app {
 	
 	export class CharacterGroupInput {
@@ -30,13 +91,28 @@ export namespace app {
 	        this.remove_group_ids = source["remove_group_ids"];
 	    }
 	}
+	export class ChatImageInput {
+	    novel_id: number;
+	    name: string;
+	    data: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatImageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.novel_id = source["novel_id"];
+	        this.name = source["name"];
+	        this.data = source["data"];
+	    }
+	}
 	export class ChatInput {
 	    session_id: string;
 	    novel_id: number;
 	    message: string;
-	    provider_name: string;
-	    model_id: string;
-	    reasoning_effort: string;
+	    images?: attachment.Ref[];
+	    model_selection: adapter.ModelSelection;
 	
 	    static createFrom(source: any = {}) {
 	        return new ChatInput(source);
@@ -47,10 +123,27 @@ export namespace app {
 	        this.session_id = source["session_id"];
 	        this.novel_id = source["novel_id"];
 	        this.message = source["message"];
-	        this.provider_name = source["provider_name"];
-	        this.model_id = source["model_id"];
-	        this.reasoning_effort = source["reasoning_effort"];
+	        this.images = this.convertValues(source["images"], attachment.Ref);
+	        this.model_selection = this.convertValues(source["model_selection"], adapter.ModelSelection);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ChatResult {
 	    session_id: string;
@@ -102,8 +195,7 @@ export namespace app {
 	}
 	export class CompressInput {
 	    session_id: string;
-	    provider_name: string;
-	    model_id: string;
+	    model_selection: adapter.ModelSelection;
 	
 	    static createFrom(source: any = {}) {
 	        return new CompressInput(source);
@@ -112,9 +204,26 @@ export namespace app {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.session_id = source["session_id"];
-	        this.provider_name = source["provider_name"];
-	        this.model_id = source["model_id"];
+	        this.model_selection = this.convertValues(source["model_selection"], adapter.ModelSelection);
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CompressResult {
 	    turn_id: number;
@@ -373,6 +482,7 @@ export namespace app {
 	export class ExtractStyleInput {
 	    task_id: string;
 	    sample_ids: number[];
+	    adapter_name: string;
 	    provider_name: string;
 	    model_id: string;
 	    reasoning_effort: string;
@@ -385,6 +495,7 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.task_id = source["task_id"];
 	        this.sample_ids = source["sample_ids"];
+	        this.adapter_name = source["adapter_name"];
 	        this.provider_name = source["provider_name"];
 	        this.model_id = source["model_id"];
 	        this.reasoning_effort = source["reasoning_effort"];
@@ -430,6 +541,22 @@ export namespace app {
 	        this.search = source["search"];
 	    }
 	}
+	export class GetSessionMessagesPageInput {
+	    session_id: string;
+	    before_turn_id: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetSessionMessagesPageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.before_turn_id = source["before_turn_id"];
+	        this.size = source["size"];
+	    }
+	}
 	export class GetSessionsInput {
 	    novel_id: number;
 	    page: number;
@@ -462,6 +589,7 @@ export namespace app {
 	}
 	export class ImportWithLLMInput {
 	    file_path: string;
+	    adapter_name: string;
 	    provider_name: string;
 	    model_id: string;
 	
@@ -472,6 +600,7 @@ export namespace app {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.file_path = source["file_path"];
+	        this.adapter_name = source["adapter_name"];
 	        this.provider_name = source["provider_name"];
 	        this.model_id = source["model_id"];
 	    }
@@ -622,8 +751,7 @@ export namespace app {
 	    session_id: string;
 	    novel_id: number;
 	    title: string;
-	    model: string;
-	    reasoning_effort: string;
+	    model_selection: adapter.ModelSelection;
 	    active_version: number;
 	    last_turn_id: number;
 	    usage?: number[];
@@ -639,14 +767,31 @@ export namespace app {
 	        this.session_id = source["session_id"];
 	        this.novel_id = source["novel_id"];
 	        this.title = source["title"];
-	        this.model = source["model"];
-	        this.reasoning_effort = source["reasoning_effort"];
+	        this.model_selection = this.convertValues(source["model_selection"], adapter.ModelSelection);
 	        this.active_version = source["active_version"];
 	        this.last_turn_id = source["last_turn_id"];
 	        this.usage = source["usage"];
 	        this.created_at = source["created_at"];
 	        this.updated_at = source["updated_at"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SessionMeta {
 	    session_id: string;
@@ -675,6 +820,38 @@ export namespace app {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.novel_id = source["novel_id"];
 	    }
+	}
+	export class SetSelectedModelInput {
+	    session_id: string;
+	    model_selection: adapter.ModelSelection;
+	
+	    static createFrom(source: any = {}) {
+	        return new SetSelectedModelInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.model_selection = this.convertValues(source["model_selection"], adapter.ModelSelection);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class SettingResult {
 	    items: setting.SettingItem[];
@@ -740,24 +917,6 @@ export namespace app {
 	        this.phase = source["phase"];
 	        this.error = source["error"];
 	        this.version = source["version"];
-	    }
-	}
-	export class TestConnectionInput {
-	    provider_name: string;
-	    chat_url: string;
-	    api_key: string;
-	    model_id: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new TestConnectionInput(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.provider_name = source["provider_name"];
-	        this.chat_url = source["chat_url"];
-	        this.api_key = source["api_key"];
-	        this.model_id = source["model_id"];
 	    }
 	}
 	export class UpdateArcNodeInput {
@@ -999,6 +1158,40 @@ export namespace apperr {
 		    return a;
 		}
 	}
+	export class Result_github_com_sigpanic_goink_internal_attachment_Image_ {
+	    data: attachment.Image;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_github_com_sigpanic_goink_internal_attachment_Image_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], attachment.Image);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_string_ {
 	    data: string;
 	    err_code: string;
@@ -1049,6 +1242,80 @@ export namespace apperr {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace attachment {
+	
+	export class ImageInfo {
+	    mime_type: string;
+	    width: number;
+	    height: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImageInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mime_type = source["mime_type"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	        this.size = source["size"];
+	    }
+	}
+	export class Image {
+	    id: string;
+	    name: string;
+	    original: ImageInfo;
+	    standard: ImageInfo;
+	
+	    static createFrom(source: any = {}) {
+	        return new Image(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.original = this.convertValues(source["original"], ImageInfo);
+	        this.standard = this.convertValues(source["standard"], ImageInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class Ref {
+	    attachment_id: string;
+	    variant: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Ref(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attachment_id = source["attachment_id"];
+	        this.variant = source["variant"];
+	    }
 	}
 
 }
@@ -1437,8 +1704,7 @@ export namespace config {
 	export class AppSettings {
 	    ID: number;
 	    last_novel_id: number;
-	    selected_model_key: string;
-	    reasoning_effort: string;
+	    default_model_selection: adapter.ModelSelection;
 	    approval_mode: string;
 	    last_session_id: string;
 	    user_name: string;
@@ -1456,8 +1722,7 @@ export namespace config {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.ID = source["ID"];
 	        this.last_novel_id = source["last_novel_id"];
-	        this.selected_model_key = source["selected_model_key"];
-	        this.reasoning_effort = source["reasoning_effort"];
+	        this.default_model_selection = this.convertValues(source["default_model_selection"], adapter.ModelSelection);
 	        this.approval_mode = source["approval_mode"];
 	        this.last_session_id = source["last_session_id"];
 	        this.user_name = source["user_name"];
@@ -1659,16 +1924,11 @@ export namespace imp {
 export namespace llm {
 	
 	export class AvailableModel {
+	    model: adapter.ModelInfo;
 	    Key: string;
-	    ModelID: string;
-	    ProviderKey: string;
+	    AdapterName: string;
 	    ProviderName: string;
-	    ModelName: string;
-	    ContextWindow: number;
-	    MaxOutputTokens: number;
-	    SupportsThinking: boolean;
-	    ReasoningLevels: string[];
-	    SupportsVision: boolean;
+	    ProviderType: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new AvailableModel(source);
@@ -1676,53 +1936,44 @@ export namespace llm {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.model = this.convertValues(source["model"], adapter.ModelInfo);
 	        this.Key = source["Key"];
-	        this.ModelID = source["ModelID"];
-	        this.ProviderKey = source["ProviderKey"];
+	        this.AdapterName = source["AdapterName"];
 	        this.ProviderName = source["ProviderName"];
-	        this.ModelName = source["ModelName"];
-	        this.ContextWindow = source["ContextWindow"];
-	        this.MaxOutputTokens = source["MaxOutputTokens"];
-	        this.SupportsThinking = source["SupportsThinking"];
-	        this.ReasoningLevels = source["ReasoningLevels"];
-	        this.SupportsVision = source["SupportsVision"];
-	    }
-	}
-	export class ModelInfo {
-	    id: string;
-	    name: string;
-	    context_window: number;
-	    max_output_tokens: number;
-	    supports_thinking: boolean;
-	    reasoning_levels?: string[];
-	    supports_vision: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new ModelInfo(source);
+	        this.ProviderType = source["ProviderType"];
 	    }
 	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.context_window = source["context_window"];
-	        this.max_output_tokens = source["max_output_tokens"];
-	        this.supports_thinking = source["supports_thinking"];
-	        this.reasoning_levels = source["reasoning_levels"];
-	        this.supports_vision = source["supports_vision"];
-	    }
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ProviderView {
 	    key: string;
+	    adapter_name: string;
+	    provider_type: string;
 	    name: string;
 	    chat_url: string;
 	    api_key: string;
 	    platform_url: string;
 	    help_text: string;
-	    temperature: number;
+	    temperature?: number;
 	    source: string;
-	    builtin_models: ModelInfo[];
-	    custom_models: ModelInfo[];
+	    builtin_models: adapter.ModelInfo[];
+	    custom_models: adapter.ModelInfo[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ProviderView(source);
@@ -1731,6 +1982,8 @@ export namespace llm {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
+	        this.adapter_name = source["adapter_name"];
+	        this.provider_type = source["provider_type"];
 	        this.name = source["name"];
 	        this.chat_url = source["chat_url"];
 	        this.api_key = source["api_key"];
@@ -1738,8 +1991,8 @@ export namespace llm {
 	        this.help_text = source["help_text"];
 	        this.temperature = source["temperature"];
 	        this.source = source["source"];
-	        this.builtin_models = this.convertValues(source["builtin_models"], ModelInfo);
-	        this.custom_models = this.convertValues(source["custom_models"], ModelInfo);
+	        this.builtin_models = this.convertValues(source["builtin_models"], adapter.ModelInfo);
+	        this.custom_models = this.convertValues(source["custom_models"], adapter.ModelInfo);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1790,20 +2043,47 @@ export namespace llm {
 		    return a;
 		}
 	}
-	
-	
-	export class TestConnectionResult {
-	    url: string;
-	    warning: string;
+	export class ProviderProbeInput {
+	    adapter_name: string;
+	    provider_name: string;
+	    provider_type: string;
+	    chat_url: string;
+	    api_key: string;
 	
 	    static createFrom(source: any = {}) {
-	        return new TestConnectionResult(source);
+	        return new ProviderProbeInput(source);
 	    }
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.url = source["url"];
-	        this.warning = source["warning"];
+	        this.adapter_name = source["adapter_name"];
+	        this.provider_name = source["provider_name"];
+	        this.provider_type = source["provider_type"];
+	        this.chat_url = source["chat_url"];
+	        this.api_key = source["api_key"];
+	    }
+	}
+	
+	export class TestConnectionInput {
+	    adapter_name: string;
+	    provider_name: string;
+	    provider_type: string;
+	    chat_url: string;
+	    api_key: string;
+	    model_id: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TestConnectionInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.adapter_name = source["adapter_name"];
+	        this.provider_name = source["provider_name"];
+	        this.provider_type = source["provider_type"];
+	        this.chat_url = source["chat_url"];
+	        this.api_key = source["api_key"];
+	        this.model_id = source["model_id"];
 	    }
 	}
 
@@ -2244,6 +2524,7 @@ export namespace pattern {
 	export class ExtractPatternInput {
 	    task_id?: string;
 	    novel_id: number;
+	    adapter_name: string;
 	    provider_name: string;
 	    model_id: string;
 	    reasoning_effort: string;
@@ -2257,6 +2538,7 @@ export namespace pattern {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.task_id = source["task_id"];
 	        this.novel_id = source["novel_id"];
+	        this.adapter_name = source["adapter_name"];
 	        this.provider_name = source["provider_name"];
 	        this.model_id = source["model_id"];
 	        this.reasoning_effort = source["reasoning_effort"];
@@ -2553,6 +2835,7 @@ export namespace session {
 	    role: string;
 	    content: string;
 	    thinking_content?: string;
+	    has_thinking: boolean;
 	    token_count: number;
 	    extra_metadata?: string;
 	    version: number;
@@ -2576,6 +2859,7 @@ export namespace session {
 	        this.role = source["role"];
 	        this.content = source["content"];
 	        this.thinking_content = source["thinking_content"];
+	        this.has_thinking = source["has_thinking"];
 	        this.token_count = source["token_count"];
 	        this.extra_metadata = source["extra_metadata"];
 	        this.version = source["version"];
@@ -2585,6 +2869,40 @@ export namespace session {
 	        this.agent_type = source["agent_type"];
 	        this.sub_task_id = source["sub_task_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MessagePage {
+	    items: Message[];
+	    next_before_turn_id: number;
+	    has_more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MessagePage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Message);
+	        this.next_before_turn_id = source["next_before_turn_id"];
+	        this.has_more = source["has_more"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

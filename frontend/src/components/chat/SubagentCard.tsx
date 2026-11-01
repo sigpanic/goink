@@ -152,10 +152,13 @@ export default memo(function SubagentCard({
                 if (seg.type === "text") {
                   return (
                     <div key={seg.id} className="space-y-1">
-                      {seg.thinkingContent && (
+                      {(seg.thinkingContent || seg.hasThinking) && (
                         <ThinkingBlock
                           content={seg.thinkingContent}
-                          isStreaming={isStreaming && !seg.thinkingDone}
+                          hasThinking={seg.hasThinking}
+                          isStreaming={
+                            isStreaming && seg.isStreaming && !seg.thinkingDone
+                          }
                         />
                       )}
                       {seg.content && (

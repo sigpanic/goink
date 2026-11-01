@@ -10,30 +10,21 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 ## 1. 确认当前状态
 
 - 确保工作区干净（`git status`）
-- 确定发版分支：若 `dev` 领先 `master`，走第 2 步 PR 合并流程；若直接在 `master` 开发，跳到第 3 步
+- 确定发版分支：若有待合并的发布分支（head，由用户指定）领先 `master`，走第 2 步 PR 合并流程；若直接在 `master` 开发，跳到第 3 步
 - 列出待发布提交：`git log <上一个 tag>..master --oneline`
 - 向用户展示提交列表，确认是否全部应发布
 - 确认版本号：参照上一个 tag 格式递增（例 `v1.1.1` → `v1.2.0`）
 - 确认 `origin/master` 已包含所有待发布提交
 - 编写 release notes 前，用 `git log <上一个 tag>..master --format=full` 读取每个提交的完整 body，并查看各提交 `Refs #NN` 指向的 issue（`gh issue view NN --comments`）作为上下文，据此区分「修复上个版本已存在的问题」与「版本内迭代」，不要只看 oneline 标题
 
-## 2. 提 PR 并合并（仅当 dev 领先 master）
+## 2. 提 PR 并合并（仅当发布分支领先 master）
 
-- 标题：英文，简洁，60 字符以内
-- 描述：英文，分 Summary 和 Test plan 两段
-- **必须先用 `git log master..dev --format=full` 读取每个提交的完整 body**，基于所有详细的改动信息来撰写 PR 描述，不要只看 oneline 标题
-- 合并：保留完整历史，**不 squash、不 rebase**，使用 `--no-ff`
-- merge commit 信息：英文，格式 `merge: <简短主题>`，后接主要改动点列表（`- ` 开头）
-- dev 分支**不删除**
-- 命令示例：
-  ```
-  git checkout master
-  git merge --no-ff dev -m "merge: <subject>
-
-  - point one
-  - point two"
-  git push origin master
-  ```
+- 走 `pr` skill 的完整流程：读取 `git log origin/master..HEAD --format=full` 的全部 commit body，用**英文标题 + 中文描述**起草，给用户 review 通过后再创建
+- 分支不对等：head 为发布分支（由用户指定），base 为 `master`，不要自行套用其他分支
+- 创建：`gh pr create --base master --head <发布分支> --title "<英文标题>" --body "<中文描述>"`
+- 合并：保留完整历史，**不 squash、不 rebase**，用 `gh pr merge <发布分支> --merge`，产生 merge commit
+- 发布分支**不删除**
+- 合并后 main 工作区 `git pull`，副工作区按 worktree 规则 `git merge origin/master` 同步
 
 ## 3. 本地打 tag 并推送
 
@@ -64,10 +55,10 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 - 确认 release body 仍为手写中文（CI 只上传产物，不覆盖 body）
 - 确认 CI 运行状态：`gh run list --limit 3`（Triggered via push，job 为 build-linux / build-macos / build-windows）
 
-## 6. 切回 dev（若适用）
+## 6. 切回发布分支（若适用）
 
-- `git checkout dev`
-- 若 dev 曾领先，确认 `git log master..dev --oneline` 为空（已合并）
+- 需要回到发布分支时执行 `git checkout <发布分支>`（切换分支属 git 写操作，先向用户确认）
+- 若该分支曾领先，确认 `git log master..<发布分支> --oneline` 为空（已合并）
 
 ## 注意事项
 
@@ -75,5 +66,5 @@ description: 发布新版本：手动建中文 release（gh 一步完成建 tag 
 - **禁止 force push 已发布的 tag**：会重新触发 release workflow（匹配 `v*`），用不可复现的新构建覆盖现有 release 产物并重置下载计数。若确有必要动旧 tag，必须先临时禁用 Release workflow（GitHub → Settings → Actions），操作完再启用。
 - **辨识版本内 fix**：区分「修复上个版本已存在的问题」（应写入 notes）与「开发过程中先 feat 后 fix 的新问题」（属本版本内部迭代，不算与上个版本的差异，不应写入 notes）。只记录面向用户的、相对上个版本的真实变化。务必结合 `Refs #NN` 的 issue 讨论确认每个 fix 到底修的是什么。
 - **Commit 规范**：英文、具体描述、无 emoji、无 Co-Authored-By
-- **PR 规范**：英文标题和描述
+- **PR 规范**：英文标题、中文描述，流程见 `pr` skill
 - **Release notes 规范**：中文

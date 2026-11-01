@@ -1,8 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactElement } from "react";
+import type { ComponentProps, ReactElement } from "react";
+import { llm } from "@/lib/wailsjs/go/models";
+import { settingsKeys } from "@/lib/queryKeys";
+import type ModelPicker from "@/components/model/ModelPicker";
+import type PatternSessionView from "./PatternSessionView";
 import PatternExtractView from "./PatternExtractView";
 import { toastError } from "@/utils/toast";
 import { installQueryErrorToast } from "@/lib/queryErrorToast";
@@ -21,10 +25,12 @@ vi.mock("./ChapterRangeInput", () => ({
   default: () => <div data-testid="chapter-range-input" />,
 }));
 
+const mockSessionProps = vi.hoisted(() => vi.fn());
 vi.mock("./PatternSessionView", () => ({
-  default: ({ title }: any) => (
-    <div data-testid="pattern-session-view">{title}</div>
-  ),
+  default: (props: ComponentProps<typeof PatternSessionView>) => {
+    mockSessionProps(props);
+    return <div data-testid="pattern-session-view">{props.title}</div>;
+  },
 }));
 
 vi.mock("@/components/shared/PopSelect", () => ({
@@ -44,15 +50,21 @@ vi.mock("@/components/shared/PopSelect", () => ({
 }));
 
 vi.mock("@/components/model/ModelPicker", () => ({
-  default: ({ models, selectedKey, onSelectModel }: any) => (
+  default: ({
+    models,
+    selectedKey,
+    reasoningEffort,
+    onSelectModel,
+  }: ComponentProps<typeof ModelPicker>) => (
     <select
       value={selectedKey}
       onChange={(e) => onSelectModel(e.target.value)}
       data-testid="pop-select"
+      data-reasoning-effort={reasoningEffort}
     >
-      {models?.map((m: any) => (
+      {models?.map((m) => (
         <option key={m.Key} value={m.Key}>
-          {m.ModelName}
+          {m.model.name}
         </option>
       ))}
     </select>
@@ -108,12 +120,39 @@ function renderWithProvider(ui: ReactElement) {
   });
 }
 
+const defaultSelection = {
+  adapter_name: "openai_chat",
+  provider_name: "Relay",
+  model_id: "same-model",
+  reasoning_effort: "max",
+};
+const chatModel = new llm.AvailableModel({
+  Key: "opaque-chat",
+  AdapterName: "openai_chat",
+  ProviderName: "Relay",
+  ProviderType: "openai",
+  model: { id: "same-model", name: "GPT-4", reasoning_levels: ["high", "max"] },
+});
+const claudeModel = new llm.AvailableModel({
+  Key: "opaque-claude",
+  AdapterName: "anthropic_messages",
+  ProviderName: "Relay",
+  ProviderType: "anthropic",
+  model: {
+    id: "same-model",
+    name: "Claude",
+    reasoning_levels: ["medium", "high"],
+  },
+});
+
 describe("PatternExtractView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetChapters.mockResolvedValue([]);
     mockGetModels.mockResolvedValue([]);
-    mockGetSettings.mockResolvedValue({ selected_model_key: "" });
+    mockGetSettings.mockResolvedValue({
+      default_model_selection: defaultSelection,
+    });
   });
 
   afterEach(() => {
@@ -137,15 +176,7 @@ describe("PatternExtractView", () => {
       { id: 5, reading_number: 5, title: "Ch5", word_count: 500 },
       { id: 6, reading_number: 6, title: "Ch6", word_count: 600 },
     ]);
-    mockGetModels.mockResolvedValue([
-      {
-        Key: "openai/gpt-4",
-        ModelName: "GPT-4",
-        ProviderName: "openai",
-        ModelID: "gpt-4",
-      },
-    ]);
-    mockGetSettings.mockResolvedValue({ selected_model_key: "openai/gpt-4" });
+    mockGetModels.mockResolvedValue([chatModel]);
 
     renderWithProvider(<PatternExtractView currentNovelId={1} />);
     expect(await screen.findByText(/Ch1/)).toBeInTheDocument();
@@ -164,29 +195,21 @@ describe("PatternExtractView", () => {
   });
 
   it("restores selected model from settings", async () => {
-    mockGetModels.mockResolvedValue([
-      {
-        Key: "openai/gpt-4",
-        ModelName: "GPT-4",
-        ProviderName: "openai",
-        ModelID: "gpt-4",
-      },
-      {
-        Key: "anthropic/claude",
-        ModelName: "Claude",
-        ProviderName: "anthropic",
-        ModelID: "claude",
-      },
-    ]);
+    mockGetModels.mockResolvedValue([chatModel, claudeModel]);
     mockGetSettings.mockResolvedValue({
-      selected_model_key: "anthropic/claude",
+      default_model_selection: {
+        ...defaultSelection,
+        adapter_name: "anthropic_messages",
+        reasoning_effort: "high",
+      },
     });
 
     renderWithProvider(<PatternExtractView currentNovelId={1} />);
     // model PopSelect 是 toolbar 第二个 pop-select（第一个是 novel 选择）。
     await vi.waitFor(() => {
       const modelSelect = screen.getAllByTestId("pop-select")[1];
-      expect(modelSelect).toHaveValue("anthropic/claude");
+      expect(modelSelect).toHaveValue(claudeModel.Key);
+      expect(modelSelect).toHaveAttribute("data-reasoning-effort", "high");
     });
   });
 
@@ -197,15 +220,7 @@ describe("PatternExtractView", () => {
       { id: 3, reading_number: 3, title: "Ch3", word_count: 300 },
       { id: 4, reading_number: 4, title: "Ch4", word_count: 400 },
     ]);
-    mockGetModels.mockResolvedValue([
-      {
-        Key: "openai/gpt-4",
-        ModelName: "GPT-4",
-        ProviderName: "openai",
-        ModelID: "gpt-4",
-      },
-    ]);
-    mockGetSettings.mockResolvedValue({ selected_model_key: "openai/gpt-4" });
+    mockGetModels.mockResolvedValue([chatModel]);
 
     renderWithProvider(<PatternExtractView currentNovelId={1} />);
     const extractBtn = await screen.findByText("extract.startExtract");
@@ -222,15 +237,7 @@ describe("PatternExtractView", () => {
       { id: 5, reading_number: 5, title: "Ch5", word_count: 500 },
       { id: 6, reading_number: 6, title: "Ch6", word_count: 600 },
     ]);
-    mockGetModels.mockResolvedValue([
-      {
-        Key: "openai/gpt-4",
-        ModelName: "GPT-4",
-        ProviderName: "openai",
-        ModelID: "gpt-4",
-      },
-    ]);
-    mockGetSettings.mockResolvedValue({ selected_model_key: "openai/gpt-4" });
+    mockGetModels.mockResolvedValue([chatModel]);
 
     renderWithProvider(<PatternExtractView currentNovelId={1} />);
     const extractBtn = await screen.findByText("extract.startExtract");
@@ -238,5 +245,45 @@ describe("PatternExtractView", () => {
     expect(
       await screen.findByTestId("pattern-session-view"),
     ).toBeInTheDocument();
+    expect(mockSessionProps).toHaveBeenLastCalledWith(
+      expect.objectContaining({ modelSelection: defaultSelection }),
+    );
+  });
+
+  it("keeps local choices and freezes the complete selection passed to the execution view", async () => {
+    const user = userEvent.setup();
+    mockGetChapters.mockResolvedValue(
+      Array.from({ length: 6 }, (_, i) => ({
+        id: i + 1,
+        reading_number: i + 1,
+        title: `Ch${i + 1}`,
+        word_count: 100,
+      })),
+    );
+    mockGetModels.mockResolvedValue([chatModel, claudeModel]);
+    renderWithProvider(<PatternExtractView currentNovelId={1} />);
+    const picker = screen.getAllByTestId("pop-select")[1];
+    await vi.waitFor(() => expect(picker).toHaveValue(chatModel.Key));
+    await user.selectOptions(picker, claudeModel.Key);
+    expect(picker).toHaveAttribute("data-reasoning-effort", "medium");
+    expect(qc.getQueryData(settingsKeys.all)).toEqual({
+      default_model_selection: defaultSelection,
+    });
+    await user.click(screen.getByText("extract.startExtract"));
+    const snapshot = mockSessionProps.mock.lastCall![0].modelSelection;
+    expect(snapshot).toEqual({
+      ...defaultSelection,
+      adapter_name: "anthropic_messages",
+      reasoning_effort: "medium",
+    });
+    act(() => {
+      qc.setQueryData(settingsKeys.all, {
+        default_model_selection: {
+          ...defaultSelection,
+          reasoning_effort: "high",
+        },
+      });
+    });
+    expect(mockSessionProps.mock.lastCall![0].modelSelection).toBe(snapshot);
   });
 });

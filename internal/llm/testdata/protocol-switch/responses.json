@@ -1,0 +1,41 @@
+{
+  "protocol": "openai_responses",
+  "provider_type": "openai",
+  "path": "/relay/v8/responses",
+  "tools_response": {
+    "id": "resp_source", "object": "response", "model": "switch-model", "status": "completed",
+    "output": [
+      {"type": "reasoning", "id": "rs_source", "summary": [{"type": "summary_text", "text": "private-thought"}], "encrypted_content": "private-responses-ciphertext"},
+      {"type": "message", "id": "msg_source", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "先读取两章。", "annotations": []}]},
+      {"type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "read", "arguments": "{\"chapter\":9007199254740993}", "status": "completed"},
+      {"type": "function_call", "id": "fc_2", "call_id": "call_2", "name": "read", "arguments": "{}", "status": "completed"}
+    ]
+  },
+  "text_response": {
+    "id": "resp_target", "object": "response", "model": "switch-model", "status": "completed",
+    "output": [{"type": "message", "id": "msg_target", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "续聊成功", "annotations": []}]}]
+  },
+  "stream_events": [
+    {"type": "response.created", "response": {"id": "resp_target", "object": "response", "status": "in_progress", "output": []}},
+    {"type": "response.output_item.added", "output_index": 0, "item": {"type": "message", "id": "msg_target", "role": "assistant", "status": "in_progress", "content": []}},
+    {"type": "response.content_part.added", "output_index": 0, "item_id": "msg_target", "content_index": 0, "part": {"type": "output_text", "text": "", "annotations": []}},
+    {"type": "response.output_text.delta", "output_index": 0, "item_id": "msg_target", "content_index": 0, "delta": "续聊"},
+    {"type": "response.output_text.delta", "output_index": 0, "item_id": "msg_target", "content_index": 0, "delta": "成功"},
+    {"type": "response.output_item.done", "output_index": 0, "item": {"type": "message", "id": "msg_target", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "续聊成功", "annotations": []}]}},
+    {"type": "response.completed", "response": {"id": "resp_target", "object": "response", "status": "completed", "output": [{"type": "message", "id": "msg_target", "role": "assistant", "status": "completed", "content": [{"type": "output_text", "text": "续聊成功", "annotations": []}]}]}}
+  ],
+  "expected_request": {
+    "model": "switch-model", "store": false, "background": false,
+    "input": [
+      {"role": "system", "content": "你是网文助手。"},
+      {"role": "user", "content": "请比较这两章。"},
+      {"role": "assistant", "content": "先读取两章。"},
+      {"type": "function_call", "call_id": "call_1", "name": "read", "arguments": "{\"chapter\":9007199254740993}"},
+      {"type": "function_call", "call_id": "call_2", "name": "read", "arguments": "{}"},
+      {"type": "function_call_output", "call_id": "call_1", "output": ""},
+      {"type": "function_call_output", "call_id": "call_2", "output": "第二章原文"},
+      {"role": "user", "content": "继续比较。"}
+    ],
+    "tools": [{"type": "function", "name": "read", "description": "读取章节", "parameters": {"type": "object", "properties": {"chapter": {"type": "integer"}}}}]
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "protocol": "anthropic_messages",
+  "provider_type": "anthropic",
+  "path": "/relay/v8/messages",
+  "tools_response": {
+    "id": "msg_source", "type": "message", "role": "assistant", "model": "switch-model",
+    "content": [
+      {"type": "thinking", "thinking": "private-thought", "signature": "private-claude-signature"},
+      {"type": "redacted_thinking", "data": "private-redacted-thinking"},
+      {"type": "text", "text": "先读取两章。"},
+      {"type": "tool_use", "id": "call_1", "name": "read", "input": {"chapter":9007199254740993}},
+      {"type": "tool_use", "id": "call_2", "name": "read", "input": {}}
+    ],
+    "stop_reason": "tool_use", "usage": {"input_tokens": 1, "output_tokens": 1}
+  },
+  "text_response": {
+    "id": "msg_target", "type": "message", "role": "assistant", "model": "switch-model",
+    "content": [{"type": "text", "text": "续聊成功"}],
+    "stop_reason": "end_turn", "usage": {"input_tokens": 1, "output_tokens": 1}
+  },
+  "stream_events": [
+    {"type": "message_start", "message": {"id": "msg_target", "type": "message", "role": "assistant", "model": "switch-model", "content": [], "usage": {"input_tokens": 1, "output_tokens": 0}}},
+    {"type": "content_block_start", "index": 0, "content_block": {"type": "text", "text": ""}},
+    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "续聊"}},
+    {"type": "content_block_delta", "index": 0, "delta": {"type": "text_delta", "text": "成功"}},
+    {"type": "content_block_stop", "index": 0},
+    {"type": "message_delta", "delta": {"stop_reason": "end_turn"}, "usage": {"output_tokens": 1}},
+    {"type": "message_stop"}
+  ],
+  "expected_request": {
+    "model": "switch-model",
+    "system": [{"type": "text", "text": "你是网文助手。"}],
+    "messages": [
+      {"role": "user", "content": [{"type": "text", "text": "请比较这两章。"}]},
+      {"role": "assistant", "content": [
+        {"type": "text", "text": "先读取两章。"},
+        {"type": "tool_use", "id": "call_1", "name": "read", "input": {"chapter":9007199254740993}},
+        {"type": "tool_use", "id": "call_2", "name": "read", "input": {}}
+      ]},
+      {"role": "user", "content": [
+        {"type": "tool_result", "tool_use_id": "call_1", "is_error": false},
+        {"type": "tool_result", "tool_use_id": "call_2", "is_error": false, "content": [{"type": "text", "text": "第二章原文"}]},
+        {"type": "text", "text": "继续比较。"}
+      ]}
+    ],
+    "tools": [{"name": "read", "description": "读取章节", "input_schema": {"type": "object", "properties": {"chapter": {"type": "integer"}}}}]
+  }
+}

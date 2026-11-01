@@ -246,29 +246,26 @@ type ToolInfo struct {
 	Category    string `json:"category"`
 }
 
-// OpenAI 生成 OpenAI Function Calling 格式的工具列表。
+// Definitions 返回协议无关的工具声明，按名称排序，schema 使用独立副本。
 // allowed=nil 表示全部 expose_to_llm=true 的工具；非 nil 只取白名单内的。
-func (r *Registry) OpenAI(allowed map[string]bool) []map[string]any {
+func (r *Registry) Definitions(allowed map[string]bool) []llm.ToolDefinition {
 	keys := make([]string, 0, len(r.tools))
 	for k := range r.tools {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	var list []map[string]any
+	var list []llm.ToolDefinition
 	for _, k := range keys {
 		t := r.tools[k]
 		if !t.ExposeToLLM() || !allow(allowed, t.Name()) {
 			continue
 		}
-		list = append(list, map[string]any{
-			"type": "function",
-			"function": map[string]any{
-				"name":        t.Name(),
-				"description": t.Description(),
-				"parameters":  t.JSONSchema(),
-			},
-		})
+		list = append(list, llm.ToolDefinition{
+			Name:        t.Name(),
+			Description: t.Description(),
+			InputSchema: t.JSONSchema(),
+		}.Clone())
 	}
 	return list
 }

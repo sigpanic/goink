@@ -19,6 +19,7 @@ import (
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/deletion"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/location"
 	"github.com/sigpanic/goink/internal/mcp_tools"
 	"github.com/sigpanic/goink/internal/mcpclient"
@@ -47,9 +48,10 @@ import (
 // App 是 Wails 绑定的根对象。前端通过 window.go.main.App 调用其导出方法。
 // 各领域方法按文件拆分（novel.go / chapter.go 等），均接收 *App。
 type App struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	logger *slog.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
+	logger    *slog.Logger
+	emitEvent func(context.Context, string, ...any)
 
 	// 启动状态：让前端能区分"未配置 / 初始化中 / 就绪 / 失败"，而不是只拿到一个
 	// 布尔量。startupMu 同时保护 startupState 与 frontendReady —— 两者会交叉读取
@@ -106,7 +108,8 @@ type App struct {
 // New 创建 App 实例。初始化在 OnStartup 中完成。
 func New(logger *slog.Logger) *App {
 	return &App{
-		logger: logger,
+		logger:    logger,
+		emitEvent: runtime.EventsEmit,
 		startupState: StartupState{
 			Phase:   PhaseInitializing,
 			Version: 1,
@@ -363,13 +366,11 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	mcp_tools.RegisterAllTools(a.registry)
 
 	// 8. 初始化 LLM 客户端
-	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())
+	llmClient, err := a.loadLLMClient()
 	if err != nil {
-		a.logger.Warn("加载 LLM 配置失败，使用空配置", "err", err)
-		userConfig = &llm.UserLLMConfig{}
+		return fmt.Errorf("初始化 LLM 客户端失败: %w", err)
 	}
-	providers := llm.Merge(llm.Builtin, userConfig)
-	a.llmClient = llm.NewClient(providers, a.logger)
+	a.llmClient = llmClient
 
 	// 9. 初始化审批服务
 	a.approvals = approval.NewService(a.logger, a.settings.ApprovalMode)
@@ -447,4 +448,20 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	)
 	initSucceeded = true
 	return nil
+}
+
+// loadLLMClient 只读取新格式；损坏或不可用的配置降级为空运行时，不改写原文件。
+func (a *App) loadLLMClient() (*llm.Client, error) {
+	empty := &llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{}}
+	userConfig, err := llm.LoadUserConfig(config.LLMConfigPath())
+	if err != nil {
+		a.logger.Warn("加载 LLM 配置失败，使用空配置", "err", err)
+		userConfig = empty
+	}
+	client, err := llm.NewClient(userConfig, a.logger)
+	if err == nil {
+		return client, nil
+	}
+	a.logger.Warn("构建 LLM 客户端失败，使用空配置", "err", err)
+	return llm.NewClient(empty, a.logger)
 }

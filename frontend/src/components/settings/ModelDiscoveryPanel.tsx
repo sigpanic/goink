@@ -1,53 +1,51 @@
 import { useState } from "react";
 import { Plus, X, Search, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
-import type { llm } from "@/lib/wailsjs/go/models";
+import { adapter, type llm } from "@/lib/wailsjs/go/models";
 import { DiscoverModels } from "@/lib/wailsjs/go/app/App";
 import { toErrorMessage } from "@/utils/error";
 import ModelEditForm from "./ModelEditForm";
 import TestResultWithHint from "./TestResultWithHint";
 
 interface Props {
-  providerName: string;
-  chatUrl: string;
-  apiKey: string;
+  provider: llm.ProviderView;
   existingIds: Set<string>;
-  onAddModel: (model: llm.ModelInfo) => void;
+  onAddModel: (model: adapter.ModelInfo) => void;
 }
 
 const DEFAULT_CTX = 200_000;
 const DEFAULT_MAX = 64_000;
 
-const emptyModel = (): llm.ModelInfo =>
-  ({
+const emptyModel = (): adapter.ModelInfo =>
+  new adapter.ModelInfo({
     id: "",
     name: "",
     context_window: DEFAULT_CTX,
     max_output_tokens: DEFAULT_MAX,
     supports_thinking: true,
     supports_vision: false,
-  }) as unknown as llm.ModelInfo;
+  });
 
 export default function ModelDiscoveryPanel({
-  providerName,
-  chatUrl,
-  apiKey,
+  provider,
   existingIds,
   onAddModel,
 }: Props) {
   const { t } = useTranslation();
   // 手动添加
   const [showAddForm, setShowAddForm] = useState(false);
-  const [draftModel, setDraftModel] = useState<llm.ModelInfo>(emptyModel());
+  const [draftModel, setDraftModel] = useState<adapter.ModelInfo>(emptyModel());
 
   // 自动发现
   const [discovering, setDiscovering] = useState(false);
   const [discoverError, setDiscoverError] = useState("");
-  const [discoveredModels, setDiscoveredModels] = useState<llm.ModelInfo[]>([]);
+  const [discoveredModels, setDiscoveredModels] = useState<adapter.ModelInfo[]>(
+    [],
+  );
   const [selectedForImport, setSelectedForImport] = useState<Set<string>>(
     new Set(),
   );
-  const [pendingImports, setPendingImports] = useState<llm.ModelInfo[]>([]);
+  const [pendingImports, setPendingImports] = useState<adapter.ModelInfo[]>([]);
 
   const startAddForm = () => {
     setDraftModel(emptyModel());
@@ -65,7 +63,13 @@ export default function ModelDiscoveryPanel({
     setDiscoveredModels([]);
     setSelectedForImport(new Set());
     try {
-      const models = await DiscoverModels(providerName, chatUrl, apiKey);
+      const models = await DiscoverModels({
+        adapter_name: provider.adapter_name,
+        provider_name: provider.name,
+        provider_type: provider.provider_type,
+        chat_url: provider.chat_url,
+        api_key: provider.api_key,
+      });
       if (!models || models.length === 0) {
         setDiscoverError(t("settings.noModelsFound"));
       } else {
@@ -86,12 +90,11 @@ export default function ModelDiscoveryPanel({
     );
     const withDefaults = toImport.map(
       (m) =>
-        ({
+        new adapter.ModelInfo({
           ...m,
           context_window: m.context_window || DEFAULT_CTX,
           max_output_tokens: m.max_output_tokens || DEFAULT_MAX,
-          supports_thinking: true,
-        }) as unknown as llm.ModelInfo,
+        }),
     );
     setPendingImports(withDefaults);
     setDiscoveredModels([]);
@@ -99,7 +102,7 @@ export default function ModelDiscoveryPanel({
     setDiscoverError("");
   };
 
-  const handleSavePending = (index: number, model: llm.ModelInfo) => {
+  const handleSavePending = (index: number, model: adapter.ModelInfo) => {
     onAddModel(model);
     setPendingImports((prev) => prev.filter((_, i) => i !== index));
   };
@@ -113,7 +116,7 @@ export default function ModelDiscoveryPanel({
         <div className="flex items-center gap-2">
           <button
             onClick={handleDiscover}
-            disabled={discovering || !apiKey}
+            disabled={discovering || !provider.api_key}
             className="text-xs text-primary flex items-center gap-0.5 hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {discovering ? (
@@ -140,7 +143,7 @@ export default function ModelDiscoveryPanel({
             onChange={(patch) =>
               setPendingImports((prev) =>
                 prev.map((pm, j) =>
-                  j === i ? ({ ...pm, ...patch } as llm.ModelInfo) : pm,
+                  j === i ? new adapter.ModelInfo({ ...pm, ...patch }) : pm,
                 ),
               )
             }
@@ -159,7 +162,9 @@ export default function ModelDiscoveryPanel({
           <ModelEditForm
             model={draftModel}
             onChange={(patch) =>
-              setDraftModel((prev) => ({ ...prev, ...patch }) as llm.ModelInfo)
+              setDraftModel(
+                (prev) => new adapter.ModelInfo({ ...prev, ...patch }),
+              )
             }
             onSave={handleManualAdd}
             onCancel={() => setShowAddForm(false)}

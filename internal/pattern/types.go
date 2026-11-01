@@ -1,14 +1,18 @@
 package pattern
 
-import "github.com/sigpanic/goink/internal/llm"
+import (
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
+)
 
 type ExtractPatternInput struct {
-	TaskID          string  `json:"task_id,omitempty"`
-	NovelID         int64   `json:"novel_id"`
-	ProviderName    string  `json:"provider_name"`
-	ModelID         string  `json:"model_id"`
-	ReasoningEffort string  `json:"reasoning_effort"`
-	ChapterIDs      []int64 `json:"chapter_ids,omitempty"`
+	TaskID          string           `json:"task_id,omitempty"`
+	NovelID         int64            `json:"novel_id"`
+	AdapterName     adapter.Protocol `json:"adapter_name"`
+	ProviderName    string           `json:"provider_name"`
+	ModelID         string           `json:"model_id"`
+	ReasoningEffort string           `json:"reasoning_effort"`
+	ChapterIDs      []int64          `json:"chapter_ids,omitempty"`
 }
 
 type ExtractPatternResult struct {

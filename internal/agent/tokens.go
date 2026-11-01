@@ -13,10 +13,10 @@ import (
 )
 
 // InitRunningTokens 对初始消息列表逐条 token 计数，返回按 role 的分组统计。
-func (a *Agent) InitRunningTokens(messages []map[string]any) map[string]int {
+func (a *Agent) InitRunningTokens(messages []llm.Message) map[string]int {
 	tokens := map[string]int{"system": 0, "user": 0, "assistant": 0, "tool": 0}
 	for _, m := range messages {
-		role, _ := m["role"].(string)
+		role := m.Role
 		if _, ok := tokens[role]; ok {
 			n, err := llm.CountMessageTokens(m)
 			if err != nil {

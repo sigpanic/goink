@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="zh-CN" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Goink · 思考预览 Demo</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --page: #f7f8fa;
+        --surface: #ffffff;
+        --foreground: #23262d;
+        --secondary: #626974;
+        --faint: #9299a4;
+        --line: #e8ebef;
+        --soft: #f3f5f8;
+        --thought: #fafbfc;
+        --blue: #396ad8;
+        --blue-soft: #edf2fd;
+        --user: #416de0;
+        --shimmer-low: #77818f;
+        --shimmer-high: #c5cdd8;
+        --shadow: 0 14px 55px -30px #2437562b;
+      }
+      [data-theme="dark"] {
+        color-scheme: dark;
+        --page: #151a22;
+        --surface: #1b212b;
+        --foreground: #e1e5ec;
+        --secondary: #a0a9b7;
+        --faint: #737f90;
+        --line: #303947;
+        --soft: #242d3a;
+        --thought: #202834;
+        --blue: #8eafff;
+        --blue-soft: #28364f;
+        --user: #365fb9;
+        --shimmer-low: #909db0;
+        --shimmer-high: #e2e9f3;
+        --shadow: 0 14px 55px -30px #0008;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--page);
+        color: var(--foreground);
+        font:
+          14px/1.65 system-ui,
+          -apple-system,
+          "PingFang SC",
+          "Microsoft YaHei",
+          "Noto Sans CJK SC",
+          sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        cursor: pointer;
+      }
+      button:disabled {
+        cursor: default;
+      }
+      button:focus-visible,
+      summary:focus-visible {
+        outline: 2px solid var(--blue);
+        outline-offset: 4px;
+      }
+      svg {
+        display: block;
+        flex-shrink: 0;
+      }
+      [hidden] {
+        display: none !important;
+      }
+      .icon {
+        width: 17px;
+        height: 17px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.7;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+      .shell {
+        width: min(900px, calc(100% - 64px));
+        margin: 0 auto;
+      }
+      .topbar {
+        display: flex;
+        height: 82px;
+        align-items: center;
+        justify-content: space-between;
+        border-bottom: 1px solid var(--line);
+      }
+      .brand {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+      }
+      .wordmark {
+        font-weight: 740;
+        font-size: 23px;
+        letter-spacing: -1.2px;
+      }
+      .tag {
+        padding: 3px 7px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        color: var(--secondary);
+        font-size: 10px;
+        letter-spacing: 0.08em;
+      }
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: 34px;
+        height: 34px;
+        padding: 0;
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--surface);
+        color: var(--secondary);
+      }
+      .icon-button:hover {
+        color: var(--foreground);
+        background: var(--soft);
+      }
+      .intro {
+        padding: 35px 0 25px;
+      }
+      .eyebrow {
+        color: var(--faint);
+        font-size: 10px;
+        letter-spacing: 0.16em;
+      }
+      h1 {
+        margin: 6px 0 9px;
+        font-size: 27px;
+        letter-spacing: -0.6px;
+        font-weight: 650;
+      }
+      .intro p {
+        margin: 0;
+        color: var(--secondary);
+        font-size: 13px;
+      }
+      .demo-controls {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+      .modes {
+        display: inline-flex;
+        padding: 4px;
+        gap: 3px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--soft);
+      }
+      .mode {
+        border: 0;
+        background: transparent;
+        color: var(--secondary);
+        border-radius: 6px;
+        padding: 6px 13px;
+        font-size: 12px;
+        transition:
+          background 0.18s,
+          color 0.18s;
+      }
+      .mode[aria-pressed="true"] {
+        color: var(--foreground);
+        background: var(--surface);
+        box-shadow: 0 1px 4px #0000000b;
+      }
+      .auto-note {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--faint);
+        font-size: 11px;
+        white-space: nowrap;
+      }
+      .auto-note i {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--blue);
+      }
+      .chat {
+        border: 1px solid var(--line);
+        border-radius: 15px;
+        background: var(--surface);
+        box-shadow: var(--shadow);
+        overflow: hidden;
+      }
+      .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 23px;
+        border-bottom: 1px solid var(--line);
+      }
+      .chat-title {
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .model-label {
+        margin-top: 1px;
+        color: var(--faint);
+        font-size: 10px;
+      }
+      .phase {
+        font-size: 11px;
+        color: var(--secondary);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .phase-dot {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--blue);
+      }
+      .phase[data-phase="done"] .phase-dot {
+        background: var(--faint);
+      }
+      .conversation {
+        padding: 28px 30px 32px;
+        min-height: 343px;
+      }
+      .user-row {
+        display: flex;
+        justify-content: flex-end;
+        margin: 0 0 31px;
+      }
+      .user-message {
+        max-width: 85%;
+        padding: 11px 15px;
+        border-radius: 12px 12px 3px 12px;
+        background: var(--user);
+        color: #fff;
+        font-size: 13px;
+      }
+      .assistant-name {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        font-size: 11px;
+        font-weight: 600;
+        color: var(--secondary);
+        margin-bottom: 11px;
+      }
+      .assistant-name svg {
+        width: 14px;
+        height: 14px;
+        color: var(--blue);
+      }
+      .thought {
+        width: min(100%, 560px);
+        border: 1px solid var(--line);
+        border-radius: 9px;
+        background: var(--thought);
+        overflow: hidden;
+      }
+      .thought-toggle {
+        width: 100%;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 11px 13px;
+        border: 0;
+        background: transparent;
+        text-align: left;
+      }
+      .thought-toggle:not(:disabled):hover {
+        background: color-mix(in srgb, var(--soft) 65%, transparent);
+      }
+      .thought-toggle:focus-visible {
+        outline-offset: -3px;
+      }
+      .signal {
+        display: grid;
+        place-items: center;
+        width: 15px;
+        height: 15px;
+        flex-shrink: 0;
+        color: var(--faint);
+      }
+      .signal .icon {
+        width: 14px;
+        height: 14px;
+      }
+      .spinner {
+        width: 13px;
+        height: 13px;
+        border: 1.5px solid var(--line);
+        border-top-color: var(--blue);
+        border-right-color: var(--blue);
+        border-radius: 50%;
+        animation: orbit 1.3s linear infinite;
+      }
+      .preview-window {
+        min-width: 0;
+        flex: 1;
+        overflow: hidden;
+        white-space: nowrap;
+      }
+      .preview {
+        display: block;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        font-size: 12px;
+        line-height: 20px;
+        color: var(--secondary);
+      }
+      [data-phase="thinking"] .preview {
+        display: inline-block;
+        min-width: 100%;
+        overflow: visible;
+        color: var(--shimmer-low);
+        background: linear-gradient(
+          100deg,
+          var(--shimmer-low) 0%,
+          var(--shimmer-low) 35%,
+          var(--shimmer-high) 48%,
+          var(--shimmer-low) 62%,
+          var(--shimmer-low) 100%
+        );
+        background-size: 240% 100%;
+        background-clip: text;
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        animation: shimmer 3s linear infinite;
+      }
+      .thought[data-paused="true"] .spinner,
+      .thought[data-paused="true"] .preview {
+        animation-play-state: paused;
+      }
+      .elapsed {
+        color: var(--faint);
+        font-size: 10px;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        padding-left: 2px;
+      }
+      .chevron {
+        width: 13px;
+        height: 13px;
+        color: var(--faint);
+        transition: transform 0.2s;
+      }
+      .thought-toggle[aria-expanded="true"] .chevron {
+        transform: rotate(180deg);
+      }
+      .full-text {
+        max-height: 220px;
+        overflow-y: auto;
+        border-top: 1px solid var(--line);
+        padding: 14px 18px 17px 38px;
+        font-size: 12px;
+        line-height: 1.95;
+        white-space: pre-wrap;
+        color: var(--secondary);
+        scrollbar-width: thin;
+        animation: unfold 0.18s ease-out;
+      }
+      .answer {
+        margin-top: 19px;
+        max-width: 615px;
+        font-size: 13px;
+        line-height: 1.95;
+        white-space: pre-wrap;
+      }
+      .answer[data-streaming="true"]::after {
+        content: "";
+        display: inline-block;
+        width: 3px;
+        height: 13px;
+        margin-left: 3px;
+        vertical-align: -2px;
+        background: var(--blue);
+        border-radius: 1px;
+        animation: blink 1s step-end infinite;
+      }
+      .encrypted-note {
+        color: var(--faint);
+        font-size: 11px;
+        margin-top: 9px;
+      }
+      .playback {
+        border-top: 1px solid var(--line);
+        background: var(--thought);
+        padding: 12px 18px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+      }
+      .playback-actions {
+        display: flex;
+        gap: 6px;
+      }
+      .control {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        border: 1px solid transparent;
+        padding: 5px 9px;
+        background: transparent;
+        color: var(--secondary);
+        border-radius: 6px;
+        font-size: 11px;
+      }
+      .control:hover:not(:disabled) {
+        border-color: var(--line);
+        background: var(--surface);
+        color: var(--foreground);
+      }
+      .control:disabled {
+        opacity: 0.4;
+      }
+      .control svg {
+        width: 13px;
+        height: 13px;
+      }
+      .playback-right {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+      }
+      .stage-label {
+        font-size: 10px;
+        color: var(--faint);
+      }
+      .stage-label strong {
+        color: var(--secondary);
+        font-weight: 500;
+      }
+      .speed {
+        padding: 4px 7px;
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        font-size: 10px;
+        color: var(--secondary);
+        background: var(--surface);
+        min-width: 35px;
+      }
+      .notes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 25px;
+        padding: 26px 2px 22px;
+      }
+      .note {
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+      }
+      .note-number {
+        color: var(--faint);
+        font-size: 10px;
+        letter-spacing: 0.05em;
+      }
+      .note h2 {
+        font-size: 12px;
+        margin: 4px 0 3px;
+        font-weight: 600;
+      }
+      .note p {
+        font-size: 11px;
+        margin: 0;
+        color: var(--secondary);
+        line-height: 1.8;
+      }
+      .footer {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0 26px;
+        color: var(--faint);
+        font-size: 10px;
+      }
+      .sr-only {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        margin: -1px;
+        padding: 0;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+        white-space: nowrap;
+        border: 0;
+      }
+      @keyframes orbit {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes shimmer {
+        from {
+          background-position: 200% 0;
+        }
+        to {
+          background-position: -40% 0;
+        }
+      }
+      @keyframes unfold {
+        from {
+          opacity: 0;
+          transform: translateY(-3px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @media (max-width: 600px) {
+        .shell {
+          width: calc(100% - 32px);
+        }
+        .topbar {
+          height: 66px;
+        }
+        .intro {
+          padding-top: 26px;
+        }
+        h1 {
+          font-size: 23px;
+        }
+        .intro p {
+          font-size: 12px;
+        }
+        .auto-note {
+          display: none;
+        }
+        .modes {
+          width: 100%;
+        }
+        .mode {
+          flex: 1;
+          padding-inline: 8px;
+        }
+        .conversation {
+          padding: 23px 18px;
+          min-height: 355px;
+        }
+        .chat-header {
+          padding: 13px 18px;
+        }
+        .user-message {
+          max-width: 93%;
+        }
+        .playback {
+          padding: 10px;
+        }
+        .playback-actions {
+          gap: 0;
+        }
+        .control {
+          padding-inline: 6px;
+        }
+        .stage-label {
+          display: none;
+        }
+        .notes {
+          gap: 13px;
+        }
+        .footer {
+          gap: 16px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation: none !important;
+          transition: none !important;
+        }
+        [data-phase="thinking"] .preview {
+          background: none;
+          -webkit-text-fill-color: var(--secondary);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div class="brand">
+          <span class="wordmark">goink</span><span class="tag">交互原型</span>
+        </div>
+        <button
+          class="icon-button"
+          id="theme-toggle"
+          aria-label="切换深色主题"
+          title="切换主题"
+        >
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20.9 13a9 9 0 0 1-9.9-9.9A9 9 0 1 0 20.9 13Z" />
+          </svg>
+        </button>
+      </header>
+      <section class="intro">
+        <div class="eyebrow">THINKING PREVIEW / 01</div>
+        <h1>思考，在这一行发生。</h1>
+        <p>流式预览，默认收起。结束以后，留下思考的痕迹。</p>
+      </section>
+      <div class="demo-controls">
+        <div class="modes" role="group" aria-label="选择演示场景">
+          <button class="mode" data-mode="summary" aria-pressed="true">
+            思考摘要
+          </button>
+          <button class="mode" data-mode="full" aria-pressed="false">
+            明文思考
+          </button>
+          <button class="mode" data-mode="opaque" aria-pressed="false">
+            无可见文本
+          </button>
+        </div>
+        <span class="auto-note"><i></i>模拟流式输出 · 不调用 API</span>
+      </div>
+      <section class="chat" aria-label="聊天效果预览">
+        <header class="chat-header">
+          <div>
+            <div class="chat-title">创作助手</div>
+            <div class="model-label" id="model-label">摘要模式</div>
+          </div>
+          <div class="phase" id="phase" data-phase="thinking">
+            <span class="phase-dot"></span
+            ><span id="phase-label">正在思考</span>
+          </div>
+        </header>
+        <div class="conversation">
+          <div class="user-row">
+            <div class="user-message">
+              帮我看看第十四章，人物动机和伏笔有没有不连贯的地方。
+            </div>
+          </div>
+          <div class="assistant-name">
+            <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="m12 3 2.3 6.7L21 12l-6.7 2.3L12 21l-2.3-6.7L3 12l6.7-2.3L12 3Z"
+              />
+            </svg>
+            Goink
+          </div>
+          <div
+            class="thought"
+            id="thought"
+            data-phase="thinking"
+            data-paused="false"
+          >
+            <button
+              class="thought-toggle"
+              id="thought-toggle"
+              disabled
+              aria-controls="thought-body"
+            >
+              <span class="signal" aria-hidden="true"
+                ><span class="spinner" id="spinner"></span
+                ><svg class="icon" id="check" viewBox="0 0 24 24" hidden>
+                  <path d="m5 12 4 4L19 6" /></svg
+              ></span>
+              <span class="preview-window" id="preview-window"
+                ><span class="preview" id="preview">正在思考</span></span
+              >
+              <span class="elapsed" id="elapsed">0s</span>
+              <svg
+                class="icon chevron"
+                id="chevron"
+                viewBox="0 0 24 24"
+                hidden
+                aria-hidden="true"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </button>
+            <div id="thought-body" hidden>
+              <div class="full-text" id="full-text"></div>
+            </div>
+          </div>
+          <div class="encrypted-note" id="encrypted-note" hidden>
+            没有可展示的思考文本
+          </div>
+          <div class="answer" id="answer" hidden></div>
+          <span
+            class="sr-only"
+            id="announcement"
+            aria-live="polite"
+            aria-atomic="true"
+            >正在思考</span
+          >
+        </div>
+        <div class="playback">
+          <div class="playback-actions">
+            <button class="control" id="replay">
+              <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M3 10a9 9 0 1 1 2 8M3 4v6h6" /></svg
+              >重播
+            </button>
+            <button class="control" id="pause">暂停</button>
+            <button class="control" id="finish">跳到结束</button>
+          </div>
+          <div class="playback-right">
+            <span class="stage-label" id="stage-label"
+              >01 / <strong>思考中</strong></span
+            ><button class="speed" id="speed" aria-label="播放速度，当前一倍">
+              1×
+            </button>
+          </div>
+        </div>
+      </section>
+      <section class="notes" aria-label="交互说明">
+        <div class="note">
+          <span class="note-number">01 / STREAM</span>
+          <h2>跟随当前这一行</h2>
+          <p>随输出更新，长行跟随末尾；换行自然衔接，宽度始终固定。</p>
+        </div>
+        <div class="note">
+          <span class="note-number">02 / EXPAND</span>
+          <h2>只在需要时展开</h2>
+          <p>默认收起，点击查看完整思考。结束后保留文字，动画自然停止。</p>
+        </div>
+        <div class="note">
+          <span class="note-number">03 / PRESENCE</span>
+          <h2>无文本，也有回应</h2>
+          <p>只有原生状态时仍显示思考动画；结束后保留条目，不提供展开。</p>
+        </div>
+      </section>
+      <footer class="footer">
+        <span>Goink · Thinking interaction study</span
+        ><span>独立演示，不影响聊天记录</span>
+      </footer>
+    </main>
+    <script>
+      const scenarios = {
+        summary: {
+          label: "摘要模式 · 单行预览",
+          text: "正在对照林砚进入钟楼的动机与已有线索，检查脚印、凿子和日志缺页之间是否形成合理的因果联系。",
+          answer:
+            "人物动机基本成立，钟楼里的线索也能相互呼应。\n\n建议在发现凿子后补一处短暂迟疑，让林砚意识到这件物品与灯塔有关，再顺势推进调查。章末的符号可以保留，作为下一章的悬念。",
+        },
+        full: {
+          label: "明文思考模式 · 多行实时切换",
+          text: "先确认林砚为什么进入钟楼：他是在追查父亲失踪的线索，而不是无缘无故探索。这个动机需要和上一章的行动衔接。\n\n接下来核对湿脚印。这里的步距与老周的腿伤不符，可以用来排除一个嫌疑，但还不能直接证明是谁留下的。\n\n凿子上的缠布方式与灯塔物品一致，这是连接两个场景的有效细节。林砚应该先产生怀疑，再采取行动，不必立刻说破。\n\n最后检查章末的符号。它能延续谜团，不过需要让读者意识到符号确实新出现了，而不是一直存在、刚刚被注意到。\n\n人物动机与线索顺序基本连贯，建议加强凿子出现后的反应。",
+          answer:
+            "这章的因果顺序是通的：追查线索 → 排除老周 → 发现灯塔关联 → 留下新的疑问。\n\n可以重点补两处：一是林砚看到缠布凿子时的反应，二是确认地板符号刚刚出现的依据。这样悬念会更有分量。",
+        },
+        opaque: {
+          label: "无可见文本模式 · 保留思考条目",
+          text: "",
+          answer:
+            "第十四章的人物动机和主要线索基本连贯。可以在林砚发现凿子时增加一个细微反应，让灯塔与钟楼之间的联系更自然。章末的符号仍适合作为悬念保留。",
+        },
+      };
+      const byId = (id) => document.getElementById(id);
+      const ui = Object.fromEntries(
+        [
+          "thought",
+          "thought-toggle",
+          "thought-body",
+          "full-text",
+          "preview",
+          "preview-window",
+          "elapsed",
+          "spinner",
+          "check",
+          "chevron",
+          "answer",
+          "phase",
+          "phase-label",
+          "model-label",
+          "stage-label",
+          "encrypted-note",
+          "announcement",
+          "pause",
+          "finish",
+          "speed",
+        ].map((id) => [id, byId(id)]),
+      );
+      const state = {
+        mode: "summary",
+        phase: "thinking",
+        paused: false,
+        speed: 1,
+        time: 0,
+        cursor: 0,
+        answerCursor: 0,
+        open: false,
+        hold: 650,
+        responseDelay: 0,
+        thoughtTime: 0,
+        lastTick: performance.now(),
+      };
+
+      function setOpen(open) {
+        state.open = open && state.cursor > 0;
+        ui["thought-body"].hidden = !state.open;
+        if (state.cursor > 0)
+          ui["thought-toggle"].setAttribute(
+            "aria-expanded",
+            String(state.open),
+          );
+      }
+
+      function updateText() {
+        const text = scenarios[state.mode].text.slice(0, state.cursor);
+        const full = ui["full-text"];
+        const follow =
+          full.scrollHeight - full.scrollTop - full.clientHeight < 35;
+        full.textContent = text;
+        if (follow) full.scrollTop = full.scrollHeight;
+        const currentLine = text
+          .split("\n")
+          .filter((line) => line.trim())
+          .at(-1);
+        const nextPreview =
+          (state.phase === "thinking"
+            ? text.replace(/\s+/g, " ").trim()
+            : currentLine) ||
+          (state.phase === "thinking" ? "正在思考" : "思考过程");
+        ui.preview.textContent = nextPreview;
+        ui["thought-toggle"].disabled = !text;
+        ui.chevron.hidden = !text;
+        if (text) {
+          ui["thought-toggle"].setAttribute(
+            "aria-expanded",
+            String(state.open),
+          );
+          ui["thought-toggle"].title = nextPreview;
+        } else {
+          ui["thought-toggle"].removeAttribute("aria-expanded");
+          ui["thought-toggle"].removeAttribute("title");
+        }
+        ui["preview-window"].scrollLeft =
+          state.phase === "thinking" ? ui["preview-window"].scrollWidth : 0;
+      }
+
+      function renderPhase() {
+        const thinking = state.phase === "thinking";
+        ui.thought.dataset.phase = thinking ? "thinking" : "done";
+        ui.thought.dataset.paused = String(state.paused);
+        ui.phase.dataset.phase = state.phase;
+        ui.spinner.hidden = !thinking;
+        ui.check.hidden = thinking;
+        ui["phase-label"].textContent = state.paused
+          ? "已暂停"
+          : thinking
+            ? "正在思考"
+            : state.phase === "answer"
+              ? "正在回复"
+              : "已完成";
+        ui["stage-label"].textContent = thinking
+          ? "01 / 思考中"
+          : state.phase === "answer"
+            ? "02 / 正文输出"
+            : "03 / 完成";
+        ui.announcement.textContent = state.paused
+          ? "演示已暂停"
+          : thinking
+            ? "正在思考"
+            : state.phase === "answer"
+              ? "思考结束，开始回复"
+              : "回复完成";
+        ui.pause.textContent = state.paused ? "继续" : "暂停";
+        ui.pause.disabled = state.phase === "done";
+        ui.finish.disabled = state.phase === "done";
+        ui["encrypted-note"].hidden = state.mode !== "opaque" || thinking;
+        ui.answer.dataset.streaming = String(
+          state.phase === "answer" && !state.paused,
+        );
+      }
+
+      function start(mode = state.mode) {
+        Object.assign(state, {
+          mode,
+          phase: "thinking",
+          paused: false,
+          time: 0,
+          cursor: 0,
+          answerCursor: 0,
+          open: false,
+          hold: 650,
+          responseDelay: 0,
+          thoughtTime: 0,
+          lastTick: performance.now(),
+        });
+        document
+          .querySelectorAll("[data-mode]")
+          .forEach((button) =>
+            button.setAttribute(
+              "aria-pressed",
+              String(button.dataset.mode === mode),
+            ),
+          );
+        ui["model-label"].textContent = scenarios[mode].label;
+        ui.answer.textContent = "";
+        ui.answer.hidden = true;
+        ui.elapsed.textContent = "0s";
+        setOpen(false);
+        renderPhase();
+        updateText();
+      }
+
+      function finishThought() {
+        state.thoughtTime = state.time;
+        state.phase = "answer";
+        state.responseDelay = 550;
+        renderPhase();
+        updateText();
+      }
+
+      function tick(now) {
+        const dt = Math.min(150, now - state.lastTick);
+        state.lastTick = now;
+        if (!state.paused && state.phase !== "done") {
+          const elapsed = dt * state.speed;
+          state.time += elapsed;
+          if (state.phase === "thinking") {
+            ui.elapsed.textContent = `${Math.floor(state.time / 1000)}s`;
+            if (state.mode === "opaque") {
+              if (state.time >= 5500) finishThought();
+            } else {
+              state.hold -= elapsed;
+              if (state.hold <= 0) {
+                const scenario = scenarios[state.mode];
+                const chunk =
+                  scenario.text[state.cursor] === "\n"
+                    ? 1
+                    : state.mode === "full"
+                      ? 2
+                      : 1;
+                state.cursor = Math.min(
+                  scenario.text.length,
+                  state.cursor + chunk,
+                );
+                updateText();
+                state.hold =
+                  scenario.text[state.cursor - 1] === "\n" ? 420 : 65;
+                if (state.cursor === scenario.text.length) finishThought();
+              }
+            }
+          } else {
+            state.responseDelay -= elapsed;
+            if (state.responseDelay <= 0) {
+              ui.answer.hidden = false;
+              state.answerCursor = Math.min(
+                scenarios[state.mode].answer.length,
+                state.answerCursor + 2,
+              );
+              ui.answer.textContent = scenarios[state.mode].answer.slice(
+                0,
+                state.answerCursor,
+              );
+              state.responseDelay = 30;
+              if (state.answerCursor === scenarios[state.mode].answer.length) {
+                state.phase = "done";
+                renderPhase();
+              }
+            }
+          }
+        }
+        window.requestAnimationFrame(tick);
+      }
+
+      ui["thought-toggle"].addEventListener("click", () =>
+        setOpen(!state.open),
+      );
+      byId("replay").addEventListener("click", () => start());
+      document
+        .querySelectorAll("[data-mode]")
+        .forEach((button) =>
+          button.addEventListener("click", () => start(button.dataset.mode)),
+        );
+      ui.pause.addEventListener("click", () => {
+        state.paused = !state.paused;
+        renderPhase();
+      });
+      ui.finish.addEventListener("click", () => {
+        state.cursor = scenarios[state.mode].text.length;
+        state.paused = false;
+        state.phase = "done";
+        state.thoughtTime = state.time;
+        updateText();
+        ui.answer.hidden = false;
+        ui.answer.textContent = scenarios[state.mode].answer;
+        renderPhase();
+      });
+      ui.speed.addEventListener("click", () => {
+        state.speed = state.speed === 1 ? 2 : state.speed === 2 ? 0.5 : 1;
+        ui.speed.textContent = `${state.speed}×`;
+        ui.speed.setAttribute("aria-label", `播放速度，当前 ${state.speed} 倍`);
+      });
+      byId("theme-toggle").addEventListener("click", () => {
+        const dark = document.documentElement.dataset.theme !== "dark";
+        document.documentElement.dataset.theme = dark ? "dark" : "light";
+        byId("theme-toggle").setAttribute(
+          "aria-label",
+          dark ? "切换浅色主题" : "切换深色主题",
+        );
+      });
+      start();
+      window.requestAnimationFrame(tick);
+    </script>
+  </body>
+</html>

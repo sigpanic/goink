@@ -10,8 +10,8 @@ import "time"
 //   - status 取值：running | done | failed（未开始 = 无行，stepStatus 返回空串）
 //   - 幂等：迁移启动时查 migration 组内非 done 的 step，逐个执行；每步"内部执行完再写 done"
 //   - 中断续跑：某 step 写 done 前中断 → 该 step 未 done → 下次从它重跑（step 内部幂等）
-//   - 备份/完成判断：查 migration 组的行是否全部 done，只看本组，不看其他迁移
-//   - 新用户 DB 初始化后所有 step INSERT 为 done（无需迁移）
+//   - 备份/完成判断：按 migration 和阶段检查相应步骤，不混用数据库与后置步骤状态
+//   - 新用户 DB 初始化仅将数据库步骤登记为 done；后置步骤仍由 RunSteps 执行并记录
 //
 // 时间戳语义：
 //   - started_at：本 step 开始执行时间（nullable，未执行时为 NULL）

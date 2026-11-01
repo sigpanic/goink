@@ -15,6 +15,7 @@ import (
 	"gorm.io/gorm/logger"
 
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/storage"
 )
 
@@ -35,6 +36,7 @@ func newTestStore(t *testing.T) (*Store, *gorm.DB) {
 }
 
 func TestInitTrackingPreservesOriginAndSettings(t *testing.T) {
+	selection := adapter.ModelSelection{AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "provider", ModelID: "model"}
 	for _, existing := range []bool{false, true} {
 		name := "new settings"
 		if existing {
@@ -43,7 +45,7 @@ func TestInitTrackingPreservesOriginAndSettings(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			s, db := newTestStore(t)
 			if existing {
-				require.NoError(t, db.Create(&config.AppSettings{ID: 1, UserName: "原作者", SelectedModelKey: "provider/model"}).Error)
+				require.NoError(t, db.Create(&config.AppSettings{ID: 1, UserName: "原作者", DefaultModelSelection: selection}).Error)
 			}
 			startedAt := s.now()
 			s.InitTracking(context.Background())
@@ -56,7 +58,7 @@ func TestInitTrackingPreservesOriginAndSettings(t *testing.T) {
 			require.Equal(t, "manual", settings.ApprovalMode)
 			if existing {
 				require.Equal(t, "原作者", settings.UserName)
-				require.Equal(t, "provider/model", settings.SelectedModelKey)
+				require.Equal(t, selection, settings.DefaultModelSelection)
 			}
 			restarted := NewStore(db, s.logger)
 			restarted.now = func() time.Time { return startedAt.AddDate(1, 0, 0) }

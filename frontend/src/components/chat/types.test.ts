@@ -15,6 +15,108 @@ describe("emptySegment", () => {
 });
 
 describe("rebuildTurns", () => {
+  it("restores message times from the last nonempty main reply, ignoring subagents", () => {
+    const messages = [
+      {
+        role: "user",
+        content: "问题",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:00:00Z",
+      },
+      {
+        role: "assistant",
+        content: "答案",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:01:00Z",
+      },
+      {
+        role: "assistant",
+        content: "子任务",
+        turn_id: 1,
+        agent_type: "review",
+        sub_task_id: "task",
+        created_at: "2026-11-01T12:02:00Z",
+      },
+      {
+        role: "assistant",
+        content: " \n",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:03:00Z",
+      },
+    ] as session.Message[];
+    expect(rebuildTurns(messages)[0]).toMatchObject({
+      userSentAt: "2026-11-01T12:00:00Z",
+      assistantSentAt: "2026-11-01T12:01:00Z",
+    });
+  });
+
+  it("restores opaque thinking without reading native metadata", () => {
+    const messages = [
+      { role: "user", content: "继续", turn_id: 1, agent_type: "main" },
+      {
+        role: "assistant",
+        content: "",
+        thinking_content: "",
+        has_thinking: true,
+        turn_id: 1,
+        agent_type: "main",
+      },
+    ] as unknown as session.Message[];
+    const turns = rebuildTurns(messages);
+    expect(turns[0].segments).toHaveLength(1);
+    expect(turns[0].segments[0]).toMatchObject({
+      hasThinking: true,
+      thinkingContent: "",
+      thinkingDone: true,
+      isStreaming: false,
+    });
+  });
+
+  it("keeps older visible thinking when the new marker is absent", () => {
+    const messages = [
+      { role: "user", content: "继续", turn_id: 1, agent_type: "main" },
+      {
+        role: "assistant",
+        content: "回答",
+        thinking_content: "思考摘要",
+        turn_id: 1,
+        agent_type: "main",
+      },
+    ] as unknown as session.Message[];
+    const [turn] = rebuildTurns(messages);
+    expect(turn.segments[0]).toMatchObject({
+      hasThinking: true,
+      thinkingContent: "思考摘要",
+    });
+  });
+
+  it.each([
+    ["error", "对话出错：unexpected EOF"],
+    ["system_interrupted", "检测到重复调用循环，已中断对话"],
+    ["user_stopped", "用户停止了本轮对话"],
+  ])(
+    "restores %s and its reason directly from history",
+    (eventType, reason) => {
+      const messages = [
+        { role: "user", content: "继续", turn_id: 1, agent_type: "main" },
+        {
+          role: "system",
+          content: reason,
+          turn_id: 1,
+          event_type: eventType,
+          agent_type: "main",
+        },
+      ] as unknown as session.Message[];
+      const turns = rebuildTurns(messages);
+      expect(turns).toHaveLength(1);
+      expect(turns[0].status).toBe(eventType);
+      expect(turns[0].errorMessage).toBe(reason);
+    },
+  );
+
   it("creates segments with firstSeq=0 (historical, never cleared)", () => {
     const messages = [
       {

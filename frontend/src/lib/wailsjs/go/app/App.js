@@ -106,6 +106,10 @@ export function DeleteCharacterGroup(arg1, arg2) {
   return window['go']['app']['App']['DeleteCharacterGroup'](arg1, arg2);
 }
 
+export function DeleteChatImage(arg1, arg2) {
+  return window['go']['app']['App']['DeleteChatImage'](arg1, arg2);
+}
+
 export function DeleteCover(arg1) {
   return window['go']['app']['App']['DeleteCover'](arg1);
 }
@@ -158,8 +162,8 @@ export function DeleteVolume(arg1, arg2) {
   return window['go']['app']['App']['DeleteVolume'](arg1, arg2);
 }
 
-export function DiscoverModels(arg1, arg2, arg3) {
-  return window['go']['app']['App']['DiscoverModels'](arg1, arg2, arg3);
+export function DiscoverModels(arg1) {
+  return window['go']['app']['App']['DiscoverModels'](arg1);
 }
 
 export function DismissUpdate(arg1) {
@@ -216,6 +220,10 @@ export function GetCharacterRelations(arg1) {
 
 export function GetCharacters(arg1) {
   return window['go']['app']['App']['GetCharacters'](arg1);
+}
+
+export function GetChatImage(arg1, arg2) {
+  return window['go']['app']['App']['GetChatImage'](arg1, arg2);
 }
 
 export function GetCommitFileList(arg1, arg2) {
@@ -294,6 +302,10 @@ export function GetSessionMessages(arg1) {
   return window['go']['app']['App']['GetSessionMessages'](arg1);
 }
 
+export function GetSessionMessagesPage(arg1) {
+  return window['go']['app']['App']['GetSessionMessagesPage'](arg1);
+}
+
 export function GetSessions(arg1) {
   return window['go']['app']['App']['GetSessions'](arg1);
 }
@@ -332,6 +344,10 @@ export function GetWritingActivity(arg1) {
 
 export function GetWritingStats() {
   return window['go']['app']['App']['GetWritingStats']();
+}
+
+export function ImportChatImage(arg1) {
+  return window['go']['app']['App']['ImportChatImage'](arg1);
 }
 
 export function ImportNovel(arg1) {
@@ -470,12 +486,8 @@ export function SetMCPToolAllowed(arg1, arg2, arg3) {
   return window['go']['app']['App']['SetMCPToolAllowed'](arg1, arg2, arg3);
 }
 
-export function SetReasoningEffort(arg1) {
-  return window['go']['app']['App']['SetReasoningEffort'](arg1);
-}
-
-export function SetSelectedModel(arg1, arg2) {
-  return window['go']['app']['App']['SetSelectedModel'](arg1, arg2);
+export function SetSelectedModel(arg1) {
+  return window['go']['app']['App']['SetSelectedModel'](arg1);
 }
 
 export function TestConnection(arg1) {

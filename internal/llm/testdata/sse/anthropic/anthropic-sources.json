@@ -1,0 +1,176 @@
+[
+  {
+    "file": "anthropic-tool_runner_next_streaming-01.sse",
+    "source_kind": "official-sdk-vcr-cassette",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "toolrunner/testdata/cassettes/tool_runner_next_streaming.yaml",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/toolrunner/testdata/cassettes/tool_runner_next_streaming.yaml",
+    "source_sha256": "875f061d52ab68cca078d988b396544275711fda774a5c4cdfe40ef2638ecd11",
+    "response_index": 1,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "732f4b46189b61ee2b432abdd29852b31ac7be408739b7dd9c936f395e01e459",
+    "bytes": 3458,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 2,
+      "content_block_delta": 17,
+      "ping": 1,
+      "content_block_stop": 2,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "text": 1,
+      "text_delta": 13,
+      "tool_use": 1,
+      "input_json_delta": 4
+    }
+  },
+  {
+    "file": "anthropic-tool_runner_streaming_all-01.sse",
+    "source_kind": "official-sdk-vcr-cassette",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "toolrunner/testdata/cassettes/tool_runner_streaming_all.yaml",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/toolrunner/testdata/cassettes/tool_runner_streaming_all.yaml",
+    "source_sha256": "a523fe3e4db93da6e1b8f715e151d448bc9cc2231bae603d5357f2f6583140fe",
+    "response_index": 1,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "9e75e3423449cfda1266e73327f43949fa0318b68a1d17293d4d06fe7ecbd783",
+    "bytes": 3489,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 2,
+      "content_block_delta": 16,
+      "ping": 1,
+      "content_block_stop": 2,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "text": 1,
+      "text_delta": 5,
+      "tool_use": 1,
+      "input_json_delta": 11
+    }
+  },
+  {
+    "file": "anthropic-tool_runner_streaming_all-02.sse",
+    "source_kind": "official-sdk-vcr-cassette",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "toolrunner/testdata/cassettes/tool_runner_streaming_all.yaml",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/toolrunner/testdata/cassettes/tool_runner_streaming_all.yaml",
+    "source_sha256": "a523fe3e4db93da6e1b8f715e151d448bc9cc2231bae603d5357f2f6583140fe",
+    "response_index": 2,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "85270c48213e3496525f928fbacae9eeb8128270aca9f2596dc18d07f4b8a3af",
+    "bytes": 1619,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 1,
+      "content_block_delta": 5,
+      "ping": 1,
+      "content_block_stop": 1,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "text": 1,
+      "text_delta": 5
+    }
+  },
+  {
+    "file": "anthropic-fallback-end-01.sse",
+    "source_kind": "official-sdk-authored-fixture",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "lib/betafallback/testdata/fallbackstream/fallback-end.sse",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/lib/betafallback/testdata/fallbackstream/fallback-end.sse",
+    "source_sha256": "7e79436abdb4ff03cc9b51e27c461bd067395a39b7b4d20fb5adba48681a1bf1",
+    "response_index": 1,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "7e79436abdb4ff03cc9b51e27c461bd067395a39b7b4d20fb5adba48681a1bf1",
+    "bytes": 1368,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 1,
+      "ping": 1,
+      "content_block_delta": 1,
+      "content_block_stop": 1,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "text": 1,
+      "text_delta": 1
+    }
+  },
+  {
+    "file": "anthropic-fallback-tooluse-01.sse",
+    "source_kind": "official-sdk-authored-fixture",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "lib/betafallback/testdata/fallbackstream/fallback-tooluse.sse",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/lib/betafallback/testdata/fallbackstream/fallback-tooluse.sse",
+    "source_sha256": "44bd0aa6cb27503f0a41cf6402998e4d5cc372642a82120b121968f14e7c0c39",
+    "response_index": 1,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "44bd0aa6cb27503f0a41cf6402998e4d5cc372642a82120b121968f14e7c0c39",
+    "bytes": 1213,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 1,
+      "content_block_delta": 1,
+      "content_block_stop": 1,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "tool_use": 1,
+      "input_json_delta": 1
+    }
+  },
+  {
+    "file": "anthropic-refusal-01.sse",
+    "source_kind": "official-sdk-authored-fixture",
+    "repository": "anthropics/anthropic-sdk-go",
+    "revision": "bdcae90baad7d21949fc694f779377f62ff68631",
+    "source_path": "lib/betafallback/testdata/fallbackstream/refusal.sse",
+    "source_url": "https://github.com/anthropics/anthropic-sdk-go/blob/bdcae90baad7d21949fc694f779377f62ff68631/lib/betafallback/testdata/fallbackstream/refusal.sse",
+    "source_sha256": "033b5288a50e744c1534186fc7147e9b097fb85ab12c3f293142163089a585bb",
+    "response_index": 1,
+    "status": 200,
+    "content_type": "text/event-stream",
+    "sha256": "033b5288a50e744c1534186fc7147e9b097fb85ab12c3f293142163089a585bb",
+    "bytes": 1976,
+    "events": {
+      "message_start": 1,
+      "content_block_start": 2,
+      "ping": 1,
+      "content_block_delta": 3,
+      "content_block_stop": 2,
+      "message_delta": 1,
+      "message_stop": 1
+    },
+    "frame_errors": [],
+    "block_and_delta_types": {
+      "thinking": 1,
+      "thinking_delta": 1,
+      "signature_delta": 1,
+      "text": 1,
+      "text_delta": 1
+    }
+  }
+]

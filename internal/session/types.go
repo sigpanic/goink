@@ -1,28 +1,27 @@
 package session
 
 import (
-	"encoding/json"
-	"log/slog"
 	"time"
+
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // Session 是对话会话的元数据容器。
 // 不持有 messages——消息通过 Store 按 to_api/to_frontend/version 三条路径独立查询。
 // active_version 配合 Message.version 实现上下文压缩和版本级回滚，压缩不删旧消息。
 type Session struct {
-	SessionID       string    `gorm:"column:session_id;primaryKey"                                 json:"session_id"`
-	NovelID         int64     `gorm:"column:novel_id;index:idx_sessions_novel;not null"            json:"novel_id"`
-	Title           string    `gorm:"column:title;not null;default:''"                            json:"title"`
-	Model           string    `gorm:"column:model;not null;default:deepseek-v4-pro"               json:"model"`
-	ReasoningEffort string    `gorm:"column:reasoning_effort"                                      json:"reasoning_effort,omitempty"` // "high" | "max" | ""，DeepSeek 推理深度
-	Summary         string    `gorm:"column:summary;not null;default:''"                          json:"summary"`                     // 最新压缩摘要，每次压缩全量替换
-	PendingChanges  string    `gorm:"column:pending_changes"                                       json:"pending_changes,omitempty"`  // JSON，待确认的编辑变更列表
-	ExtraMetadata   string    `gorm:"column:extra_metadata"                                        json:"extra_metadata,omitempty"`   // JSON，扩展槽
-	ActiveVersion   int       `gorm:"column:active_version;not null;default:1"                    json:"active_version"`              // 当前活跃的上下文代数
-	LastTurnID      int       `gorm:"column:last_turn_id;not null;default:0"                      json:"last_turn_id"`                // 最后一个 turn 的编号，原子自增
-	Usage           string    `gorm:"column:usage"                                                 json:"usage,omitempty"`            // JSON，最近一次 LLM 调用的 token 用量
-	CreatedAt       time.Time `gorm:"column:created_at;autoCreateTime"                            json:"created_at"`
-	UpdatedAt       time.Time `gorm:"column:updated_at;autoUpdateTime;index:idx_sessions_novel"   json:"updated_at"`
+	SessionID      string                 `gorm:"column:session_id;primaryKey"                                 json:"session_id"`
+	NovelID        int64                  `gorm:"column:novel_id;index:idx_sessions_novel;not null"            json:"novel_id"`
+	Title          string                 `gorm:"column:title;not null;default:''"                            json:"title"`
+	ModelSelection adapter.ModelSelection `gorm:"embedded" json:"model_selection"`
+	Summary        string                 `gorm:"column:summary;not null;default:''"                          json:"summary"`                    // 最新压缩摘要，每次压缩全量替换
+	PendingChanges string                 `gorm:"column:pending_changes"                                       json:"pending_changes,omitempty"` // JSON，待确认的编辑变更列表
+	ExtraMetadata  string                 `gorm:"column:extra_metadata"                                        json:"extra_metadata,omitempty"`  // JSON，扩展槽
+	ActiveVersion  int                    `gorm:"column:active_version;not null;default:1"                    json:"active_version"`             // 当前活跃的上下文代数
+	LastTurnID     int                    `gorm:"column:last_turn_id;not null;default:0"                      json:"last_turn_id"`               // 最后一个 turn 的编号，原子自增
+	Usage          string                 `gorm:"column:usage"                                                 json:"usage,omitempty"`           // JSON，最近一次 LLM 调用的 token 用量
+	CreatedAt      time.Time              `gorm:"column:created_at;autoCreateTime"                            json:"created_at"`
+	UpdatedAt      time.Time              `gorm:"column:updated_at;autoUpdateTime;index:idx_sessions_novel"   json:"updated_at"`
 }
 
 func (Session) TableName() string { return "sessions" }
@@ -34,7 +33,7 @@ func (Session) TableName() string { return "sessions" }
 // - EventCompression:       上下文压缩边界
 // - EventUserStopped:       用户手动停止（context.Canceled）
 // - EventSystemInterrupted: 后端主动中断（MaxTurns/死循环检测/工具连续失败）
-// - EventError:             服务商错误（HTTP 4xx/5xx/网络/超时）
+// - EventError:             对话执行失败（服务商/网络/协议/解析/存储等错误）
 type EventType string
 
 const (
@@ -57,6 +56,7 @@ type Message struct {
 	Role            string `gorm:"column:role;not null"                                          json:"role"`   // "system" | "user" | "assistant" | "tool"
 	Content         string `gorm:"column:content;not null"                                       json:"content"`
 	ThinkingContent string `gorm:"column:thinking_content"                                     json:"thinking_content,omitempty"`
+	HasThinking     bool   `gorm:"column:has_thinking;not null;default:0"                        json:"has_thinking"` // 发生过思考，不表示仍在思考。
 	TokenCount      int    `gorm:"column:token_count;not null;default:0"                        json:"token_count"`
 	ExtraMetadata   string `gorm:"column:extra_metadata"                                         json:"extra_metadata,omitempty"` // JSON：tool_calls / tool_call_id / display_text 等
 	Version         int    `gorm:"column:version;not null;default:1;index"                      json:"version"`                   // 压缩代数，查询时 = session.active_version
@@ -70,69 +70,3 @@ type Message struct {
 }
 
 func (Message) TableName() string { return "messages" }
-
-// ToAPIFormat 转为 OpenAI Chat Completions 兼容的消息格式。
-// 从 ExtraMetadata 提取 tool_calls、thinking_content、tool_call_id 拼入对应字段。
-func (m *Message) ToAPIFormat(logger *slog.Logger) map[string]any {
-	payload := map[string]any{
-		"role":    m.Role,
-		"content": m.Content,
-	}
-
-	// 用户消息前置发送时间，让模型能感知"这句话是何时说的"。
-	//
-	// 时间取自入库后不再变化的 created_at：历史消息每次回放得到的字符串完全一致，
-	// 因此不会破坏前缀缓存（若改用 time.Now()，每轮请求都会让缓存前缀失效）。
-	//
-	// 门控用 ToFrontend 而非 created_at 零值判断：ToFrontend 为真的 user 消息才是
-	// 用户真实发言，slash 注入 / 审批反馈 / tool reminder / 压缩提醒与摘要等系统注入
-	// 的 user 消息全是 ToFrontend=false，天然不带前缀。
-	//
-	// 关键：压缩时保留的消息会被 cp 一份（apiMsgToMessage，ToFrontend=false），其
-	// Content 已是带上前缀的渲染产物，而 created_at 会被 GORM autoCreateTime 覆盖成
-	// 压缩时刻。因为副本 ToFrontend=false，这里不会再加一层前缀——既避免了 "[压缩时间]
-	// [原始时间] 内容" 的逐次叠加，也让发送时间随 Content 一起保留下来。不要改成用
-	// created_at 判断，否则压缩副本会被重复加前缀。
-	if m.Role == "user" && m.ToFrontend && !m.CreatedAt.IsZero() {
-		payload["content"] = "[" + m.CreatedAt.Local().Format("2006-01-02 15:04") + "] " + m.Content
-	}
-
-	if m.Role == "assistant" {
-		if m.ThinkingContent != "" {
-			payload["reasoning_content"] = m.ThinkingContent
-		}
-		var meta map[string]any
-		if m.ExtraMetadata != "" {
-			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
-				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
-			}
-		}
-		if meta != nil {
-			if tc, ok := meta["tool_calls"]; ok {
-				payload["tool_calls"] = tc
-				if m.ThinkingContent == "" {
-					payload["reasoning_content"] = ""
-				}
-			}
-		}
-	}
-
-	if m.Role == "tool" {
-		var meta map[string]any
-		if m.ExtraMetadata != "" {
-			if err := json.Unmarshal([]byte(m.ExtraMetadata), &meta); err != nil {
-				logger.Error("corrupt ExtraMetadata", "message_id", m.ID, "raw", m.ExtraMetadata, "err", err)
-			}
-		}
-		if meta != nil {
-			if id, ok := meta["tool_call_id"]; ok {
-				payload["tool_call_id"] = id
-			}
-			if name, ok := meta["tool_name"]; ok {
-				payload["name"] = name
-			}
-		}
-	}
-
-	return payload
-}

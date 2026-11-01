@@ -11,7 +11,7 @@ import type {
   ImportProgressState,
 } from "@/hooks/useImportNovel";
 import type { llm } from "@/lib/wailsjs/go/models";
-import PopSelect from "@/components/shared/PopSelect";
+import ModelPicker from "@/components/model/ModelPicker";
 
 interface Props {
   open: boolean;
@@ -154,13 +154,10 @@ export default function ImportProgressDialog({
               <span className="text-xs text-muted-foreground">
                 {t("novel.importModel")}
               </span>
-              <PopSelect
-                value={selectedModel?.Key ?? ""}
-                options={models.map((m) => ({
-                  value: m.Key,
-                  label: m.ModelName,
-                }))}
-                onChange={(key) => {
+              <ModelPicker
+                models={models}
+                selectedKey={selectedModel?.Key ?? ""}
+                onSelectModel={(key) => {
                   const model = models.find((m) => m.Key === key);
                   if (model) onModelChange(model);
                 }}

@@ -1,0 +1,26 @@
+: Modified by Goink: extracted recorded response segments and reframed them as SSE; added this notice.
+: Source: https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/Chats_Tests_sendMessage_Google_AI_with_text_stream.json
+: License: Apache-2.0; see GOOGLE-LICENSE.txt.
+
+data: {"candidates":[{"content":{"parts":[{"text":"The"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" sky is blue"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" due to a phenomenon called **Rayleigh scattering**. Here's a breakdown:"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":"\n\n*   **Sunlight and Colors:** Sunlight is actually made up of all"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" the colors of the rainbow. These colors have different wavelengths. Blue and violet have shorter wavelengths, while red and orange have longer wavelengths.\n\n*   **Atmospheric Particles"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":":** The Earth's atmosphere contains tiny particles like nitrogen and oxygen molecules.\n\n*   **Scattering:** When sunlight enters the atmosphere, it collides with these"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" particles. This causes the light to scatter in different directions.\n\n*   **Rayleigh Scattering in Action:** Rayleigh scattering is much more effective at scattering shorter wavelengths (blue and violet) than longer wavelengths (red and orange). This means that blue"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" and violet light are scattered much more throughout the atmosphere.\n\n*   **Why Blue and not Violet?** While violet is scattered even more than blue, our eyes are more sensitive to blue light. Also, the sun emits less violet light to"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" begin with, and the upper atmosphere absorbs a good portion of it before it can even reach the lower atmosphere. Therefore, what reaches our eyes is predominantly blue.\n\nIn essence, the blue light is scattered so much that it appears to come from all directions in the sky, making the sky appear blue.\n\n**Important Considerations"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":":**\n\n*   **Sunset/Sunrise:** At sunset and sunrise, the sunlight has to travel through a greater amount of atmosphere to reach our eyes. This means that most of the blue light has been scattered away before it gets to us. The longer wavelengths (red and orange) are less affected and can pass through,"}],"role":"model"}}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"promptTokenCount":7,"promptTokensDetails":[{"modality":"TEXT","tokenCount":7}],"totalTokenCount":7}}
+
+data: {"candidates":[{"content":{"parts":[{"text":" which is why we see those beautiful reddish and orange hues.\n*   **Other Factors:** The presence of particles like dust and pollution can also affect the color of the sky, leading to variations in the blue intensity or even a hazy appearance."}],"role":"model"},"finishReason":"STOP"}],"modelVersion":"gemini-2.0-flash","responseId":"pdSfaOurIPqAm9IPucqbqA4","usageMetadata":{"candidatesTokenCount":377,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":377}],"promptTokenCount":6,"promptTokensDetails":[{"modality":"TEXT","tokenCount":6}],"totalTokenCount":383}}
+

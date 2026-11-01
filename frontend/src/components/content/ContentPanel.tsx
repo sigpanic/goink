@@ -52,6 +52,7 @@ export interface ContentPanelHandle {
     title?: string,
     readOnly?: boolean,
     initialViewMode?: string,
+    initialContent?: string,
   ) => void;
   openFileWithHighlight: (
     path: string,
@@ -356,6 +357,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           .getState()
           .byNovel[String(novelId)]?.tabs.find((item) => item.id === tabId);
         const expected = original?.contentBase ?? original?.content ?? "";
+        updateTab(tabId, { content, isDirty: true });
         let saveError: unknown;
         editorSaveQueue.schedule(
           {
@@ -628,6 +630,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         title?: string,
         readOnly?: boolean,
         initialViewMode?: string,
+        initialContent?: string,
       ) => {
         void resolveFileDescription(qc, novelId, path, t)
           .then(async (description) => {
@@ -640,7 +643,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               useEditorTabsStore.getState().byNovel[String(novelId)]?.tabs ??
               tabs
             ).find((tab) => tab.path === filePath && tab.type === "file");
-            if (existing) {
+            if (existing && initialContent === undefined) {
               updateTab(existing.id, {
                 title: display,
                 ...(description.outlinePath
@@ -673,15 +676,16 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               loaded = await readLatestContent(filePath, true);
             }
             if (novelIdRef.current !== novelId) return;
-            const c = loaded.content;
+            const c = initialContent ?? loaded.content;
+            if (existing) closeTab(existing.id);
             openTab({
               type: "file",
               path: filePath,
               outlinePath: description.outlinePath,
               title: display,
               content: c,
-              contentBase: c,
-              isDirty: false,
+              contentBase: loaded.content,
+              isDirty: initialContent !== undefined,
               viewMode: initialMode,
               readOnly: skReadOnly,
             });
@@ -696,6 +700,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
         tabs,
         readLatestContent,
         openTab,
+        closeTab,
         setActiveTabId,
         updateTab,
         qc,

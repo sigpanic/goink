@@ -13,8 +13,10 @@ import {preference} from '../models';
 import {reader} from '../models';
 import {timeline} from '../models';
 import {llm} from '../models';
+import {adapter} from '../models';
 import {pattern} from '../models';
 import {storage} from '../models';
+import {attachment} from '../models';
 import {git} from '../models';
 import {mcpserver} from '../models';
 import {mcpclient} from '../models';
@@ -80,6 +82,8 @@ export function DeleteCharacter(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteCharacterGroup(arg1:number,arg2:number):Promise<void>;
 
+export function DeleteChatImage(arg1:number,arg2:string):Promise<void>;
+
 export function DeleteCover(arg1:number):Promise<void>;
 
 export function DeleteLocation(arg1:number,arg2:number):Promise<void>;
@@ -106,7 +110,7 @@ export function DeleteTimelineEntry(arg1:number,arg2:number):Promise<void>;
 
 export function DeleteVolume(arg1:number,arg2:number):Promise<void>;
 
-export function DiscoverModels(arg1:string,arg2:string,arg3:string):Promise<Array<llm.ModelInfo>>;
+export function DiscoverModels(arg1:llm.ProviderProbeInput):Promise<Array<adapter.ModelInfo>>;
 
 export function DismissUpdate(arg1:string):Promise<void>;
 
@@ -135,6 +139,8 @@ export function GetCharacterGroups(arg1:app.GetCharacterGroupsInput):Promise<sto
 export function GetCharacterRelations(arg1:number):Promise<Array<character.CharacterRelation>>;
 
 export function GetCharacters(arg1:number):Promise<Array<character.Character>>;
+
+export function GetChatImage(arg1:number,arg2:string):Promise<attachment.Image>;
 
 export function GetCommitFileList(arg1:number,arg2:string):Promise<app.CommitFileListResult>;
 
@@ -174,6 +180,8 @@ export function GetSession(arg1:string):Promise<app.SessionDetail>;
 
 export function GetSessionMessages(arg1:string):Promise<Array<session.Message>>;
 
+export function GetSessionMessagesPage(arg1:app.GetSessionMessagesPageInput):Promise<session.MessagePage>;
+
 export function GetSessions(arg1:app.GetSessionsInput):Promise<storage.PageResult_github_com_sigpanic_goink_app_SessionMeta_>;
 
 export function GetSettings():Promise<config.AppSettings>;
@@ -193,6 +201,8 @@ export function GetVolumes(arg1:number):Promise<Array<volume.Volume>>;
 export function GetWritingActivity(arg1:number):Promise<Array<writing.DailyActivity>>;
 
 export function GetWritingStats():Promise<writing.WritingStats>;
+
+export function ImportChatImage(arg1:app.ChatImageInput):Promise<apperr.Result_github_com_sigpanic_goink_internal_attachment_Image_>;
 
 export function ImportNovel(arg1:app.ImportNovelInput):Promise<imp.ImportResult>;
 
@@ -262,11 +272,9 @@ export function SetMCPConnectionEnabled(arg1:string,arg2:boolean):Promise<void>;
 
 export function SetMCPToolAllowed(arg1:string,arg2:string,arg3:boolean):Promise<void>;
 
-export function SetReasoningEffort(arg1:string):Promise<void>;
+export function SetSelectedModel(arg1:app.SetSelectedModelInput):Promise<void>;
 
-export function SetSelectedModel(arg1:string,arg2:string):Promise<void>;
-
-export function TestConnection(arg1:app.TestConnectionInput):Promise<llm.TestConnectionResult>;
+export function TestConnection(arg1:llm.TestConnectionInput):Promise<adapter.TestConnectionResult>;
 
 export function TestMCPConnection(arg1:string):Promise<Array<mcpclient.ToolView>>;
 

@@ -1,0 +1,63 @@
+event: interaction.created
+data: {"event_type":"interaction.created","interaction":{"id":"interaction_stream_tools","status":"in_progress","model":"gemini-3.8-flash","usage":{"total_input_tokens":7}}}
+
+event: step.start
+data: {"event_type":"step.start","index":0,"step":{"type":"thought","signature":"","summary":[{"type":"text","text":"先思"}],"extension":{"n":9007199254740995}}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":0,"delta":{"type":"thought_summary","content":{"type":"text","text":"后想","extension":{"keep":true}}}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":0,"delta":{"type":"thought_summary","content":{"type":"image","uri":"data:image/png;base64,AA=="}}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":0,"delta":{"type":"thought_signature","signature":"opaque-stream-signature"}}
+
+event: step.stop
+data: {"event_type":"step.stop","index":0,"usage":{"total_thought_tokens":22},"step_usage":{"total_thought_tokens":999}}
+
+event: step.start
+data: {"event_type":"step.start","index":1,"step":{"type":"model_output","content":[{"type":"text","text":"先","extension":{"keep":true}}]}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":1,"delta":{"type":"text","text":"读"},"metadata":{"total_usage":{"total_output_tokens":3,"total_thought_tokens":22}}}
+
+event: step.stop
+data: {"event_type":"step.stop","index":1}
+
+event: step.start
+data: {"event_type":"step.start","index":2,"step":{"type":"function_call","id":"a","name":"read","arguments":{},"extension":{"keep":9007199254740997}}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":2,"delta":{"type":"arguments_delta","arguments":"{\"chapter\":"}}
+
+event: step.start
+data: {"event_type":"step.start","index":3,"step":{"type":"function_call","id":"b","name":"read","arguments":{"chapter":2}}}
+
+event: step.stop
+data: {"event_type":"step.stop","index":3}
+
+event: step.delta
+data: {"event_type":"step.delta","index":2,"delta":{"type":"arguments_delta","arguments":"9007199254740993}"}}
+
+event: step.stop
+data: {"event_type":"step.stop","index":2}
+
+event: step.start
+data: {"event_type":"step.start","index":4,"step":{"type":"model_output"}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":4,"delta":{"type":"text","text":"后"}}
+
+event: step.delta
+data: {"event_type":"step.delta","index":4,"delta":{"type":"text_annotation_delta","annotations":[{"type":"url_citation","url":"https://example.invalid/reference","extension":{"n":9007199254740993}}]}}
+
+event: step.stop
+data: {"event_type":"step.stop","index":4}
+
+event: interaction.status_update
+data: {"event_type":"interaction.status_update","interaction_id":"interaction_stream_tools","status":"requires_action","usage":{"total_input_tokens":7,"total_output_tokens":20,"total_thought_tokens":22,"total_cached_tokens":3,"total_tokens":49,"total_tool_use_tokens":50}}
+
+event: done
+data: [DONE]
+

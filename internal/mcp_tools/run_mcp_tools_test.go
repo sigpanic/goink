@@ -132,17 +132,16 @@ func TestRunMCPAcceptsEmptyObjectAndExposesOnlyEntry(t *testing.T) {
 			return &ToolResult{Success: true}, nil
 		},
 	})
-	tools := reg.OpenAI(agentcfg.Allowlist(agentcfg.MainAgent))
+	tools := reg.Definitions(agentcfg.Allowlist(agentcfg.MainAgent))
 	require.Len(t, tools, 1)
-	function := tools[0]["function"].(map[string]any)
-	require.Equal(t, "run_mcp", function["name"])
+	require.Equal(t, "run_mcp", tools[0].Name)
 	var schema map[string]any
-	require.NoError(t, json.Unmarshal(function["parameters"].(json.RawMessage), &schema))
+	require.NoError(t, json.Unmarshal(tools[0].InputSchema, &schema))
 	require.ElementsMatch(t, []any{"tool_name", "args"}, schema["required"])
 	argsSchema := schema["properties"].(map[string]any)["args"].(map[string]any)
 	require.Equal(t, "object", argsSchema["type"])
 	require.NotEqual(t, false, argsSchema["additionalProperties"])
-	require.Len(t, reg.OpenAI(nil), 1, "拓展工具不直接向模型展示")
+	require.Len(t, reg.Definitions(nil), 1, "拓展工具不直接向模型展示")
 	result := reg.Execute(context.Background(), "run_mcp", json.RawMessage(`{"tool_name":"low_frequency","args":{}}`), tc, agentcfg.Allowlist(agentcfg.MainAgent))
 	require.True(t, result.Success, result.Error)
 }

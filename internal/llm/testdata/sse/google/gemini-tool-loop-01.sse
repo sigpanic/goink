@@ -1,0 +1,6 @@
+: Modified by Goink: extracted recorded response segments and reframed them as SSE; added this notice.
+: Source: https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/AFC_Streaming_Tests_generateContentStream_afc_enabled_Google_AI_AFC_enabled.json
+: License: Apache-2.0; see GOOGLE-LICENSE.txt.
+
+data: {"candidates":[{"content":{"parts":[{"functionCall":{"args":{"denominator":2,"numerator":10},"name":"customDivide"}}],"role":"model"},"finishReason":"STOP"}],"modelVersion":"gemini-2.0-flash","responseId":"a9SfaKaNG-3xn9kP5pnMyQ4","usageMetadata":{"candidatesTokenCount":6,"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":6}],"promptTokenCount":17,"promptTokensDetails":[{"modality":"TEXT","tokenCount":17}],"totalTokenCount":23}}
+

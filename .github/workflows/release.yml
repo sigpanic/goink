@@ -9,6 +9,11 @@ on:
   workflow_dispatch:
 
 jobs:
+  upgrade:
+    uses: ./.github/workflows/upgrade-tests.yml
+    with:
+      target: ${{ github.ref_name }}
+
   build-windows:
     runs-on: windows-latest
     steps:
@@ -296,7 +301,7 @@ jobs:
           path: build/dist/*
 
   release:
-    needs: [build-windows, build-linux, build-macos]
+    needs: [upgrade, build-windows, build-linux, build-macos]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     permissions:

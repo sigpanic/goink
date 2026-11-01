@@ -14,6 +14,7 @@ import (
 
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/skill"
 )
 
@@ -444,10 +445,7 @@ func TestBoundaryMessages_Format(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(msgs))
 	}
-	userContent, ok := msgs[1]["content"].(string)
-	if !ok {
-		t.Fatal("user message content is not string")
-	}
+	userContent := msgs[1].Content
 	if !strings.Contains(userContent, "第1章（chapter_id: 42）：初遇") {
 		t.Error("should contain chapter 1 title")
 	}
@@ -468,10 +466,7 @@ func TestSummaryMessages_WithBoundaries(t *testing.T) {
 		{StartChapterID: 42, EndChapterID: 84, StartReadingNumber: 1, EndReadingNumber: 2, Hint: "第一阶段"},
 	}
 	msgs := summaryMessages(chapters, boundaries)
-	userContent, ok := msgs[1]["content"].(string)
-	if !ok {
-		t.Fatal("user message content is not string")
-	}
+	userContent := msgs[1].Content
 	if !strings.Contains(userContent, "疑似阶段边界参考") {
 		t.Error("should contain boundary reference section")
 	}
@@ -488,10 +483,7 @@ func TestSummaryMessages_NoBoundaries(t *testing.T) {
 		{ID: 42, ReadingNumber: 1, Title: "开始", Content: "正文"},
 	}
 	msgs := summaryMessages(chapters, nil)
-	userContent, ok := msgs[1]["content"].(string)
-	if !ok {
-		t.Fatal("user message content is not string")
-	}
+	userContent := msgs[1].Content
 	if strings.Contains(userContent, "疑似阶段边界参考") {
 		t.Error("should not contain boundary section when no boundaries")
 	}
@@ -505,10 +497,7 @@ func TestInitialChunkMessages_Format(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(msgs))
 	}
-	userContent, ok := msgs[1]["content"].(string)
-	if !ok {
-		t.Fatal("user message content is not string")
-	}
+	userContent := msgs[1].Content
 	if !strings.Contains(userContent, "开篇叙事") {
 		t.Error("should contain summary text")
 	}
@@ -522,10 +511,7 @@ func TestCompressChunkMessages_ContainsRound(t *testing.T) {
 		{Name: "崛起", StartChapterID: 1, EndChapterID: 10, StartReadingNumber: 1, EndReadingNumber: 10, Content: "主角崛起"},
 	}
 	msgs := compressChunkMessages(chunks, map[int64]int{1: 1, 10: 10}, 3)
-	userContent, ok := msgs[1]["content"].(string)
-	if !ok {
-		t.Fatal("user message content is not string")
-	}
+	userContent := msgs[1].Content
 	if !strings.Contains(userContent, "第 3 轮压缩") {
 		t.Error("should contain round number")
 	}
@@ -542,10 +528,7 @@ func TestFinalSkillMessages_Format(t *testing.T) {
 	if len(msgs) != 2 {
 		t.Fatalf("expected 2 messages, got %d", len(msgs))
 	}
-	sysContent, ok := msgs[0]["content"].(string)
-	if !ok {
-		t.Fatal("system message content is not string")
-	}
+	sysContent := msgs[0].Content
 	if !strings.Contains(sysContent, "套路模板") {
 		t.Error("system prompt should mention 套路模板")
 	}
@@ -607,7 +590,7 @@ func TestExtract_EmptyProvider(t *testing.T) {
 		Chapters:  &chapter.Store{},
 		LLMClient: &llm.Client{},
 	}
-	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 1, ProviderName: "", ModelID: "m"})
+	_, err := e.Extract(context.TODO(), ExtractPatternInput{NovelID: 1, AdapterName: adapter.ProtocolOpenAIChat, ProviderName: "", ModelID: "m"})
 	if err == nil {
 		t.Fatal("expected error for empty provider")
 	}
@@ -628,24 +611,31 @@ const testModel = "test-model"
 
 // newMockLLMClient 创建一个指向 httptest.Server 的真实 llm.Client。
 // handler 负责根据请求中的 tools 字段返回预设 SSE 流。
-func newMockLLMClient(handler http.HandlerFunc) *llm.Client {
-	server := httptest.NewServer(handler)
-	t := server // 用于测试中引用
+func newMockLLMClient(t *testing.T, handler http.HandlerFunc) *llm.Client {
+	t.Helper()
+	server := httptest.NewServer(handler) // 用于测试中引用
+	t.Cleanup(server.Close)               // server lifetime managed by test
 
-	_ = t // server lifetime managed by test
-
-	providers := map[string]llm.Provider{
-		testProvider: {
-			Name:    testProvider,
-			ChatURL: server.URL,
-			APIKey:  "test-key",
-			Models: []llm.ModelInfo{
-				{ID: testModel, ContextWindow: 128_000},
-			},
+	config := &llm.UserLLMConfig{
+		Version: llm.ConfigVersion,
+		Adapters: map[adapter.Protocol]llm.AdapterConfig{
+			adapter.ProtocolOpenAIChat: {Providers: []adapter.Provider{{
+				Name:         testProvider,
+				ProviderType: "openai",
+				ChatURL:      server.URL,
+				APIKey:       "test-key",
+				Models: []adapter.ModelInfo{
+					{ID: testModel, ContextWindow: 128_000},
+				},
+			}}},
 		},
 	}
 	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelError}))
-	return llm.NewClient(providers, logger)
+	client, err := llm.NewClient(config, logger)
+	if err != nil {
+		t.Fatalf("create LLM client: %v", err)
+	}
+	return client
 }
 
 // mockToolHandler 返回一个 HTTP handler，对包含 tool_calls 的请求返回指定 tool name
@@ -725,8 +715,9 @@ func mustJSON(v any) string {
 
 // testExtractor 创建一个用于测试的 Extractor，LLM 指向 mock server。
 // Chapters 字段为非 nil 的空 Store（仅用于 nil 检查，不实际查询）。
-func testExtractor(handler http.HandlerFunc) *Extractor {
-	client := newMockLLMClient(handler)
+func testExtractor(t *testing.T, handler http.HandlerFunc) *Extractor {
+	t.Helper()
+	client := newMockLLMClient(t, handler)
 	return &Extractor{
 		Chapters:  &chapter.Store{},
 		LLMClient: client,
@@ -737,6 +728,7 @@ func defaultInput() ExtractPatternInput {
 	return ExtractPatternInput{
 		TaskID:       "test-task",
 		NovelID:      1,
+		AdapterName:  adapter.ProtocolOpenAIChat,
 		ProviderName: testProvider,
 		ModelID:      testModel,
 	}
@@ -756,7 +748,7 @@ func TestPreAnalyzeBoundaries_MockLLM(t *testing.T) {
 	argsJSON, _ := json.Marshal(boundaries)
 
 	chapters := makeChapters(10, 50)
-	e := testExtractor(mockToolHandler(outputBoundariesTool, string(argsJSON), ""))
+	e := testExtractor(t, mockToolHandler(outputBoundariesTool, string(argsJSON), ""))
 
 	got, err := e.preAnalyzeBoundaries(context.Background(), defaultInput(), chapters)
 	if err != nil {
@@ -791,7 +783,7 @@ func TestInitialChunks_MockLLM(t *testing.T) {
 		{ChapterID: 2, ReadingNumber: 2, Summary: "第二章摘要"},
 	}
 
-	e := testExtractor(mockToolHandler(outputChunksTool, string(argsJSON), ""))
+	e := testExtractor(t, mockToolHandler(outputChunksTool, string(argsJSON), ""))
 	chunks, trace, err := e.initialChunks(context.Background(), defaultInput(), summaries, 100_000)
 	if err != nil {
 		t.Fatalf("initialChunks: %v", err)
@@ -827,7 +819,7 @@ func TestCompressChunks_MockLLM(t *testing.T) {
 		{Name: "转折", StartChapterID: 6, EndChapterID: 10, StartReadingNumber: 6, EndReadingNumber: 10, Content: "遭遇重大变故"},
 	}
 
-	e := testExtractor(mockToolHandler(outputChunksTool, string(argsJSON), ""))
+	e := testExtractor(t, mockToolHandler(outputChunksTool, string(argsJSON), ""))
 	compressed, trace, err := e.compressChunks(context.Background(), defaultInput(), inputChunks, map[int64]int{1: 1, 5: 5, 6: 6, 10: 10}, 100_000, 2)
 	if err != nil {
 		t.Fatalf("compressChunks: %v", err)
@@ -860,7 +852,7 @@ func TestFinalSkill_MockLLM(t *testing.T) {
 	}
 	argsJSON, _ := json.Marshal(out)
 
-	e := testExtractor(mockToolHandler("output_skill", string(argsJSON), ""))
+	e := testExtractor(t, mockToolHandler("output_skill", string(argsJSON), ""))
 	chunks := []Chunk{
 		{Name: "崛起", StartChapterID: 1, EndChapterID: 5, StartReadingNumber: 1, EndReadingNumber: 5, Content: "主角觉醒"},
 	}
@@ -886,7 +878,7 @@ func TestFinalSkill_MockLLM(t *testing.T) {
 
 func TestCallTool_ToolNotCalled(t *testing.T) {
 	// handler 返回 content 而不是 tool call
-	e := testExtractor(mockToolHandler("", "", "some content"))
+	e := testExtractor(t, mockToolHandler("", "", "some content"))
 
 	_, err := e.callTool(
 		context.Background(),
@@ -911,7 +903,7 @@ func TestCallTool_ToolNotCalled(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func TestCallTool_UnknownProvider(t *testing.T) {
-	e := testExtractor(mockToolHandler("", "", ""))
+	e := testExtractor(t, mockToolHandler("", "", ""))
 	input := defaultInput()
 	input.ProviderName = "nonexistent"
 
@@ -938,7 +930,7 @@ func TestPreAnalyzeBoundaries_Cancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel() // 立即取消
 
-	e := testExtractor(mockToolHandler(outputBoundariesTool, `{"boundaries":[]}`, ""))
+	e := testExtractor(t, mockToolHandler(outputBoundariesTool, `{"boundaries":[]}`, ""))
 	chapters := makeChapters(5, 50)
 
 	_, err := e.preAnalyzeBoundaries(ctx, defaultInput(), chapters)
@@ -960,7 +952,7 @@ func TestPreAnalyzeBoundaries_ProgressCallback(t *testing.T) {
 	argsJSON, _ := json.Marshal(boundaries)
 
 	var progressCalls []Progress
-	e := testExtractor(mockToolHandler(outputBoundariesTool, string(argsJSON), ""))
+	e := testExtractor(t, mockToolHandler(outputBoundariesTool, string(argsJSON), ""))
 	e.Progress = func(p Progress) {
 		progressCalls = append(progressCalls, p)
 	}

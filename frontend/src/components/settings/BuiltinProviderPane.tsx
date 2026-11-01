@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Globe, ExternalLink, ChevronDown } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
-import type { llm } from "@/lib/wailsjs/go/models";
+import type { adapter, llm } from "@/lib/wailsjs/go/models";
 import ModelDiscoveryPanel from "./ModelDiscoveryPanel";
 import ProviderIcon from "./ProviderIcon";
 import ProviderFormFields from "./ProviderFormFields";
@@ -12,7 +12,7 @@ import ProviderStatusBadge from "./ProviderStatusBadge";
 interface Props {
   providers: llm.ProviderView[];
   onUpdate: (key: string, patch: Partial<llm.ProviderView>) => void;
-  onAddCustomModel: (providerKey: string, model: llm.ModelInfo) => void;
+  onAddCustomModel: (providerKey: string, model: adapter.ModelInfo) => void;
   onRemoveCustomModel: (providerKey: string, modelId: string) => void;
   onTest: (
     providerKey: string,
@@ -95,7 +95,9 @@ export default function BuiltinProviderPane({
           testResults={testResults}
           renderIcon={(key) => (
             <ProviderIcon
-              provider={key}
+              provider={
+                providers.find((p) => p.key === key)?.provider_type ?? ""
+              }
               className="w-4 h-4 shrink-0 text-muted-foreground"
             />
           )}
@@ -196,9 +198,7 @@ export default function BuiltinProviderPane({
 
       <ModelDiscoveryPanel
         key={selectedKey}
-        providerName={selectedKey}
-        chatUrl={provider.chat_url}
-        apiKey={provider.api_key}
+        provider={provider}
         existingIds={allExistingIds}
         onAddModel={(m) => onAddCustomModel(selectedKey, m)}
       />

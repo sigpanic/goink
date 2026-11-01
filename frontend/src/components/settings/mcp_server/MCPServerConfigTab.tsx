@@ -24,6 +24,7 @@ export default function MCPServerConfigTab() {
   const [portDraft, setPortDraft] = useState<string | null>(null);
   const [toolsDraft, setToolsDraft] = useState<string[] | null>(null);
   const [actionError, setActionError] = useState("");
+  const [applying, setApplying] = useState(false);
   const [saved, setSaved] = useState(false);
   const [credentialNotice, setCredentialNotice] = useState("");
   const [confirmAction, setConfirmAction] = useState<
@@ -67,6 +68,7 @@ export default function MCPServerConfigTab() {
   const portValue = portDraft ?? String(config.port);
   const allowedTools = toolsDraft ?? view.config.allowed_tools ?? [];
   const busy =
+    applying ||
     save.isPending ||
     credentials.rotate.isPending ||
     credentials.revoke.isPending;
@@ -90,19 +92,37 @@ export default function MCPServerConfigTab() {
     ? toErrorMessage(query.error, t("settings.mcpServer.loadFailed"))
     : actionError || view.last_error;
 
-  async function apply(input: servercfg.Local, clearDraft: boolean) {
+  async function apply(
+    input: servercfg.Local,
+    action: "save" | "enable" | "disable",
+  ) {
+    setApplying(true);
     setActionError("");
     setSaved(false);
     setCredentialNotice("");
     try {
       await save.mutateAsync(input);
-      if (clearDraft) {
+      if (action !== "disable") {
         setPortDraft(null);
         setToolsDraft(null);
         setSaved(true);
       }
     } catch (err) {
-      setActionError(toErrorMessage(err, t("settings.mcpServer.saveFailed")));
+      const message = toErrorMessage(err, t("settings.mcpServer.saveFailed"));
+      setActionError(message);
+      if (action === "enable") {
+        try {
+          await save.mutateAsync(
+            new servercfg.Local({ ...input, enabled: false }),
+          );
+        } catch (restoreError) {
+          setActionError(
+            `${message}\n${toErrorMessage(restoreError, t("settings.mcpServer.saveFailed"))}`,
+          );
+        }
+      }
+    } finally {
+      setApplying(false);
     }
   }
 
@@ -133,7 +153,7 @@ export default function MCPServerConfigTab() {
     }
   }
 
-  function saveConfig() {
+  function saveConfig(start = false) {
     const port = Number(portValue);
     if (
       !/^\d+$/.test(portValue) ||
@@ -147,11 +167,11 @@ export default function MCPServerConfigTab() {
     }
     void apply(
       new servercfg.Local({
-        enabled: config.enabled,
+        enabled: start || config.enabled,
         port,
         allowed_tools: allowedTools,
       }),
-      true,
+      start ? "enable" : "save",
     );
   }
 
@@ -257,9 +277,14 @@ export default function MCPServerConfigTab() {
             stopping={view.status.stopping}
             port={portValue}
             disabled={disabled}
-            onEnabledChange={(enabled) =>
-              void apply(new servercfg.Local({ ...config, enabled }), false)
-            }
+            onEnabledChange={(enabled) => {
+              if (enabled) saveConfig(true);
+              else
+                void apply(
+                  new servercfg.Local({ ...config, enabled: false }),
+                  "disable",
+                );
+            }}
             onPortChange={(port) => {
               setPortDraft(port);
               setSaved(false);
@@ -349,7 +374,7 @@ export default function MCPServerConfigTab() {
           )}
           <Button
             size="sm"
-            onClick={saveConfig}
+            onClick={() => saveConfig()}
             disabled={
               disabled || (!dirty && !view.last_error && !view.status.stopping)
             }

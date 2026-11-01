@@ -1,0 +1,51 @@
+{
+  "_fixture_notice": {
+    "modified_by": "Goink",
+    "changes": "Extracted the response status and body segments from the upstream recording, omitted request data, and added this notice. This metadata is not part of the API response.",
+    "source_url": "https://github.com/googleapis/js-genai/blob/1693f7cce750e5e9c3615e5a90b4602029cb0979/test/system/recordings/Chats_Tests_chats_function_calling_Google_AI_with_function_calling_stream.json",
+    "license": "Apache-2.0; see GOOGLE-LICENSE.txt."
+  },
+  "status_code": 200,
+  "body_segments": [
+    {
+      "candidates": [
+        {
+          "content": {
+            "parts": [
+              {
+                "functionCall": {
+                  "args": {
+                    "denominator": 2,
+                    "numerator": 50
+                  },
+                  "name": "customDivide"
+                }
+              }
+            ],
+            "role": "model"
+          },
+          "finishReason": "STOP"
+        }
+      ],
+      "modelVersion": "gemini-2.0-flash",
+      "responseId": "xtSfaMmgI_7Xn9kPr_f76AI",
+      "usageMetadata": {
+        "candidatesTokenCount": 6,
+        "candidatesTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 6
+          }
+        ],
+        "promptTokenCount": 38,
+        "promptTokensDetails": [
+          {
+            "modality": "TEXT",
+            "tokenCount": 38
+          }
+        ],
+        "totalTokenCount": 44
+      }
+    }
+  ]
+}

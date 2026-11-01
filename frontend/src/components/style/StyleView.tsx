@@ -163,13 +163,22 @@ export default function StyleView({
   // 从 settings 恢复选中模型（models + settings query ready 后回填，替代手动 GetSettings fetch）。
   useEffect(() => {
     if (!selectedModel && models.length > 0 && settingsQuery.data) {
-      const key = settingsQuery.data.selected_model_key || "";
-      const m = models.find((x) => x.Key === key) ?? models[0] ?? null;
+      const saved = settingsQuery.data.default_model_selection;
+      const matched = models.find(
+        (m) =>
+          m.AdapterName === saved?.adapter_name &&
+          m.ProviderName === saved?.provider_name &&
+          m.model.id === saved?.model_id,
+      );
+      const m = matched ?? models[0] ?? null;
       if (m) {
         setSelectedModel(m);
-        if (m.ReasoningLevels?.length) {
-          setReasoningEffort(m.ReasoningLevels[0]);
-        }
+        const levels = m.model.reasoning_levels;
+        setReasoningEffort(
+          matched && levels?.includes(saved.reasoning_effort)
+            ? saved.reasoning_effort
+            : (levels?.[0] ?? ""),
+        );
       }
     }
   }, [models, settingsQuery.data, selectedModel]);
@@ -180,8 +189,8 @@ export default function StyleView({
       const m = models.find((item) => item.Key === key);
       if (!m) return;
       setSelectedModel(m);
-      if (m.ReasoningLevels?.length) {
-        setReasoningEffort(m.ReasoningLevels[0]);
+      if (m.model.reasoning_levels?.length) {
+        setReasoningEffort(m.model.reasoning_levels[0]);
       } else {
         setReasoningEffort("");
       }
@@ -276,8 +285,9 @@ export default function StyleView({
       const res = await ExtractStyle({
         task_id: taskId,
         sample_ids: [...selected],
+        adapter_name: selectedModel.AdapterName,
         provider_name: selectedModel.ProviderName,
-        model_id: selectedModel.ModelID,
+        model_id: selectedModel.model.id,
         reasoning_effort: reasoningEffort,
       });
       if (runningTaskIdRef.current !== taskId) return;

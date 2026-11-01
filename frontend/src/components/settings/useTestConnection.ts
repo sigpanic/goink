@@ -1,6 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { TestConnection } from "@/lib/wailsjs/go/app/App";
-import type { app } from "@/lib/wailsjs/go/models";
+import type { llm } from "@/lib/wailsjs/go/models";
 
 // useTestConnection: 测试 LLM 服务商连通性 mutation。
 // 后端多层 fallback 真测，返回验证通过的实际 URL（可能和入参不同）。
@@ -9,6 +9,6 @@ import type { app } from "@/lib/wailsjs/go/models";
 // 5.8 commit 1。
 export function useTestConnection() {
   return useMutation({
-    mutationFn: (input: app.TestConnectionInput) => TestConnection(input),
+    mutationFn: (input: llm.TestConnectionInput) => TestConnection(input),
   });
 }

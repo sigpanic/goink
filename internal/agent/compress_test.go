@@ -13,6 +13,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/agentcfg"
+	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/session"
 )
 
@@ -40,11 +41,16 @@ func newCompressTestAgent(t *testing.T, sessionID string) *Agent {
 	return &Agent{db: db, session: session.NewStore(db, logger), logger: logger}
 }
 
-// renderForAPI 复刻 loadAPIMessages 的渲染步骤：逐条 ToAPIFormat。
-func renderForAPI(msgs []session.Message, logger *slog.Logger) []map[string]any {
-	out := make([]map[string]any, 0, len(msgs))
+// renderForAPI 使用 Session 映射逐条生成模型请求消息。
+func renderForAPI(t *testing.T, msgs []session.Message) []llm.Message {
+	t.Helper()
+	out := make([]llm.Message, 0, len(msgs))
 	for i := range msgs {
-		out = append(out, msgs[i].ToAPIFormat(logger))
+		message, err := msgs[i].ToLLMRequestMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, message)
 	}
 	return out
 }
@@ -59,12 +65,14 @@ func assertUserContent(t *testing.T, a *Agent, ctx context.Context, sessionID st
 	}
 	var matched, allUser []string
 	for i := range msgs {
-		api := msgs[i].ToAPIFormat(a.logger)
-		role, _ := api["role"].(string)
-		content, _ := api["content"].(string)
-		if role != "user" {
+		message, err := msgs[i].ToLLMRequestMessage()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if message.Role != "user" {
 			continue
 		}
+		content := message.Content
 		allUser = append(allUser, content)
 		if strings.Contains(content, "你好") {
 			matched = append(matched, content)
@@ -110,7 +118,7 @@ func TestPersistCompression_DoesNotDoublePrefixUserTimestamp(t *testing.T) {
 
 	// 第一次压缩
 	version, err := a.persistCompression(ctx, opts, &agentcfg.SystemMessages{Identity: "sys-identity"},
-		"第一次摘要", retainMessages(renderForAPI(v1, a.logger)))
+		"第一次摘要", retainMessages(renderForAPI(t, v1)))
 	if err != nil {
 		t.Fatalf("persistCompression #1: %v", err)
 	}
@@ -123,7 +131,7 @@ func TestPersistCompression_DoesNotDoublePrefixUserTimestamp(t *testing.T) {
 		t.Fatalf("reload v%d: %v", version, err)
 	}
 	version2, err := a.persistCompression(ctx, opts, &agentcfg.SystemMessages{Identity: "sys-identity"},
-		"第二次摘要", retainMessages(renderForAPI(reloaded, a.logger)))
+		"第二次摘要", retainMessages(renderForAPI(t, reloaded)))
 	if err != nil {
 		t.Fatalf("persistCompression #2: %v", err)
 	}

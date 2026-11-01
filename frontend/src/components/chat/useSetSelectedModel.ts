@@ -1,19 +1,42 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { SetSelectedModel } from "@/lib/wailsjs/go/app/App";
-import { settingsKeys } from "@/lib/queryKeys";
+import { app, config } from "@/lib/wailsjs/go/models";
+import { sessionKeys, settingsKeys } from "@/lib/queryKeys";
 
-// useSetSelectedModel: 设置选中模型 mutation（持久化 selected_model_key + reasoning_effort 到 AppSettings）。
-// 后端 API 签名是 SetSelectedModel(key, effort)，mutationFn 包装成对象 { key, effort }。
-// onSuccess invalidate settingsKeys.all —— useSettings refetch 拿新 selected_model_key/reasoning_effort。
-// 错误处理由调用方 try/catch + toastError。
-// 5.1 commit 4 补遗。
+// useSetSelectedModel 保存完整模型选择（协议、服务商实例、模型及推理等级）。
+// session_id 为空时更新全局默认值，否则只更新指定会话。
+// 同一 mutation scope 串行保存；成功后更新并刷新对应的 settings 或 session 缓存。
+// 错误由 useChatModelSelection 保留用户草稿并提示。
 export function useSetSelectedModel() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: { key: string; effort: string }) =>
-      SetSelectedModel(input.key, input.effort),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: settingsKeys.all });
+    scope: { id: "chat-model-selection" },
+    mutationFn: (input: app.SetSelectedModelInput) => SetSelectedModel(input),
+    onSuccess: async (_, input) => {
+      const queryKey = input.session_id
+        ? sessionKeys.detail(input.session_id)
+        : settingsKeys.all;
+      await qc.cancelQueries({ queryKey, exact: true });
+      if (input.session_id) {
+        qc.setQueryData<app.SessionDetail>(queryKey, (current) =>
+          current
+            ? new app.SessionDetail({
+                ...current,
+                model_selection: input.model_selection,
+              })
+            : current,
+        );
+      } else {
+        qc.setQueryData<config.AppSettings>(queryKey, (current) =>
+          current
+            ? new config.AppSettings({
+                ...current,
+                default_model_selection: input.model_selection,
+              })
+            : current,
+        );
+      }
+      await qc.invalidateQueries({ queryKey, exact: true });
     },
   });
 }
