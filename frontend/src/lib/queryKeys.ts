@@ -138,6 +138,8 @@ export const slashCommandKeys = {
 
 export const sessionMessagesKeys = {
   detail: (sessionId: string) => ["session-messages", sessionId] as const,
+  infiniteList: (sessionId: string, size: number) =>
+    ["session-messages", sessionId, "infinite", size] as const,
 };
 
 export const sessionKeys = {
@@ -193,4 +195,8 @@ export const writingActivityKeys = {
 
 export const writingStatsKeys = {
   all: ["writing-stats"] as const,
+};
+
+export const attachmentKeys = {
+  detail: (novelId: number, id: string) => ["attachment", novelId, id] as const,
 };

@@ -91,10 +91,27 @@ export namespace app {
 	        this.remove_group_ids = source["remove_group_ids"];
 	    }
 	}
+	export class ChatImageInput {
+	    novel_id: number;
+	    name: string;
+	    data: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ChatImageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.novel_id = source["novel_id"];
+	        this.name = source["name"];
+	        this.data = source["data"];
+	    }
+	}
 	export class ChatInput {
 	    session_id: string;
 	    novel_id: number;
 	    message: string;
+	    images?: attachment.Ref[];
 	    model_selection: adapter.ModelSelection;
 	
 	    static createFrom(source: any = {}) {
@@ -106,6 +123,7 @@ export namespace app {
 	        this.session_id = source["session_id"];
 	        this.novel_id = source["novel_id"];
 	        this.message = source["message"];
+	        this.images = this.convertValues(source["images"], attachment.Ref);
 	        this.model_selection = this.convertValues(source["model_selection"], adapter.ModelSelection);
 	    }
 	
@@ -521,6 +539,22 @@ export namespace app {
 	        this.page = source["page"];
 	        this.size = source["size"];
 	        this.search = source["search"];
+	    }
+	}
+	export class GetSessionMessagesPageInput {
+	    session_id: string;
+	    before_turn_id: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new GetSessionMessagesPageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.session_id = source["session_id"];
+	        this.before_turn_id = source["before_turn_id"];
+	        this.size = source["size"];
 	    }
 	}
 	export class GetSessionsInput {
@@ -1124,6 +1158,40 @@ export namespace apperr {
 		    return a;
 		}
 	}
+	export class Result_github_com_sigpanic_goink_internal_attachment_Image_ {
+	    data: attachment.Image;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_github_com_sigpanic_goink_internal_attachment_Image_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], attachment.Image);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class Result_string_ {
 	    data: string;
 	    err_code: string;
@@ -1174,6 +1242,80 @@ export namespace apperr {
 		    }
 		    return a;
 		}
+	}
+
+}
+
+export namespace attachment {
+	
+	export class ImageInfo {
+	    mime_type: string;
+	    width: number;
+	    height: number;
+	    size: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImageInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mime_type = source["mime_type"];
+	        this.width = source["width"];
+	        this.height = source["height"];
+	        this.size = source["size"];
+	    }
+	}
+	export class Image {
+	    id: string;
+	    name: string;
+	    original: ImageInfo;
+	    standard: ImageInfo;
+	
+	    static createFrom(source: any = {}) {
+	        return new Image(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.original = this.convertValues(source["original"], ImageInfo);
+	        this.standard = this.convertValues(source["standard"], ImageInfo);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	export class Ref {
+	    attachment_id: string;
+	    variant: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Ref(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.attachment_id = source["attachment_id"];
+	        this.variant = source["variant"];
+	    }
 	}
 
 }
@@ -2727,6 +2869,40 @@ export namespace session {
 	        this.agent_type = source["agent_type"];
 	        this.sub_task_id = source["sub_task_id"];
 	        this.created_at = this.convertValues(source["created_at"], null);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class MessagePage {
+	    items: Message[];
+	    next_before_turn_id: number;
+	    has_more: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new MessagePage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.items = this.convertValues(source["items"], Message);
+	        this.next_before_turn_id = source["next_before_turn_id"];
+	        this.has_more = source["has_more"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

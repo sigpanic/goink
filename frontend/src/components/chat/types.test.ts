@@ -15,6 +15,44 @@ describe("emptySegment", () => {
 });
 
 describe("rebuildTurns", () => {
+  it("restores message times from the last nonempty main reply, ignoring subagents", () => {
+    const messages = [
+      {
+        role: "user",
+        content: "问题",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:00:00Z",
+      },
+      {
+        role: "assistant",
+        content: "答案",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:01:00Z",
+      },
+      {
+        role: "assistant",
+        content: "子任务",
+        turn_id: 1,
+        agent_type: "review",
+        sub_task_id: "task",
+        created_at: "2026-11-01T12:02:00Z",
+      },
+      {
+        role: "assistant",
+        content: " \n",
+        turn_id: 1,
+        agent_type: "main",
+        created_at: "2026-11-01T12:03:00Z",
+      },
+    ] as session.Message[];
+    expect(rebuildTurns(messages)[0]).toMatchObject({
+      userSentAt: "2026-11-01T12:00:00Z",
+      assistantSentAt: "2026-11-01T12:01:00Z",
+    });
+  });
+
   it("restores opaque thinking without reading native metadata", () => {
     const messages = [
       { role: "user", content: "继续", turn_id: 1, agent_type: "main" },

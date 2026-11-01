@@ -48,9 +48,10 @@ import (
 // App 是 Wails 绑定的根对象。前端通过 window.go.main.App 调用其导出方法。
 // 各领域方法按文件拆分（novel.go / chapter.go 等），均接收 *App。
 type App struct {
-	ctx    context.Context
-	cancel context.CancelFunc
-	logger *slog.Logger
+	ctx       context.Context
+	cancel    context.CancelFunc
+	logger    *slog.Logger
+	emitEvent func(context.Context, string, ...any)
 
 	// 启动状态：让前端能区分"未配置 / 初始化中 / 就绪 / 失败"，而不是只拿到一个
 	// 布尔量。startupMu 同时保护 startupState 与 frontendReady —— 两者会交叉读取
@@ -107,7 +108,8 @@ type App struct {
 // New 创建 App 实例。初始化在 OnStartup 中完成。
 func New(logger *slog.Logger) *App {
 	return &App{
-		logger: logger,
+		logger:    logger,
+		emitEvent: runtime.EventsEmit,
 		startupState: StartupState{
 			Phase:   PhaseInitializing,
 			Version: 1,

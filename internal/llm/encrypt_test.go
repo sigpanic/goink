@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/sigpanic/goink/internal/config"
@@ -167,7 +168,9 @@ func TestSaveUserConfigPersistsExplicitRecordsWithoutKey(t *testing.T) {
 	require.Equal(t, state, loaded, "无 Key 配置应完整保留")
 	info, err := os.Stat(path)
 	require.NoError(t, err)
-	require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	if runtime.GOOS != "windows" {
+		require.Equal(t, os.FileMode(0600), info.Mode().Perm())
+	}
 }
 
 func TestBuiltinOverridesRoundTripWithoutPersistingDefaults(t *testing.T) {

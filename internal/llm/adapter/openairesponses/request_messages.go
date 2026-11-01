@@ -14,6 +14,11 @@ import (
 )
 
 func (p Provider) buildMessages(params *responses.ResponseNewParams, messages []adapter.Message) error {
+	for i, message := range messages {
+		if err := message.ValidateImages(); err != nil {
+			return fmt.Errorf("message %d: %w", i, err)
+		}
+	}
 	used := make(map[string]bool)
 	for i := 0; i < len(messages); i++ {
 		message := messages[i]
@@ -22,6 +27,20 @@ func (p Provider) buildMessages(params *responses.ResponseNewParams, messages []
 		}
 		switch message.Role {
 		case "system", "developer", "user":
+			if len(message.ImageInputs) > 0 {
+				var content responses.ResponseInputMessageContentListParam
+				if message.Content != "" {
+					content = append(content, responses.ResponseInputContentParamOfInputText(message.Content))
+				}
+				for _, image := range message.ImageInputs {
+					part := responses.ResponseInputContentParamOfInputImage(responses.ResponseInputImageDetailAuto)
+					part.OfInputImage.ImageURL = param.NewOpt(image.DataURL())
+					content = append(content, part)
+				}
+				params.Input.OfInputItemList = append(params.Input.OfInputItemList,
+					responses.ResponseInputItemParamOfMessage(content, responses.EasyInputMessageRole(message.Role)))
+				continue
+			}
 			// Responses 可直接表达这些角色，保留中途 system 的原始位置。
 			if message.Content != "" {
 				params.Input.OfInputItemList = append(params.Input.OfInputItemList,
@@ -60,6 +79,18 @@ func (p Provider) buildMessages(params *responses.ResponseNewParams, messages []
 			}
 			for _, result := range results {
 				item := responses.ResponseInputItemParamOfFunctionCallOutput(result.Content)
+				if len(result.ImageInputs) > 0 {
+					var output responses.ResponseFunctionCallOutputItemListParam
+					if result.Content != "" {
+						output = append(output, responses.ResponseFunctionCallOutputItemParamOfInputText(result.Content))
+					}
+					for _, image := range result.ImageInputs {
+						output = append(output, responses.ResponseFunctionCallOutputItemUnionParam{
+							OfInputImage: &responses.ResponseInputImageContentParam{ImageURL: param.NewOpt(image.DataURL()), Detail: "auto"},
+						})
+					}
+					item = responses.ResponseInputItemParamOfFunctionCallOutput(output)
+				}
 				item.OfFunctionCallOutput.CallID = param.NewOpt(result.ToolCallID)
 				params.Input.OfInputItemList = append(params.Input.OfInputItemList, item)
 			}

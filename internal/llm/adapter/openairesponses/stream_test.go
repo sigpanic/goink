@@ -318,25 +318,80 @@ func TestStreamPropagatesReadErrorsAfterTerminalWithoutCompletion(t *testing.T) 
 	}
 }
 
-func TestStreamKeepsPrivateReasoningTextOutOfDisplay(t *testing.T) {
-	frames := sdkStreamEvents()
-	wire := sseEvents(frames[:2]) + sseEvents([]string{
+func TestStreamDisplaysPlaintextReasoningWithoutRepeatingSnapshotsOrSummary(t *testing.T) {
+	const plaintextItem = `{"type":"reasoning","id":"rs_1","summary":[],"content":[{"type":"reasoning_text","text":"先分析请求。"}],"encrypted_content":"opaque-test-state"}`
+	const bothItem = `{"type":"reasoning","id":"rs_1","summary":[{"type":"summary_text","text":"plan"}],"content":[{"type":"reasoning_text","text":"先分析请求。"}],"encrypted_content":"opaque-test-state"}`
+	plaintext := []string{
 		`{"type":"response.content_part.added","output_index":0,"item_id":"rs_1","content_index":0,"part":{"type":"reasoning_text","text":""}}`,
-		`{"type":"response.reasoning_text.delta","output_index":0,"item_id":"rs_1","content_index":0,"delta":"private internal text"}`,
-		`{"type":"response.reasoning_text.done","output_index":0,"item_id":"rs_1","content_index":0,"text":"private internal text"}`,
-	}) + sseEvents(frames[2:])
-	wire = strings.ReplaceAll(wire, sdkReasoning, strings.TrimSuffix(sdkReasoning, "}")+`,"content":[{"type":"reasoning_text","text":"private internal text"}]}`)
-	var state *adapter.ResponseState
-	for _, event := range replayStream(t, wire, nil) {
-		if event.Type == adapter.EventError || strings.Contains(event.Data, "private internal") {
-			t.Fatalf("private reasoning text affected public events: %+v", event)
-		}
-		if event.Type == adapter.EventResponseState {
-			state = event.State
-		}
+		`{"type":"response.reasoning_text.delta","output_index":0,"item_id":"rs_1","content_index":0,"delta":"先分析"}`,
+		`{"type":"response.reasoning_text.delta","output_index":0,"item_id":"rs_1","content_index":0,"delta":"请求。"}`,
+		`{"type":"response.reasoning_text.done","output_index":0,"item_id":"rs_1","content_index":0,"text":"先分析请求。"}`,
+		`{"type":"response.content_part.done","output_index":0,"item_id":"rs_1","content_index":0,"part":{"type":"reasoning_text","text":"先分析请求。"}}`,
 	}
-	if state == nil || !strings.Contains(string(state.Payload), "private internal text") {
-		t.Fatal("private native reasoning was removed from replay state")
+	summary := []string{
+		`{"type":"response.reasoning_summary_part.added","output_index":0,"item_id":"rs_1","summary_index":0,"part":{"type":"summary_text","text":""}}`,
+		`{"type":"response.reasoning_summary_text.delta","output_index":0,"item_id":"rs_1","summary_index":0,"delta":"plan"}`,
+		`{"type":"response.reasoning_summary_text.done","output_index":0,"item_id":"rs_1","summary_index":0,"text":"plan"}`,
+		`{"type":"response.reasoning_summary_part.done","output_index":0,"item_id":"rs_1","summary_index":0,"part":{"type":"summary_text","text":"plan"}}`,
+	}
+	for _, tt := range []struct {
+		name, item, initial, want string
+		events                    []string
+	}{
+		{name: "plaintext deltas and snapshots", item: plaintextItem, want: "先分析请求。", events: plaintext},
+		{name: "nonempty part added", item: plaintextItem, want: "先分析请求。", events: append([]string{strings.Replace(plaintext[0], `"text":""`, `"text":"先分析"`, 1)}, plaintext[2:]...)},
+		{name: "nonempty item added", item: plaintextItem, initial: plaintextItem, want: "先分析请求。"},
+		{name: "done snapshots only", item: plaintextItem, want: "先分析请求。", events: plaintext[3:]},
+		{name: "item done only", item: plaintextItem, want: "先分析请求。"},
+		{name: "summary only", item: sdkReasoning, want: "plan", events: summary},
+		{name: "plaintext before summary", item: bothItem, want: "先分析请求。", events: append(append([]string(nil), plaintext...), summary...)},
+		{name: "summary before plaintext", item: bothItem, want: "plan", events: append(append([]string(nil), summary...), plaintext...)},
+		{name: "empty summary before plaintext", item: plaintextItem, want: "先分析请求。", events: append(append([]string(nil), summary[:1]...), plaintext...)},
+		{name: "malformed plaintext delta", item: plaintextItem, want: "先分析请求。", events: []string{strings.Replace(plaintext[1], `"delta":"先分析"`, `"delta":123`, 1)}},
+		{name: "malformed plaintext part", item: plaintextItem, want: "先分析请求。", events: []string{strings.Replace(plaintext[0], `"text":""`, `"text":false`, 1)}},
+		{name: "ciphertext only", item: `{"type":"reasoning","id":"rs_1","summary":[],"encrypted_content":"opaque-test-state"}`},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			frames := sdkStreamEvents()
+			if tt.initial != "" {
+				frames[1] = `{"type":"response.output_item.added","output_index":0,"item":` + tt.initial + `}`
+			}
+			wire := sseEvents(frames[:2]) + sseEvents(tt.events) + sseEvents(frames[3:])
+			wire = strings.ReplaceAll(wire, sdkReasoning, tt.item)
+			var text, thinking strings.Builder
+			var state *adapter.ResponseState
+			thinkingDone, calls := 0, 0
+			for _, event := range replayStream(t, wire, nil) {
+				if strings.Contains(event.Data, "opaque-test-state") {
+					t.Fatal("encrypted reasoning was exposed as display text")
+				}
+				switch event.Type {
+				case adapter.EventError:
+					t.Fatal(event.Error)
+				case adapter.EventContent:
+					text.WriteString(event.Data)
+				case adapter.EventThinking:
+					thinking.WriteString(event.Data)
+				case adapter.EventThinkingDone:
+					thinkingDone++
+				case adapter.EventResponseState:
+					state = event.State
+				case adapter.EventToolCallEnd:
+					calls++
+				}
+			}
+			if thinking.String() != tt.want || text.String() != "ok" || thinkingDone != 1 || calls != 1 || state == nil {
+				t.Fatalf("invalid thinking display or completion: thinking=%q text=%q done=%d calls=%d state=%+v", thinking.String(), text.String(), thinkingDone, calls, state)
+			}
+			var payload replayPayload
+			if err := json.Unmarshal(state.Payload, &payload); err != nil {
+				t.Fatal(err)
+			}
+			var output []json.RawMessage
+			if err := json.Unmarshal(payload.Output, &output); err != nil || len(output) != 3 || !sameJSON(output[0], json.RawMessage(tt.item)) {
+				t.Fatalf("thinking display changed native replay state: %s", payload.Output)
+			}
+		})
 	}
 }
 

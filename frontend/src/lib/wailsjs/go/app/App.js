@@ -106,6 +106,10 @@ export function DeleteCharacterGroup(arg1, arg2) {
   return window['go']['app']['App']['DeleteCharacterGroup'](arg1, arg2);
 }
 
+export function DeleteChatImage(arg1, arg2) {
+  return window['go']['app']['App']['DeleteChatImage'](arg1, arg2);
+}
+
 export function DeleteCover(arg1) {
   return window['go']['app']['App']['DeleteCover'](arg1);
 }
@@ -218,6 +222,10 @@ export function GetCharacters(arg1) {
   return window['go']['app']['App']['GetCharacters'](arg1);
 }
 
+export function GetChatImage(arg1, arg2) {
+  return window['go']['app']['App']['GetChatImage'](arg1, arg2);
+}
+
 export function GetCommitFileList(arg1, arg2) {
   return window['go']['app']['App']['GetCommitFileList'](arg1, arg2);
 }
@@ -294,6 +302,10 @@ export function GetSessionMessages(arg1) {
   return window['go']['app']['App']['GetSessionMessages'](arg1);
 }
 
+export function GetSessionMessagesPage(arg1) {
+  return window['go']['app']['App']['GetSessionMessagesPage'](arg1);
+}
+
 export function GetSessions(arg1) {
   return window['go']['app']['App']['GetSessions'](arg1);
 }
@@ -332,6 +344,10 @@ export function GetWritingActivity(arg1) {
 
 export function GetWritingStats() {
   return window['go']['app']['App']['GetWritingStats']();
+}
+
+export function ImportChatImage(arg1) {
+  return window['go']['app']['App']['ImportChatImage'](arg1);
 }
 
 export function ImportNovel(arg1) {

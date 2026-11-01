@@ -13,6 +13,11 @@ import (
 )
 
 func (p Provider) buildMessages(params *types.CreateModelInteraction, messages []adapter.Message) error {
+	for i, message := range messages {
+		if err := message.ValidateImages(); err != nil {
+			return fmt.Errorf("message %d: %w", i, err)
+		}
+	}
 	start := 0
 	var system []string
 	for start < len(messages) && messages[start].Role == "system" {
@@ -38,14 +43,22 @@ func (p Provider) buildMessages(params *types.CreateModelInteraction, messages [
 		}
 		switch message.Role {
 		case "system", "user":
-			if message.Content == "" {
+			if message.Content == "" && len(message.ImageInputs) == 0 {
 				continue
 			}
 			content := message.Content
 			if message.Role == "system" {
 				content = "<system-reminder>\n" + content + "\n</system-reminder>"
 			}
-			input.ArrayOfStep = append(input.ArrayOfStep, types.NewStep(types.UserInputStep{Content: textContent(content)}))
+			var blocks []types.Content
+			if content != "" {
+				blocks = textContent(content)
+			}
+			for _, image := range message.ImageInputs {
+				mime := types.ImageContentMimeType(image.MIMEType)
+				blocks = append(blocks, types.NewContent(types.ImageContent{Data: &image.Base64, MimeType: &mime}))
+			}
+			input.ArrayOfStep = append(input.ArrayOfStep, types.NewStep(types.UserInputStep{Content: blocks}))
 		case "assistant":
 			calls, results, end, err := pairedTools(messages, i)
 			if err != nil {
@@ -82,12 +95,15 @@ func (p Provider) buildMessages(params *types.CreateModelInteraction, messages [
 			}
 			for j, result := range results {
 				name := calls[j].Name
+				blocks := []types.FunctionResultSubcontent{types.NewFunctionResultSubcontent(types.TextContent{Text: result.Content})}
+				for _, image := range result.ImageInputs {
+					mime := types.ImageContentMimeType(image.MIMEType)
+					blocks = append(blocks, types.NewFunctionResultSubcontent(types.ImageContent{Data: &image.Base64, MimeType: &mime}))
+				}
 				// 公共消息没有执行错误标志，不从正文猜测 is_error；空结果也保留。
 				input.ArrayOfStep = append(input.ArrayOfStep, types.NewStep(types.FunctionResultStep{
 					CallID: result.ToolCallID, Name: &name,
-					Result: types.NewFunctionResultStepResultUnion([]types.FunctionResultSubcontent{
-						types.NewFunctionResultSubcontent(types.TextContent{Text: result.Content}),
-					}),
+					Result: types.NewFunctionResultStepResultUnion(blocks),
 				}))
 			}
 			i = end

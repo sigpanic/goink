@@ -1,11 +1,39 @@
-import { expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { session } from "@/lib/wailsjs/go/models";
 import ChatTurn from "./ChatTurn";
 import { emptySegment, rebuildTurns, type Turn } from "./types";
 
+const fixture = vi.hoisted(() => ({
+  copy: vi.fn(),
+  toastError: vi.fn(),
+}));
+vi.mock("@/lib/wailsjs/runtime/runtime", () => ({
+  ClipboardSetText: fixture.copy,
+}));
+vi.mock("@/utils/toast", () => ({ toastError: fixture.toastError }));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  fixture.copy.mockResolvedValue(true);
+});
+
 vi.mock("@/components/Markdown", () => ({
   default: ({ content }: { content: string }) => <div>{content}</div>,
+}));
+
+vi.mock("./ChatImages", () => ({
+  default: ({
+    novelId,
+    images,
+  }: {
+    novelId: number;
+    images: { attachment_id: string }[];
+  }) => (
+    <div data-testid="images" data-novel-id={novelId}>
+      {images.map((image) => image.attachment_id).join(",")}
+    </div>
+  ),
 }));
 
 function makeTurn(status: Turn["status"]): Turn {
@@ -35,7 +63,166 @@ function makeTurn(status: Turn["status"]): Turn {
   };
 }
 
-const callbacks = { onApprove: vi.fn(), onReject: vi.fn() };
+const callbacks = { novelId: 1, onApprove: vi.fn(), onReject: vi.fn() };
+
+it("restores and displays an image-only user message", () => {
+  const [turn] = rebuildTurns([
+    {
+      role: "user",
+      content: "",
+      turn_id: 1,
+      agent_type: "main",
+      extra_metadata: JSON.stringify({
+        images: [{ attachment_id: "picture", variant: "standard-v1" }],
+      }),
+    },
+  ] as session.Message[]);
+  expect(turn.userImages).toEqual([
+    { attachment_id: "picture", variant: "standard-v1" },
+  ]);
+  render(<ChatTurn turn={turn} {...callbacks} />);
+  expect(screen.getByTestId("images")).toHaveTextContent("picture");
+  expect(screen.getByTestId("images")).toHaveAttribute("data-novel-id", "1");
+  expect(screen.queryByRole("button", { name: "chat.copyMessage" })).toBeNull();
+});
+
+it("copies only user Markdown and the final reply even with work history expanded", async () => {
+  const turn = makeTurn("done");
+  turn.userMessage = "**检查章节**\n\n保留原文。";
+  render(<ChatTurn turn={turn} {...callbacks} />);
+  fireEvent.click(screen.getByRole("button", { name: "chat.workHistory" }));
+  const [userCopy, replyCopy] = screen.getAllByRole("button", {
+    name: "chat.copyMessage",
+  });
+  expect(userCopy).toBeVisible();
+  expect(replyCopy).toBeVisible();
+  await act(async () => {
+    fireEvent.click(userCopy);
+  });
+  expect(fixture.copy).toHaveBeenLastCalledWith(turn.userMessage);
+  await act(async () => {
+    fireEvent.click(replyCopy);
+  });
+  expect(fixture.copy).toHaveBeenLastCalledWith("最终分析结果。");
+  expect(
+    screen.getAllByRole("button", { name: "chat.messageCopied" }),
+  ).toHaveLength(2);
+  expect(fixture.copy).toHaveBeenCalledTimes(2);
+});
+
+it("enables copying a plain final reply only after completion", () => {
+  const turn = makeTurn("streaming");
+  turn.segments = [{ ...emptySegment("answer"), content: "直接回答。" }];
+  const { rerender } = render(<ChatTurn turn={turn} {...callbacks} />);
+  expect(
+    screen.getAllByRole("button", { name: "chat.copyMessage" }),
+  ).toHaveLength(1);
+  rerender(<ChatTurn turn={{ ...turn, status: "done" }} {...callbacks} />);
+  expect(
+    screen.getAllByRole("button", { name: "chat.copyMessage" }),
+  ).toHaveLength(2);
+  rerender(
+    <ChatTurn turn={{ ...turn, status: "user_stopped" }} {...callbacks} />,
+  );
+  expect(
+    screen.getAllByRole("button", { name: "chat.copyMessage" }),
+  ).toHaveLength(1);
+});
+
+it.each(["false", "rejected"])(
+  "reports a %s clipboard failure and allows retry",
+  async (result) => {
+    if (result === "false") fixture.copy.mockResolvedValueOnce(false);
+    else fixture.copy.mockRejectedValueOnce(new Error("clipboard failed"));
+    const turn = makeTurn("done");
+    turn.segments = [];
+    render(<ChatTurn turn={turn} {...callbacks} />);
+    const button = screen.getByRole("button", { name: "chat.copyMessage" });
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(fixture.toastError).toHaveBeenCalledWith("chat.copyMessageFailed");
+    expect(button).toBeEnabled();
+    expect(
+      screen.queryByRole("button", { name: "chat.messageCopied" }),
+    ).toBeNull();
+    await act(async () => {
+      fireEvent.click(button);
+    });
+    expect(
+      screen.getByRole("button", { name: "chat.messageCopied" }),
+    ).toBeVisible();
+  },
+);
+
+it("shows saved user and final reply times without adding history timestamps", () => {
+  const userSentAt = "2026-11-01T12:00:00Z";
+  const assistantSentAt = "2026-11-01T12:02:00Z";
+  const [turn] = rebuildTurns([
+    {
+      role: "user",
+      content: "问题",
+      turn_id: 1,
+      agent_type: "main",
+      created_at: userSentAt,
+    },
+    {
+      role: "assistant",
+      content: "先检查",
+      turn_id: 1,
+      agent_type: "main",
+      created_at: "2026-11-01T12:01:00Z",
+    },
+    {
+      role: "assistant",
+      content: "最终回答",
+      turn_id: 1,
+      agent_type: "main",
+      created_at: assistantSentAt,
+    },
+  ] as session.Message[]);
+  const { container } = render(<ChatTurn turn={turn} {...callbacks} />);
+  fireEvent.click(screen.getByRole("button", { name: "chat.workHistory" }));
+  expect(
+    Array.from(container.querySelectorAll("time"), (time) => time.dateTime),
+  ).toEqual([userSentAt, assistantSentAt]);
+});
+
+it("omits invalid timestamps while keeping the copy button", () => {
+  const turn = { ...makeTurn("done"), userSentAt: "invalid", segments: [] };
+  const { container } = render(<ChatTurn turn={turn} {...callbacks} />);
+  expect(container.querySelector("time")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "chat.copyMessage" }),
+  ).toBeVisible();
+});
+
+it.each([
+  [new Date(2026, 10, 1, 10, 30), "10:30"],
+  [new Date(2026, 9, 31, 23), "time.hoursAgo"],
+  [new Date(2026, 9, 30, 12), "time.daysAgo"],
+  [new Date(2026, 8, 2, 12), "time.monthsAgo"],
+])(
+  "formats the message time from %s and preserves its full hover time",
+  (date, expected) => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 10, 1, 12));
+    try {
+      const sentAt = date.toISOString();
+      const turn = { ...makeTurn("done"), userSentAt: sentAt, segments: [] };
+      const { container, unmount } = render(
+        <ChatTurn turn={turn} {...callbacks} />,
+      );
+      const time = container.querySelector("time");
+      expect(time).toHaveTextContent(expected);
+      expect(time).toHaveAttribute("datetime", sentAt);
+      expect(time).toHaveAttribute("title", date.toLocaleString("zh-CN"));
+      unmount();
+    } finally {
+      vi.useRealTimers();
+    }
+  },
+);
 
 it("collapses only on completion and keeps the final answer outside manually expandable history", () => {
   const { rerender } = render(
@@ -121,6 +308,9 @@ it("keeps a tool-ending turn expanded rather than treating an earlier reply as t
   expect(screen.queryByRole("button", { name: "chat.workHistory" })).toBeNull();
   expect(screen.getByText("先读取章节。")).toBeVisible();
   expect(screen.getByText("查看第 14 章")).toBeVisible();
+  expect(
+    screen.getAllByRole("button", { name: "chat.copyMessage" }),
+  ).toHaveLength(1);
 });
 
 it("does not add a history control for a plain answer or hide a thinking-only turn", () => {

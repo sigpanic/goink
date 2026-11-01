@@ -46,7 +46,7 @@ func (a *Agent) generateSummary(ctx context.Context, opts *RunOptions) (string, 
 	copy(msgs, opts.Messages)
 	msgs[len(opts.Messages)] = llm.Message{Role: "user", Content: compressionPrompt}
 
-	callOpts := &llm.CallOptions{SessionID: opts.SessionID}
+	callOpts := &llm.CallOptions{SessionID: opts.SessionID, NovelID: opts.NovelID}
 	if opts.ReasoningEffort != "" {
 		callOpts.ReasoningEffort = &opts.ReasoningEffort
 	}
@@ -107,6 +107,10 @@ func (a *Agent) Compress(ctx context.Context, opts *RunOptions, runningTokens ma
 		if err != nil {
 			return fmt.Errorf("compress: render message: %w", err)
 		}
+	}
+	messages, err = llm.PrepareImageMessages(opts.NovelID, *opts.Model, messages)
+	if err != nil {
+		return fmt.Errorf("compress: prepare images: %w", err)
 	}
 	opts.ActiveVersion = newVersion
 	opts.Messages = messages

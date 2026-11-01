@@ -13,6 +13,10 @@ func (c *Client) GenerateText(ctx context.Context, adapterName adapter.Protocol,
 	if err != nil {
 		return "", err
 	}
+	messages, err = prepareRequestImages(backend, providerName, model, messages, opts)
+	if err != nil {
+		return "", err
+	}
 	result, err := backend.Generate(ctx, adapter.Request{ProviderName: providerName, Model: model, Messages: messages, Options: opts})
 	if err != nil {
 		return "", err

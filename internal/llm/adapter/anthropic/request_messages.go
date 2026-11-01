@@ -12,6 +12,11 @@ import (
 )
 
 func (p Provider) buildMessages(params *sdk.MessageNewParams, messages []adapter.Message) error {
+	for i, message := range messages {
+		if err := message.ValidateImages(); err != nil {
+			return fmt.Errorf("message %d: %w", i, err)
+		}
+	}
 	start := 0
 	for start < len(messages) && messages[start].Role == "system" {
 		if len(messages[start].ToolCalls) > 0 {
@@ -30,14 +35,21 @@ func (p Provider) buildMessages(params *sdk.MessageNewParams, messages []adapter
 			if len(message.ToolCalls) > 0 {
 				return fmt.Errorf("message %d: tool calls require assistant role", i)
 			}
-			if message.Content == "" {
+			if message.Content == "" && len(message.ImageInputs) == 0 {
 				continue
 			}
 			content := message.Content
 			if message.Role == "system" {
 				content = "<system-reminder>\n" + content + "\n</system-reminder>"
 			}
-			appendUserMessage(params, sdk.NewTextBlock(content))
+			var blocks []sdk.ContentBlockParamUnion
+			if content != "" {
+				blocks = append(blocks, sdk.NewTextBlock(content))
+			}
+			for _, image := range message.ImageInputs {
+				blocks = append(blocks, sdk.NewImageBlockBase64(image.MIMEType, image.Base64))
+			}
+			appendUserMessage(params, blocks...)
 		case "assistant":
 			calls, results, end, err := pairedTools(messages, i)
 			if err != nil {
@@ -75,6 +87,10 @@ func (p Provider) buildMessages(params *sdk.MessageNewParams, messages []adapter
 				block := sdk.NewToolResultBlock(result.ToolCallID, result.Content, false)
 				if result.Content == "" {
 					block.OfToolResult.Content = nil
+				}
+				for _, image := range result.ImageInputs {
+					imageBlock := sdk.NewImageBlockBase64(image.MIMEType, image.Base64)
+					block.OfToolResult.Content = append(block.OfToolResult.Content, sdk.ToolResultBlockParamContentUnion{OfImage: imageBlock.OfImage})
 				}
 				appendUserMessage(params, block)
 			}

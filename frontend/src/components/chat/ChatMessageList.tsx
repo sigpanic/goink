@@ -1,4 +1,5 @@
 import { MessageSquare, Loader2 } from "lucide-react";
+import type { Ref } from "react";
 import { useTranslation } from "react-i18next";
 import type { Turn } from "./types";
 import type { useSessions } from "./useSessions";
@@ -7,6 +8,7 @@ import RecentSessions from "./RecentSessions";
 import ChatTurn from "./ChatTurn";
 
 interface Props {
+  novelId: number;
   hasNovel: boolean;
   hasTurns: boolean;
   showRecent: boolean;
@@ -15,8 +17,15 @@ interface Props {
   sessionsQuery: Pick<ReturnType<typeof useSessions>, "data">;
   messagesQuery: Pick<
     ReturnType<typeof useSessionMessages>,
-    "isLoading" | "isError" | "refetch"
+    | "isLoading"
+    | "isError"
+    | "refetch"
+    | "hasNextPage"
+    | "isFetchingNextPage"
+    | "isFetchNextPageError"
   >;
+  olderMessagesRef: Ref<HTMLDivElement>;
+  onLoadOlder: () => void;
   onSelectSession: (sessionId: string) => void;
   onViewAll: () => void;
   onApprove: (toolId: string, feedback: string) => Promise<void>;
@@ -24,6 +33,7 @@ interface Props {
 }
 
 export default function ChatMessageList({
+  novelId,
   hasNovel,
   hasTurns,
   showRecent,
@@ -31,6 +41,8 @@ export default function ChatMessageList({
   turns,
   sessionsQuery,
   messagesQuery,
+  olderMessagesRef,
+  onLoadOlder,
   onSelectSession,
   onViewAll,
   onApprove,
@@ -52,14 +64,14 @@ export default function ChatMessageList({
       onSelectSession={onSelectSession}
       onViewAll={onViewAll}
     />
-  ) : messagesQuery.isLoading ? (
+  ) : messagesQuery.isLoading && !hasTurns ? (
     <div className="flex items-center justify-center h-full">
       <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
     </div>
   ) : (
     <>
       {/* 消息列表 */}
-      {messagesQuery.isError ? (
+      {messagesQuery.isError && !hasTurns ? (
         <div className="flex items-center justify-center h-full">
           <div className="text-center">
             <p className="text-sm text-red-500 mb-2">
@@ -84,8 +96,41 @@ export default function ChatMessageList({
         </div>
       ) : (
         <div className="space-y-4">
+          {messagesQuery.hasNextPage && (
+            <div
+              ref={olderMessagesRef}
+              className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground"
+            >
+              {messagesQuery.isFetchingNextPage ? (
+                <Loader2
+                  className="h-4 w-4 animate-spin"
+                  aria-label={t("chat.loadingOlderMessages")}
+                />
+              ) : (
+                <>
+                  {messagesQuery.isFetchNextPageError && (
+                    <span role="alert">
+                      {t("chat.loadOlderMessagesFailed")}
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={onLoadOlder}
+                    className="hover:text-foreground hover:underline"
+                  >
+                    {t(
+                      messagesQuery.isFetchNextPageError
+                        ? "chat.retry"
+                        : "chat.loadOlderMessages",
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
           {turns.map((turn) => (
             <ChatTurn
+              novelId={novelId}
               key={turn.id}
               turn={turn}
               onApprove={onApprove}

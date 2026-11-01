@@ -18,9 +18,27 @@ func (c *Adapter) buildMessages(messages []adapter.Message) ([]map[string]any, e
 	result := make([]map[string]any, 0, len(messages))
 	validToolCallIDs := make(map[string]bool)
 	seenToolMsgIDs := make(map[string]bool)
+	var toolImages []adapter.ImageInput
+	var toolImageSources []string
+	flushToolImages := func() {
+		if len(toolImages) > 0 {
+			result = append(result, map[string]any{"role": "user", "content": imageContent(strings.Join(toolImageSources, "\n"), toolImages)})
+			toolImages, toolImageSources = nil, nil
+		}
+	}
 	for i, message := range messages {
+		if message.Role != "tool" {
+			flushToolImages()
+		}
+		if err := message.ValidateImages(); err != nil {
+			return nil, fmt.Errorf("message %d: %w", i, err)
+		}
 		out := map[string]any{"role": message.Role, "content": message.Content}
 		switch message.Role {
+		case "user":
+			if len(message.ImageInputs) > 0 {
+				out["content"] = imageContent(message.Content, message.ImageInputs)
+			}
 		case "assistant":
 			// 外部协议的显示用思考不冒充当前协议的推理输入。
 			includeThinking := message.State == nil || message.State.Origin.AdapterName == adapter.ProtocolOpenAIChat
@@ -71,11 +89,29 @@ func (c *Adapter) buildMessages(messages []adapter.Message) ([]map[string]any, e
 			if message.ToolName != "" {
 				out["name"] = message.ToolName
 			}
+			if len(message.ImageInputs) > 0 {
+				toolImages = append(toolImages, message.ImageInputs...)
+				for _, ref := range message.Images {
+					toolImageSources = append(toolImageSources, fmt.Sprintf("工具 %s 的图片结果，调用 ID：%s，路径：attachments/%s", message.ToolName, message.ToolCallID, ref.AttachmentID))
+				}
+			}
 		}
 		result = append(result, out)
 	}
+	flushToolImages()
 	// 出站归一化：合并多条 system 为单条置于头部（参见 mergeSystemMessages）。
 	return mergeSystemMessages(result), nil
+}
+
+func imageContent(text string, images []adapter.ImageInput) []map[string]any {
+	var content []map[string]any
+	if text != "" {
+		content = append(content, map[string]any{"type": "text", "text": text})
+	}
+	for _, image := range images {
+		content = append(content, map[string]any{"type": "image_url", "image_url": map[string]any{"url": image.DataURL()}})
+	}
+	return content
 }
 
 // mergeSystemMessages 将 messages 数组中所有 role=system 的消息合并成单条置于头部。

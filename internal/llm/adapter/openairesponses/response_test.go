@@ -57,6 +57,45 @@ func TestResponseRetainsRefusalAndDoesNotExposeEncryptedReasoning(t *testing.T) 
 	}
 }
 
+func TestResponseProjectsPlaintextReasoningAndSummary(t *testing.T) {
+	for _, tt := range []struct {
+		name, fields, want string
+	}{
+		{"plaintext", `"content":[{"type":"reasoning_text","text":"先分析"},{"type":"reasoning_text","text":"请求。"}],"summary":[]`, "先分析请求。"},
+		{"summary", `"summary":[{"type":"summary_text","text":"plan"}]`, "plan"},
+		{"both channels", `"content":[{"type":"reasoning_text","text":"先分析请求。"}],"summary":[{"type":"summary_text","text":"plan"}]`, "先分析请求。"},
+		{"empty plaintext", `"content":[{"type":"reasoning_text","text":""}],"summary":[{"type":"summary_text","text":"plan"}]`, "plan"},
+		{"malformed plaintext", `"content":[{"type":"reasoning_text","text":false}],"summary":[{"type":"summary_text","text":"plan"}]`, "plan"},
+		{"malformed summary", `"content":[{"type":"reasoning_text","text":"先分析请求。"}],"summary":false`, "先分析请求。"},
+		{"malformed part", `"content":[{"type":"reasoning_text","text":123},{"type":"reasoning_text","text":"先分析请求。"}]`, "先分析请求。"},
+		{"unknown part", `"content":[{"type":"vendor_extension","text":"ignored"}],"summary":[]`, ""},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			item := `{"type":"reasoning","id":"rs_1","encrypted_content":"opaque-test-state",` + tt.fields + `}`
+			response, err := convertNativeResponse(t, responseWithOutput(`[`+item+`,`+sdkMessage+`]`))
+			if err != nil || response.Content != "ok" || response.ThinkingContent != tt.want || response.State == nil {
+				t.Fatalf("unexpected reasoning projection: %+v, %v", response, err)
+			}
+			var payload replayPayload
+			if err := json.Unmarshal(response.State.Payload, &payload); err != nil {
+				t.Fatal(err)
+			}
+			var output []json.RawMessage
+			if err := json.Unmarshal(payload.Output, &output); err != nil || len(output) != 2 || !sameJSON(output[0], json.RawMessage(item)) {
+				t.Fatalf("reasoning projection changed native replay state: %s", payload.Output)
+			}
+			if strings.Contains(response.Content+response.ThinkingContent, "opaque-test-state") {
+				t.Fatal("encrypted reasoning was exposed as display text")
+			}
+		})
+	}
+	output := `[{"type":"reasoning","content":[{"type":"reasoning_text","text":"first"}]},` + sdkReasoning + `,` + sdkMessage + `]`
+	response, err := convertNativeResponse(t, responseWithOutput(output))
+	if err != nil || response.ThinkingContent != "firstplan" {
+		t.Fatalf("missing ciphertext or mixed reasoning items lost display text: %+v, %v", response, err)
+	}
+}
+
 func TestResponseRejectsPartialOrFailedEnvelopes(t *testing.T) {
 	for _, tt := range []struct {
 		name, raw, kind string

@@ -4,12 +4,14 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // llmMetadata 只解析模型消息使用的扩展字段，不包含展示和审计信息。
 // ToolCall 沿用既有存储形状；State 内的原生 payload 不在 session 中解释。
 type llmMetadata struct {
+	Images     []attachment.Ref       `json:"images,omitempty"`
 	ToolCalls  []adapter.ToolCall     `json:"tool_calls,omitempty"`
 	ToolCallID string                 `json:"tool_call_id,omitempty"`
 	ToolName   string                 `json:"tool_name,omitempty"`
@@ -28,6 +30,7 @@ func (m Message) ToLLMMessage() (adapter.Message, error) {
 	return adapter.Message{
 		Role:            m.Role,
 		Content:         m.Content,
+		Images:          metadata.Images,
 		ThinkingContent: m.ThinkingContent,
 		HasThinking:     m.HasThinking,
 		ToolCalls:       metadata.ToolCalls,
@@ -72,6 +75,7 @@ func (m Message) WithLLMMessage(message adapter.Message) (Message, error) {
 		value   any
 		present bool
 	}{
+		{"images", message.Images, len(message.Images) > 0},
 		{"tool_calls", message.ToolCalls, len(message.ToolCalls) > 0},
 		{"tool_call_id", message.ToolCallID, message.ToolCallID != ""},
 		{"tool_name", message.ToolName, message.ToolName != ""},

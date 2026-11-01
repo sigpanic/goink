@@ -7,23 +7,31 @@ import TurnSegmentView from "./TurnSegmentView";
 import TurnOutcome from "./TurnOutcome";
 
 interface Props {
+  novelId: number;
   turn: Turn;
   onApprove: (toolId: string, feedback: string) => Promise<void>;
   onReject: (toolId: string, feedback: string) => Promise<void>;
 }
 
-export default function ChatTurn({ turn, onApprove, onReject }: Props) {
+export default function ChatTurn({
+  novelId,
+  turn,
+  onApprove,
+  onReject,
+}: Props) {
   const { t } = useTranslation();
   const historyId = useId();
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const finalIndex = turn.segments.findLastIndex(
     (seg) => seg.type === "text" && seg.content.trim() !== "",
   );
-  const canCollapse =
+  const hasFinalReply =
     turn.status === "done" &&
     !turn.compressionOnly &&
     finalIndex >= 0 &&
-    turn.segments.slice(finalIndex + 1).every((seg) => seg.type === "text") &&
+    turn.segments.slice(finalIndex + 1).every((seg) => seg.type === "text");
+  const canCollapse =
+    hasFinalReply &&
     turn.segments.some((seg, index) =>
       seg.type === "text"
         ? !!(
@@ -35,9 +43,16 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
     );
 
   return (
-    <div className="space-y-2">
-      {turn.userMessage && (
-        <MessageBubble role="user" content={turn.userMessage} />
+    <div className="space-y-2" data-turn-id={turn.turnId}>
+      {(turn.userMessage || turn.userImages?.length) && (
+        <MessageBubble
+          role="user"
+          content={turn.userMessage}
+          novelId={novelId}
+          images={turn.userImages}
+          copyable
+          sentAt={turn.userSentAt}
+        />
       )}
 
       <div className="space-y-2">
@@ -67,6 +82,8 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
               segment={segment}
               isTurnStreaming={turn.status === "streaming"}
               hideContent={canCollapse && index === finalIndex}
+              copyable={hasFinalReply && !canCollapse && index === finalIndex}
+              sentAt={index === finalIndex ? turn.assistantSentAt : undefined}
               onApprove={onApprove}
               onReject={onReject}
             />
@@ -78,6 +95,8 @@ export default function ChatTurn({ turn, onApprove, onReject }: Props) {
         <MessageBubble
           role="assistant"
           content={turn.segments[finalIndex].content}
+          copyable
+          sentAt={turn.assistantSentAt}
         />
       )}
 

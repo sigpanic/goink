@@ -1,11 +1,13 @@
+import type { ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 import ModelPicker from "@/components/model/ModelPicker";
 import ContextRing from "./ContextRing";
 import type { UsageInfo } from "./ContextRing";
 import { useModels } from "@/components/settings/useModels";
 import { useChatStore } from "./useChatStore";
+import ChatActionsMenu from "./ChatActionsMenu";
 
-interface Props {
+interface Props extends ComponentProps<typeof ChatActionsMenu> {
   onSelectModel: (key: string) => void;
   onRefreshModels?: () => void;
   onSelectEffort: (effort: string) => void;
@@ -22,6 +24,8 @@ interface Props {
 // 从 useChatStore 订阅（跨组件共享，废弃拼接 key）。回调仍由 props 传入（mutation commit 4 迁）。
 // 5.x: 模型 + reasoning 合并进 ModelPicker（按 provider 聚类 + 底部 reasoning 跟随区域）。
 export default function ChatControls({
+  onImportImages,
+  uploadDisabled,
   onSelectModel,
   onRefreshModels,
   onSelectEffort,
@@ -43,6 +47,10 @@ export default function ChatControls({
 
   return (
     <div className="flex items-center gap-1.5 px-4 py-2 text-xs shrink-0 select-none">
+      <ChatActionsMenu
+        onImportImages={onImportImages}
+        uploadDisabled={uploadDisabled}
+      />
       <ModelPicker
         models={models}
         selectedKey={selectedKey}

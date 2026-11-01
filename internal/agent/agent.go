@@ -180,6 +180,11 @@ func (a *Agent) run(
 	if opts.Model == nil {
 		return AgentLoopResult{}, errors.New("agent: Model is required in RunOptions")
 	}
+	messages, err := llm.PrepareImageMessages(opts.NovelID, *opts.Model, opts.Messages)
+	if err != nil {
+		return AgentLoopResult{}, err
+	}
+	opts.Messages = messages
 
 	ctx = storage.WithTurn(ctx, opts.SessionID, opts.TurnID)
 
@@ -220,6 +225,11 @@ func (a *Agent) run(
 		// tool_args_invalid 首次提醒标志：同一 turn 内只加一次 reminder，
 		// 避免重试耗尽后 DB 残留多条孤立 user reminder 污染下轮 LLM 上下文
 		reminderAdded := false
+		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.95 {
+			return AgentLoopResult{FinalText: responseBuffer.String(), ThinkingContent: thinkingBuffer.String(), TurnCount: loopCount},
+				fmt.Errorf("当前上下文约 %d tokens，已达到模型 %s 上下文窗口（%d tokens）的 95%%，请换用上下文窗口更大的模型压缩后再继续",
+					sumRunningTokens(runningTokens), opts.Model.ID, opts.Model.ContextWindow)
+		}
 		// token 预算检查：每轮开始时，超限触发压缩
 		if opts.Model.ContextWindow > 0 && float64(sumRunningTokens(runningTokens))/float64(opts.Model.ContextWindow) >= 0.8 {
 			a.logger.Warn("token budget exceeded, triggering compression",
@@ -239,7 +249,7 @@ func (a *Agent) run(
 			}
 		}
 
-		callOpts := &llm.CallOptions{}
+		callOpts := &llm.CallOptions{NovelID: opts.NovelID}
 		callOpts.SessionID = opts.SessionID // 会话标识，供需要会话感知的服务商（如 OpenCode Go 的 x-opencode-session）使用
 		if opts.ReasoningEffort != "" {
 			callOpts.ReasoningEffort = &opts.ReasoningEffort
@@ -656,6 +666,17 @@ func (a *Agent) run(
 // appendMsg 统一处理消息的内存追加 + 持久化 + token 计数。
 // opts 必须传指针，因为 opts.Messages 需要被追加（Go 切片传值会丢失 append）。
 func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOptions, runningTokens map[string]int) error {
+	if len(message.Images) > 0 {
+		if opts.Model == nil {
+			return fmt.Errorf("agent: 图片输入需要指定模型")
+		}
+		prepared, err := llm.PrepareImageMessages(opts.NovelID, *opts.Model, []llm.Message{message})
+		if err != nil {
+			return fmt.Errorf("agent: prepare %s images: %w", message.Role, err)
+		}
+		message = prepared[0]
+	}
+	imageInputs := message.ImageInputs
 	role := message.Role
 	metadata, err := extraJSON(extra)
 	if err != nil {
@@ -688,6 +709,7 @@ func (a *Agent) appendMsg(message llm.Message, extra map[string]any, opts *RunOp
 		a.logger.Error("构建模型消息失败", "role", role, "turnID", opts.TurnID, "err", err)
 		return fmt.Errorf("agent: render %s message: %w", role, err)
 	}
+	message.ImageInputs = imageInputs
 	opts.Messages = append(opts.Messages, message)
 	n, err := llm.CountMessageTokens(message)
 	if err != nil {
