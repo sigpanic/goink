@@ -26,6 +26,7 @@ import (
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/report"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/session"
 	"github.com/sigpanic/goink/internal/setting"
@@ -150,6 +151,7 @@ func setupTestApp(t *testing.T) *App {
 		volume:     volumeStore,
 		activity:   activityStore,
 	}
+	app.reportService = report.NewService(activityStore, writingStore)
 	chapterDeletionGuard := deletion.NewGuard(
 		deletion.For(deletion.EntityChapter, timelineStore.ChapterDeletionBlockers),
 		deletion.For(deletion.EntityChapter, storyarcStore.ChapterDeletionBlockers),
