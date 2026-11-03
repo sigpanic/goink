@@ -51,6 +51,7 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // settings 复用 chat.settingsLoadFailed（GetSettings 共享缓存，文案通用）
   "writing-activity": "profile.activityLoadFailed",
   "writing-stats": "profile.statsLoadFailed",
+  "annual-report": "annualReport.loadFailed",
   // 5.8 commit 1：LLM 配置 query（GetLLMConfig）
   "llm-config": "settings.llmConfigLoadFailed",
   "mcp-server": "settings.mcpServer.loadFailed",

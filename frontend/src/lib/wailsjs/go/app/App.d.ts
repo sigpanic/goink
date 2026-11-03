@@ -244,6 +244,8 @@ export function RevokeMCPServerCredential():Promise<void>;
 
 export function RotateMCPServerCredential():Promise<mcpserver.LocalView>;
 
+export function SaveAnnualReportImage(arg1:app.SaveAnnualReportImageInput):Promise<apperr.Result_bool_>;
+
 export function SaveAvatar(arg1:Array<number>):Promise<void>;
 
 export function SaveContent(arg1:app.SaveContentInput):Promise<void>;

@@ -430,6 +430,10 @@ export function RotateMCPServerCredential() {
   return window['go']['app']['App']['RotateMCPServerCredential']();
 }
 
+export function SaveAnnualReportImage(arg1) {
+  return window['go']['app']['App']['SaveAnnualReportImage'](arg1);
+}
+
 export function SaveAvatar(arg1) {
   return window['go']['app']['App']['SaveAvatar'](arg1);
 }

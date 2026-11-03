@@ -9,6 +9,11 @@ import { useWritingStats } from "./useWritingStats";
 import { useProfileSettings } from "./useProfileSettings";
 import { useSaveAvatar } from "./useSaveAvatar";
 import { useSaveUserName } from "./useSaveUserName";
+import AnnualReportView from "@/components/annual-report/AnnualReportView";
+import { ArrowUpRight, BookOpen } from "lucide-react";
+import { Dialog } from "radix-ui";
+
+const SHOW_ANNUAL_REPORT_ENTRY = false;
 
 export default function ProfileView() {
   const { t } = useTranslation();
@@ -50,6 +55,7 @@ export default function ProfileView() {
   const [nameError, setNameError] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [currentYear] = useState(() => new Date().getFullYear());
+  const [showAnnualReport, setShowAnnualReport] = useState(false);
 
   function handleAvatarClick() {
     fileInputRef.current?.click();
@@ -102,136 +108,193 @@ export default function ProfileView() {
   }
 
   return (
-    <main className="flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept="image/*"
-        className="hidden"
-        onChange={handleFileChange}
-      />
-      <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-        {isError && (
-          <p className="text-xs text-destructive py-4">
-            {t("profile.loadFailed")}
-          </p>
-        )}
-        {/* 头像 + 问候 */}
-        <div className="flex items-center gap-4">
-          <div
-            className="relative group flex-shrink-0 cursor-pointer select-none"
-            onClick={handleAvatarClick}
-          >
-            {avatarErrored ? (
-              <div className="w-14 h-14 rounded-full bg-muted bg-secondary flex items-center justify-center">
-                <User className="w-7 h-7 text-muted-foreground" />
+    <Dialog.Root
+      open={showAnnualReport}
+      onOpenChange={setShowAnnualReport}
+      modal={false}
+    >
+      <main className="profile-view flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
+        <div className="max-w-4xl mx-auto px-6 py-8 space-y-8">
+          {isError && (
+            <p className="text-xs text-destructive py-4">
+              {t("profile.loadFailed")}
+            </p>
+          )}
+          {/* 头像 + 问候 */}
+          <div className="flex items-center gap-4">
+            <div
+              className="relative group flex-shrink-0 cursor-pointer select-none"
+              onClick={handleAvatarClick}
+            >
+              {avatarErrored ? (
+                <div className="w-14 h-14 rounded-full bg-muted bg-secondary flex items-center justify-center">
+                  <User className="w-7 h-7 text-muted-foreground" />
+                </div>
+              ) : (
+                <img
+                  src={`/avatar?v=${avatarKey}`}
+                  alt=""
+                  onError={() => setAvatarErrored(true)}
+                  className="w-14 h-14 rounded-full object-cover"
+                />
+              )}
+              <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Camera className="w-5 h-5 text-white" />
               </div>
-            ) : (
-              <img
-                src={`/avatar?v=${avatarKey}`}
-                alt=""
-                onError={() => setAvatarErrored(true)}
-                className="w-14 h-14 rounded-full object-cover"
-              />
+            </div>
+            {avatarError && (
+              <p className="text-xs text-destructive">{avatarError}</p>
             )}
-            <div className="absolute inset-0 rounded-full flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Camera className="w-5 h-5 text-white" />
+            <div>
+              {editingName ? (
+                <div>
+                  <input
+                    autoFocus
+                    value={nameDraft}
+                    onChange={(e) => {
+                      setNameDraft(e.target.value);
+                      setNameError("");
+                    }}
+                    onBlur={handleNameSave}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") handleNameSave();
+                      if (e.key === "Escape") setEditingName(false);
+                    }}
+                    className="text-lg font-semibold bg-transparent border-b border-primary outline-none text-foreground max-w-[200px]"
+                  />
+                  {nameError && (
+                    <p className="text-xs text-destructive mt-0.5">
+                      {nameError}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <h1
+                  onClick={startEditName}
+                  className={`text-lg font-semibold cursor-pointer hover:text-primary transition-colors select-none ${settings?.user_name ? "text-foreground" : "text-muted-foreground"}`}
+                >
+                  {settings?.user_name || t("profile.noNickname")}
+                </h1>
+              )}
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {t("profile.pastYearStats", {
+                  count: Object.keys(activity).length,
+                })}
+              </p>
             </div>
           </div>
-          {avatarError && (
-            <p className="text-xs text-destructive">{avatarError}</p>
+
+          {SHOW_ANNUAL_REPORT_ENTRY && (
+            <Dialog.Trigger asChild>
+              <button type="button" className="annual-report-entry">
+                <span className="annual-report-entry-icon">
+                  <BookOpen size={24} />
+                </span>
+                <span className="annual-report-entry-copy">
+                  <strong>{t("annualReport.entryTitle")}</strong>
+                  <span>{t("annualReport.entryNote")}</span>
+                </span>
+                <span className="annual-report-entry-year" aria-hidden="true">
+                  {currentYear}
+                </span>
+                <ArrowUpRight size={21} />
+              </button>
+            </Dialog.Trigger>
           )}
-          <div>
-            {editingName ? (
-              <div>
-                <input
-                  autoFocus
-                  value={nameDraft}
-                  onChange={(e) => {
-                    setNameDraft(e.target.value);
-                    setNameError("");
-                  }}
-                  onBlur={handleNameSave}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") handleNameSave();
-                    if (e.key === "Escape") setEditingName(false);
-                  }}
-                  className="text-lg font-semibold bg-transparent border-b border-primary outline-none text-foreground max-w-[200px]"
-                />
-                {nameError && (
-                  <p className="text-xs text-destructive mt-0.5">{nameError}</p>
-                )}
-              </div>
-            ) : (
-              <h1
-                onClick={startEditName}
-                className={`text-lg font-semibold cursor-pointer hover:text-primary transition-colors select-none ${settings?.user_name ? "text-foreground" : "text-muted-foreground"}`}
-              >
-                {settings?.user_name || t("profile.noNickname")}
-              </h1>
-            )}
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t("profile.pastYearStats", {
-                count: Object.keys(activity).length,
+
+          {/* 统计卡片 */}
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard
+              icon={PenLine}
+              label={t("profile.totalWords")}
+              value={(stats?.total_words ?? 0).toLocaleString()}
+            />
+            <StatCard
+              icon={CalendarDays}
+              label={t("profile.writingDays")}
+              value={`${stats?.total_days_active ?? 0}`}
+            />
+            <StatCard
+              icon={Flame}
+              label={t("profile.streakDays")}
+              value={`${stats?.current_streak ?? 0} ${t("profile.day")}`}
+            />
+            <StatCard
+              icon={Flame}
+              label={t("profile.longestStreak")}
+              value={`${stats?.longest_streak ?? 0} ${t("profile.day")}`}
+            />
+          </div>
+
+          {/* 作品/章节概览 */}
+          <div className="flex gap-6 text-xs text-muted-foreground">
+            <span>
+              {t("profile.worksCount", { count: stats?.total_novels ?? 0 })}
+            </span>
+            <span>
+              {t("profile.chaptersCount", {
+                count: stats?.total_chapters ?? 0,
               })}
-            </p>
+            </span>
           </div>
+
+          {/* 绿格子 */}
+          <section>
+            <h2 className="text-sm font-medium text-foreground mb-4">
+              {t("profile.yearCalendar", { year: currentYear })}
+            </h2>
+            <div className="overflow-x-auto">
+              <ContributionGrid data={activity} />
+            </div>
+          </section>
+
+          {Object.keys(activity).length === 0 && (
+            <div className="text-center py-12">
+              <PenLine className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
+              <p className="text-sm text-muted-foreground">
+                {t("profile.noWritingRecord")}
+              </p>
+            </div>
+          )}
         </div>
-
-        {/* 统计卡片 */}
-        <div className="grid grid-cols-2 gap-3">
-          <StatCard
-            icon={PenLine}
-            label={t("profile.totalWords")}
-            value={(stats?.total_words ?? 0).toLocaleString()}
-          />
-          <StatCard
-            icon={CalendarDays}
-            label={t("profile.writingDays")}
-            value={`${stats?.total_days_active ?? 0}`}
-          />
-          <StatCard
-            icon={Flame}
-            label={t("profile.streakDays")}
-            value={`${stats?.current_streak ?? 0} ${t("profile.day")}`}
-          />
-          <StatCard
-            icon={Flame}
-            label={t("profile.longestStreak")}
-            value={`${stats?.longest_streak ?? 0} ${t("profile.day")}`}
-          />
-        </div>
-
-        {/* 作品/章节概览 */}
-        <div className="flex gap-6 text-xs text-muted-foreground">
-          <span>
-            {t("profile.worksCount", { count: stats?.total_novels ?? 0 })}
-          </span>
-          <span>
-            {t("profile.chaptersCount", { count: stats?.total_chapters ?? 0 })}
-          </span>
-        </div>
-
-        {/* 绿格子 */}
-        <section>
-          <h2 className="text-sm font-medium text-foreground mb-4">
-            {t("profile.yearCalendar", { year: currentYear })}
-          </h2>
-          <div className="overflow-x-auto">
-            <ContributionGrid data={activity} />
-          </div>
-        </section>
-
-        {Object.keys(activity).length === 0 && (
-          <div className="text-center py-12">
-            <PenLine className="w-10 h-10 mx-auto text-muted-foreground mb-3" />
-            <p className="text-sm text-muted-foreground">
-              {t("profile.noWritingRecord")}
-            </p>
-          </div>
-        )}
-      </div>
-    </main>
+      </main>
+      <Dialog.Portal>
+        <Dialog.Content
+          className="report-fullscreen"
+          aria-describedby={undefined}
+          onInteractOutside={(event) => event.preventDefault()}
+          onKeyDown={(event) => {
+            if (event.key !== "Tab") return;
+            const items = Array.from(
+              event.currentTarget.querySelectorAll<HTMLElement>(
+                "button:not(:disabled), select, input, a[href], [tabindex='0']",
+              ),
+            ).filter((item) => !item.closest("[inert]"));
+            const first = items[0];
+            const last = items[items.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last?.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first?.focus();
+            }
+          }}
+        >
+          <Dialog.Title className="sr-only">
+            {t("annualReport.title")}
+          </Dialog.Title>
+          <AnnualReportView onBack={() => setShowAnnualReport(false)} />
+        </Dialog.Content>
+      </Dialog.Portal>
+    </Dialog.Root>
   );
 }
 

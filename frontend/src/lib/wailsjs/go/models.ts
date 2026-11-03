@@ -826,6 +826,20 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class SaveAnnualReportImageInput {
+	    year: number;
+	    png_base64: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveAnnualReportImageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.year = source["year"];
+	        this.png_base64 = source["png_base64"];
+	    }
+	}
 	export class SaveContentInput {
 	    novel_id: number;
 	    path: string;
@@ -1266,6 +1280,22 @@ export namespace apperr {
 		    }
 		    return a;
 		}
+	}
+	export class Result_bool_ {
+	    data: boolean;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_bool_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = source["data"];
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
 	}
 	export class Result_github_com_sigpanic_goink_internal_attachment_Image_ {
 	    data: attachment.Image;
