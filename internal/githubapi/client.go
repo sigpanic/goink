@@ -79,15 +79,15 @@ func (e *Error) Unwrap() error { return e.Cause }
 func (e *Error) Code() apperr.Code {
 	switch e.Kind {
 	case KindNetwork:
-		return apperr.CodeGitHubAPINetwork
+		return CodeNetwork
 	case KindRateLimited:
-		return apperr.CodeGitHubAPIRateLimited
+		return CodeRateLimited
 	case KindNotFound:
-		return apperr.CodeGitHubAPINotFound
+		return CodeNotFound
 	case KindForbidden:
-		return apperr.CodeGitHubAPIForbidden
+		return CodeForbidden
 	default: // 含 KindOther
-		return apperr.CodeGitHubAPIOther
+		return CodeOther
 	}
 }
 

@@ -40,43 +40,6 @@ const (
 	CodeInternal Code = "internal"
 )
 
-// githubapi 模块错误码
-const (
-	// CodeGitHubAPINetwork 网络层失败：超时 / 连接拒绝 / DNS / context 取消。
-	CodeGitHubAPINetwork Code = "githubapi.network"
-	// CodeGitHubAPIRateLimited rate limit 触发：GitHub 403+Remaining:0、429。
-	CodeGitHubAPIRateLimited Code = "githubapi.rate_limited"
-	// CodeGitHubAPINotFound 资源不存在（404，如 skill 被移除）。
-	CodeGitHubAPINotFound Code = "githubapi.not_found"
-	// CodeGitHubAPIForbidden 权限拒绝（403 非 rate limit）。
-	CodeGitHubAPIForbidden Code = "githubapi.forbidden"
-	// CodeGitHubAPIOther 其他未分类的 GitHub API 错误。
-	CodeGitHubAPIOther Code = "githubapi.other"
-)
-
-// llm 模块错误码
-const (
-	// CodeLLMRateLimited LLM 调用触发 429。
-	CodeLLMRateLimited Code = "llm.rate_limited"
-	// CodeLLMNotFound LLM 模型不存在（404）。
-	CodeLLMNotFound Code = "llm.not_found"
-	// CodeLLMForbidden LLM 调用权限拒绝（403）。
-	CodeLLMForbidden Code = "llm.forbidden"
-	// CodeLLMServerError LLM 服务端 5xx，归类为可重试服务端问题。
-	CodeLLMServerError Code = "llm.server_error"
-	// CodeLLMClientError LLM 客户端 4xx（非 429/404/403），归类为请求侧问题。
-	CodeLLMClientError Code = "llm.client_error"
-)
-
-const (
-	// CodeAttachmentFileTooLarge 原图或处理后的图片超过文件体积限制。
-	CodeAttachmentFileTooLarge Code = "attachment.file_too_large"
-	// CodeAttachmentTooManyPixels 原图像素数超过解码限制。
-	CodeAttachmentTooManyPixels Code = "attachment.too_many_pixels"
-	// CodeAttachmentInvalidImage 图片格式不受支持、数据损坏或编码无效。
-	CodeAttachmentInvalidImage Code = "attachment.invalid_image"
-)
-
 // Result 是 Wails API 的统一返回包装，泛型 T 表示业务数据类型。
 //
 // 成功时 ErrCode=""，失败时 Data 为零值、ErrCode 非 ""、ErrMsg 含可读描述。

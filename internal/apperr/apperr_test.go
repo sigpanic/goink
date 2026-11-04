@@ -9,8 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/githubapi"
 	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 )
 
 // TestOk_ConstructsSuccess 验证 Ok 包装成功结果时 ErrCode 为空、ErrMsg 缺省、Data 透传。
@@ -38,11 +40,11 @@ func TestErr_GitHubAPIError_KindMapping(t *testing.T) {
 		kind githubapi.Kind
 		want apperr.Code
 	}{
-		{"network", githubapi.KindNetwork, apperr.CodeGitHubAPINetwork},
-		{"rate_limited", githubapi.KindRateLimited, apperr.CodeGitHubAPIRateLimited},
-		{"not_found", githubapi.KindNotFound, apperr.CodeGitHubAPINotFound},
-		{"forbidden", githubapi.KindForbidden, apperr.CodeGitHubAPIForbidden},
-		{"other_fallback", githubapi.KindOther, apperr.CodeGitHubAPIOther},
+		{"network", githubapi.KindNetwork, githubapi.CodeNetwork},
+		{"rate_limited", githubapi.KindRateLimited, githubapi.CodeRateLimited},
+		{"not_found", githubapi.KindNotFound, githubapi.CodeNotFound},
+		{"forbidden", githubapi.KindForbidden, githubapi.CodeForbidden},
+		{"other_fallback", githubapi.KindOther, githubapi.CodeOther},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -63,11 +65,11 @@ func TestErr_LLMAPIError_StatusMapping(t *testing.T) {
 		statusCode int
 		want       apperr.Code
 	}{
-		{"429_rate_limited", 429, apperr.CodeLLMRateLimited},
-		{"404_not_found", 404, apperr.CodeLLMNotFound},
-		{"403_forbidden", 403, apperr.CodeLLMForbidden},
-		{"500_server_error", 500, apperr.CodeLLMServerError},
-		{"400_client_error", 400, apperr.CodeLLMClientError},
+		{"429_rate_limited", 429, adapter.CodeRateLimited},
+		{"404_not_found", 404, adapter.CodeNotFound},
+		{"403_forbidden", 403, adapter.CodeForbidden},
+		{"500_server_error", 500, adapter.CodeServerError},
+		{"400_client_error", 400, adapter.CodeClientError},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -85,7 +87,7 @@ func TestErr_WrappedError_PreservesKind(t *testing.T) {
 	wrapped := fmt.Errorf("remote: fetch: %w", ghErr)
 	res := apperr.Err[string](wrapped)
 	require.NotNil(t, res)
-	assert.Equal(t, apperr.CodeGitHubAPINetwork, res.ErrCode, "errors.As 应穿透 %w 包装")
+	assert.Equal(t, githubapi.CodeNetwork, res.ErrCode, "errors.As 应穿透 %w 包装")
 	assert.Contains(t, res.ErrMsg, "remote: fetch:")
 	assert.Contains(t, res.ErrMsg, "request failed")
 }
@@ -96,7 +98,7 @@ func TestErr_WrappedError_PreservesLLMStatusCode(t *testing.T) {
 	wrapped := fmt.Errorf("llm: call: %w", apiErr)
 	res := apperr.Err[string](wrapped)
 	require.NotNil(t, res)
-	assert.Equal(t, apperr.CodeLLMNotFound, res.ErrCode)
+	assert.Equal(t, adapter.CodeNotFound, res.ErrCode)
 }
 
 // TestErr_BusinessError_CustomCode 验证调用方定义的错误码和原始错误链均被保留。
@@ -159,14 +161,17 @@ func TestErr_GenericClass_Instantiation(t *testing.T) {
 func TestCode_StringValues(t *testing.T) {
 	assert.Equal(t, "", string(apperr.CodeOK))
 	assert.Equal(t, "internal", string(apperr.CodeInternal))
-	assert.Equal(t, "githubapi.network", string(apperr.CodeGitHubAPINetwork))
-	assert.Equal(t, "githubapi.rate_limited", string(apperr.CodeGitHubAPIRateLimited))
-	assert.Equal(t, "githubapi.not_found", string(apperr.CodeGitHubAPINotFound))
-	assert.Equal(t, "githubapi.forbidden", string(apperr.CodeGitHubAPIForbidden))
-	assert.Equal(t, "githubapi.other", string(apperr.CodeGitHubAPIOther))
-	assert.Equal(t, "llm.rate_limited", string(apperr.CodeLLMRateLimited))
-	assert.Equal(t, "llm.not_found", string(apperr.CodeLLMNotFound))
-	assert.Equal(t, "llm.forbidden", string(apperr.CodeLLMForbidden))
-	assert.Equal(t, "llm.server_error", string(apperr.CodeLLMServerError))
-	assert.Equal(t, "llm.client_error", string(apperr.CodeLLMClientError))
+	assert.Equal(t, "githubapi.network", string(githubapi.CodeNetwork))
+	assert.Equal(t, "githubapi.rate_limited", string(githubapi.CodeRateLimited))
+	assert.Equal(t, "githubapi.not_found", string(githubapi.CodeNotFound))
+	assert.Equal(t, "githubapi.forbidden", string(githubapi.CodeForbidden))
+	assert.Equal(t, "githubapi.other", string(githubapi.CodeOther))
+	assert.Equal(t, "llm.rate_limited", string(adapter.CodeRateLimited))
+	assert.Equal(t, "llm.not_found", string(adapter.CodeNotFound))
+	assert.Equal(t, "llm.forbidden", string(adapter.CodeForbidden))
+	assert.Equal(t, "llm.server_error", string(adapter.CodeServerError))
+	assert.Equal(t, "llm.client_error", string(adapter.CodeClientError))
+	assert.Equal(t, "attachment.file_too_large", string(attachment.CodeFileTooLarge))
+	assert.Equal(t, "attachment.too_many_pixels", string(attachment.CodeTooManyPixels))
+	assert.Equal(t, "attachment.invalid_image", string(attachment.CodeInvalidImage))
 }

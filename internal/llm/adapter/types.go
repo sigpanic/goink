@@ -59,15 +59,15 @@ func (e *APIError) Unwrap() error {
 func (e *APIError) Code() apperr.Code {
 	switch {
 	case e.StatusCode == 429:
-		return apperr.CodeLLMRateLimited
+		return CodeRateLimited
 	case e.StatusCode == 404:
-		return apperr.CodeLLMNotFound
+		return CodeNotFound
 	case e.StatusCode == 403:
-		return apperr.CodeLLMForbidden
+		return CodeForbidden
 	case e.StatusCode >= 500:
-		return apperr.CodeLLMServerError
+		return CodeServerError
 	default:
-		return apperr.CodeLLMClientError
+		return CodeClientError
 	}
 }
 

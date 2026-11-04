@@ -32,7 +32,7 @@ func TestChatImageBindings(t *testing.T) {
 	_, err = a.GetChatImage(8, meta.ID)
 	require.Error(t, err)
 	invalid := a.ImportChatImage(ChatImageInput{NovelID: 7, Data: "not base64"})
-	require.Equal(t, apperr.CodeAttachmentInvalidImage, invalid.ErrCode)
+	require.Equal(t, attachment.CodeInvalidImage, invalid.ErrCode)
 	require.Zero(t, invalid.Data)
 	require.Contains(t, invalid.ErrMsg, "base64")
 	require.NoError(t, a.DeleteChatImage(8, meta.ID))
@@ -59,7 +59,7 @@ func TestChatImageImportReturnsBusinessAndUnderlyingErrors(t *testing.T) {
 	invalid = input
 	invalid.Data = base64.StdEncoding.EncodeToString([]byte("corrupt image"))
 	result = a.ImportChatImage(invalid)
-	require.Equal(t, apperr.CodeAttachmentInvalidImage, result.ErrCode)
+	require.Equal(t, attachment.CodeInvalidImage, result.ErrCode)
 	require.Zero(t, result.Data)
 	require.Contains(t, result.ErrMsg, "decode image header")
 
