@@ -16,7 +16,7 @@ import Markdown from "@/components/Markdown";
 import { splitFrontmatter } from "@/components/content/types";
 import { BrowserOpenURL } from "@/lib/wailsjs/runtime/runtime";
 import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
+import { errorCodeMessage, toErrorMessage } from "@/utils/error";
 import { contentKeys, skillKeys } from "@/lib/queryKeys";
 import { AppErr } from "@/utils/wailsResult";
 import { useSkills } from "./useSkills";
@@ -64,6 +64,8 @@ function classifyError(
   msg: string,
   t: TFunction,
 ): { code: string; message: string } {
+  const businessMessage = errorCodeMessage(code, t);
+  if (businessMessage) return { code, message: businessMessage };
   // 后端 err_code 是带模块前缀的全码（如 "githubapi.rate_limited"、"llm.not_found"），
   // 用 endsWith 匹配短码，保持 canRetry 等下游逻辑用短码判断。
   if (code.endsWith("network"))
@@ -253,7 +255,7 @@ export default function SkillMarketplace({
         setLocalContent("");
         setRemoteContentForConfirm("");
       } catch (e: unknown) {
-        if (e instanceof AppErr && e.errCode === "conflict") {
+        if (e instanceof AppErr && e.errCode === "skill.install_conflict") {
           setCheckingTarget(target);
           try {
             const latest = await probeLocal(target, name);

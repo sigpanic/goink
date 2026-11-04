@@ -9,6 +9,8 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useProfileSettings } from "@/components/profile/useProfileSettings";
+import { AppErr } from "@/utils/wailsResult";
+import { errorCodeMessage, toErrorMessage } from "@/utils/error";
 import { useAnnualReport } from "./useAnnualReport";
 import type { AnnualReport } from "./useAnnualReport";
 import ReportCover from "./ReportCover";
@@ -97,6 +99,14 @@ export default function AnnualReportView({ onBack }: { onBack: () => void }) {
             <AlertCircle size={28} />
             <h1>{t("annualReport.loadFailed")}</h1>
             <p>{t("annualReport.errorNote")}</p>
+            {query.error && (
+              <p className="max-w-full break-words">
+                {query.error instanceof AppErr
+                  ? (errorCodeMessage(query.error.errCode, t) ??
+                    toErrorMessage(query.error))
+                  : toErrorMessage(query.error)}
+              </p>
+            )}
             <button
               type="button"
               className="report-button"

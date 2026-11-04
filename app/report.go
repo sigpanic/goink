@@ -20,12 +20,12 @@ import (
 // GetAnnualReport 复用领域报告结构，年份校验及统计编排由报告服务负责。
 func (a *App) GetAnnualReport(year int) *apperr.Result[report.AnnualReport] {
 	if a.reportService == nil {
-		return apperr.Err[report.AnnualReport](errors.New("年度报告服务尚未就绪"))
+		return apperr.Err[report.AnnualReport](errors.New("report: service is not ready"))
 	}
 	result, err := a.reportService.GetAnnual(a.ctx, year)
 	if err != nil {
 		if errors.Is(err, report.ErrInvalidYear) {
-			err = &apperr.BusinessError{CodeVal: apperr.CodeInvalid, Msg: "报告年份必须介于 1 和当前年份之间", Cause: err}
+			err = &apperr.BusinessError{CodeVal: report.CodeInvalidYear, Msg: "report: year must be between 1 and the current year", Cause: err}
 		}
 		return apperr.Err[report.AnnualReport](err)
 	}
@@ -46,14 +46,14 @@ func (a *App) SaveAnnualReportImage(input SaveAnnualReportImageInput) *apperr.Re
 
 func saveAnnualReportImage(input SaveAnnualReportImageInput, choosePath func(runtime.SaveDialogOptions) (string, error)) *apperr.Result[bool] {
 	if input.Year < 1 || input.Year > time.Now().Year() {
-		return apperr.Err[bool](apperr.NewInvalid("报告年份无效"))
+		return apperr.Err[bool](&apperr.BusinessError{CodeVal: report.CodeInvalidYear, Msg: "report: year must be between 1 and the current year"})
 	}
 	data, err := base64.StdEncoding.DecodeString(input.PNGBase64)
 	if err != nil {
-		return apperr.Err[bool](apperr.NewInvalid("分享图片编码无效"))
+		return apperr.Err[bool](&apperr.BusinessError{CodeVal: report.CodeInvalidImage, Msg: "report: decode poster base64", Cause: err})
 	}
 	if _, err := png.DecodeConfig(bytes.NewReader(data)); err != nil {
-		return apperr.Err[bool](apperr.NewInvalid("分享图片不是有效的 PNG"))
+		return apperr.Err[bool](&apperr.BusinessError{CodeVal: report.CodeInvalidImage, Msg: "report: decode poster PNG header", Cause: err})
 	}
 	path, err := choosePath(runtime.SaveDialogOptions{
 		DefaultFilename:      fmt.Sprintf("Goink-%d.png", input.Year),

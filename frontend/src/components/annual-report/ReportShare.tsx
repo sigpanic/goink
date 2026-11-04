@@ -3,7 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Dialog } from "radix-ui";
 import { Download, ImagePlus, LoaderCircle, Check, X } from "lucide-react";
 import { SaveAnnualReportImage } from "@/lib/wailsjs/go/app/App";
-import { unwrapResult } from "@/utils/wailsResult";
+import { AppErr, unwrapResult } from "@/utils/wailsResult";
+import { errorCodeMessage, toErrorMessage } from "@/utils/error";
 import { createSharePoster } from "./sharePoster";
 import type { AnnualReport } from "./useAnnualReport";
 
@@ -76,8 +77,8 @@ export default function ReportShare({
       });
       setImage(data);
       setOpen(true);
-    } catch {
-      setError(t("annualReport.shareFailed"));
+    } catch (err) {
+      setError(`${t("annualReport.shareFailed")}: ${toErrorMessage(err)}`);
     } finally {
       setGenerating(false);
     }
@@ -94,8 +95,12 @@ export default function ReportShare({
         }),
       );
       setSaved(result);
-    } catch {
-      setError(t("annualReport.saveFailed"));
+    } catch (err) {
+      const message =
+        err instanceof AppErr ? errorCodeMessage(err.errCode, t) : undefined;
+      setError(
+        message ?? `${t("annualReport.saveFailed")}: ${toErrorMessage(err)}`,
+      );
     } finally {
       setSaving(false);
     }

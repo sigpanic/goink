@@ -296,6 +296,7 @@ it.each([
   ["attachment.file_too_large", "chat.imageFileTooLarge"],
   ["attachment.too_many_pixels", "chat.imageTooManyPixels"],
   ["attachment.invalid_image", "chat.invalidImageData"],
+  ["attachment.invalid_novel_id", "chat.imageNovelRequired"],
 ])(
   "localizes the backend import error %s and retains the text draft",
   async (code, key) => {
@@ -310,6 +311,7 @@ it.each([
     });
     view.upload([picture()]);
     await waitFor(() => expect(fixture.toastError).toHaveBeenCalledWith(key));
+    expect(fixture.toastError).toHaveBeenCalledOnce();
     expect(screen.getByRole("textbox")).toHaveValue("keep text");
     expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
     expect(
@@ -332,6 +334,7 @@ it.each(["internal", "attachment.future_error"])(
     await waitFor(() =>
       expect(fixture.toastError).toHaveBeenCalledWith(message),
     );
+    expect(fixture.toastError).toHaveBeenCalledOnce();
     expect(localStorage.getItem(refsKey + "new_7")).toBeNull();
   },
 );

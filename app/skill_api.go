@@ -172,7 +172,7 @@ type InstallRemoteSkillInput struct {
 // expected_content 是用户看到目标时的内容，服务端在写入时校验它。
 func (a *App) InstallRemoteSkill(input InstallRemoteSkillInput) *apperr.Result[apperr.Empty] {
 	if input.ExpectedContent == nil {
-		return apperr.Err[apperr.Empty](apperr.NewInvalid("expected_content is required"))
+		return apperr.Err[apperr.Empty](&apperr.BusinessError{CodeVal: remote.CodeExpectedContentRequired, Msg: "remote: expected_content is required"})
 	}
 	if err := a.remote.InstallRemoteSkill(a.ctx, input.Name, input.Target, input.NovelID, *input.ExpectedContent); err != nil {
 		return apperr.Err[apperr.Empty](err)

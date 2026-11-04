@@ -139,7 +139,7 @@ func TestInvalidImportsDoNotPublishAttachments(t *testing.T) {
 		want   string
 		code   apperr.Code
 	}{
-		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID", apperr.CodeInvalid},
+		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID", attachment.CodeInvalidNovelID},
 		{"unsupported format", 1, bytes.NewReader(unsupported.Bytes()), "仅支持 PNG 和 JPEG", apperr.CodeAttachmentInvalidImage},
 		{"empty image", 1, bytes.NewReader(nil), "decode image header", apperr.CodeAttachmentInvalidImage},
 		{"corrupt image", 1, bytes.NewReader(pngImage.Bytes()[:33]), "decode image:", apperr.CodeAttachmentInvalidImage},

@@ -10,6 +10,7 @@ import (
 	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/config"
+	"github.com/sigpanic/goink/internal/report"
 	"github.com/sigpanic/goink/internal/writing"
 )
 
@@ -117,14 +118,14 @@ func TestGetAnnualReportAdaptsErrors(t *testing.T) {
 	a := setupTestApp(t)
 	for _, year := range []int{-1, 0, time.Now().Year() + 1} {
 		result := a.GetAnnualReport(year)
-		require.Equal(t, apperr.CodeInvalid, result.ErrCode)
+		require.Equal(t, report.CodeInvalidYear, result.ErrCode)
 		require.Zero(t, result.Data)
-		require.Contains(t, result.ErrMsg, "报告年份")
+		require.Contains(t, result.ErrMsg, "year must be between")
 	}
 	result := (&App{}).GetAnnualReport(time.Now().Year())
 	require.Equal(t, apperr.CodeInternal, result.ErrCode)
 	require.Zero(t, result.Data)
-	require.Contains(t, result.ErrMsg, "尚未就绪")
+	require.Contains(t, result.ErrMsg, "service is not ready")
 
 	require.NoError(t, a.db.Migrator().DropTable(&writing.WritingLog{}))
 	result = a.GetAnnualReport(time.Now().Year())

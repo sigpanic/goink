@@ -5,6 +5,14 @@ import SkillMarketplace from "./SkillMarketplace";
 import { contentKeys, skillKeys } from "@/lib/queryKeys";
 import { toastError } from "@/utils/toast";
 
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string, options?: { message?: string }) =>
+      options?.message ? `${key}: ${options.message}` : key,
+    i18n: { language: "en" },
+  }),
+}));
+
 const {
   mockListSkills,
   mockListRemoteSkills,
@@ -115,7 +123,7 @@ describe("SkillMarketplace installation", () => {
       .mockResolvedValueOnce("newly appeared body");
     mockInstallRemoteSkill
       .mockResolvedValueOnce({
-        err_code: "conflict",
+        err_code: "skill.install_conflict",
         err_msg: "target changed",
       })
       .mockResolvedValueOnce({ err_code: "", data: {} });
@@ -141,6 +149,40 @@ describe("SkillMarketplace installation", () => {
         expected_content: "newly appeared body",
       });
     });
+  });
+
+  it.each([
+    ["skill.invalid_target", "skill.marketplace.invalidTarget"],
+    ["skill.invalid_name", "skill.marketplace.invalidName"],
+    ["skill.invalid_path", "skill.marketplace.invalidPath"],
+    ["skill.novel_required", "skill.marketplace.novelRequired"],
+    ["skill.expected_content_required", "skill.marketplace.confirmationRequired"],
+  ])("localizes installation error %s", async (code, message) => {
+    mockGetContent.mockResolvedValue("");
+    mockInstallRemoteSkill.mockResolvedValueOnce({
+      err_code: code,
+      err_msg: "backend validation detail",
+    });
+    renderMarketplace();
+    await openSkill();
+    fireEvent.click(screen.getByText("skill.marketplace.installToUser"));
+    await vi.waitFor(() => expect(toastError).toHaveBeenCalledWith(message));
+  });
+
+  it("keeps the original internal installation error visible", async () => {
+    mockGetContent.mockResolvedValue("");
+    mockInstallRemoteSkill.mockResolvedValueOnce({
+      err_code: "internal",
+      err_msg: "write skill file: disk full",
+    });
+    renderMarketplace();
+    await openSkill();
+    fireEvent.click(screen.getByText("skill.marketplace.installToUser"));
+    await vi.waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith(
+        "skill.marketplace.errorOther: write skill file: disk full",
+      ),
+    );
   });
 
   it("stops before installation if the target cannot be read", async () => {

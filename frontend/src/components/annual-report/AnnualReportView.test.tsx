@@ -142,6 +142,7 @@ describe("AnnualReportView", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "暂时无法打开年度报告",
     );
+    expect(screen.getByRole("alert")).toHaveTextContent("database unavailable");
     expect(
       screen.queryByText("这一年的故事，正等你写下"),
     ).not.toBeInTheDocument();
@@ -260,12 +261,36 @@ describe("AnnualReportView", () => {
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "图片保存失败，请重试。",
     );
+    expect(within(dialog).getByRole("alert")).toHaveTextContent("disk full");
     fireEvent.click(within(dialog).getByRole("button", { name: "保存图片" }));
     expect(await within(dialog).findByRole("status")).toHaveTextContent(
       "已保存到所选位置",
     );
     fireEvent.click(within(dialog).getByRole("button", { name: "关闭预览" }));
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ["report.invalid_year", "报告年份无效，请选择不晚于今年的有效年份"],
+    ["report.invalid_image", "分享图片无效，请重新生成海报"],
+  ])("localizes poster save error %s", async (code, message) => {
+    vi.mocked(SaveAnnualReportImage).mockResolvedValueOnce(
+      new apperr.Result_bool_({
+        data: false,
+        err_code: code,
+        err_msg: "backend validation detail",
+      }),
+    );
+    mount();
+    await screen.findByRole("heading", { name: /故事因你而生长/ });
+    fireEvent.click(screen.getByRole("button", { name: "第 6 页：尾页" }));
+    fireEvent.click(screen.getByRole("button", { name: "生成分享海报" }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "保存图片" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(message);
+    expect(within(dialog).getByRole("alert")).not.toHaveTextContent(
+      "backend validation detail",
+    );
   });
 
   it("reports poster generation failure without trying to save", async () => {
@@ -279,6 +304,7 @@ describe("AnnualReportView", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "海报生成失败，请重试。",
     );
+    expect(screen.getByRole("alert")).toHaveTextContent("canvas unavailable");
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     expect(SaveAnnualReportImage).not.toHaveBeenCalled();
   });

@@ -158,6 +158,7 @@
     "imageFileTooLarge": "图片文件不能超过 20 MiB",
     "imageTooManyPixels": "图片不能超过 4000 万像素",
     "invalidImageData": "图片格式不受支持或文件已损坏，请选择有效的 PNG 或 JPEG 图片",
+    "imageNovelRequired": "请先选择有效的小说，再添加图片",
     "imageImportFailed": "导入图片失败",
     "importingImages": "正在导入图片…",
     "removingImages": "正在删除图片…",
@@ -1191,6 +1192,10 @@
       "errorRateLimited": "GitHub API 限流：未认证请求每小时限制 60 次。请稍后再试。",
       "errorNotFound": "未找到该 skill。可能仓库已更新，请刷新列表。",
       "errorForbidden": "GitHub 拒绝访问该资源。",
+      "invalidTarget": "技能安装位置无效，请重新选择",
+      "invalidName": "技能名称无效，请刷新列表后重试",
+      "invalidPath": "技能安装路径无效，请检查安装位置",
+      "confirmationRequired": "缺少安装确认信息，请重新确认后安装",
       "errorOther": "加载远程 skill 时出错：{{message}}",
       "errorGeneric": "出错了，请重试。"
     }
@@ -1618,6 +1623,8 @@
     "shareLocal": "保存到本机，分享时由你选择发送给谁。",
     "shareFailed": "海报生成失败，请重试。",
     "saveFailed": "图片保存失败，请重试。",
+    "invalidYear": "报告年份无效，请选择不晚于今年的有效年份",
+    "invalidImage": "分享图片无效，请重新生成海报",
     "saveImage": "保存图片",
     "savingImage": "正在保存…",
     "imageSaved": "已保存到所选位置",

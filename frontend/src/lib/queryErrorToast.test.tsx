@@ -26,6 +26,7 @@ vi.mock("@/i18n", () => ({
 }));
 
 import { installQueryErrorToast } from "./queryErrorToast";
+import { AppErr } from "@/utils/wailsResult";
 
 // 每个测试用独立 QueryClient（retry:false 避免重试延迟），无状态残留。
 function newClient() {
@@ -67,6 +68,32 @@ describe("installQueryErrorToast", () => {
     expect(mockToastError).toHaveBeenCalledOnce();
     expect(mockToastError).toHaveBeenCalledWith("角色加载失败: fetch failed");
 
+    unsub();
+  });
+
+  it.each([
+    ["internal", "database unavailable"],
+    ["report.invalid_year", "报告年份无效"],
+  ])("displays the structured query error %s", async (code, message) => {
+    mockI18n.exists.mockReturnValue(true);
+    mockI18n.t.mockImplementation((key: string) =>
+      key === "annualReport.invalidYear" ? "报告年份无效" : "加载失败",
+    );
+    const qc = newClient();
+    const unsub = installQueryErrorToast(qc);
+    renderHook(
+      () =>
+        useQuery({
+          queryKey: ["annual-report", 2026],
+          queryFn: () => {
+            throw new AppErr(code, "database unavailable");
+          },
+        }),
+      { wrapper: makeWrapper(qc) },
+    );
+    await waitFor(() =>
+      expect(mockToastError).toHaveBeenCalledWith(`加载失败: ${message}`),
+    );
     unsub();
   });
 

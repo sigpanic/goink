@@ -37,7 +37,7 @@ func NewStore(dir string) *Store {
 func (s *Store) Import(novelID int64, name string, src io.Reader) (Image, error) {
 	dir, err := s.novelDir(novelID)
 	if err != nil {
-		return Image{}, apperr.NewInvalid(err.Error())
+		return Image{}, &apperr.BusinessError{CodeVal: CodeInvalidNovelID, Msg: "attachment: invalid novel ID", Cause: err}
 	}
 	data, err := io.ReadAll(io.LimitReader(src, MaxFileSize+1))
 	if err != nil {

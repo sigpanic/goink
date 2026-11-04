@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/report"
 )
 
 func TestSaveAnnualReportImage(t *testing.T) {
@@ -40,14 +41,17 @@ func TestSaveAnnualReportImage(t *testing.T) {
 		require.False(t, result.Data)
 	})
 	t.Run("invalid input never opens a dialog", func(t *testing.T) {
-		for _, invalid := range []SaveAnnualReportImageInput{
-			{Year: 0, PNGBase64: input.PNGBase64},
-			{Year: input.Year + 1, PNGBase64: input.PNGBase64},
-			{Year: input.Year, PNGBase64: "invalid base64"},
-			{Year: input.Year, PNGBase64: base64.StdEncoding.EncodeToString([]byte("not a PNG"))},
+		for _, tc := range []struct {
+			input SaveAnnualReportImageInput
+			code  apperr.Code
+		}{
+			{SaveAnnualReportImageInput{Year: 0, PNGBase64: input.PNGBase64}, report.CodeInvalidYear},
+			{SaveAnnualReportImageInput{Year: input.Year + 1, PNGBase64: input.PNGBase64}, report.CodeInvalidYear},
+			{SaveAnnualReportImageInput{Year: input.Year, PNGBase64: "invalid base64"}, report.CodeInvalidImage},
+			{SaveAnnualReportImageInput{Year: input.Year, PNGBase64: base64.StdEncoding.EncodeToString([]byte("not a PNG"))}, report.CodeInvalidImage},
 		} {
-			result := saveAnnualReportImage(invalid, func(runtime.SaveDialogOptions) (string, error) { t.Fatal("unexpected save dialog"); return "", nil })
-			require.Equal(t, apperr.CodeInvalid, result.ErrCode)
+			result := saveAnnualReportImage(tc.input, func(runtime.SaveDialogOptions) (string, error) { t.Fatal("unexpected save dialog"); return "", nil })
+			require.Equal(t, tc.code, result.ErrCode)
 			require.False(t, result.Data)
 		}
 	})

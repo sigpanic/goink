@@ -38,10 +38,6 @@ const (
 	CodeOK Code = ""
 	// CodeInternal 其他未分类错误（默认 fallback）。
 	CodeInternal Code = "internal"
-	// CodeInvalid 入参非法（target 不是 user/novel、novelID=0 等）。
-	CodeInvalid Code = "invalid"
-	// CodeConflict 目标资源在确认和写入之间发生变化。
-	CodeConflict Code = "conflict"
 )
 
 // githubapi 模块错误码

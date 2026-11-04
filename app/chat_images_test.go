@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/session"
 	"github.com/stretchr/testify/require"
@@ -53,7 +54,7 @@ func TestChatImageImportReturnsBusinessAndUnderlyingErrors(t *testing.T) {
 	invalid := input
 	invalid.NovelID = 0
 	result := a.ImportChatImage(invalid)
-	require.Equal(t, apperr.CodeInvalid, result.ErrCode)
+	require.Equal(t, attachment.CodeInvalidNovelID, result.ErrCode)
 	require.Zero(t, result.Data)
 	invalid = input
 	invalid.Data = base64.StdEncoding.EncodeToString([]byte("corrupt image"))

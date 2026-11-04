@@ -99,14 +99,16 @@ func TestErr_WrappedError_PreservesLLMStatusCode(t *testing.T) {
 	assert.Equal(t, apperr.CodeLLMNotFound, res.ErrCode)
 }
 
-// TestErr_BusinessError_Invalid 验证 apperr.NewInvalid 构造的 *BusinessError 走 apperr.Err 后 ErrCode 为 CodeInvalid。
-// v1.3.0 取消 strings.Contains fallback 后，业务层校验错误必须用 NewInvalid 显式结构化。
-func TestErr_BusinessError_Invalid(t *testing.T) {
-	err := apperr.NewInvalid("remote: invalid target")
-	res := apperr.Err[string](err)
+// TestErr_BusinessError_CustomCode 验证调用方定义的错误码和原始错误链均被保留。
+func TestErr_BusinessError_CustomCode(t *testing.T) {
+	code := apperr.Code("example.invalid_target")
+	cause := errors.New("original failure")
+	err := &apperr.BusinessError{CodeVal: code, Msg: "example: invalid target", Cause: cause}
+	res := apperr.Err[string](fmt.Errorf("request: %w", err))
 	require.NotNil(t, res)
-	assert.Equal(t, apperr.CodeInvalid, res.ErrCode)
-	assert.Equal(t, "remote: invalid target", res.ErrMsg)
+	assert.Equal(t, code, res.ErrCode)
+	assert.Equal(t, "request: example: invalid target: original failure", res.ErrMsg)
+	assert.ErrorIs(t, err, cause)
 }
 
 // TestCodeFromError_CodeOKDegraded 验证 CodeOK 不变量：
@@ -157,7 +159,6 @@ func TestErr_GenericClass_Instantiation(t *testing.T) {
 func TestCode_StringValues(t *testing.T) {
 	assert.Equal(t, "", string(apperr.CodeOK))
 	assert.Equal(t, "internal", string(apperr.CodeInternal))
-	assert.Equal(t, "invalid", string(apperr.CodeInvalid))
 	assert.Equal(t, "githubapi.network", string(apperr.CodeGitHubAPINetwork))
 	assert.Equal(t, "githubapi.rate_limited", string(apperr.CodeGitHubAPIRateLimited))
 	assert.Equal(t, "githubapi.not_found", string(apperr.CodeGitHubAPINotFound))

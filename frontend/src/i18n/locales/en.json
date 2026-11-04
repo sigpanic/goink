@@ -166,6 +166,7 @@
     "imageFileTooLarge": "Image files must not exceed 20 MiB",
     "imageTooManyPixels": "Images must not exceed 40 million pixels",
     "invalidImageData": "The image format is unsupported or the file is damaged. Choose a valid PNG or JPEG image",
+    "imageNovelRequired": "Select a valid novel before adding images",
     "imageImportFailed": "Failed to import image",
     "importingImages": "Importing images…",
     "removingImages": "Deleting image…",
@@ -1216,6 +1217,10 @@
       "errorRateLimited": "GitHub API rate limit: unauthenticated requests are capped at 60 per hour. Please try again later.",
       "errorNotFound": "Skill not found. The repo may have been updated; please refresh the list.",
       "errorForbidden": "GitHub denied access to this resource.",
+      "invalidTarget": "The skill installation location is invalid. Select it again.",
+      "invalidName": "The skill name is invalid. Refresh the list and try again.",
+      "invalidPath": "The skill installation path is invalid. Check the installation location.",
+      "confirmationRequired": "Installation confirmation is missing. Confirm again before installing.",
       "errorOther": "Failed to load remote skill: {{message}}",
       "errorGeneric": "Something went wrong, please retry."
     }
@@ -1657,6 +1662,8 @@
     "shareLocal": "Saved on your device. You decide when and where to share it.",
     "shareFailed": "The poster could not be created. Please try again.",
     "saveFailed": "The image could not be saved. Please try again.",
+    "invalidYear": "The report year is invalid. Select a valid year no later than the current year.",
+    "invalidImage": "The share image is invalid. Generate the poster again.",
     "saveImage": "Save image",
     "savingImage": "Saving…",
     "imageSaved": "Saved to the selected location",
