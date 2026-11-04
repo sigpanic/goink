@@ -92,9 +92,23 @@ func (r *AnnualReport) summarize() error {
 			return fmt.Errorf("report: activity date: %w", err)
 		}
 		r.Activity.NovelsCreated += day.NovelsCreated
+		r.Activity.VolumesCreated += day.VolumesCreated
 		r.Activity.ChaptersCreated += day.ChaptersCreated
 		r.Activity.CharactersCreated += day.CharactersCreated
+		r.Activity.CharacterGroupsCreated += day.CharacterGroupsCreated
+		r.Activity.CharacterRelationsCreated += day.CharacterRelationsCreated
 		r.Activity.LocationsCreated += day.LocationsCreated
+		r.Activity.LocationRelationsCreated += day.LocationRelationsCreated
+		r.Activity.StoryArcsCreated += day.StoryArcsCreated
+		r.Activity.ArcNodesCreated += day.ArcNodesCreated
+		r.Activity.TimelineEntriesCreated += day.TimelineEntriesCreated
+		r.Activity.ReaderPerspectivesCreated += day.ReaderPerspectivesCreated
+		r.Activity.SettingsCreated += day.SettingsCreated
+		r.Activity.PreferencesCreated += day.PreferencesCreated
+		r.Activity.StyleSamplesCreated += day.StyleSamplesCreated
+		r.Activity.SkillsCreated += day.SkillsCreated
+		r.Activity.ImagesImported += day.ImagesImported
+		r.Activity.SessionsCreated += day.SessionsCreated
 		r.Activity.CreativeSeconds += day.CreativeSeconds
 		r.Activity.ConversationTurns += day.ConversationTurns
 		r.Activity.ToolCalls += day.ToolCalls

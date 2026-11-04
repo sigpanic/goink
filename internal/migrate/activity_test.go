@@ -65,3 +65,52 @@ func TestActivityMigrationPreservesExistingSettingsAndStatistics(t *testing.T) {
 	require.EqualValues(t, 1, usage.UsageCount)
 	require.EqualValues(t, 123, usage.TotalTokens)
 }
+
+func TestActivityEntityColumnsUpgradePreservesStatistics(t *testing.T) {
+	setupMigrationIntegrationEnv(t)
+	db := openMigrationIntegrationDB(t)
+	require.NoError(t, migrate.Run(db, slog.Default()))
+	ctx := context.Background()
+	store := activity.NewStore(db, slog.Default())
+	store.InitTracking(ctx)
+	previous := activity.ActivityDelta{
+		NovelsCreated: 2, ChaptersCreated: 3, CharactersCreated: 4, LocationsCreated: 5,
+		CreativeSeconds: 600, ConversationTurns: 7, ToolCalls: 8,
+	}
+	store.AddActivity(ctx, previous)
+	settings, err := config.LoadSettings(db)
+	require.NoError(t, err)
+	date := settings.TrackingStartDate
+	columns := []string{
+		"volumes_created", "character_groups_created", "character_relations_created",
+		"location_relations_created", "story_arcs_created", "arc_nodes_created",
+		"timeline_entries_created", "reader_perspectives_created", "settings_created",
+		"preferences_created", "style_samples_created", "skills_created", "images_imported",
+		"sessions_created",
+	}
+	for _, column := range columns {
+		require.NoError(t, db.Migrator().DropColumn(&activity.DailyActivity{}, column))
+	}
+	for range 2 {
+		require.NoError(t, migrate.Run(db, slog.Default()))
+	}
+	store.InitTracking(ctx)
+	reloaded, err := config.LoadSettings(db)
+	require.NoError(t, err)
+	require.Equal(t, settings, reloaded)
+	var persisted map[string]any
+	require.NoError(t, db.Table("activity_daily").Where("date = ?", date).Take(&persisted).Error)
+	for _, column := range columns {
+		require.EqualValues(t, 0, persisted[column], column)
+	}
+	var recorded activity.DailyActivity
+	require.NoError(t, db.First(&recorded, "date = ?", date).Error)
+	require.Equal(t, previous, recorded.ActivityDelta)
+	store.AddActivity(ctx, activity.ActivityDelta{StoryArcsCreated: 4, SkillsCreated: 3, ImagesImported: 5, SessionsCreated: 2})
+	require.NoError(t, db.First(&recorded, "date = ?", date).Error)
+	previous.StoryArcsCreated = 4
+	previous.SkillsCreated = 3
+	previous.ImagesImported = 5
+	previous.SessionsCreated = 2
+	require.Equal(t, previous, recorded.ActivityDelta)
+}

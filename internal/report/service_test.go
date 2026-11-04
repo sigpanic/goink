@@ -42,12 +42,25 @@ func TestGetAnnualAggregatesCoveredDates(t *testing.T) {
 	s, db := newTestService(t, "2024-02-28", now)
 	require.NoError(t, db.Create(&[]novel.Novel{{ID: 1, Title: "第一部"}, {ID: 2, Title: "第二部"}}).Error)
 	require.NoError(t, db.Create(&[]activity.DailyActivity{
-		{Date: "2024-02-27", ActivityDelta: activity.ActivityDelta{CreativeSeconds: 9999}},
-		{Date: "2024-02-28", ActivityDelta: activity.ActivityDelta{NovelsCreated: 1, ChaptersCreated: 2, CharactersCreated: 3, LocationsCreated: 4, CreativeSeconds: 3600, ConversationTurns: 4, ToolCalls: 5}},
-		{Date: "2024-02-29", ActivityDelta: activity.ActivityDelta{CreativeSeconds: 1800, ConversationTurns: 1, ToolCalls: 2}},
+		{Date: "2024-02-27", ActivityDelta: activity.ActivityDelta{CreativeSeconds: 9999, StoryArcsCreated: 9999, SkillsCreated: 9999, SessionsCreated: 9999}},
+		{Date: "2024-02-28", ActivityDelta: activity.ActivityDelta{
+			NovelsCreated: 1, ChaptersCreated: 2, CharactersCreated: 3, LocationsCreated: 4,
+			VolumesCreated: 1, CharacterGroupsCreated: 2, CharacterRelationsCreated: 3,
+			LocationRelationsCreated: 4, StoryArcsCreated: 5, ArcNodesCreated: 6,
+			TimelineEntriesCreated: 7, ReaderPerspectivesCreated: 8, SettingsCreated: 9,
+			PreferencesCreated: 10, StyleSamplesCreated: 11, SkillsCreated: 12, ImagesImported: 13,
+			SessionsCreated: 1, CreativeSeconds: 3600, ConversationTurns: 4, ToolCalls: 5,
+		}},
+		{Date: "2024-02-29", ActivityDelta: activity.ActivityDelta{
+			VolumesCreated: 1, CharacterGroupsCreated: 2, CharacterRelationsCreated: 3,
+			LocationRelationsCreated: 4, StoryArcsCreated: 5, ArcNodesCreated: 6,
+			TimelineEntriesCreated: 7, ReaderPerspectivesCreated: 8, SettingsCreated: 9,
+			PreferencesCreated: 10, StyleSamplesCreated: 11, SkillsCreated: 12, ImagesImported: 13,
+			SessionsCreated: 2, CreativeSeconds: 1800, ConversationTurns: 1, ToolCalls: 2,
+		}},
 		{Date: "2024-03-01", ActivityDelta: activity.ActivityDelta{CharactersCreated: 1, CreativeSeconds: 600}},
 		{Date: "2024-12-31", ActivityDelta: activity.ActivityDelta{NovelsCreated: 1, ChaptersCreated: 1, CreativeSeconds: 60}},
-		{Date: "2025-01-01", ActivityDelta: activity.ActivityDelta{CreativeSeconds: 9999}},
+		{Date: "2025-01-01", ActivityDelta: activity.ActivityDelta{CreativeSeconds: 9999, StoryArcsCreated: 9999, ImagesImported: 9999, SessionsCreated: 9999}},
 	}).Error)
 	require.NoError(t, db.Create(&[]writing.WritingLog{
 		{Date: "2024-02-27", NovelID: 1, WordsAdded: 9999, WordDelta: 9999},
@@ -78,7 +91,14 @@ func TestGetAnnualAggregatesCoveredDates(t *testing.T) {
 	require.Equal(t, &DateRange{Start: "2024-02-28", End: "2025-01-01"}, r.Coverage)
 	require.Equal(t, "2024-02-28", r.TrackingStartDate)
 	require.Equal(t, "2024-02-27", r.TrackingStartedAt.UTC().Format(time.DateOnly))
-	require.Equal(t, activity.ActivityDelta{NovelsCreated: 2, ChaptersCreated: 3, CharactersCreated: 4, LocationsCreated: 4, CreativeSeconds: 6060, ConversationTurns: 5, ToolCalls: 7}, r.Activity)
+	require.Equal(t, activity.ActivityDelta{
+		NovelsCreated: 2, ChaptersCreated: 3, CharactersCreated: 4, LocationsCreated: 4,
+		VolumesCreated: 2, CharacterGroupsCreated: 4, CharacterRelationsCreated: 6,
+		LocationRelationsCreated: 8, StoryArcsCreated: 10, ArcNodesCreated: 12,
+		TimelineEntriesCreated: 14, ReaderPerspectivesCreated: 16, SettingsCreated: 18,
+		PreferencesCreated: 20, StyleSamplesCreated: 22, SkillsCreated: 24, ImagesImported: 26,
+		SessionsCreated: 3, CreativeSeconds: 6060, ConversationTurns: 5, ToolCalls: 7,
+	}, r.Activity)
 	require.Equal(t, WritingSummary{WordsAdded: 315, WordsDeleted: 110, WordsNet: 205, ActiveDays: 6, LongestStreak: 3}, r.Writing)
 	require.Equal(t, activity.TokenUsage{InputTokens: 3_000_000_127, OutputTokens: 38, TotalTokens: 3_000_000_255, CacheHitTokens: 22, CacheMissTokens: 43, ReasoningTokens: 5}, r.Usage)
 	require.EqualValues(t, 8, r.UsageCount)
