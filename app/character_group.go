@@ -1,6 +1,7 @@
 package app
 
 import (
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/character"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -46,7 +47,11 @@ func (a *App) GetCharacterGroupMembers(input GetCharacterGroupMembersInput) (*st
 }
 
 func (a *App) CreateCharacterGroup(novelID int64, input CharacterGroupInput) (*character.Group, error) {
-	return a.character.CreateGroup(a.ctx, novelID, input.Name, input.Description)
+	group, err := a.character.CreateGroup(a.ctx, novelID, input.Name, input.Description)
+	if err == nil && a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{CharacterGroupsCreated: 1})
+	}
+	return group, err
 }
 
 func (a *App) UpdateCharacterGroup(novelID, groupID int64, input CharacterGroupInput) error {

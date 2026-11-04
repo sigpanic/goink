@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
@@ -176,6 +177,9 @@ func (a *App) InstallRemoteSkill(input InstallRemoteSkillInput) *apperr.Result[a
 	}
 	if err := a.remote.InstallRemoteSkill(a.ctx, input.Name, input.Target, input.NovelID, *input.ExpectedContent); err != nil {
 		return apperr.Err[apperr.Empty](err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{SkillsCreated: 1})
 	}
 	return apperr.Ok(apperr.Empty{})
 }

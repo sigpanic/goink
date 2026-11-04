@@ -234,6 +234,9 @@ func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContex
 	if res, err := writeApproved(ctx, tc, a.Path, current, proposed); res != nil || err != nil {
 		return res, err
 	}
+	if isSkillPath(a.Path) && current == "" {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{SkillsCreated: 1})
+	}
 
 	var injects []InjectMessage
 	if feedback != "" {

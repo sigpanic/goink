@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/preference"
 )
 
@@ -51,6 +52,7 @@ func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 	}
 	var failed *failure
 	var ids []int64
+	var created int64
 
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, item := range a.Preferences {
@@ -60,6 +62,9 @@ func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 				return err
 			}
 			ids = append(ids, id)
+			if item.PreferenceID == nil {
+				created++
+			}
 		}
 		return nil
 	})
@@ -76,6 +81,8 @@ func (t *UpsertPreferenceTool) Execute(ctx context.Context, args any, tc ToolCon
 			Data:    map[string]any{"failed_index": failed.index, "failed_category": failed.category},
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{PreferencesCreated: created})
 
 	return &ToolResult{
 		Success: true,

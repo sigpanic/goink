@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/agent"
 	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/storage"
@@ -54,6 +55,9 @@ func (a *App) CreateStyleSample(input CreateStyleSampleInput) (*style.Sample, er
 	}
 	if err := a.style.DB.WithContext(a.ctx).Create(sample).Error; err != nil {
 		return nil, fmt.Errorf("create style sample: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{StyleSamplesCreated: 1})
 	}
 	return sample, nil
 }

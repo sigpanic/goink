@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
 )
@@ -70,6 +71,9 @@ func (a *App) CreateStoryArc(novelID int64, input CreateStoryArcInput) (*storyar
 	}
 	if err := a.storyarc.DB.WithContext(a.ctx).Create(&arc).Error; err != nil {
 		return nil, fmt.Errorf("create story arc: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{StoryArcsCreated: 1})
 	}
 	return &arc, nil
 }
@@ -145,6 +149,9 @@ func (a *App) CreateArcNode(novelID int64, input CreateArcNodeInput) (*storyarc.
 	}
 	if err := a.storyarc.DB.WithContext(a.ctx).Create(&node).Error; err != nil {
 		return nil, fmt.Errorf("create arc node: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{ArcNodesCreated: 1})
 	}
 	return &node, nil
 }

@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/reader"
 )
@@ -238,6 +239,8 @@ func (t *CreateReaderPerspectiveEntryTool) Execute(ctx context.Context, args any
 			Error:   fmt.Sprintf("创建读者认知条目 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{ReaderPerspectivesCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

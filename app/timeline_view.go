@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/timeline"
 )
@@ -101,6 +102,9 @@ func (a *App) CreateTimelineEntry(novelID int64, input CreateTimelineEntryInput)
 	}
 	if err := a.timeline.DB.WithContext(a.ctx).Create(&entry).Error; err != nil {
 		return nil, fmt.Errorf("create timeline entry: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{TimelineEntriesCreated: 1})
 	}
 	return &entry, nil
 }
