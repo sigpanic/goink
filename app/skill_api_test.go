@@ -5,7 +5,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/skill/remote"
 )
 
 func TestInstallRemoteSkillRequiresExpectedContent(t *testing.T) {
@@ -14,5 +14,5 @@ func TestInstallRemoteSkillRequiresExpectedContent(t *testing.T) {
 		Name:   "my-skill",
 		Target: "user",
 	})
-	assert.Equal(t, apperr.CodeInvalid, result.ErrCode)
+	assert.Equal(t, remote.CodeExpectedContentRequired, result.ErrCode)
 }

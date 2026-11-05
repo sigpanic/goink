@@ -3,18 +3,13 @@ import { useTranslation } from "react-i18next";
 import { ImportChatImage, DeleteChatImage } from "@/lib/wailsjs/go/app/App";
 import { app, type attachment } from "@/lib/wailsjs/go/models";
 import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
+import { errorCodeMessage, toErrorMessage } from "@/utils/error";
 import { AppErr, unwrapResult } from "@/utils/wailsResult";
 import type { SendResult } from "./types";
 
 // 草稿 localStorage key 前缀（per-session 持久化，沿用 goink_ 惯例）
 const DRAFT_PREFIX = "goink_chat_draft_";
 const IMAGE_DRAFT_PREFIX = "goink_chat_images_";
-const IMAGE_IMPORT_ERRORS: Record<string, string> = {
-  "attachment.file_too_large": "chat.imageFileTooLarge",
-  "attachment.too_many_pixels": "chat.imageTooManyPixels",
-  "attachment.invalid_image": "chat.invalidImageData",
-};
 
 function loadImageDraft(key: string): attachment.Ref[] {
   try {
@@ -111,12 +106,12 @@ export default function useChatInputDraft({
               { attachment_id: image.id, variant: "standard-v1" },
             ]);
           } catch (err) {
-            const key =
+            const message =
               err instanceof AppErr
-                ? IMAGE_IMPORT_ERRORS[err.errCode]
+                ? errorCodeMessage(err.errCode, t)
                 : undefined;
             toastError(
-              key ? t(key) : toErrorMessage(err, t("chat.imageImportFailed")),
+              message ?? toErrorMessage(err, t("chat.imageImportFailed")),
             );
           }
         }

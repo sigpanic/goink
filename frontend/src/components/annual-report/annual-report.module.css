@@ -1,0 +1,222 @@
+.annual-report {
+  container-type: inline-size;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--tag-amber) 9%, var(--card));
+}
+.report-fullscreen {
+  position: fixed;
+  inset: 44px 0 0;
+  z-index: 40;
+  display: flex;
+  min-width: 0;
+  overflow: hidden;
+  outline: none;
+  background: var(--background);
+}
+.report-shell {
+  height: 100%;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.report-stage-tools {
+  height: 44px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0 28px;
+  background: color-mix(in srgb, var(--tag-amber) 9%, var(--card));
+  border-bottom: 1px solid var(--border);
+}
+.report-stage-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.report-back,
+.report-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+  cursor: pointer;
+}
+.report-back:hover,
+.report-refresh:hover {
+  color: var(--tag-teal-foreground);
+}
+.report-refresh {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+}
+.report-refresh:disabled {
+  opacity: 0.45;
+  cursor: wait;
+}
+.report-year-label {
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.report-year-label > span {
+  display: none;
+}
+.report-year-label select {
+  padding: 4px 8px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--tag-amber) 9%, var(--card));
+  border-radius: 4px;
+  cursor: pointer;
+}
+.annual-report :is(button, select):focus-visible {
+  outline: 2px solid var(--tag-teal-foreground);
+  outline-offset: 3px;
+}
+.report-state {
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  text-align: center;
+}
+.report-state > svg {
+  color: var(--tag-teal-foreground);
+}
+.report-state h1 {
+  font-family: "Songti SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
+  font-size: 22px;
+  font-weight: 500;
+}
+.report-state > p {
+  max-width: 350px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.report-button {
+  background: var(--tag-teal);
+  color: var(--tag-teal-foreground);
+  border: 1px solid
+    color-mix(in srgb, var(--tag-teal-foreground) 25%, transparent);
+  border-radius: 7px;
+  padding: 8px 18px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.report-loading-lines {
+  display: flex;
+  gap: 8px;
+  width: 200px;
+  margin-top: 18px;
+}
+.report-loading-lines > i {
+  height: 4px;
+  border-radius: 4px;
+  background: var(--tag-teal);
+  flex: 1;
+  animation: report-breathe 1.5s ease-in-out infinite alternate;
+}
+.report-loading-lines > i:nth-child(2) {
+  animation-delay: 0.25s;
+}
+.report-loading-lines > i:nth-child(3) {
+  animation-delay: 0.5s;
+}
+.report-content {
+  animation: report-appear 0.4s ease both;
+}
+.profile-view {
+  container-type: inline-size;
+}
+.annual-report-entry {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 23px 24px;
+  text-align: left;
+  border-radius: 11px;
+  background: var(--tag-teal);
+  color: var(--tag-teal-foreground);
+  border: 1px solid
+    color-mix(in srgb, var(--tag-teal-foreground) 18%, transparent);
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.annual-report-entry:hover {
+  border-color: var(--tag-teal-foreground);
+}
+.annual-report-entry:focus-visible {
+  outline: 2px solid var(--tag-teal-foreground);
+  outline-offset: 3px;
+}
+.annual-report-entry-icon {
+  display: grid;
+  place-items: center;
+  height: 46px;
+  width: 46px;
+  flex: none;
+  border: 1px solid color-mix(in srgb, currentColor 20%, transparent);
+  border-radius: 50%;
+}
+.annual-report-entry-copy {
+  flex: 1;
+}
+.annual-report-entry-copy strong {
+  display: block;
+  font:
+    500 19px "Songti SC",
+    "Noto Serif CJK SC",
+    "SimSun",
+    Georgia,
+    serif;
+}
+.annual-report-entry-copy > span {
+  display: block;
+  margin-top: 7px;
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.annual-report-entry-year {
+  margin-right: 10px;
+  font:
+    italic 32px Georgia,
+    serif;
+  opacity: 0.4;
+}
+@keyframes report-breathe {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@container (max-width: 640px) {
+  .report-stage-tools {
+    padding: 0 18px;
+  }
+  .annual-report-entry-year {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .annual-report *,
+  .annual-report-entry {
+    animation: none !important;
+    transition: none !important;
+  }
+}

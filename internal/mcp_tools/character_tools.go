@@ -477,6 +477,10 @@ func (t *UpdateCharacterRelationshipTool) evolveRelation(ctx context.Context, a 
 		return nil, err
 	}
 
+	if action == "create" {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{CharacterRelationsCreated: 1})
+	}
+
 	return &ToolResult{
 		Success: true,
 		Data:    map[string]any{"id": newRel.ID, "action": action},

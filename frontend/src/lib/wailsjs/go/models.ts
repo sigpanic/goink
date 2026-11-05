@@ -1,3 +1,168 @@
+export namespace activity {
+	
+	export class ActivityDelta {
+	    NovelsCreated: number;
+	    VolumesCreated: number;
+	    ChaptersCreated: number;
+	    CharactersCreated: number;
+	    CharacterGroupsCreated: number;
+	    CharacterRelationsCreated: number;
+	    LocationsCreated: number;
+	    LocationRelationsCreated: number;
+	    StoryArcsCreated: number;
+	    ArcNodesCreated: number;
+	    TimelineEntriesCreated: number;
+	    ReaderPerspectivesCreated: number;
+	    SettingsCreated: number;
+	    PreferencesCreated: number;
+	    StyleSamplesCreated: number;
+	    SkillsCreated: number;
+	    ImagesImported: number;
+	    SessionsCreated: number;
+	    CreativeSeconds: number;
+	    ConversationTurns: number;
+	    ToolCalls: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ActivityDelta(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.NovelsCreated = source["NovelsCreated"];
+	        this.VolumesCreated = source["VolumesCreated"];
+	        this.ChaptersCreated = source["ChaptersCreated"];
+	        this.CharactersCreated = source["CharactersCreated"];
+	        this.CharacterGroupsCreated = source["CharacterGroupsCreated"];
+	        this.CharacterRelationsCreated = source["CharacterRelationsCreated"];
+	        this.LocationsCreated = source["LocationsCreated"];
+	        this.LocationRelationsCreated = source["LocationRelationsCreated"];
+	        this.StoryArcsCreated = source["StoryArcsCreated"];
+	        this.ArcNodesCreated = source["ArcNodesCreated"];
+	        this.TimelineEntriesCreated = source["TimelineEntriesCreated"];
+	        this.ReaderPerspectivesCreated = source["ReaderPerspectivesCreated"];
+	        this.SettingsCreated = source["SettingsCreated"];
+	        this.PreferencesCreated = source["PreferencesCreated"];
+	        this.StyleSamplesCreated = source["StyleSamplesCreated"];
+	        this.SkillsCreated = source["SkillsCreated"];
+	        this.ImagesImported = source["ImagesImported"];
+	        this.SessionsCreated = source["SessionsCreated"];
+	        this.CreativeSeconds = source["CreativeSeconds"];
+	        this.ConversationTurns = source["ConversationTurns"];
+	        this.ToolCalls = source["ToolCalls"];
+	    }
+	}
+	export class DailyActivity {
+	    Date: string;
+	    NovelsCreated: number;
+	    VolumesCreated: number;
+	    ChaptersCreated: number;
+	    CharactersCreated: number;
+	    CharacterGroupsCreated: number;
+	    CharacterRelationsCreated: number;
+	    LocationsCreated: number;
+	    LocationRelationsCreated: number;
+	    StoryArcsCreated: number;
+	    ArcNodesCreated: number;
+	    TimelineEntriesCreated: number;
+	    ReaderPerspectivesCreated: number;
+	    SettingsCreated: number;
+	    PreferencesCreated: number;
+	    StyleSamplesCreated: number;
+	    SkillsCreated: number;
+	    ImagesImported: number;
+	    SessionsCreated: number;
+	    CreativeSeconds: number;
+	    ConversationTurns: number;
+	    ToolCalls: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DailyActivity(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Date = source["Date"];
+	        this.NovelsCreated = source["NovelsCreated"];
+	        this.VolumesCreated = source["VolumesCreated"];
+	        this.ChaptersCreated = source["ChaptersCreated"];
+	        this.CharactersCreated = source["CharactersCreated"];
+	        this.CharacterGroupsCreated = source["CharacterGroupsCreated"];
+	        this.CharacterRelationsCreated = source["CharacterRelationsCreated"];
+	        this.LocationsCreated = source["LocationsCreated"];
+	        this.LocationRelationsCreated = source["LocationRelationsCreated"];
+	        this.StoryArcsCreated = source["StoryArcsCreated"];
+	        this.ArcNodesCreated = source["ArcNodesCreated"];
+	        this.TimelineEntriesCreated = source["TimelineEntriesCreated"];
+	        this.ReaderPerspectivesCreated = source["ReaderPerspectivesCreated"];
+	        this.SettingsCreated = source["SettingsCreated"];
+	        this.PreferencesCreated = source["PreferencesCreated"];
+	        this.StyleSamplesCreated = source["StyleSamplesCreated"];
+	        this.SkillsCreated = source["SkillsCreated"];
+	        this.ImagesImported = source["ImagesImported"];
+	        this.SessionsCreated = source["SessionsCreated"];
+	        this.CreativeSeconds = source["CreativeSeconds"];
+	        this.ConversationTurns = source["ConversationTurns"];
+	        this.ToolCalls = source["ToolCalls"];
+	    }
+	}
+	export class DailyLLMUsage {
+	    Date: string;
+	    Provider: string;
+	    Model: string;
+	    Purpose: string;
+	    UsageCount: number;
+	    InputTokens: number;
+	    OutputTokens: number;
+	    TotalTokens: number;
+	    CacheHitTokens: number;
+	    CacheMissTokens: number;
+	    ReasoningTokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new DailyLLMUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Date = source["Date"];
+	        this.Provider = source["Provider"];
+	        this.Model = source["Model"];
+	        this.Purpose = source["Purpose"];
+	        this.UsageCount = source["UsageCount"];
+	        this.InputTokens = source["InputTokens"];
+	        this.OutputTokens = source["OutputTokens"];
+	        this.TotalTokens = source["TotalTokens"];
+	        this.CacheHitTokens = source["CacheHitTokens"];
+	        this.CacheMissTokens = source["CacheMissTokens"];
+	        this.ReasoningTokens = source["ReasoningTokens"];
+	    }
+	}
+	export class TokenUsage {
+	    InputTokens: number;
+	    OutputTokens: number;
+	    TotalTokens: number;
+	    CacheHitTokens: number;
+	    CacheMissTokens: number;
+	    ReasoningTokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.InputTokens = source["InputTokens"];
+	        this.OutputTokens = source["OutputTokens"];
+	        this.TotalTokens = source["TotalTokens"];
+	        this.CacheHitTokens = source["CacheHitTokens"];
+	        this.CacheMissTokens = source["CacheMissTokens"];
+	        this.ReasoningTokens = source["ReasoningTokens"];
+	    }
+	}
+
+}
+
 export namespace adapter {
 	
 	export class ModelInfo {
@@ -717,6 +882,20 @@ export namespace app {
 		    return a;
 		}
 	}
+	export class SaveAnnualReportImageInput {
+	    year: number;
+	    png_base64: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveAnnualReportImageInput(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.year = source["year"];
+	        this.png_base64 = source["png_base64"];
+	    }
+	}
 	export class SaveContentInput {
 	    novel_id: number;
 	    path: string;
@@ -1158,6 +1337,22 @@ export namespace apperr {
 		    return a;
 		}
 	}
+	export class Result_bool_ {
+	    data: boolean;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_bool_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = source["data"];
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	}
 	export class Result_github_com_sigpanic_goink_internal_attachment_Image_ {
 	    data: attachment.Image;
 	    err_code: string;
@@ -1170,6 +1365,40 @@ export namespace apperr {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.data = this.convertValues(source["data"], attachment.Image);
+	        this.err_code = source["err_code"];
+	        this.err_msg = source["err_msg"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Result_github_com_sigpanic_goink_internal_report_AnnualReport_ {
+	    data: report.AnnualReport;
+	    err_code: string;
+	    err_msg?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new Result_github_com_sigpanic_goink_internal_report_AnnualReport_(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.data = this.convertValues(source["data"], report.AnnualReport);
 	        this.err_code = source["err_code"];
 	        this.err_msg = source["err_msg"];
 	    }
@@ -2762,6 +2991,149 @@ export namespace remote {
 
 }
 
+export namespace report {
+	
+	export class ModelUsage {
+	    Provider: string;
+	    Model: string;
+	    UsageCount: number;
+	    InputTokens: number;
+	    OutputTokens: number;
+	    TotalTokens: number;
+	    CacheHitTokens: number;
+	    CacheMissTokens: number;
+	    ReasoningTokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ModelUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Provider = source["Provider"];
+	        this.Model = source["Model"];
+	        this.UsageCount = source["UsageCount"];
+	        this.InputTokens = source["InputTokens"];
+	        this.OutputTokens = source["OutputTokens"];
+	        this.TotalTokens = source["TotalTokens"];
+	        this.CacheHitTokens = source["CacheHitTokens"];
+	        this.CacheMissTokens = source["CacheMissTokens"];
+	        this.ReasoningTokens = source["ReasoningTokens"];
+	    }
+	}
+	export class MonthlySummary {
+	    Month: number;
+	    WordsAdded: number;
+	    CreativeSeconds: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new MonthlySummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Month = source["Month"];
+	        this.WordsAdded = source["WordsAdded"];
+	        this.CreativeSeconds = source["CreativeSeconds"];
+	    }
+	}
+	export class WritingSummary {
+	    WordsAdded: number;
+	    WordsDeleted: number;
+	    WordsNet: number;
+	    ActiveDays: number;
+	    LongestStreak: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new WritingSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.WordsAdded = source["WordsAdded"];
+	        this.WordsDeleted = source["WordsDeleted"];
+	        this.WordsNet = source["WordsNet"];
+	        this.ActiveDays = source["ActiveDays"];
+	        this.LongestStreak = source["LongestStreak"];
+	    }
+	}
+	export class DateRange {
+	    Start: string;
+	    End: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DateRange(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Start = source["Start"];
+	        this.End = source["End"];
+	    }
+	}
+	export class AnnualReport {
+	    Year: number;
+	    // Go type: time
+	    TrackingStartedAt?: any;
+	    TrackingStartDate: string;
+	    Coverage?: DateRange;
+	    Activity: activity.ActivityDelta;
+	    Writing: WritingSummary;
+	    Usage: activity.TokenUsage;
+	    UsageCount: number;
+	    DailyActivity: activity.DailyActivity[];
+	    DailyWriting: writing.DailyActivity[];
+	    DailyLLMUsage: activity.DailyLLMUsage[];
+	    Monthly: MonthlySummary[];
+	    Novels: writing.NovelWords[];
+	    Models: ModelUsage[];
+	
+	    static createFrom(source: any = {}) {
+	        return new AnnualReport(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.Year = source["Year"];
+	        this.TrackingStartedAt = this.convertValues(source["TrackingStartedAt"], null);
+	        this.TrackingStartDate = source["TrackingStartDate"];
+	        this.Coverage = this.convertValues(source["Coverage"], DateRange);
+	        this.Activity = this.convertValues(source["Activity"], activity.ActivityDelta);
+	        this.Writing = this.convertValues(source["Writing"], WritingSummary);
+	        this.Usage = this.convertValues(source["Usage"], activity.TokenUsage);
+	        this.UsageCount = source["UsageCount"];
+	        this.DailyActivity = this.convertValues(source["DailyActivity"], activity.DailyActivity);
+	        this.DailyWriting = this.convertValues(source["DailyWriting"], writing.DailyActivity);
+	        this.DailyLLMUsage = this.convertValues(source["DailyLLMUsage"], activity.DailyLLMUsage);
+	        this.Monthly = this.convertValues(source["Monthly"], MonthlySummary);
+	        this.Novels = this.convertValues(source["Novels"], writing.NovelWords);
+	        this.Models = this.convertValues(source["Models"], ModelUsage);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	
+
+}
+
 export namespace search {
 	
 	export class Result {
@@ -3638,6 +4010,24 @@ export namespace writing {
 	        this.words_net = source["words_net"];
 	        this.words_added = source["words_added"];
 	        this.words_deleted = source["words_deleted"];
+	    }
+	}
+	export class NovelWords {
+	    NovelID: number;
+	    Title: string;
+	    Deleted: boolean;
+	    WordsAdded: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new NovelWords(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.NovelID = source["NovelID"];
+	        this.Title = source["Title"];
+	        this.Deleted = source["Deleted"];
+	        this.WordsAdded = source["WordsAdded"];
 	    }
 	}
 	export class WritingStats {

@@ -5,6 +5,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/volume"
 )
@@ -16,6 +17,9 @@ func (a *App) PlaceVolume(input PlaceVolumeInput) (*volume.Volume, error) {
 	v, err := a.volume.Place(a.ctx, nil, input)
 	if err != nil {
 		return nil, fmt.Errorf("place volume: %w", err)
+	}
+	if input.SourceVolumeID == nil && a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{VolumesCreated: 1})
 	}
 	return v, nil
 }

@@ -31,6 +31,7 @@ import (
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/rag"
 	"github.com/sigpanic/goink/internal/reader"
+	"github.com/sigpanic/goink/internal/report"
 	"github.com/sigpanic/goink/internal/rollback"
 	"github.com/sigpanic/goink/internal/search"
 	"github.com/sigpanic/goink/internal/session"
@@ -83,6 +84,7 @@ type App struct {
 	approvals        *approval.Service
 	vectorStore      atomic.Pointer[rag.VectorStore]
 	searchService    atomic.Pointer[search.Service]
+	reportService    *report.Service
 
 	novel          *novel.Store
 	preference     *preference.Store
@@ -331,6 +333,7 @@ func (a *App) initWithConfig(cfg *config.AppConfig) error {
 	a.turnCommit = rollback.NewStore(db, a.logger)
 	a.writing = writing.NewStore(db, a.logger)
 	a.volume = volume.NewStore(db, a.logger)
+	a.reportService = report.NewService(a.activity, a.writing)
 	chapterDeletionGuard := deletion.NewGuard(
 		deletion.For(deletion.EntityChapter, a.timeline.ChapterDeletionBlockers),
 		deletion.For(deletion.EntityChapter, a.storyarc.ChapterDeletionBlockers),

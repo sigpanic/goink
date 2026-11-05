@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/setting"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -56,6 +57,9 @@ func (a *App) CreateNovelSetting(novelID int64, input CreateNovelSettingInput) (
 	}
 	if err := a.setting.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create setting: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{SettingsCreated: 1})
 	}
 	return &item, nil
 }

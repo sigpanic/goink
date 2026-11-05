@@ -7,6 +7,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/rag"
@@ -78,6 +79,10 @@ func (a *App) SaveContent(input SaveContentInput) error {
 	}
 	if err != nil {
 		return err
+	}
+
+	if isSkillPath(input.Path) && input.ExpectedContent != nil && *input.ExpectedContent == "" && a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{SkillsCreated: 1})
 	}
 
 	if ref, ok := git.ParseChapterLikePath(input.Path); ok && !ref.IsOutline && !ref.IsNew && ref.VolumeID == 0 {

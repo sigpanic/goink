@@ -2,12 +2,6 @@ package apperr
 
 import "fmt"
 
-// 通用业务错误码补充
-const (
-	// CodeNotFound 业务资源不存在（跨模块通用）。
-	CodeNotFound Code = "not_found"
-)
-
 // BusinessError 是无领域专属字段的业务错误通用载体。
 // 实现 Coder 接口，供 CodeFromError 直接读取 Code。
 //
@@ -20,7 +14,7 @@ const (
 // 警示：勿用 BusinessError 包装实现了 Coder 的领域 error——errors.As 会先匹配外层
 // BusinessError，底层领域 Code 被遮蔽。想保留领域分类用 fmt.Errorf("...: %w", err) 包装。
 type BusinessError struct {
-	CodeVal Code // apperr.CodeInvalid / apperr.CodeNotFound / ...
+	CodeVal Code // 调用方定义的领域错误码。
 	Msg     string
 	Cause   error
 }
@@ -37,21 +31,11 @@ func (e *BusinessError) Error() string {
 func (e *BusinessError) Unwrap() error { return e.Cause }
 
 // Code 实现 Coder 接口。
-// 自保：若直接用 struct literal 构造绕过 NewInvalid/NewNotFound，CodeVal 字段未赋值取零值 CodeOK，
+// 自保：若构造时 CodeVal 字段未赋值取零值 CodeOK，
 // 这里降级为 CodeInternal，防止错误被静默吞成成功（呼应 CodeFromError 的 CodeOK 不变量）。
 func (e *BusinessError) Code() Code {
 	if e.CodeVal == CodeOK {
 		return CodeInternal
 	}
 	return e.CodeVal
-}
-
-// NewInvalid 构造入参非法类业务错误。
-func NewInvalid(msg string) *BusinessError {
-	return &BusinessError{CodeVal: CodeInvalid, Msg: msg}
-}
-
-// NewNotFound 构造业务资源不存在类业务错误。
-func NewNotFound(msg string) *BusinessError {
-	return &BusinessError{CodeVal: CodeNotFound, Msg: msg}
 }

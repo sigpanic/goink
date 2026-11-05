@@ -8,6 +8,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/storyarc"
@@ -214,6 +215,8 @@ func (t *CreateStoryArcTool) Execute(ctx context.Context, args any, tc ToolConte
 		}, nil
 	}
 
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{StoryArcsCreated: int64(len(ids))})
+
 	return &ToolResult{
 		Success: true,
 		Data:    map[string]any{"ids": ids, "count": len(ids)},
@@ -355,6 +358,8 @@ func (t *CreateArcNodeTool) Execute(ctx context.Context, args any, tc ToolContex
 			Error:   fmt.Sprintf("创建节点 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{ArcNodesCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

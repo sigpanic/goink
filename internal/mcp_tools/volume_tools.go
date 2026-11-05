@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/git"
 	"github.com/sigpanic/goink/internal/volume"
 )
@@ -78,6 +79,9 @@ func (t *PlaceVolumeTool) Execute(ctx context.Context, args any, tc ToolContext)
 			return &ToolResult{Success: false, Error: err.Error()}, nil
 		}
 		return nil, fmt.Errorf("放置分卷失败: %w", err)
+	}
+	if a.SourceVolumeID == nil {
+		activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{VolumesCreated: 1})
 	}
 	emitFileMetadataChanged(ctx, tc.NovelID, v.OutlineFilePath)
 	return &ToolResult{Success: true, Data: map[string]any{"volume_id": v.ID}}, nil

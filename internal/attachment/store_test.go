@@ -139,12 +139,12 @@ func TestInvalidImportsDoNotPublishAttachments(t *testing.T) {
 		want   string
 		code   apperr.Code
 	}{
-		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID", apperr.CodeInvalid},
-		{"unsupported format", 1, bytes.NewReader(unsupported.Bytes()), "仅支持 PNG 和 JPEG", apperr.CodeAttachmentInvalidImage},
-		{"empty image", 1, bytes.NewReader(nil), "decode image header", apperr.CodeAttachmentInvalidImage},
-		{"corrupt image", 1, bytes.NewReader(pngImage.Bytes()[:33]), "decode image:", apperr.CodeAttachmentInvalidImage},
-		{"oversized dimensions", 1, bytes.NewReader(oversized), "4000 万像素", apperr.CodeAttachmentTooManyPixels},
-		{"oversized file", 1, io.LimitReader(zeroReader{}, attachment.MaxFileSize+1), "20 MiB", apperr.CodeAttachmentFileTooLarge},
+		{"invalid novel", 0, bytes.NewReader(nil), "无效小说 ID", attachment.CodeInvalidNovelID},
+		{"unsupported format", 1, bytes.NewReader(unsupported.Bytes()), "仅支持 PNG 和 JPEG", attachment.CodeInvalidImage},
+		{"empty image", 1, bytes.NewReader(nil), "decode image header", attachment.CodeInvalidImage},
+		{"corrupt image", 1, bytes.NewReader(pngImage.Bytes()[:33]), "decode image:", attachment.CodeInvalidImage},
+		{"oversized dimensions", 1, bytes.NewReader(oversized), "4000 万像素", attachment.CodeTooManyPixels},
+		{"oversized file", 1, io.LimitReader(zeroReader{}, attachment.MaxFileSize+1), "20 MiB", attachment.CodeFileTooLarge},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -168,7 +168,7 @@ func TestImportPreservesUnderlyingErrors(t *testing.T) {
 
 	_, err = store.Import(1, "picture.png", bytes.NewReader([]byte("not an image")))
 	require.ErrorIs(t, err, image.ErrFormat)
-	require.Equal(t, apperr.CodeAttachmentInvalidImage, apperr.CodeFromError(err))
+	require.Equal(t, attachment.CodeInvalidImage, apperr.CodeFromError(err))
 
 	dir := filepath.Join(t.TempDir(), "blocked")
 	require.NoError(t, os.WriteFile(dir, []byte("not a directory"), 0600))

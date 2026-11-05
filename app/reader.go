@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/reader"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -64,6 +65,9 @@ func (a *App) CreateReaderPerspective(novelID int64, input CreateReaderPerspecti
 	}
 	if err := a.reader.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create reader perspective: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{ReaderPerspectivesCreated: 1})
 	}
 	return &item, nil
 }

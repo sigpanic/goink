@@ -242,6 +242,9 @@ func (a *App) loadOrCreateSession(ctx context.Context, input ChatInput) (*sessio
 	if err := a.session.DB.WithContext(ctx).Create(sess).Error; err != nil {
 		return nil, false, err
 	}
+	if a.activity != nil {
+		a.activity.AddActivity(ctx, activity.ActivityDelta{SessionsCreated: 1})
+	}
 
 	wails.EventsEmit(ctx, "chat:session_created", sess)
 	return sess, true, nil

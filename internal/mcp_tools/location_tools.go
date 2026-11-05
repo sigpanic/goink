@@ -494,6 +494,8 @@ func (t *CreateLocationRelationTool) Execute(ctx context.Context, args any, tc T
 		}, nil
 	}
 
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{LocationRelationsCreated: int64(len(ids))})
+
 	return &ToolResult{Success: true, Data: map[string]any{"ids": ids, "count": len(ids)}}, nil
 }
 

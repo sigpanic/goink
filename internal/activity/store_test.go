@@ -84,24 +84,71 @@ func TestAddActivityAccumulatesAndSeparatesLocalDates(t *testing.T) {
 	require.Zero(t, count)
 	s.AddActivity(ctx, ActivityDelta{
 		NovelsCreated: 1, ChaptersCreated: 2, CharactersCreated: 3, LocationsCreated: 4,
-		CreativeSeconds: 50, ConversationTurns: 6, ToolCalls: 7,
+		VolumesCreated: 1, CharacterGroupsCreated: 2, CharacterRelationsCreated: 3,
+		LocationRelationsCreated: 4, StoryArcsCreated: 5, ArcNodesCreated: 6,
+		TimelineEntriesCreated: 7, ReaderPerspectivesCreated: 8, SettingsCreated: 9,
+		PreferencesCreated: 10, StyleSamplesCreated: 11, SkillsCreated: 12, ImagesImported: 13,
+		SessionsCreated: 1, CreativeSeconds: 50, ConversationTurns: 6, ToolCalls: 7,
 	})
-	s.AddActivity(ctx, ActivityDelta{ChaptersCreated: 1, CreativeSeconds: 10, ToolCalls: 2})
+	s.AddActivity(ctx, ActivityDelta{
+		ChaptersCreated: 1, SessionsCreated: 2, CreativeSeconds: 10, ToolCalls: 2,
+		VolumesCreated: 1, CharacterGroupsCreated: 2, CharacterRelationsCreated: 3,
+		LocationRelationsCreated: 4, StoryArcsCreated: 5, ArcNodesCreated: 6,
+		TimelineEntriesCreated: 7, ReaderPerspectivesCreated: 8, SettingsCreated: 9,
+		PreferencesCreated: 10, StyleSamplesCreated: 11, SkillsCreated: 12, ImagesImported: 13,
+	})
 	s.AddActivity(ctx, ActivityDelta{NovelsCreated: -1, ChaptersCreated: 100})
 	var first DailyActivity
 	require.NoError(t, db.First(&first, "date = ?", "2027-01-01").Error)
 	require.Equal(t, ActivityDelta{
 		NovelsCreated: 1, ChaptersCreated: 3, CharactersCreated: 3, LocationsCreated: 4,
-		CreativeSeconds: 60, ConversationTurns: 6, ToolCalls: 9,
+		VolumesCreated: 2, CharacterGroupsCreated: 4, CharacterRelationsCreated: 6,
+		LocationRelationsCreated: 8, StoryArcsCreated: 10, ArcNodesCreated: 12,
+		TimelineEntriesCreated: 14, ReaderPerspectivesCreated: 16, SettingsCreated: 18,
+		PreferencesCreated: 20, StyleSamplesCreated: 22, SkillsCreated: 24, ImagesImported: 26,
+		SessionsCreated: 3, CreativeSeconds: 60, ConversationTurns: 6, ToolCalls: 9,
 	}, first.ActivityDelta)
 	tomorrow := s.now().AddDate(0, 0, 1)
 	s.now = func() time.Time { return tomorrow }
-	s.AddActivity(ctx, ActivityDelta{NovelsCreated: 1})
+	s.AddActivity(ctx, ActivityDelta{NovelsCreated: 1, SkillsCreated: 3, SessionsCreated: 1})
 	var next DailyActivity
 	require.NoError(t, db.First(&next, "date = ?", "2027-01-02").Error)
-	require.Equal(t, ActivityDelta{NovelsCreated: 1}, next.ActivityDelta)
+	require.Equal(t, ActivityDelta{NovelsCreated: 1, SkillsCreated: 3, SessionsCreated: 1}, next.ActivityDelta)
 	require.NoError(t, db.Model(&DailyActivity{}).Count(&count).Error)
 	require.EqualValues(t, 2, count)
+}
+
+func TestAddActivityRejectsNegativeEntityCounts(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		delta ActivityDelta
+	}{
+		{"volumes", ActivityDelta{VolumesCreated: -1}},
+		{"character groups", ActivityDelta{CharacterGroupsCreated: -1}},
+		{"character relations", ActivityDelta{CharacterRelationsCreated: -1}},
+		{"location relations", ActivityDelta{LocationRelationsCreated: -1}},
+		{"story arcs", ActivityDelta{StoryArcsCreated: -1}},
+		{"arc nodes", ActivityDelta{ArcNodesCreated: -1}},
+		{"timeline entries", ActivityDelta{TimelineEntriesCreated: -1}},
+		{"reader perspectives", ActivityDelta{ReaderPerspectivesCreated: -1}},
+		{"settings", ActivityDelta{SettingsCreated: -1}},
+		{"preferences", ActivityDelta{PreferencesCreated: -1}},
+		{"style samples", ActivityDelta{StyleSamplesCreated: -1}},
+		{"skills", ActivityDelta{SkillsCreated: -1}},
+		{"images", ActivityDelta{ImagesImported: -1}},
+		{"sessions", ActivityDelta{SessionsCreated: -1}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			s, db := newTestStore(t)
+			ctx := context.Background()
+			s.AddActivity(ctx, ActivityDelta{StoryArcsCreated: 2})
+			tc.delta.NovelsCreated = 1
+			s.AddActivity(ctx, tc.delta)
+			var recorded DailyActivity
+			require.NoError(t, db.First(&recorded).Error)
+			require.Equal(t, ActivityDelta{StoryArcsCreated: 2}, recorded.ActivityDelta)
+		})
+	}
 }
 
 func TestAddLLMUsageAccumulatesAllDimensions(t *testing.T) {
@@ -151,7 +198,7 @@ func TestDailyCountersAccumulateConcurrently(t *testing.T) {
 	const writes = 40
 	for range writes {
 		wg.Go(func() {
-			s.AddActivity(context.Background(), ActivityDelta{ToolCalls: 1, CreativeSeconds: 10})
+			s.AddActivity(context.Background(), ActivityDelta{ToolCalls: 1, CreativeSeconds: 10, StoryArcsCreated: 1, ImagesImported: 2})
 			s.AddLLMUsage(context.Background(), "provider", "model", "chat", TokenUsage{InputTokens: 20, TotalTokens: 20})
 		})
 	}
@@ -160,6 +207,8 @@ func TestDailyCountersAccumulateConcurrently(t *testing.T) {
 	require.NoError(t, db.First(&activity).Error)
 	require.EqualValues(t, writes, activity.ToolCalls)
 	require.EqualValues(t, writes*10, activity.CreativeSeconds)
+	require.EqualValues(t, writes, activity.StoryArcsCreated)
+	require.EqualValues(t, writes*2, activity.ImagesImported)
 	var usage DailyLLMUsage
 	require.NoError(t, db.First(&usage).Error)
 	require.EqualValues(t, writes, usage.UsageCount)
@@ -176,7 +225,7 @@ func TestStatisticsFailuresOnlyWarn(t *testing.T) {
 		require.NoError(t, db.Exec("CREATE TRIGGER reject_"+table+" BEFORE INSERT ON "+table+" BEGIN SELECT RAISE(FAIL, 'statistics unavailable'); END").Error)
 	}
 	s.InitTracking(ctx)
-	s.AddActivity(ctx, ActivityDelta{ChaptersCreated: 1})
+	s.AddActivity(ctx, ActivityDelta{ChaptersCreated: 1, StoryArcsCreated: 1, SkillsCreated: 1, ImagesImported: 1})
 	s.AddLLMUsage(ctx, "provider", "model", "chat", TokenUsage{TotalTokens: 10})
 	require.Contains(t, logs.String(), "初始化创作统计起点失败")
 	require.Contains(t, logs.String(), "记录每日创作统计失败")
