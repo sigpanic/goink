@@ -63,6 +63,10 @@ export default function ReportShare({
           chapters: report.Activity.ChaptersCreated,
           locations: report.Activity.LocationsCreated,
         }),
+        storySummary: t("annualReport.posterStorySummary", {
+          arcs: report.Activity.StoryArcsCreated,
+          entries: report.Activity.TimelineEntriesCreated,
+        }),
         coverage:
           report.Coverage && end
             ? t("annualReport.coverage", {

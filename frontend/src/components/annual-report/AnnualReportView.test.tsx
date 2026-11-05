@@ -22,8 +22,10 @@ import ReportCalendar from "./ReportCalendar";
 import MonthlyChart from "./MonthlyChart";
 import { makeReport } from "./report.fixture";
 import { createSharePoster } from "./sharePoster";
+import { Environment } from "@/lib/wailsjs/runtime/runtime";
 
 vi.mock("./sharePoster", () => ({ createSharePoster: vi.fn() }));
+vi.mock("@/lib/wailsjs/runtime/runtime", () => ({ Environment: vi.fn() }));
 
 vi.mock("@/lib/wailsjs/go/app/App", () => ({
   GetAnnualReport: vi.fn(),
@@ -48,7 +50,7 @@ vi.mock("react-i18next", async () => {
 });
 
 const getReport = vi.mocked(GetAnnualReport);
-const currentYear = new Date().getFullYear();
+const currentYear = 2026;
 function success(data = makeReport()) {
   return new apperr.Result_github_com_sigpanic_goink_internal_report_AnnualReport_(
     { data, err_code: "" },
@@ -65,6 +67,13 @@ function mount(view = <AnnualReportView onBack={() => {}} />) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(Environment).mockResolvedValue({
+    buildType: "production",
+    platform: "linux",
+    arch: "amd64",
+  });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 10, 4, 12));
   vi.stubGlobal("matchMedia", vi.fn().mockReturnValue({ matches: true }));
   vi.mocked(createSharePoster).mockResolvedValue("data:image/png;base64,cG5n");
   getReport.mockImplementation(async (year) => success(makeReport(year)));
@@ -73,7 +82,11 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.useRealTimers();
+});
 
 describe("AnnualReportView", () => {
   it("shows the recorded totals, coverage, deleted works and model distribution", async () => {
@@ -92,9 +105,9 @@ describe("AnnualReportView", () => {
     expect(
       container.querySelector(".report-signature img"),
     ).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "第 4 页：作品" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 2 页：作品" }));
     expect(screen.getByText("已删除作品")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "第 5 页：搭档" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 7 页：搭档" }));
     expect(screen.getByText("provider-a")).toBeInTheDocument();
     const tokens = screen.getByText("已记录 Token 用量").closest("article")!;
     expect(within(tokens).getByText("999")).toBeInTheDocument();
@@ -127,7 +140,7 @@ describe("AnnualReportView", () => {
     older.Novels[0].Title = "旧年度作品";
     await act(async () => resolvePrevious(success(older)));
     expect(select).toHaveValue(String(currentYear));
-    fireEvent.click(screen.getByRole("button", { name: "第 4 页：作品" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 2 页：作品" }));
     expect(screen.queryByText("旧年度作品")).not.toBeInTheDocument();
     expect(screen.getByText("Night Voyage")).toBeInTheDocument();
   });
@@ -194,7 +207,7 @@ describe("AnnualReportView", () => {
       mount();
       await screen.findByRole("heading", { name: /正等待下一次落笔/ });
       expect(
-        screen.queryByRole("button", { name: "第 3 页：日历" }),
+        screen.queryByRole("button", { name: "第 5 页：日历" }),
       ).not.toBeInTheDocument();
       fireEvent.click(screen.getByRole("button", { name: "第 2 页：尾页" }));
       expect(
@@ -211,7 +224,53 @@ describe("AnnualReportView", () => {
     },
   );
 
-  it("keeps the annual report entry hidden on the profile", async () => {
+  it.each([
+    [false, 2026, 10, 4, false],
+    [false, 2026, 11, 29, true],
+    [false, 2027, 0, 15, true],
+    [false, 2027, 0, 16, false],
+    [true, 2026, 10, 4, true],
+  ])(
+    "profile entry respects dev=%s and date %i/%i/%i",
+    async (dev, year, month, day, visible) => {
+      vi.stubEnv("DEV", dev);
+      vi.setSystemTime(new Date(year, month, day));
+      vi.mocked(GetWritingActivity).mockResolvedValue([]);
+      vi.mocked(GetWritingStats).mockResolvedValue({
+        total_words: 0,
+        total_days_active: 0,
+        current_streak: 0,
+        longest_streak: 0,
+        total_novels: 0,
+        total_chapters: 0,
+      });
+      mount(<ProfileView />);
+      await screen.findByRole("heading", { name: "林川" });
+      const entry = screen.queryByRole("button", { name: /你的年度创作回顾/ });
+      if (visible) expect(entry).toBeInTheDocument();
+      else expect(entry).not.toBeInTheDocument();
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+      expect(getReport).not.toHaveBeenCalled();
+    },
+  );
+
+  it("opens the completed year in January", async () => {
+    vi.setSystemTime(new Date(2027, 0, 1));
+    mount();
+    await screen.findByRole("heading", { name: /故事因你而生长/ });
+    expect(getReport).toHaveBeenCalledWith(2026);
+    expect(screen.getByRole("combobox", { name: "查看年份" })).toHaveValue(
+      "2026",
+    );
+  });
+
+  it("opens the profile report entry in Wails dev even with a production frontend", async () => {
+    vi.stubEnv("DEV", false);
+    vi.mocked(Environment).mockResolvedValue({
+      buildType: "dev",
+      platform: "linux",
+      arch: "amd64",
+    });
     vi.mocked(GetWritingActivity).mockResolvedValue([]);
     vi.mocked(GetWritingStats).mockResolvedValue({
       total_words: 0,
@@ -222,12 +281,60 @@ describe("AnnualReportView", () => {
       total_chapters: 0,
     });
     mount(<ProfileView />);
-    await screen.findByRole("heading", { name: "林川" });
-    expect(
-      screen.queryByRole("button", { name: /你的年度创作回顾/ }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
-    expect(getReport).not.toHaveBeenCalled();
+    const entry = await screen.findByRole("button", {
+      name: /你的年度创作回顾/,
+    });
+    fireEvent.click(entry);
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: /故事因你而生长/ });
+    expect(getReport).toHaveBeenCalledWith(2026);
+  });
+
+  it("presents the new entity totals in their own themed chapters", async () => {
+    const { container } = mount();
+    await screen.findByRole("heading", { name: /故事因你而生长/ });
+    const chapters = [
+      ["第 2 页：作品", { 铺开的卷册: "3" }],
+      [
+        "第 3 页：世界",
+        { 建立的角色群体: "2", 建立的角色关系: "12", 建立的地点关系: "5" },
+      ],
+      [
+        "第 4 页：故事",
+        { 安排的弧线节点: "18", 记录的时间线条目: "9", 梳理的读者认知: "7" },
+      ],
+      [
+        "第 6 页：灵感",
+        {
+          记下的创作偏好: "3",
+          收藏的风格素材: "8",
+          新增与安装的技能: "2",
+          导入的图片: "6",
+        },
+      ],
+    ] as const;
+    for (const [page, counts] of chapters) {
+      fireEvent.click(screen.getByRole("button", { name: page }));
+      for (const [label, value] of Object.entries(counts)) {
+        const count = screen.getByText(label).closest(".report-count")!;
+        expect(count.querySelector("dd")).toHaveTextContent(
+          new RegExp(`^${value}$`),
+        );
+      }
+      if (page === "第 4 页：故事")
+        expect(
+          container.querySelector(
+            ".report-story-feature .report-display-number",
+          ),
+        ).toHaveTextContent(/^4$/);
+      if (page === "第 6 页：灵感")
+        expect(
+          container.querySelector(".report-notebook .report-display-number"),
+        ).toHaveTextContent(/^15$/);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "第 7 页：搭档" }));
+    const sessions = screen.getByText("开启的会话").closest("article")!;
+    expect(sessions.querySelector(".report-ai-value")).toHaveTextContent("3");
   });
 
   it("previews a poster and distinguishes canceled, failed and successful saves", async () => {
@@ -247,7 +354,7 @@ describe("AnnualReportView", () => {
     );
     mount();
     await screen.findByRole("heading", { name: /故事因你而生长/ });
-    fireEvent.click(screen.getByRole("button", { name: "第 6 页：尾页" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 8 页：尾页" }));
     fireEvent.click(screen.getByRole("button", { name: "生成分享海报" }));
     const dialog = await screen.findByRole("dialog");
     expect(within(dialog).getByRole("img")).toHaveAttribute(
@@ -255,7 +362,7 @@ describe("AnnualReportView", () => {
       "data:image/png;base64,cG5n",
     );
     fireEvent.keyDown(dialog, { key: "ArrowLeft" });
-    expect(screen.getByText("6 / 6 · 尾页")).toBeInTheDocument();
+    expect(screen.getByText("8 / 8 · 尾页")).toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: "保存图片" }));
     await waitFor(() =>
       expect(save).toHaveBeenCalledWith({
@@ -297,7 +404,7 @@ describe("AnnualReportView", () => {
     );
     mount();
     await screen.findByRole("heading", { name: /故事因你而生长/ });
-    fireEvent.click(screen.getByRole("button", { name: "第 6 页：尾页" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 8 页：尾页" }));
     fireEvent.click(screen.getByRole("button", { name: "生成分享海报" }));
     const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: "保存图片" }));
@@ -313,7 +420,7 @@ describe("AnnualReportView", () => {
     );
     mount();
     await screen.findByRole("heading", { name: /故事因你而生长/ });
-    fireEvent.click(screen.getByRole("button", { name: "第 6 页：尾页" }));
+    fireEvent.click(screen.getByRole("button", { name: "第 8 页：尾页" }));
     fireEvent.click(screen.getByRole("button", { name: "生成分享海报" }));
     expect(await screen.findByRole("alert")).toHaveTextContent(
       "海报生成失败，请重试。",

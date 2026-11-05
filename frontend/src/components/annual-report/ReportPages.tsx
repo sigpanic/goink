@@ -8,8 +8,15 @@ import {
   MessageCircle,
   WandSparkles,
   Sparkles,
+  Library,
+  Network,
+  Route,
+  Lightbulb,
+  MessagesSquare,
 } from "lucide-react";
 import type { AnnualReport } from "./useAnnualReport";
+import ReportCalendar from "./ReportCalendar";
+import MonthlyChart from "./MonthlyChart";
 
 export function PageHeading({
   index,
@@ -64,87 +71,313 @@ export function AchievementPage({
   const { t } = useTranslation();
   const number = (value: number) =>
     new Intl.NumberFormat(locale, { maximumFractionDigits: 1 }).format(value);
-  const compact = (value: number) =>
-    new Intl.NumberFormat(locale, {
-      notation: "compact",
-      maximumFractionDigits: 1,
-    }).format(value);
-  const seconds = report.Activity.CreativeSeconds;
-  const inMinutes = seconds > 0 && seconds < 3600;
-  const outcomes = [
-    {
-      icon: BookOpen,
-      value: report.Activity.NovelsCreated,
-      label: "annualReport.novels",
-      note: "annualReport.novelsNote",
-      color: "teal",
-    },
-    {
-      icon: Files,
-      value: report.Activity.ChaptersCreated,
-      label: "annualReport.chapters",
-      note: "annualReport.chaptersNote",
-      color: "amber",
-    },
-    {
-      icon: Users,
-      value: report.Activity.CharactersCreated,
-      label: "annualReport.characters",
-      note: "annualReport.charactersNote",
-      color: "purple",
-    },
-    {
-      icon: MapPin,
-      value: report.Activity.LocationsCreated,
-      label: "annualReport.locations",
-      note: "annualReport.locationsNote",
-      color: "blue",
-    },
-  ];
   return (
     <>
       <PageHeading
         index="01"
+        title={t("annualReport.worksTitle")}
+        note={t("annualReport.booksNote")}
+      />
+      <div className="report-works-layout">
+        <section className="report-manuscript">
+          <Files size={25} strokeWidth={1.2} />
+          <span className="report-kicker">
+            {t("annualReport.manuscriptKicker")}
+          </span>
+          <strong className="report-display-number">
+            {number(report.Activity.ChaptersCreated)}
+          </strong>
+          <h3>{t("annualReport.chapters")}</h3>
+          <p>{t("annualReport.manuscriptNote")}</p>
+          <dl className="report-inline-counts">
+            <Count
+              label={t("annualReport.novels")}
+              value={report.Activity.NovelsCreated}
+              locale={locale}
+            />
+            <Count
+              label={t("annualReport.volumes")}
+              value={report.Activity.VolumesCreated}
+              locale={locale}
+            />
+          </dl>
+        </section>
+        {report.Novels.length > 0 ? (
+          <NovelRanking report={report} locale={locale} />
+        ) : (
+          <div className="report-unwritten">
+            <BookOpen size={62} strokeWidth={0.7} />
+            <p>{t("annualReport.unwrittenNote")}</p>
+          </div>
+        )}
+      </div>
+      <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+    </>
+  );
+}
+
+function Count({
+  label,
+  value,
+  locale,
+}: {
+  label: string;
+  value: number;
+  locale: string;
+}) {
+  return (
+    <div className="report-count">
+      <dt>{label}</dt>
+      <dd>{value.toLocaleString(locale)}</dd>
+    </div>
+  );
+}
+
+export function WorldPage({
+  report,
+  locale,
+}: {
+  report: AnnualReport;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const a = report.Activity;
+  return (
+    <>
+      <PageHeading
+        index="02"
         title={t("annualReport.worldTitle")}
         note={t("annualReport.worldNote")}
       />
-      <section
-        className="report-lead-stats"
-        aria-label={t("annualReport.overview")}
-      >
-        <LeadStat
-          label={t("annualReport.wordsAdded")}
-          value={compact(report.Writing.WordsAdded)}
-          unit={t("annualReport.wordsUnit")}
-          note={t("annualReport.wordsNote")}
-        />
-        <LeadStat
-          label={t("annualReport.creativeTime")}
-          value={number(inMinutes ? seconds / 60 : seconds / 3600)}
-          unit={t(inMinutes ? "annualReport.minutes" : "annualReport.hours")}
-          note={t("annualReport.timeNote")}
-        />
-      </section>
-      <section
-        className="report-outcomes"
-        aria-label={t("annualReport.worldTitle")}
-      >
-        {outcomes.map((item) => (
-          <article
-            className="report-outcome"
-            key={item.label}
-            data-color={item.color}
-          >
-            <div className="report-outcome-heading">
-              <span>{t(item.label)}</span>
-              <item.icon size={18} />
-            </div>
-            <strong>{number(item.value)}</strong>
-            <p>{t(item.note)}</p>
-          </article>
-        ))}
-      </section>
+      <div className="report-world-layout">
+        <section className="report-cast">
+          <div className="report-orbit" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+            <Users size={48} strokeWidth={1} />
+          </div>
+          <span className="report-kicker">{t("annualReport.castKicker")}</span>
+          <strong className="report-display-number">
+            {a.CharactersCreated.toLocaleString(locale)}
+          </strong>
+          <h3>{t("annualReport.characters")}</h3>
+          <p>{t("annualReport.castNote")}</p>
+        </section>
+        <div className="report-world-details">
+          <section className="report-detail-group">
+            <Network size={22} strokeWidth={1.2} />
+            <h3>{t("annualReport.connectionsTitle")}</h3>
+            <dl>
+              <Count
+                label={t("annualReport.characterGroups")}
+                value={a.CharacterGroupsCreated}
+                locale={locale}
+              />
+              <Count
+                label={t("annualReport.characterRelations")}
+                value={a.CharacterRelationsCreated}
+                locale={locale}
+              />
+            </dl>
+          </section>
+          <section className="report-detail-group">
+            <MapPin size={22} strokeWidth={1.2} />
+            <h3>{t("annualReport.placesTitle")}</h3>
+            <dl>
+              <Count
+                label={t("annualReport.locations")}
+                value={a.LocationsCreated}
+                locale={locale}
+              />
+              <Count
+                label={t("annualReport.locationRelations")}
+                value={a.LocationRelationsCreated}
+                locale={locale}
+              />
+            </dl>
+          </section>
+        </div>
+      </div>
       <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+    </>
+  );
+}
+
+export function StoryPage({
+  report,
+  locale,
+}: {
+  report: AnnualReport;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const a = report.Activity;
+  return (
+    <>
+      <PageHeading
+        index="03"
+        title={t("annualReport.storyTitle")}
+        note={t("annualReport.storyNote")}
+      />
+      <div className="report-story-layout">
+        <section className="report-story-feature">
+          <Route size={30} strokeWidth={1.1} />
+          <span className="report-kicker">{t("annualReport.storyKicker")}</span>
+          <strong className="report-display-number">
+            {a.StoryArcsCreated.toLocaleString(locale)}
+          </strong>
+          <h3>{t("annualReport.storyArcs")}</h3>
+          <p>{t("annualReport.storyFeatureNote")}</p>
+          <svg
+            viewBox="0 0 400 130"
+            className="report-story-illustration"
+            aria-hidden="true"
+            fill="none"
+          >
+            <path
+              d="M15 105C85 105 55 25 125 25S200 100 260 65s60-55 125-50"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            {[
+              [15, 105],
+              [125, 25],
+              [260, 65],
+              [385, 15],
+            ].map(([x, y]) => (
+              <circle key={x} cx={x} cy={y} r="5" fill="currentColor" />
+            ))}
+          </svg>
+        </section>
+        <dl className="report-story-ledger">
+          <Count
+            label={t("annualReport.arcNodes")}
+            value={a.ArcNodesCreated}
+            locale={locale}
+          />
+          <Count
+            label={t("annualReport.timelineEntries")}
+            value={a.TimelineEntriesCreated}
+            locale={locale}
+          />
+          <Count
+            label={t("annualReport.readerPerspectives")}
+            value={a.ReaderPerspectivesCreated}
+            locale={locale}
+          />
+        </dl>
+      </div>
+      <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+    </>
+  );
+}
+
+export function HabitsPage({
+  report,
+  locale,
+}: {
+  report: AnnualReport;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <PageHeading
+        index="04"
+        title={t("annualReport.habitsTitle")}
+        note={t("annualReport.habitsNote")}
+      />
+      <div className="report-habit-layout">
+        <div className="report-habit-summary">
+          <LeadStat
+            label={t("annualReport.activeDays")}
+            value={report.Writing.ActiveDays.toLocaleString(locale)}
+            unit={t("annualReport.days")}
+          />
+          <LeadStat
+            label={t("annualReport.longestStreak")}
+            value={report.Writing.LongestStreak.toLocaleString(locale)}
+            unit={t("annualReport.days")}
+          />
+          <dl className="report-edit-counts">
+            <Count
+              label={t("annualReport.wordsDeleted")}
+              value={report.Writing.WordsDeleted}
+              locale={locale}
+            />
+            <Count
+              label={t("annualReport.wordsNet")}
+              value={report.Writing.WordsNet}
+              locale={locale}
+            />
+          </dl>
+        </div>
+        <MonthlyChart report={report} />
+      </div>
+      <ReportCalendar report={report} />
+    </>
+  );
+}
+
+export function InspirationPage({
+  report,
+  locale,
+}: {
+  report: AnnualReport;
+  locale: string;
+}) {
+  const { t } = useTranslation();
+  const a = report.Activity;
+  return (
+    <>
+      <PageHeading
+        index="05"
+        title={t("annualReport.inspirationTitle")}
+        note={t("annualReport.inspirationNote")}
+      />
+      <div className="report-inspiration-layout">
+        <section className="report-notebook">
+          <Lightbulb size={32} strokeWidth={1} />
+          <span className="report-kicker">
+            {t("annualReport.inspirationKicker")}
+          </span>
+          <strong className="report-display-number">
+            {a.SettingsCreated.toLocaleString(locale)}
+          </strong>
+          <h3>{t("annualReport.settings")}</h3>
+          <p>{t("annualReport.settingsNote")}</p>
+          <dl className="report-inline-counts">
+            <Count
+              label={t("annualReport.preferences")}
+              value={a.PreferencesCreated}
+              locale={locale}
+            />
+          </dl>
+        </section>
+        <section className="report-collection">
+          <Library size={26} strokeWidth={1} />
+          <h3>{t("annualReport.collectionTitle")}</h3>
+          <dl>
+            <Count
+              label={t("annualReport.styleSamples")}
+              value={a.StyleSamplesCreated}
+              locale={locale}
+            />
+            <Count
+              label={t("annualReport.skills")}
+              value={a.SkillsCreated}
+              locale={locale}
+            />
+            <Count
+              label={t("annualReport.images")}
+              value={a.ImagesImported}
+              locale={locale}
+            />
+          </dl>
+          <p className="report-page-note">{t("annualReport.skillsNote")}</p>
+        </section>
+      </div>
     </>
   );
 }
@@ -235,7 +468,7 @@ export function AIPage({
   return (
     <>
       <PageHeading
-        index="04"
+        index="06"
         title={t("annualReport.aiTitle")}
         note={t("annualReport.aiNote")}
       />
@@ -243,6 +476,13 @@ export function AIPage({
         className="report-ai-grid"
         aria-label={t("annualReport.aiTitle")}
       >
+        <AIStat
+          icon={<MessagesSquare size={17} />}
+          label={t("annualReport.sessions")}
+          value={number(report.Activity.SessionsCreated)}
+          unit={t("annualReport.sessionsUnit")}
+          note={t("annualReport.sessionsNote")}
+        />
         <AIStat
           icon={<MessageCircle size={17} />}
           label={t("annualReport.turns")}

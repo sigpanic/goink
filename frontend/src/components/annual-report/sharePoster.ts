@@ -9,6 +9,7 @@ export interface PosterText {
   characters: string;
   time: string;
   summary: string;
+  storySummary: string;
   coverage: string;
   approximate: string;
   footer: string;
@@ -99,9 +100,9 @@ export async function createSharePoster(
     draw(item.label, item.x, 834, 24, palette.muted, sans, 270);
   });
   draw(text.summary, 88, 910, 23, palette.muted);
+  draw(text.storySummary, 88, 952, 23, palette.muted);
   ctx.save();
-  ctx.translate(280, 925);
-  ctx.scale(1.15, 1.15);
+  ctx.translate(280, 970);
   ctx.strokeStyle = palette.accent;
   ctx.lineWidth = 1.2;
   ctx.globalAlpha = 0.28;

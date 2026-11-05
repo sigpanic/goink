@@ -14,23 +14,23 @@ import { errorCodeMessage, toErrorMessage } from "@/utils/error";
 import { useAnnualReport } from "./useAnnualReport";
 import type { AnnualReport } from "./useAnnualReport";
 import ReportCover from "./ReportCover";
-import ReportCalendar from "./ReportCalendar";
-import MonthlyChart from "./MonthlyChart";
 import ReportBook from "./ReportBook";
 import {
   AchievementPage,
   AIPage,
-  LeadStat,
-  NovelRanking,
-  PageHeading,
+  WorldPage,
+  StoryPage,
+  HabitsPage,
+  InspirationPage,
 } from "./ReportPages";
 import ReportShare from "./ReportShare";
+import { defaultReportYear } from "./useReportSeason";
 import "./annual-report.css";
 
 export default function AnnualReportView({ onBack }: { onBack: () => void }) {
   const { t, i18n } = useTranslation();
   const [currentYear] = useState(() => new Date().getFullYear());
-  const [year, setYear] = useState(currentYear);
+  const [year, setYear] = useState(() => defaultReportYear(new Date()));
   const query = useAnnualReport(year);
   const settings = useProfileSettings();
   const firstYear = Math.min(
@@ -138,7 +138,6 @@ function ReportContent({
   locale: string;
 }) {
   const { t } = useTranslation();
-  const number = (value: number) => value.toLocaleString(locale);
   const date = (value: string) =>
     new Intl.DateTimeFormat(locale, {
       year: "numeric",
@@ -215,54 +214,29 @@ function ReportContent({
     ...(hasData
       ? [
           {
-            id: "achievements",
-            label: t("annualReport.pageAchievements"),
+            id: "works",
+            label: t("annualReport.pageWorlds"),
             content: <AchievementPage report={report} locale={locale} />,
           },
           {
-            id: "calendar",
-            label: t("annualReport.pageCalendar"),
-            content: (
-              <>
-                <PageHeading
-                  index="02"
-                  title={t("annualReport.habitsTitle")}
-                  note={t("annualReport.habitsNote")}
-                />
-                <div className="report-calendar-stats">
-                  <LeadStat
-                    label={t("annualReport.activeDays")}
-                    value={number(report.Writing.ActiveDays)}
-                    unit={t("annualReport.days")}
-                  />
-                  <LeadStat
-                    label={t("annualReport.longestStreak")}
-                    value={number(report.Writing.LongestStreak)}
-                    unit={t("annualReport.days")}
-                  />
-                </div>
-                <ReportCalendar report={report} />
-              </>
-            ),
+            id: "world",
+            label: t("annualReport.pageCharacters"),
+            content: <WorldPage report={report} locale={locale} />,
           },
           {
-            id: "worlds",
-            label: t("annualReport.pageWorlds"),
-            content: (
-              <>
-                <PageHeading
-                  index="03"
-                  title={t("annualReport.growthTitle")}
-                  note={t("annualReport.booksNote")}
-                />
-                <div
-                  className={`report-two-columns ${report.Novels.length === 0 ? "report-single-column" : ""}`}
-                >
-                  <MonthlyChart report={report} />
-                  <NovelRanking report={report} locale={locale} />
-                </div>
-              </>
-            ),
+            id: "story",
+            label: t("annualReport.pageStory"),
+            content: <StoryPage report={report} locale={locale} />,
+          },
+          {
+            id: "habits",
+            label: t("annualReport.pageCalendar"),
+            content: <HabitsPage report={report} locale={locale} />,
+          },
+          {
+            id: "inspiration",
+            label: t("annualReport.pageInspiration"),
+            content: <InspirationPage report={report} locale={locale} />,
           },
           {
             id: "ai",

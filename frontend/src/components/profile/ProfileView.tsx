@@ -10,13 +10,13 @@ import { useProfileSettings } from "./useProfileSettings";
 import { useSaveAvatar } from "./useSaveAvatar";
 import { useSaveUserName } from "./useSaveUserName";
 import AnnualReportView from "@/components/annual-report/AnnualReportView";
+import { useReportSeason } from "@/components/annual-report/useReportSeason";
 import { ArrowUpRight, BookOpen } from "lucide-react";
 import { Dialog } from "radix-ui";
 
-const SHOW_ANNUAL_REPORT_ENTRY = false;
-
 export default function ProfileView() {
   const { t } = useTranslation();
+  const reportSeason = useReportSeason();
   // 5.7 commit 2: SaveAvatar/SaveUserName 改 mutation（删 useApp）。
   // invalidate settingsKeys.all 由 useSaveUserName onSuccess 接管。
   const saveAvatar = useSaveAvatar();
@@ -109,7 +109,7 @@ export default function ProfileView() {
 
   return (
     <Dialog.Root
-      open={showAnnualReport}
+      open={showAnnualReport && reportSeason.available}
       onOpenChange={setShowAnnualReport}
       modal={false}
     >
@@ -191,7 +191,7 @@ export default function ProfileView() {
             </div>
           </div>
 
-          {SHOW_ANNUAL_REPORT_ENTRY && (
+          {reportSeason.available && (
             <Dialog.Trigger asChild>
               <button type="button" className="annual-report-entry">
                 <span className="annual-report-entry-icon">
@@ -202,7 +202,7 @@ export default function ProfileView() {
                   <span>{t("annualReport.entryNote")}</span>
                 </span>
                 <span className="annual-report-entry-year" aria-hidden="true">
-                  {currentYear}
+                  {reportSeason.reportYear}
                 </span>
                 <ArrowUpRight size={21} />
               </button>
