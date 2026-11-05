@@ -1,7 +1,8 @@
+import styles from "./report.module.css";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Sparkles } from "lucide-react";
-import type { AnnualReport } from "./useAnnualReport";
+import type { AnnualReport } from "../../useAnnualReport";
 
 export default function MonthlyChart({ report }: { report: AnnualReport }) {
   const { t, i18n } = useTranslation();
@@ -15,7 +16,9 @@ export default function MonthlyChart({ report }: { report: AnnualReport }) {
   const highlight = selected ?? peak;
   const formatValue = (value: number) =>
     t(
-      metric === "words" ? "annualReport.wordValue" : "annualReport.hourValue",
+      metric === "words"
+        ? "annualReport.editions.2026.wordValue"
+        : "annualReport.editions.2026.hourValue",
       {
         value: new Intl.NumberFormat(i18n.language, {
           maximumFractionDigits: metric === "words" ? 0 : 1,
@@ -28,17 +31,21 @@ export default function MonthlyChart({ report }: { report: AnnualReport }) {
     );
   return (
     <section
-      className="report-panel report-trend"
+      className={[styles["report-panel"], styles["report-trend"]].join(" ")}
       aria-labelledby="report-trend-title"
     >
-      <div className="report-panel-heading">
+      <div className={styles["report-panel-heading"]}>
         <div>
-          <span className="report-kicker">{t("annualReport.trendKicker")}</span>
-          <h3 id="report-trend-title">{t("annualReport.trendTitle")}</h3>
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.trendKicker")}
+          </span>
+          <h3 id="report-trend-title">
+            {t("annualReport.editions.2026.trendTitle")}
+          </h3>
         </div>
         <div
-          className="report-segmented"
-          aria-label={t("annualReport.trendMetric")}
+          className={styles["report-segmented"]}
+          aria-label={t("annualReport.editions.2026.trendMetric")}
         >
           {(["words", "hours"] as const).map((value) => (
             <button
@@ -52,14 +59,17 @@ export default function MonthlyChart({ report }: { report: AnnualReport }) {
             >
               {t(
                 value === "words"
-                  ? "annualReport.wordsMetric"
-                  : "annualReport.hoursMetric",
+                  ? "annualReport.editions.2026.wordsMetric"
+                  : "annualReport.editions.2026.hoursMetric",
               )}
             </button>
           ))}
         </div>
       </div>
-      <div className="report-chart" aria-label={t("annualReport.monthlyChart")}>
+      <div
+        className={styles["report-chart"]}
+        aria-label={t("annualReport.editions.2026.monthlyChart")}
+      >
         {report.Monthly.map((month, index) => {
           const start = `${report.Year}-${String(month.Month).padStart(2, "0")}-01`;
           const end = `${month.Month === 12 ? report.Year + 1 : report.Year}-${String(month.Month === 12 ? 1 : month.Month + 1).padStart(2, "0")}-01`;
@@ -67,12 +77,12 @@ export default function MonthlyChart({ report }: { report: AnnualReport }) {
             !!report.Coverage &&
             start < report.Coverage.End &&
             end > report.Coverage.Start;
-          const label = `${monthName(month.Month)} · ${isCovered ? formatValue(values[index]) : t("annualReport.notCovered")}`;
+          const label = `${monthName(month.Month)} · ${isCovered ? formatValue(values[index]) : t("annualReport.editions.2026.notCovered")}`;
           return (
-            <div className="report-chart-column" key={month.Month}>
+            <div className={styles["report-chart-column"]} key={month.Month}>
               <button
                 type="button"
-                className="report-chart-bar"
+                className={styles["report-chart-bar"]}
                 style={{
                   height: `${maximum > 0 ? Math.max((values[index] / maximum) * 100, 2) : 2}%`,
                 }}
@@ -89,22 +99,22 @@ export default function MonthlyChart({ report }: { report: AnnualReport }) {
           );
         })}
       </div>
-      <div className="report-chart-insight" aria-live="polite">
+      <div className={styles["report-chart-insight"]} aria-live="polite">
         <Sparkles size={14} />
         <span>
           {maximum > 0
             ? t(
                 selected === null
                   ? metric === "words"
-                    ? "annualReport.wordsPeakMonth"
-                    : "annualReport.hoursPeakMonth"
-                  : "annualReport.selectedMonth",
+                    ? "annualReport.editions.2026.wordsPeakMonth"
+                    : "annualReport.editions.2026.hoursPeakMonth"
+                  : "annualReport.editions.2026.selectedMonth",
                 {
                   month: monthName(report.Monthly[highlight].Month),
                   value: formatValue(values[highlight]),
                 },
               )
-            : t("annualReport.noTrend")}
+            : t("annualReport.editions.2026.noTrend")}
         </span>
       </div>
     </section>

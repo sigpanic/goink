@@ -11,6 +11,7 @@ import { useSaveAvatar } from "./useSaveAvatar";
 import { useSaveUserName } from "./useSaveUserName";
 import AnnualReportView from "@/components/annual-report/AnnualReportView";
 import { useReportSeason } from "@/components/annual-report/useReportSeason";
+import reportStyles from "@/components/annual-report/annual-report.module.css";
 import { ArrowUpRight, BookOpen } from "lucide-react";
 import { Dialog } from "radix-ui";
 
@@ -113,7 +114,9 @@ export default function ProfileView() {
       onOpenChange={setShowAnnualReport}
       modal={false}
     >
-      <main className="profile-view flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background">
+      <main
+        className={`${reportStyles["profile-view"]} flex-1 min-w-0 overflow-y-auto overscroll-contain bg-background`}
+      >
         <input
           ref={fileInputRef}
           type="file"
@@ -193,15 +196,22 @@ export default function ProfileView() {
 
           {reportSeason.available && (
             <Dialog.Trigger asChild>
-              <button type="button" className="annual-report-entry">
-                <span className="annual-report-entry-icon">
+              <button
+                type="button"
+                className={reportStyles["annual-report-entry"]}
+                data-annual-report-entry
+              >
+                <span className={reportStyles["annual-report-entry-icon"]}>
                   <BookOpen size={24} />
                 </span>
-                <span className="annual-report-entry-copy">
+                <span className={reportStyles["annual-report-entry-copy"]}>
                   <strong>{t("annualReport.entryTitle")}</strong>
                   <span>{t("annualReport.entryNote")}</span>
                 </span>
-                <span className="annual-report-entry-year" aria-hidden="true">
+                <span
+                  className={reportStyles["annual-report-entry-year"]}
+                  aria-hidden="true"
+                >
                   {reportSeason.reportYear}
                 </span>
                 <ArrowUpRight size={21} />
@@ -267,7 +277,7 @@ export default function ProfileView() {
       </main>
       <Dialog.Portal>
         <Dialog.Content
-          className="report-fullscreen"
+          className={reportStyles["report-fullscreen"]}
           aria-describedby={undefined}
           onInteractOutside={(event) => event.preventDefault()}
           onKeyDown={(event) => {

@@ -1,3 +1,4 @@
+import styles from "./report.module.css";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { CSSProperties, KeyboardEvent, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
@@ -54,7 +55,9 @@ export default function ReportBook({
     const captured = snapshot.current;
     if (!turn || !host || !captured) return;
     host.replaceChildren(captured.node);
-    const scroll = captured.node.querySelector(".report-page-scroll");
+    const scroll = captured.node.querySelector(
+      `.${styles["report-page-scroll"]}`,
+    );
     if (scroll) scroll.scrollTop = captured.scrollTop;
     snapshot.current = null;
     return () => host.replaceChildren();
@@ -73,8 +76,8 @@ export default function ReportBook({
       return;
     }
     const node = sheet.current.cloneNode(true) as HTMLElement;
-    node.classList.remove("report-sheet-live");
-    node.classList.add("report-sheet-snapshot");
+    node.classList.remove(styles["report-sheet-live"]);
+    node.classList.add(styles["report-sheet-snapshot"]);
     node.removeAttribute("tabindex");
     node.removeAttribute("id");
     node.querySelectorAll("[id]").forEach((item) => item.removeAttribute("id"));
@@ -105,7 +108,7 @@ export default function ReportBook({
     if (
       target.isContentEditable ||
       target.closest(
-        "input, select, textarea, .report-share-dialog, .report-calendar-scroll, .report-chart",
+        `input, select, textarea, .${styles["report-share-dialog"]}, .${styles["report-calendar-scroll"]}, .${styles["report-chart"]}`,
       )
     )
       return;
@@ -117,45 +120,47 @@ export default function ReportBook({
 
   return (
     <section
-      className="report-book"
+      className={styles["report-book"]}
       onKeyDown={onKeyDown}
-      aria-label={t("annualReport.bookLabel")}
+      aria-label={t("annualReport.editions.2026.bookLabel")}
       aria-busy={turn !== null}
       style={
         { "--report-turn-duration": `${TURN_DURATION}ms` } as CSSProperties
       }
     >
       <div
-        className="report-book-frame"
+        className={styles["report-book-frame"]}
         data-turning={turn !== null}
         data-direction={turn?.direction}
       >
-        <div className="report-book-underlay" aria-hidden="true" />
+        <div className={styles["report-book-underlay"]} aria-hidden="true" />
         <div
-          className="report-sheet report-sheet-live"
+          className={[styles["report-sheet"], styles["report-sheet-live"]].join(
+            " ",
+          )}
           ref={sheet}
           tabIndex={-1}
           inert={turn !== null}
           aria-label={pages[visiblePage].label}
         >
-          <header className="report-paper-heading">
+          <header className={styles["report-paper-heading"]}>
             <span>
               <Feather size={16} />
               Goink
             </span>
-            <span>{title ?? t("annualReport.edition")}</span>
+            <span>{title ?? t("annualReport.editions.2026.edition")}</span>
             <span>{year}</span>
           </header>
-          <div className="report-page-scroll" ref={scroller}>
+          <div className={styles["report-page-scroll"]} ref={scroller}>
             <div
               key={pages[visiblePage].id}
-              className="report-page-content"
+              className={styles["report-page-content"]}
               data-page={pages[visiblePage].id}
             >
               {pages[visiblePage].content}
             </div>
           </div>
-          <footer className="report-page-folio">
+          <footer className={styles["report-page-folio"]}>
             <span>{footer ?? "Goink"}</span>
             <i />
             <span>{String(visiblePage + 1).padStart(2, "0")}</span>
@@ -164,18 +169,18 @@ export default function ReportBook({
         {turn && (
           <>
             <div
-              className="report-reveal-shadow"
+              className={styles["report-reveal-shadow"]}
               data-direction={turn.direction}
               aria-hidden="true"
             />
             <div
-              className="report-turning-leaf"
+              className={styles["report-turning-leaf"]}
               data-direction={turn.direction}
               aria-hidden="true"
               inert
             >
-              <div className="report-leaf-front" ref={front} />
-              <div className="report-leaf-back">
+              <div className={styles["report-leaf-front"]} ref={front} />
+              <div className={styles["report-leaf-back"]}>
                 <Feather size={35} />
                 <span>Goink</span>
                 <small>{year}</small>
@@ -185,22 +190,22 @@ export default function ReportBook({
         )}
       </div>
       <nav
-        className="report-book-controls"
-        aria-label={t("annualReport.pageNavigation")}
+        className={styles["report-book-controls"]}
+        aria-label={t("annualReport.editions.2026.pageNavigation")}
       >
         <button
           type="button"
-          className="report-page-previous"
+          className={styles["report-page-previous"]}
           disabled={page === 0 || turn !== null}
           onClick={() => goTo(page - 1)}
         >
           <ArrowLeft size={16} />
-          <span>{t("annualReport.previousPage")}</span>
+          <span>{t("annualReport.editions.2026.previousPage")}</span>
         </button>
-        <div className="report-book-progress">
+        <div className={styles["report-book-progress"]}>
           <nav
-            className="report-book-tabs"
-            aria-label={t("annualReport.contents")}
+            className={styles["report-book-tabs"]}
+            aria-label={t("annualReport.editions.2026.contents")}
           >
             {pages.map((item, index) => (
               <button
@@ -208,7 +213,7 @@ export default function ReportBook({
                 type="button"
                 disabled={turn !== null}
                 aria-current={page === index ? "page" : undefined}
-                aria-label={t("annualReport.goToPage", {
+                aria-label={t("annualReport.editions.2026.goToPage", {
                   page: index + 1,
                   title: item.label,
                 })}
@@ -220,7 +225,7 @@ export default function ReportBook({
             ))}
           </nav>
           <span aria-live="polite" aria-atomic="true">
-            {t("annualReport.pageStatus", {
+            {t("annualReport.editions.2026.pageStatus", {
               page: page + 1,
               total: pages.length,
               title: pages[page].label,
@@ -229,12 +234,16 @@ export default function ReportBook({
         </div>
         <button
           type="button"
-          className="report-page-next"
+          className={styles["report-page-next"]}
           disabled={page === pages.length - 1 || turn !== null}
           onClick={() => goTo(page + 1)}
         >
           <span>
-            {t(page === 0 ? "annualReport.openBook" : "annualReport.nextPage")}
+            {t(
+              page === 0
+                ? "annualReport.editions.2026.openBook"
+                : "annualReport.editions.2026.nextPage",
+            )}
           </span>
           <ArrowRight size={16} />
         </button>

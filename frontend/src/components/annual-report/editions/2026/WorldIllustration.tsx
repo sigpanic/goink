@@ -1,7 +1,8 @@
+import styles from "./report.module.css";
 export default function WorldIllustration() {
   return (
     <svg
-      className="report-world"
+      className={styles["report-world"]}
       viewBox="0 0 480 380"
       aria-hidden="true"
       fill="none"

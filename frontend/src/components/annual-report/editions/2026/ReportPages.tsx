@@ -1,3 +1,4 @@
+import styles from "./report.module.css";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 import {
@@ -14,7 +15,7 @@ import {
   Lightbulb,
   MessagesSquare,
 } from "lucide-react";
-import type { AnnualReport } from "./useAnnualReport";
+import type { AnnualReport } from "../../useAnnualReport";
 import ReportCalendar from "./ReportCalendar";
 import MonthlyChart from "./MonthlyChart";
 
@@ -28,8 +29,8 @@ export function PageHeading({
   note: string;
 }) {
   return (
-    <header className="report-chapter-heading">
-      <span className="report-chapter-index">{index}</span>
+    <header className={styles["report-chapter-heading"]}>
+      <span className={styles["report-chapter-index"]}>{index}</span>
       <div>
         <h2>{title}</h2>
         <p>{note}</p>
@@ -50,7 +51,7 @@ export function LeadStat({
   note?: string;
 }) {
   return (
-    <div className="report-lead-stat">
+    <div className={styles["report-lead-stat"]}>
       <p>{label}</p>
       <div>
         <strong>{value}</strong>
@@ -75,28 +76,28 @@ export function AchievementPage({
     <>
       <PageHeading
         index="01"
-        title={t("annualReport.worksTitle")}
-        note={t("annualReport.booksNote")}
+        title={t("annualReport.editions.2026.worksTitle")}
+        note={t("annualReport.editions.2026.booksNote")}
       />
-      <div className="report-works-layout">
-        <section className="report-manuscript">
+      <div className={styles["report-works-layout"]}>
+        <section className={styles["report-manuscript"]}>
           <Files size={25} strokeWidth={1.2} />
-          <span className="report-kicker">
-            {t("annualReport.manuscriptKicker")}
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.manuscriptKicker")}
           </span>
-          <strong className="report-display-number">
+          <strong className={styles["report-display-number"]}>
             {number(report.Activity.ChaptersCreated)}
           </strong>
-          <h3>{t("annualReport.chapters")}</h3>
-          <p>{t("annualReport.manuscriptNote")}</p>
-          <dl className="report-inline-counts">
+          <h3>{t("annualReport.editions.2026.chapters")}</h3>
+          <p>{t("annualReport.editions.2026.manuscriptNote")}</p>
+          <dl className={styles["report-inline-counts"]}>
             <Count
-              label={t("annualReport.novels")}
+              label={t("annualReport.editions.2026.novels")}
               value={report.Activity.NovelsCreated}
               locale={locale}
             />
             <Count
-              label={t("annualReport.volumes")}
+              label={t("annualReport.editions.2026.volumes")}
               value={report.Activity.VolumesCreated}
               locale={locale}
             />
@@ -105,13 +106,15 @@ export function AchievementPage({
         {report.Novels.length > 0 ? (
           <NovelRanking report={report} locale={locale} />
         ) : (
-          <div className="report-unwritten">
+          <div className={styles["report-unwritten"]}>
             <BookOpen size={62} strokeWidth={0.7} />
-            <p>{t("annualReport.unwrittenNote")}</p>
+            <p>{t("annualReport.editions.2026.unwrittenNote")}</p>
           </div>
         )}
       </div>
-      <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+      <p className={styles["report-page-note"]}>
+        {t("annualReport.editions.2026.creationHistory")}
+      </p>
     </>
   );
 }
@@ -126,7 +129,7 @@ function Count({
   locale: string;
 }) {
   return (
-    <div className="report-count">
+    <div className={styles["report-count"]}>
       <dt>{label}</dt>
       <dd>{value.toLocaleString(locale)}</dd>
     </div>
@@ -146,52 +149,54 @@ export function WorldPage({
     <>
       <PageHeading
         index="02"
-        title={t("annualReport.worldTitle")}
-        note={t("annualReport.worldNote")}
+        title={t("annualReport.editions.2026.worldTitle")}
+        note={t("annualReport.editions.2026.worldNote")}
       />
-      <div className="report-world-layout">
-        <section className="report-cast">
-          <div className="report-orbit" aria-hidden="true">
+      <div className={styles["report-world-layout"]}>
+        <section className={styles["report-cast"]}>
+          <div className={styles["report-orbit"]} aria-hidden="true">
             <i />
             <i />
             <i />
             <Users size={48} strokeWidth={1} />
           </div>
-          <span className="report-kicker">{t("annualReport.castKicker")}</span>
-          <strong className="report-display-number">
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.castKicker")}
+          </span>
+          <strong className={styles["report-display-number"]}>
             {a.CharactersCreated.toLocaleString(locale)}
           </strong>
-          <h3>{t("annualReport.characters")}</h3>
-          <p>{t("annualReport.castNote")}</p>
+          <h3>{t("annualReport.editions.2026.characters")}</h3>
+          <p>{t("annualReport.editions.2026.castNote")}</p>
         </section>
-        <div className="report-world-details">
-          <section className="report-detail-group">
+        <div className={styles["report-world-details"]}>
+          <section className={styles["report-detail-group"]}>
             <Network size={22} strokeWidth={1.2} />
-            <h3>{t("annualReport.connectionsTitle")}</h3>
+            <h3>{t("annualReport.editions.2026.connectionsTitle")}</h3>
             <dl>
               <Count
-                label={t("annualReport.characterGroups")}
+                label={t("annualReport.editions.2026.characterGroups")}
                 value={a.CharacterGroupsCreated}
                 locale={locale}
               />
               <Count
-                label={t("annualReport.characterRelations")}
+                label={t("annualReport.editions.2026.characterRelations")}
                 value={a.CharacterRelationsCreated}
                 locale={locale}
               />
             </dl>
           </section>
-          <section className="report-detail-group">
+          <section className={styles["report-detail-group"]}>
             <MapPin size={22} strokeWidth={1.2} />
-            <h3>{t("annualReport.placesTitle")}</h3>
+            <h3>{t("annualReport.editions.2026.placesTitle")}</h3>
             <dl>
               <Count
-                label={t("annualReport.locations")}
+                label={t("annualReport.editions.2026.locations")}
                 value={a.LocationsCreated}
                 locale={locale}
               />
               <Count
-                label={t("annualReport.locationRelations")}
+                label={t("annualReport.editions.2026.locationRelations")}
                 value={a.LocationRelationsCreated}
                 locale={locale}
               />
@@ -199,7 +204,9 @@ export function WorldPage({
           </section>
         </div>
       </div>
-      <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+      <p className={styles["report-page-note"]}>
+        {t("annualReport.editions.2026.creationHistory")}
+      </p>
     </>
   );
 }
@@ -217,21 +224,23 @@ export function StoryPage({
     <>
       <PageHeading
         index="03"
-        title={t("annualReport.storyTitle")}
-        note={t("annualReport.storyNote")}
+        title={t("annualReport.editions.2026.storyTitle")}
+        note={t("annualReport.editions.2026.storyNote")}
       />
-      <div className="report-story-layout">
-        <section className="report-story-feature">
+      <div className={styles["report-story-layout"]}>
+        <section className={styles["report-story-feature"]}>
           <Route size={30} strokeWidth={1.1} />
-          <span className="report-kicker">{t("annualReport.storyKicker")}</span>
-          <strong className="report-display-number">
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.storyKicker")}
+          </span>
+          <strong className={styles["report-display-number"]}>
             {a.StoryArcsCreated.toLocaleString(locale)}
           </strong>
-          <h3>{t("annualReport.storyArcs")}</h3>
-          <p>{t("annualReport.storyFeatureNote")}</p>
+          <h3>{t("annualReport.editions.2026.storyArcs")}</h3>
+          <p>{t("annualReport.editions.2026.storyFeatureNote")}</p>
           <svg
             viewBox="0 0 400 130"
-            className="report-story-illustration"
+            className={styles["report-story-illustration"]}
             aria-hidden="true"
             fill="none"
           >
@@ -250,25 +259,27 @@ export function StoryPage({
             ))}
           </svg>
         </section>
-        <dl className="report-story-ledger">
+        <dl className={styles["report-story-ledger"]}>
           <Count
-            label={t("annualReport.arcNodes")}
+            label={t("annualReport.editions.2026.arcNodes")}
             value={a.ArcNodesCreated}
             locale={locale}
           />
           <Count
-            label={t("annualReport.timelineEntries")}
+            label={t("annualReport.editions.2026.timelineEntries")}
             value={a.TimelineEntriesCreated}
             locale={locale}
           />
           <Count
-            label={t("annualReport.readerPerspectives")}
+            label={t("annualReport.editions.2026.readerPerspectives")}
             value={a.ReaderPerspectivesCreated}
             locale={locale}
           />
         </dl>
       </div>
-      <p className="report-page-note">{t("annualReport.creationHistory")}</p>
+      <p className={styles["report-page-note"]}>
+        {t("annualReport.editions.2026.creationHistory")}
+      </p>
     </>
   );
 }
@@ -285,29 +296,29 @@ export function HabitsPage({
     <>
       <PageHeading
         index="04"
-        title={t("annualReport.habitsTitle")}
-        note={t("annualReport.habitsNote")}
+        title={t("annualReport.editions.2026.habitsTitle")}
+        note={t("annualReport.editions.2026.habitsNote")}
       />
-      <div className="report-habit-layout">
-        <div className="report-habit-summary">
+      <div className={styles["report-habit-layout"]}>
+        <div className={styles["report-habit-summary"]}>
           <LeadStat
-            label={t("annualReport.activeDays")}
+            label={t("annualReport.editions.2026.activeDays")}
             value={report.Writing.ActiveDays.toLocaleString(locale)}
-            unit={t("annualReport.days")}
+            unit={t("annualReport.editions.2026.days")}
           />
           <LeadStat
-            label={t("annualReport.longestStreak")}
+            label={t("annualReport.editions.2026.longestStreak")}
             value={report.Writing.LongestStreak.toLocaleString(locale)}
-            unit={t("annualReport.days")}
+            unit={t("annualReport.editions.2026.days")}
           />
-          <dl className="report-edit-counts">
+          <dl className={styles["report-edit-counts"]}>
             <Count
-              label={t("annualReport.wordsDeleted")}
+              label={t("annualReport.editions.2026.wordsDeleted")}
               value={report.Writing.WordsDeleted}
               locale={locale}
             />
             <Count
-              label={t("annualReport.wordsNet")}
+              label={t("annualReport.editions.2026.wordsNet")}
               value={report.Writing.WordsNet}
               locale={locale}
             />
@@ -333,49 +344,51 @@ export function InspirationPage({
     <>
       <PageHeading
         index="05"
-        title={t("annualReport.inspirationTitle")}
-        note={t("annualReport.inspirationNote")}
+        title={t("annualReport.editions.2026.inspirationTitle")}
+        note={t("annualReport.editions.2026.inspirationNote")}
       />
-      <div className="report-inspiration-layout">
-        <section className="report-notebook">
+      <div className={styles["report-inspiration-layout"]}>
+        <section className={styles["report-notebook"]}>
           <Lightbulb size={32} strokeWidth={1} />
-          <span className="report-kicker">
-            {t("annualReport.inspirationKicker")}
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.inspirationKicker")}
           </span>
-          <strong className="report-display-number">
+          <strong className={styles["report-display-number"]}>
             {a.SettingsCreated.toLocaleString(locale)}
           </strong>
-          <h3>{t("annualReport.settings")}</h3>
-          <p>{t("annualReport.settingsNote")}</p>
-          <dl className="report-inline-counts">
+          <h3>{t("annualReport.editions.2026.settings")}</h3>
+          <p>{t("annualReport.editions.2026.settingsNote")}</p>
+          <dl className={styles["report-inline-counts"]}>
             <Count
-              label={t("annualReport.preferences")}
+              label={t("annualReport.editions.2026.preferences")}
               value={a.PreferencesCreated}
               locale={locale}
             />
           </dl>
         </section>
-        <section className="report-collection">
+        <section className={styles["report-collection"]}>
           <Library size={26} strokeWidth={1} />
-          <h3>{t("annualReport.collectionTitle")}</h3>
+          <h3>{t("annualReport.editions.2026.collectionTitle")}</h3>
           <dl>
             <Count
-              label={t("annualReport.styleSamples")}
+              label={t("annualReport.editions.2026.styleSamples")}
               value={a.StyleSamplesCreated}
               locale={locale}
             />
             <Count
-              label={t("annualReport.skills")}
+              label={t("annualReport.editions.2026.skills")}
               value={a.SkillsCreated}
               locale={locale}
             />
             <Count
-              label={t("annualReport.images")}
+              label={t("annualReport.editions.2026.images")}
               value={a.ImagesImported}
               locale={locale}
             />
           </dl>
-          <p className="report-page-note">{t("annualReport.skillsNote")}</p>
+          <p className={styles["report-page-note"]}>
+            {t("annualReport.editions.2026.skillsNote")}
+          </p>
         </section>
       </div>
     </>
@@ -399,30 +412,39 @@ export function NovelRanking({
     }).format(value);
   if (report.Novels.length === 0) return null;
   return (
-    <section className="report-panel" aria-labelledby="report-books-title">
-      <div className="report-panel-heading">
+    <section
+      className={styles["report-panel"]}
+      aria-labelledby="report-books-title"
+    >
+      <div className={styles["report-panel-heading"]}>
         <div>
-          <span className="report-kicker">{t("annualReport.booksKicker")}</span>
-          <h3 id="report-books-title">{t("annualReport.booksTitle")}</h3>
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.booksKicker")}
+          </span>
+          <h3 id="report-books-title">
+            {t("annualReport.editions.2026.booksTitle")}
+          </h3>
         </div>
-        <BookOpen size={17} className="report-muted-icon" />
+        <BookOpen size={17} className={styles["report-muted-icon"]} />
       </div>
-      <div className="report-books">
+      <div className={styles["report-books"]}>
         {report.Novels.slice(0, 5).map((book, index) => (
-          <div className="report-book-row" key={book.NovelID}>
+          <div className={styles["report-book-row"]} key={book.NovelID}>
             <span
-              className="report-book-cover"
+              className={styles["report-book-cover"]}
               data-color={index % 3}
               aria-hidden="true"
             >
               {String(index + 1).padStart(2, "0")}
             </span>
-            <div className="report-book-main">
-              <div className="report-book-name">
-                {book.Deleted ? t("annualReport.deletedNovel") : book.Title}
+            <div className={styles["report-book-main"]}>
+              <div className={styles["report-book-name"]}>
+                {book.Deleted
+                  ? t("annualReport.editions.2026.deletedNovel")
+                  : book.Title}
               </div>
               <span>
-                {t("annualReport.bookShare", {
+                {t("annualReport.editions.2026.bookShare", {
                   percent: number(
                     report.Writing.WordsAdded > 0
                       ? (book.WordsAdded / report.Writing.WordsAdded) * 100
@@ -430,7 +452,7 @@ export function NovelRanking({
                   ),
                 })}
               </span>
-              <div className="report-track">
+              <div className={styles["report-track"]}>
                 <i
                   style={{
                     width: `${report.Writing.WordsAdded > 0 ? (book.WordsAdded / report.Writing.WordsAdded) * 100 : 0}%`,
@@ -440,7 +462,7 @@ export function NovelRanking({
             </div>
             <strong>
               {compact(book.WordsAdded)}
-              <small>{t("annualReport.wordsUnit")}</small>
+              <small>{t("annualReport.editions.2026.wordsUnit")}</small>
             </strong>
           </div>
         ))}
@@ -469,44 +491,49 @@ export function AIPage({
     <>
       <PageHeading
         index="06"
-        title={t("annualReport.aiTitle")}
-        note={t("annualReport.aiNote")}
+        title={t("annualReport.editions.2026.aiTitle")}
+        note={t("annualReport.editions.2026.aiNote")}
       />
       <section
-        className="report-ai-grid"
-        aria-label={t("annualReport.aiTitle")}
+        className={styles["report-ai-grid"]}
+        aria-label={t("annualReport.editions.2026.aiTitle")}
       >
         <AIStat
           icon={<MessagesSquare size={17} />}
-          label={t("annualReport.sessions")}
+          label={t("annualReport.editions.2026.sessions")}
           value={number(report.Activity.SessionsCreated)}
-          unit={t("annualReport.sessionsUnit")}
-          note={t("annualReport.sessionsNote")}
+          unit={t("annualReport.editions.2026.sessionsUnit")}
+          note={t("annualReport.editions.2026.sessionsNote")}
         />
         <AIStat
           icon={<MessageCircle size={17} />}
-          label={t("annualReport.turns")}
+          label={t("annualReport.editions.2026.turns")}
           value={number(report.Activity.ConversationTurns)}
-          unit={t("annualReport.turnsUnit")}
-          note={t("annualReport.turnsNote")}
+          unit={t("annualReport.editions.2026.turnsUnit")}
+          note={t("annualReport.editions.2026.turnsNote")}
         />
         <AIStat
           icon={<WandSparkles size={17} />}
-          label={t("annualReport.tools")}
+          label={t("annualReport.editions.2026.tools")}
           value={number(report.Activity.ToolCalls)}
-          unit={t("annualReport.toolsUnit")}
-          note={t("annualReport.toolsNote")}
+          unit={t("annualReport.editions.2026.toolsUnit")}
+          note={t("annualReport.editions.2026.toolsNote")}
         />
-        <article className="report-ai-card report-token-card">
-          <div className="report-ai-label">
+        <article
+          className={[
+            styles["report-ai-card"],
+            styles["report-token-card"],
+          ].join(" ")}
+        >
+          <div className={styles["report-ai-label"]}>
             <Sparkles size={17} />
-            {t("annualReport.tokens")}
+            {t("annualReport.editions.2026.tokens")}
           </div>
-          <div className="report-ai-value">
+          <div className={styles["report-ai-value"]}>
             {report.UsageCount > 0 ? compact(report.Usage.TotalTokens) : "—"}
             <small>tokens</small>
           </div>
-          <div className="report-token-track" aria-hidden="true">
+          <div className={styles["report-token-track"]} aria-hidden="true">
             <i
               style={{
                 width: `${inputOutput > 0 ? (report.Usage.InputTokens / inputOutput) * 100 : 0}%`,
@@ -518,13 +545,13 @@ export function AIPage({
               }}
             />
           </div>
-          <div className="report-token-labels">
+          <div className={styles["report-token-labels"]}>
             <span>
-              {t("annualReport.input")}{" "}
+              {t("annualReport.editions.2026.input")}{" "}
               <b>{compact(report.Usage.InputTokens)}</b>
             </span>
             <span>
-              {t("annualReport.output")}{" "}
+              {t("annualReport.editions.2026.output")}{" "}
               <b>{compact(report.Usage.OutputTokens)}</b>
             </span>
           </div>
@@ -532,22 +559,27 @@ export function AIPage({
       </section>
       {report.Models.length > 0 ? (
         <section
-          className="report-panel report-model-panel"
+          className={[
+            styles["report-panel"],
+            styles["report-model-panel"],
+          ].join(" ")}
           aria-labelledby="report-model-title"
         >
-          <div className="report-model-heading">
-            <span className="report-model-symbol">
+          <div className={styles["report-model-heading"]}>
+            <span className={styles["report-model-symbol"]}>
               <Sparkles size={20} />
             </span>
             <div>
-              <span className="report-kicker">
-                {t("annualReport.modelKicker")}
+              <span className={styles["report-kicker"]}>
+                {t("annualReport.editions.2026.modelKicker")}
               </span>
-              <h3 id="report-model-title">{t("annualReport.modelsTitle")}</h3>
-              <p>{t("annualReport.modelsNote")}</p>
+              <h3 id="report-model-title">
+                {t("annualReport.editions.2026.modelsTitle")}
+              </h3>
+              <p>{t("annualReport.editions.2026.modelsNote")}</p>
             </div>
           </div>
-          <div className="report-models">
+          <div className={styles["report-models"]}>
             {report.Models.slice(0, 5).map((model, index) => {
               const percent =
                 report.UsageCount > 0
@@ -555,19 +587,22 @@ export function AIPage({
                   : 0;
               return (
                 <div
-                  className="report-model"
+                  className={styles["report-model"]}
                   key={JSON.stringify([model.Provider, model.Model])}
                 >
-                  <span className="report-model-dot" data-color={index % 3} />
-                  <div className="report-model-name">
+                  <span
+                    className={styles["report-model-dot"]}
+                    data-color={index % 3}
+                  />
+                  <div className={styles["report-model-name"]}>
                     <strong>{model.Model}</strong>
                     <span>{model.Provider}</span>
                   </div>
-                  <div className="report-model-meter">
+                  <div className={styles["report-model-meter"]}>
                     <i style={{ width: `${percent}%` }} />
                   </div>
-                  <span className="report-model-count">
-                    {t("annualReport.recordedCalls", {
+                  <span className={styles["report-model-count"]}>
+                    {t("annualReport.editions.2026.recordedCalls", {
                       value: number(model.UsageCount),
                     })}
                     <small>{number(percent)}%</small>
@@ -576,8 +611,8 @@ export function AIPage({
               );
             })}
             {report.Models.length > 5 && (
-              <p className="report-model-more">
-                {t("annualReport.otherModels", {
+              <p className={styles["report-model-more"]}>
+                {t("annualReport.editions.2026.otherModels", {
                   value: number(report.Models.length - 5),
                 })}
               </p>
@@ -585,7 +620,9 @@ export function AIPage({
           </div>
         </section>
       ) : (
-        <p className="report-no-models">{t("annualReport.noModelUsage")}</p>
+        <p className={styles["report-no-models"]}>
+          {t("annualReport.editions.2026.noModelUsage")}
+        </p>
       )}
     </>
   );
@@ -605,12 +642,12 @@ function AIStat({
   note: string;
 }) {
   return (
-    <article className="report-ai-card">
-      <div className="report-ai-label">
+    <article className={styles["report-ai-card"]}>
+      <div className={styles["report-ai-label"]}>
         {icon}
         {label}
       </div>
-      <div className="report-ai-value">
+      <div className={styles["report-ai-value"]}>
         {value}
         <small>{unit}</small>
       </div>

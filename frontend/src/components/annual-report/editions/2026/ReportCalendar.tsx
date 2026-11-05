@@ -1,7 +1,8 @@
+import styles from "./report.module.css";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { CalendarDays } from "lucide-react";
-import type { AnnualReport } from "./useAnnualReport";
+import type { AnnualReport } from "../../useAnnualReport";
 
 export default function ReportCalendar({ report }: { report: AnnualReport }) {
   const { t, i18n } = useTranslation();
@@ -32,9 +33,10 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
     date < report.Coverage.End;
   function description(date: string) {
     const label = dateFormat.format(new Date(date + "T00:00:00Z"));
-    if (!covered(date)) return `${label} · ${t("annualReport.notCovered")}`;
+    if (!covered(date))
+      return `${label} · ${t("annualReport.editions.2026.notCovered")}`;
     const day = changes.get(date);
-    if (!day) return `${label} · ${t("annualReport.noEdits")}`;
+    if (!day) return `${label} · ${t("annualReport.editions.2026.noEdits")}`;
     return `${label} · ${t("profile.dailyChanges", {
       added: day.words_added.toLocaleString(i18n.language),
       deleted: day.words_deleted.toLocaleString(i18n.language),
@@ -45,27 +47,31 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
   }
   return (
     <section
-      className="report-panel report-calendar-panel"
+      className={[styles["report-panel"], styles["report-calendar-panel"]].join(
+        " ",
+      )}
       aria-labelledby="report-calendar-title"
     >
-      <div className="report-panel-heading">
+      <div className={styles["report-panel-heading"]}>
         <div>
-          <span className="report-kicker">
-            {t("annualReport.calendarKicker")}
+          <span className={styles["report-kicker"]}>
+            {t("annualReport.editions.2026.calendarKicker")}
           </span>
-          <h3 id="report-calendar-title">{t("annualReport.calendarTitle")}</h3>
+          <h3 id="report-calendar-title">
+            {t("annualReport.editions.2026.calendarTitle")}
+          </h3>
         </div>
-        <span className="report-panel-note">
+        <span className={styles["report-panel-note"]}>
           <CalendarDays size={13} />
-          {t("annualReport.activeDaysNote", {
+          {t("annualReport.editions.2026.activeDaysNote", {
             days: report.Writing.ActiveDays,
           })}
         </span>
       </div>
-      <div className="report-calendar-scroll">
-        <div className="report-calendar-inner">
+      <div className={styles["report-calendar-scroll"]}>
+        <div className={styles["report-calendar-inner"]}>
           <div
-            className="report-calendar-months"
+            className={styles["report-calendar-months"]}
             style={{ gridTemplateColumns: `repeat(${weeks}, minmax(0, 1fr))` }}
             aria-hidden="true"
           >
@@ -87,8 +93,11 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
               );
             })}
           </div>
-          <div className="report-calendar-body">
-            <div className="report-calendar-weekdays" aria-hidden="true">
+          <div className={styles["report-calendar-body"]}>
+            <div
+              className={styles["report-calendar-weekdays"]}
+              aria-hidden="true"
+            >
               <span />
               <span>{t("profile.mon")}</span>
               <span />
@@ -98,8 +107,8 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
               <span />
             </div>
             <div
-              className="report-calendar-grid"
-              aria-label={t("annualReport.calendarTitle")}
+              className={styles["report-calendar-grid"]}
+              aria-label={t("annualReport.editions.2026.calendarTitle")}
             >
               {Array.from({ length: offset }, (_, i) => (
                 <span key={`blank-${i}`} />
@@ -123,7 +132,7 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
                   <button
                     type="button"
                     key={date}
-                    className="report-calendar-day"
+                    className={styles["report-calendar-day"]}
                     data-date={date}
                     data-level={covered(date) ? level : undefined}
                     aria-label={description(date)}
@@ -138,11 +147,13 @@ export default function ReportCalendar({ report }: { report: AnnualReport }) {
           </div>
         </div>
       </div>
-      <div className="report-calendar-footer">
+      <div className={styles["report-calendar-footer"]}>
         <p>
-          {selected ? description(selected) : t("annualReport.calendarHint")}
+          {selected
+            ? description(selected)
+            : t("annualReport.editions.2026.calendarHint")}
         </p>
-        <div className="report-calendar-legend" aria-hidden="true">
+        <div className={styles["report-calendar-legend"]} aria-hidden="true">
           <span>{t("profile.less")}</span>
           {[0, 1, 2, 3, 4].map((level) => (
             <i key={level} data-level={level} />

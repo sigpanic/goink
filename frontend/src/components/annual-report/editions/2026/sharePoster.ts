@@ -1,4 +1,4 @@
-import type { AnnualReport } from "./useAnnualReport";
+import type { AnnualReport } from "../../useAnnualReport";
 
 export interface PosterText {
   owner: string;
@@ -27,7 +27,8 @@ export async function createSharePoster(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas is unavailable");
   const style = getComputedStyle(
-    document.querySelector(".annual-report") ?? document.documentElement,
+    document.querySelector('[data-report-edition="2026"]') ??
+      document.documentElement,
   );
   const color = (token: string) => style.getPropertyValue(token).trim();
   const palette = {
