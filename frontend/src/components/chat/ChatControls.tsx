@@ -53,6 +53,7 @@ export default function ChatControls({
       />
       <ModelPicker
         models={models}
+        isLoading={modelsQuery.isPending}
         selectedKey={selectedKey}
         reasoningEffort={reasoningEffort}
         onSelectModel={onSelectModel}

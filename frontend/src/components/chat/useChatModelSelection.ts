@@ -51,8 +51,7 @@ export function useChatModelSelection({
       m.ProviderName === choice?.provider_name &&
       m.model.id === choice?.model_id,
   );
-  const selectedModel =
-    enabled && choice ? (matched ?? models?.[0] ?? null) : null;
+  const selectedModel = enabled ? (matched ?? null) : null;
   const levels = selectedModel?.model.reasoning_levels;
   const reasoningEffort =
     matched && levels?.includes(choice?.reasoning_effort ?? "")
