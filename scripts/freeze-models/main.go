@@ -84,7 +84,7 @@ func run(ref, out string, check bool) error {
 	if !token.IsIdentifier(pkg) || token.Lookup(pkg).IsKeyword() {
 		return fmt.Errorf("invalid snapshot package %q", pkg)
 	}
-	commit, err := git(root, "rev-parse", ref+"^{commit}")
+	ref, commit, err := resolveSource(root, ref)
 	if err != nil {
 		return err
 	}
@@ -449,6 +449,21 @@ func (f *freezer) render(pkg, ref, commit, hash string, models []model) ([]byte,
 	}
 	source.WriteString("}\n}\n")
 	return format.Source([]byte(source.String()))
+}
+
+func resolveSource(root, ref string) (string, string, error) {
+	commit, err := git(root, "rev-parse", "--verify", "--end-of-options", ref+"^{commit}")
+	if err != nil {
+		return "", "", err
+	}
+	symbolicRef, err := git(root, "rev-parse", "--symbolic-full-name", "--verify", "--end-of-options", ref)
+	if err != nil {
+		return "", "", err
+	}
+	if strings.HasPrefix(symbolicRef, "refs/tags/") || (symbolicRef == "" && ref != "" && strings.HasPrefix(commit, ref)) {
+		return ref, commit, nil
+	}
+	return commit, commit, nil
 }
 
 func git(root string, args ...string) (string, error) {
