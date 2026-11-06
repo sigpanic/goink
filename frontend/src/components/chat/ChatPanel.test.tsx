@@ -7,7 +7,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { attachment, session } from "@/lib/wailsjs/go/models";
+import { llm, type attachment, type session } from "@/lib/wailsjs/go/models";
 import ChatPanel from "./ChatPanel";
 import { AgentEventType, type SendResult } from "./types";
 
@@ -34,7 +34,9 @@ const fixture = vi.hoisted(() => ({
     refetch: vi.fn(),
   },
   settings: undefined as { last_session_id: string } | undefined,
-  models: [],
+  models: [] as llm.AvailableModel[],
+  modelsPending: false,
+  hasSelectedModel: true,
   supportsVision: true,
   selection: {
     adapter_name: "openai_chat",
@@ -62,7 +64,7 @@ vi.mock("@/lib/wailsjs/runtime/runtime", () => ({
 }));
 vi.mock("@/utils/toast", () => ({ toastError: fixture.toastError }));
 vi.mock("@/components/settings/useModels", () => ({
-  useModels: () => ({ data: fixture.models }),
+  useModels: () => ({ data: fixture.models, isPending: fixture.modelsPending }),
 }));
 vi.mock("@/components/settings/useSettings", () => ({
   useSettings: () => ({ data: fixture.settings }),
@@ -82,11 +84,13 @@ vi.mock("react-intersection-observer", () => ({
 vi.mock("./useSlashCommands", () => ({ useSlashCommands: () => ({}) }));
 vi.mock("./useChatModelSelection", () => ({
   useChatModelSelection: () => ({
-    selectedModel: {
-      Key: "test",
-      model: { supports_vision: fixture.supportsVision },
-    },
-    modelSelection: fixture.selection,
+    selectedModel: fixture.hasSelectedModel
+      ? {
+          Key: "test",
+          model: { supports_vision: fixture.supportsVision },
+        }
+      : null,
+    modelSelection: fixture.hasSelectedModel ? fixture.selection : null,
     handleSelectModel: vi.fn(),
     handleSelectEffort: vi.fn(),
   }),
@@ -96,16 +100,19 @@ vi.mock("./ChatComposer", () => ({
     disabled,
     isLoading,
     isCancelling,
+    placeholder,
     onSend,
     onStop,
   }: {
     disabled: boolean;
     isLoading: boolean;
     isCancelling: boolean;
+    placeholder: string;
     onSend: (message: string, images?: attachment.Ref[]) => Promise<SendResult>;
     onStop: () => void;
   }) => (
     <div>
+      <textarea readOnly disabled={disabled} placeholder={placeholder} />
       <button
         disabled={disabled || isLoading}
         onClick={() => void onSend("继续").then(fixture.sendResult)}
@@ -164,14 +171,14 @@ function emit(name: string, payload: unknown) {
   fixture.listeners.get(name)?.forEach((callback) => callback(payload));
 }
 
-function renderPanel() {
+function renderPanel(novelId = 1) {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
   const panel = () => (
     <QueryClientProvider client={client}>
       <ChatPanel
-        novelId={1}
+        novelId={novelId}
         chatPanelWidth={400}
         onChatPanelResize={vi.fn()}
         onApprove={vi.fn()}
@@ -199,6 +206,9 @@ async function startChat() {
 beforeEach(() => {
   vi.clearAllMocks();
   fixture.supportsVision = true;
+  fixture.models = [];
+  fixture.modelsPending = false;
+  fixture.hasSelectedModel = true;
   fixture.listeners.clear();
   fixture.messages = undefined;
   fixture.messagesBySession = {};
@@ -217,6 +227,36 @@ beforeEach(() => {
   fixture.SetLastSession.mockResolvedValue(undefined);
   fixture.GetSession.mockResolvedValue({ session_id: "session", novel_id: 1 });
   HTMLElement.prototype.scrollIntoView = vi.fn();
+});
+
+it.each([
+  { available: false, pending: false, label: "chat.configureModelFirst" },
+  { available: true, pending: false, label: "chat.selectModelFirst" },
+  { available: false, pending: true, label: "chat.loadingModels" },
+])(
+  "prompts $label when no model is selected",
+  ({ available, pending, label }) => {
+    fixture.hasSelectedModel = false;
+    fixture.modelsPending = pending;
+    fixture.models = available
+      ? [
+          new llm.AvailableModel({
+            Key: "available",
+            model: { id: "available", name: "Available" },
+          }),
+        ]
+      : [];
+    renderPanel();
+    expect(screen.getByPlaceholderText(label)).toBeDisabled();
+    expect(screen.getByRole("button", { name: "发送" })).toBeDisabled();
+  },
+);
+
+it("asks for a novel before prompting for a model", () => {
+  fixture.hasSelectedModel = false;
+  fixture.modelsPending = true;
+  renderPanel(0);
+  expect(screen.getByPlaceholderText("chat.selectNovelFirst")).toBeDisabled();
 });
 
 it("sends image references with an empty user message", async () => {

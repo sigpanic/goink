@@ -1,4 +1,4 @@
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor } from "@/components/shared/MonacoEditor";
 import { FileCode, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";
@@ -21,13 +21,7 @@ const DIFF_OPTIONS = {
 } as const;
 
 function getLanguage(path: string): string {
-  if (path.endsWith(".md")) return "markdown";
-  if (path.endsWith(".json")) return "json";
-  if (path.endsWith(".yaml") || path.endsWith(".yml")) return "yaml";
-  if (path.endsWith(".go")) return "go";
-  if (path.endsWith(".ts") || path.endsWith(".tsx")) return "typescript";
-  if (path.endsWith(".css")) return "css";
-  return "plaintext";
+  return path.endsWith(".md") ? "markdown" : "plaintext";
 }
 
 export default function GitCommitView() {

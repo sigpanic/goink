@@ -19,6 +19,23 @@ import AnnualReportView from "./AnnualReportView";
 import { makeReport } from "./report.fixture";
 import { Environment } from "@/lib/wailsjs/runtime/runtime";
 import type { AnnualReportEditionProps } from "./types";
+import { useState } from "react";
+import { useReportSeason } from "./useReportSeason";
+import AnnualReportDialog from "./AnnualReportDialog";
+
+function ProfileHarness() {
+  const season = useReportSeason();
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <ProfileView
+        reportSeason={season}
+        onOpenAnnualReport={() => setOpen(true)}
+      />
+      <AnnualReportDialog open={open} onClose={() => setOpen(false)} />
+    </>
+  );
+}
 
 vi.mock("@/lib/wailsjs/runtime/runtime", () => ({ Environment: vi.fn() }));
 vi.mock("./editions", async (importOriginal) => {
@@ -140,7 +157,7 @@ describe("AnnualReportView", () => {
     await waitFor(() => expect(getReport).toHaveBeenCalledWith(2026));
     await screen.findByRole("heading", { name: /故事因你而生长/ });
     expect(years).toHaveValue("2026");
-    fireEvent.click(screen.getByRole("button", { name: "返回个人中心" }));
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
     expect(back).toHaveBeenCalledOnce();
   });
   it("does not show a previous year's results while loading or after an older request resolves", async () => {
@@ -212,7 +229,7 @@ describe("AnnualReportView", () => {
         total_novels: 0,
         total_chapters: 0,
       });
-      mount(<ProfileView />);
+      mount(<ProfileHarness />);
       await screen.findByRole("heading", { name: "林川" });
       const entry = screen.queryByRole("button", { name: /你的年度创作回顾/ });
       if (visible) expect(entry).toBeInTheDocument();
@@ -248,7 +265,7 @@ describe("AnnualReportView", () => {
       total_novels: 0,
       total_chapters: 0,
     });
-    mount(<ProfileView />);
+    mount(<ProfileHarness />);
     const entry = await screen.findByRole("button", {
       name: /你的年度创作回顾/,
     });
@@ -256,5 +273,11 @@ describe("AnnualReportView", () => {
     expect(await screen.findByRole("dialog")).toBeInTheDocument();
     await screen.findByRole("heading", { name: /故事因你而生长/ });
     expect(getReport).toHaveBeenCalledWith(2026);
+    const profile = screen.getByRole("heading", { name: "林川" });
+    fireEvent.click(screen.getByRole("button", { name: "返回" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByRole("heading", { name: "林川" })).toBe(profile);
   });
 });

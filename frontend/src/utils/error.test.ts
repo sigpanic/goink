@@ -53,7 +53,10 @@ describe("errorCodeMessage", () => {
     ["skill.novel_required", "skill.marketplace.novelRequired"],
     ["skill.invalid_name", "skill.marketplace.invalidName"],
     ["skill.invalid_path", "skill.marketplace.invalidPath"],
-    ["skill.expected_content_required", "skill.marketplace.confirmationRequired"],
+    [
+      "skill.expected_content_required",
+      "skill.marketplace.confirmationRequired",
+    ],
     ["skill.install_conflict", "skill.marketplace.targetChanged"],
   ])("translates %s in both languages", (code, key) => {
     const english = errorCodeMessage(code, i18n.getFixedT("en"));

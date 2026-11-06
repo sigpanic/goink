@@ -122,7 +122,7 @@ vi.mock("@/components/Markdown", () => ({
   default: ({ content }: any) => <div data-testid="markdown">{content}</div>,
 }));
 
-vi.mock("@monaco-editor/react", () => ({
+vi.mock("@/components/shared/MonacoEditor", () => ({
   DiffEditor: ({ original, modified, options }: any) => (
     <div
       data-testid="diff-editor"

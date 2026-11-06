@@ -460,6 +460,7 @@ export default function StyleView({
                 <>
                   <ModelPicker
                     models={models}
+                    isLoading={modelsQuery.isPending}
                     selectedKey={selectedModel?.Key ?? ""}
                     reasoningEffort={reasoningEffort}
                     onSelectModel={handleSelectModel}

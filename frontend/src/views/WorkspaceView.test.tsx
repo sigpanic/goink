@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   render as originalRender,
   screen,
@@ -31,6 +31,10 @@ function render(
 // 顶层 beforeEach 重置所有 5 个字段，避免上个用例的 activeNovelId/showCreateDialog 等影响下个用例。
 // initialNovelId 由 useLayoutEffect 在 mount 时同步覆盖，重置 activeNovelId=0 不影响 initialNovelId 测试。
 beforeEach(() => {
+  mockGetSettings.mockResolvedValue({
+    annual_report_prompt_year: new Date().getFullYear(),
+  });
+  mockMarkAnnualReportPrompted.mockResolvedValue(undefined);
   useNovelStore.setState({
     activeNovelId: 0,
     editingNovel: null,
@@ -53,6 +57,8 @@ const {
   mockGetPlatform,
   mockApproveTool,
   mockToastError,
+  mockGetSettings,
+  mockMarkAnnualReportPrompted,
 } = vi.hoisted(() => ({
   mockGetNovels: vi.fn(),
   mockCreateNovel: vi.fn(),
@@ -63,6 +69,8 @@ const {
   mockGetPlatform: vi.fn(),
   mockApproveTool: vi.fn(),
   mockToastError: vi.fn(),
+  mockGetSettings: vi.fn(),
+  mockMarkAnnualReportPrompted: vi.fn(),
 }));
 
 vi.mock("@/utils/toast", () => ({ toastError: mockToastError }));
@@ -83,6 +91,16 @@ vi.mock("@/lib/wailsjs/go/app/App", () => ({
   ApproveTool: mockApproveTool,
   GetChapters: vi.fn().mockResolvedValue([]),
   GetVolumes: vi.fn().mockResolvedValue([]),
+  GetSettings: mockGetSettings,
+  MarkAnnualReportPrompted: mockMarkAnnualReportPrompted,
+}));
+
+vi.mock("@/components/annual-report/AnnualReportView", () => ({
+  default: ({ onBack }: { onBack: () => void }) => (
+    <div data-testid="annual-report">
+      <button onClick={onBack}>close-report</button>
+    </div>
+  ),
 }));
 
 vi.mock("@/stores/useThemeStore", () => ({
@@ -368,7 +386,11 @@ vi.mock("@/components/chat/ChatPanel", () => ({
   ),
 }));
 vi.mock("@/components/profile/ProfileView", () => ({
-  default: () => <div data-testid="profile">profile</div>,
+  default: ({ onOpenAnnualReport }: { onOpenAnnualReport: () => void }) => (
+    <div data-testid="profile">
+      <button onClick={onOpenAnnualReport}>open-profile-report</button>
+    </div>
+  ),
 }));
 vi.mock("@/components/git/GitCommitView", () => ({
   default: () => <div data-testid="git">git</div>,
@@ -412,6 +434,60 @@ vi.mock("@/components/export/ExportDialog", () => ({ default: () => null }));
 vi.mock("@/components/update/UpdateDialog", () => ({ default: () => null }));
 vi.mock("@/components/Logo", () => ({ default: () => null }));
 // ErrorBoundary 保留真实（简单包裹组件）
+
+describe("WorkspaceView annual report", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(2026, 11, 29, 12));
+    mockGetSettings.mockResolvedValue({ annual_report_prompt_year: 0 });
+    mockGetNovels.mockResolvedValue([{ id: 1, title: "测试小说" }]);
+    mockGetPlatform.mockResolvedValue({ os: "linux" });
+    mockSetActiveNovel.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => vi.useRealTimers());
+
+  it("opens from the reminder without switching panels or unmounting the editor and chat", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    const editor = await screen.findByTestId("content-panel");
+    const chat = screen.getByTestId("chat-panel");
+    useEditorStore.setState({ activeContent: "未保存正文", isDirty: true });
+    fireEvent.click(
+      await screen.findByRole("button", { name: "annualReport.viewNow" }),
+    );
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    expect(screen.getByTestId("content-panel")).toBe(editor);
+    expect(screen.getByTestId("chat-panel")).toBe(chat);
+    expect(useEditorStore.getState().activeContent).toBe("未保存正文");
+    expect(useEditorStore.getState().isDirty).toBe(true);
+    fireEvent.click(screen.getByText("close-report"));
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(editor).toBeVisible();
+    expect(chat).toBeVisible();
+    expect(mockMarkAnnualReportPrompted).toHaveBeenCalledExactlyOnceWith(2026);
+  });
+
+  it("uses the same report overlay from profile after dismissing the reminder", async () => {
+    render(<WorkspaceView initialNovelId={1} />);
+    await screen.findByTestId("content-panel");
+    fireEvent.click(
+      await screen.findByRole("button", { name: "annualReport.viewLater" }),
+    );
+    fireEvent.click(screen.getByText("btn-profile"));
+    const profile = await screen.findByTestId("profile");
+    fireEvent.click(screen.getByText("open-profile-report"));
+    expect(await screen.findByRole("dialog")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("close-report"));
+    await vi.waitFor(() =>
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument(),
+    );
+    expect(screen.getByTestId("profile")).toBe(profile);
+    expect(screen.queryByText("annualReport.viewNow")).not.toBeInTheDocument();
+  });
+});
 
 describe("WorkspaceView panel switching", () => {
   beforeEach(() => {
@@ -470,11 +546,14 @@ describe("WorkspaceView panel switching", () => {
     render(<WorkspaceView initialNovelId={1} />);
     await screen.findByTestId("content-panel");
     const chatPanel = screen.getByTestId("chat-panel");
-    fireEvent.click(screen.getByText("btn-profile"));
+    expect(screen.getByTestId("side-panel")).toBeVisible();
+    fireEvent.click(screen.getByTitle("workspace.profile"));
     expect(await screen.findByTestId("profile")).toBeInTheDocument();
+    expect(screen.queryByTestId("side-panel")).not.toBeInTheDocument();
     expect(chatPanel).not.toBeVisible();
     expect(screen.getByTestId("chat-panel")).toBe(chatPanel);
     fireEvent.click(screen.getByText("btn-chapters"));
+    expect(screen.getByTestId("side-panel")).toBeVisible();
     expect(chatPanel).toBeVisible();
     expect(screen.getByTestId("chat-panel")).toBe(chatPanel);
   });

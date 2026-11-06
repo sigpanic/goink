@@ -394,6 +394,10 @@ export function ListStyleSamples(arg1) {
   return window['go']['app']['App']['ListStyleSamples'](arg1);
 }
 
+export function MarkAnnualReportPrompted(arg1) {
+  return window['go']['app']['App']['MarkAnnualReportPrompted'](arg1);
+}
+
 export function PickAndImportNovel() {
   return window['go']['app']['App']['PickAndImportNovel']();
 }

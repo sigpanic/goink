@@ -6,7 +6,8 @@ import {
   forwardRef,
   useImperativeHandle,
 } from "react";
-import { type OnMount, DiffEditor } from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
+import { DiffEditor } from "@/components/shared/MonacoEditor";
 import { FileText, Loader2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";

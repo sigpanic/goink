@@ -13,6 +13,7 @@ interface FooterAction {
 interface Props {
   models: llm.AvailableModel[];
   selectedKey: string;
+  isLoading?: boolean;
   // reasoning：传入则启用底部跟随区域。当前选中模型不支持时不显示。
   reasoningEffort?: string;
   onSelectModel: (key: string) => void;
@@ -32,6 +33,7 @@ interface Props {
 export default function ModelPicker({
   models,
   selectedKey,
+  isLoading = false,
   reasoningEffort,
   onSelectModel,
   onSelectEffort,
@@ -47,6 +49,11 @@ export default function ModelPicker({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const selected = models.find((m) => m.Key === selectedKey);
+  const emptyLabel = isLoading
+    ? t("chat.loadingModels")
+    : models.length > 0
+      ? t("chat.selectModel")
+      : t("chat.noModelAvailable");
   const supportsReasoning = !!selected?.model.reasoning_levels?.length;
   const showReasoning = supportsReasoning && !!onSelectEffort;
 
@@ -129,7 +136,7 @@ export default function ModelPicker({
         className="h-[30px] rounded-lg border bg-background px-2.5 text-xs text-muted-foreground flex items-center justify-between gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
       >
         <span className="truncate">
-          {selected?.model.name || placeholder || t("chat.noModelAvailable")}
+          {selected?.model.name || placeholder || emptyLabel}
         </span>
         <ChevronUp
           className={`w-3 h-3 shrink-0 transition-transform ${open === dropUp ? "rotate-180" : ""}`}
@@ -142,6 +149,11 @@ export default function ModelPicker({
         >
           {/* 按 provider 聚类的 model 列表 —— 独立滚动区 */}
           <div className="flex-1 overflow-y-auto py-1">
+            {models.length === 0 && (
+              <div className="px-2.5 py-1.5 text-xs text-muted-foreground">
+                {emptyLabel}
+              </div>
+            )}
             {groups.map((g) => (
               <div key={g.providerKey} className="py-0.5">
                 <div className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium text-foreground">

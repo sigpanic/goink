@@ -156,7 +156,10 @@ describe("SkillMarketplace installation", () => {
     ["skill.invalid_name", "skill.marketplace.invalidName"],
     ["skill.invalid_path", "skill.marketplace.invalidPath"],
     ["skill.novel_required", "skill.marketplace.novelRequired"],
-    ["skill.expected_content_required", "skill.marketplace.confirmationRequired"],
+    [
+      "skill.expected_content_required",
+      "skill.marketplace.confirmationRequired",
+    ],
   ])("localizes installation error %s", async (code, message) => {
     mockGetContent.mockResolvedValue("");
     mockInstallRemoteSkill.mockResolvedValueOnce({

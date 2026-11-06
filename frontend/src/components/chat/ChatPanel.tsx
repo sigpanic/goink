@@ -1220,7 +1220,11 @@ export default function ChatPanel({
   const inputPlaceholder = !hasNovel
     ? t("chat.selectNovelFirst")
     : !selectedKey
-      ? t("chat.configureModelFirst")
+      ? modelsQuery.isPending
+        ? t("chat.loadingModels")
+        : modelsQuery.data?.length
+          ? t("chat.selectModelFirst")
+          : t("chat.configureModelFirst")
       : t("chat.inputPlaceholder");
 
   // 草稿 key：已有会话按 sessionId，新对话（未选中/新开）按小说分槽
