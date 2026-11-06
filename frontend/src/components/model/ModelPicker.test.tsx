@@ -35,9 +35,7 @@ it("groups instances by protocol and name and qualifies only cross-protocol dupl
       onSelectModel={onSelectModel}
     />,
   );
-  await user.click(
-    screen.getByRole("button", { name: "chat.noModelAvailable" }),
-  );
+  await user.click(screen.getByRole("button", { name: "chat.selectModel" }));
   expect(screen.getAllByText("Relay (OpenAI Chat)")).toHaveLength(1);
   expect(screen.getAllByText("Another relay")).toHaveLength(1);
   expect(screen.getAllByText("Relay (OpenAI Responses)")).toHaveLength(1);
@@ -47,6 +45,81 @@ it("groups instances by protocol and name and qualifies only cross-protocol dupl
     screen.queryByText("Relay (OpenAI Responses)"),
   ).not.toBeInTheDocument();
 });
+
+it.each([
+  {
+    available: false,
+    selectedKey: "",
+    isLoading: false,
+    label: "chat.noModelAvailable",
+  },
+  {
+    available: true,
+    selectedKey: "",
+    isLoading: false,
+    label: "chat.selectModel",
+  },
+  {
+    available: true,
+    selectedKey: "removed",
+    isLoading: false,
+    label: "chat.selectModel",
+  },
+  {
+    available: false,
+    selectedKey: "",
+    isLoading: true,
+    label: "chat.loadingModels",
+  },
+])(
+  "shows $label for available=$available, selectedKey=$selectedKey, loading=$isLoading",
+  ({ available, selectedKey, isLoading, label }) => {
+    render(
+      <ModelPicker
+        models={available ? [model("openai_chat", "Relay", "Plain")] : []}
+        selectedKey={selectedKey}
+        isLoading={isLoading}
+        onSelectModel={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("button", { name: label })).toBeInTheDocument();
+  },
+);
+
+it("keeps the selected model visible during a refresh and supports custom placeholders", () => {
+  const models = [model("openai_chat", "Relay", "Plain")];
+  const props = {
+    models,
+    onSelectModel: vi.fn(),
+    isLoading: true,
+    placeholder: "Custom placeholder",
+  };
+  const { rerender } = render(
+    <ModelPicker {...props} selectedKey={models[0].Key} />,
+  );
+  expect(screen.getByRole("button", { name: "Plain" })).toBeInTheDocument();
+  rerender(<ModelPicker {...props} selectedKey="" />);
+  expect(
+    screen.getByRole("button", { name: "Custom placeholder" }),
+  ).toBeInTheDocument();
+});
+
+it.each([false, true])(
+  "explains an empty dropdown while loading=%s",
+  async (isLoading) => {
+    const label = isLoading ? "chat.loadingModels" : "chat.noModelAvailable";
+    render(
+      <ModelPicker
+        models={[]}
+        selectedKey=""
+        isLoading={isLoading}
+        onSelectModel={vi.fn()}
+      />,
+    );
+    await userEvent.click(screen.getByRole("button", { name: label }));
+    expect(screen.getAllByText(label)).toHaveLength(2);
+  },
+);
 
 it("uses the selected model's reasoning levels and preserves protocol-specific values", async () => {
   const user = userEvent.setup();

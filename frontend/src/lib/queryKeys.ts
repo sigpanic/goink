@@ -197,6 +197,10 @@ export const writingStatsKeys = {
   all: ["writing-stats"] as const,
 };
 
+export const annualReportKeys = {
+  detail: (year: number) => ["annual-report", year] as const,
+};
+
 export const attachmentKeys = {
   detail: (novelId: number, id: string) => ["attachment", novelId, id] as const,
 };

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/apperr"
 	"github.com/sigpanic/goink/internal/attachment"
 	"github.com/sigpanic/goink/internal/config"
@@ -23,9 +24,12 @@ func (a *App) ImportChatImage(input ChatImageInput) *apperr.Result[attachment.Im
 	if err != nil {
 		var corrupt base64.CorruptInputError
 		if errors.As(err, &corrupt) {
-			err = &apperr.BusinessError{CodeVal: apperr.CodeAttachmentInvalidImage, Msg: "attachment: 图片编码无效", Cause: err}
+			err = &apperr.BusinessError{CodeVal: attachment.CodeInvalidImage, Msg: "attachment: 图片编码无效", Cause: err}
 		}
 		return apperr.Err[attachment.Image](err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{ImagesImported: 1})
 	}
 	return apperr.Ok(image)
 }

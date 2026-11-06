@@ -186,6 +186,10 @@ export function FrontendReady() {
   return window['go']['app']['App']['FrontendReady']();
 }
 
+export function GetAnnualReport(arg1) {
+  return window['go']['app']['App']['GetAnnualReport'](arg1);
+}
+
 export function GetAppConfig() {
   return window['go']['app']['App']['GetAppConfig']();
 }
@@ -390,6 +394,10 @@ export function ListStyleSamples(arg1) {
   return window['go']['app']['App']['ListStyleSamples'](arg1);
 }
 
+export function MarkAnnualReportPrompted(arg1) {
+  return window['go']['app']['App']['MarkAnnualReportPrompted'](arg1);
+}
+
 export function PickAndImportNovel() {
   return window['go']['app']['App']['PickAndImportNovel']();
 }
@@ -424,6 +432,10 @@ export function RevokeMCPServerCredential() {
 
 export function RotateMCPServerCredential() {
   return window['go']['app']['App']['RotateMCPServerCredential']();
+}
+
+export function SaveAnnualReportImage(arg1) {
+  return window['go']['app']['App']['SaveAnnualReportImage'](arg1);
 }
 
 export function SaveAvatar(arg1) {

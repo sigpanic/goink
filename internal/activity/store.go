@@ -53,8 +53,13 @@ func (s *Store) AddActivity(ctx context.Context, delta ActivityDelta) {
 	if delta == (ActivityDelta{}) {
 		return
 	}
-	if !nonNegative(delta.NovelsCreated, delta.ChaptersCreated, delta.CharactersCreated,
-		delta.LocationsCreated, delta.CreativeSeconds, delta.ConversationTurns, delta.ToolCalls) {
+	if !nonNegative(delta.NovelsCreated, delta.VolumesCreated, delta.ChaptersCreated,
+		delta.CharactersCreated, delta.CharacterGroupsCreated, delta.CharacterRelationsCreated,
+		delta.LocationsCreated, delta.LocationRelationsCreated, delta.StoryArcsCreated,
+		delta.ArcNodesCreated, delta.TimelineEntriesCreated, delta.ReaderPerspectivesCreated,
+		delta.SettingsCreated, delta.PreferencesCreated, delta.StyleSamplesCreated,
+		delta.SkillsCreated, delta.ImagesImported, delta.SessionsCreated,
+		delta.CreativeSeconds, delta.ConversationTurns, delta.ToolCalls) {
 		s.logger.Warn("忽略负数创作统计增量")
 		return
 	}
@@ -62,13 +67,27 @@ func (s *Store) AddActivity(ctx context.Context, delta ActivityDelta) {
 	err := s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "date"}},
 		DoUpdates: clause.Assignments(map[string]any{
-			"novels_created":     gorm.Expr("novels_created + excluded.novels_created"),
-			"chapters_created":   gorm.Expr("chapters_created + excluded.chapters_created"),
-			"characters_created": gorm.Expr("characters_created + excluded.characters_created"),
-			"locations_created":  gorm.Expr("locations_created + excluded.locations_created"),
-			"creative_seconds":   gorm.Expr("creative_seconds + excluded.creative_seconds"),
-			"conversation_turns": gorm.Expr("conversation_turns + excluded.conversation_turns"),
-			"tool_calls":         gorm.Expr("tool_calls + excluded.tool_calls"),
+			"novels_created":              gorm.Expr("novels_created + excluded.novels_created"),
+			"volumes_created":             gorm.Expr("volumes_created + excluded.volumes_created"),
+			"chapters_created":            gorm.Expr("chapters_created + excluded.chapters_created"),
+			"characters_created":          gorm.Expr("characters_created + excluded.characters_created"),
+			"character_groups_created":    gorm.Expr("character_groups_created + excluded.character_groups_created"),
+			"character_relations_created": gorm.Expr("character_relations_created + excluded.character_relations_created"),
+			"locations_created":           gorm.Expr("locations_created + excluded.locations_created"),
+			"location_relations_created":  gorm.Expr("location_relations_created + excluded.location_relations_created"),
+			"story_arcs_created":          gorm.Expr("story_arcs_created + excluded.story_arcs_created"),
+			"arc_nodes_created":           gorm.Expr("arc_nodes_created + excluded.arc_nodes_created"),
+			"timeline_entries_created":    gorm.Expr("timeline_entries_created + excluded.timeline_entries_created"),
+			"reader_perspectives_created": gorm.Expr("reader_perspectives_created + excluded.reader_perspectives_created"),
+			"settings_created":            gorm.Expr("settings_created + excluded.settings_created"),
+			"preferences_created":         gorm.Expr("preferences_created + excluded.preferences_created"),
+			"style_samples_created":       gorm.Expr("style_samples_created + excluded.style_samples_created"),
+			"skills_created":              gorm.Expr("skills_created + excluded.skills_created"),
+			"images_imported":             gorm.Expr("images_imported + excluded.images_imported"),
+			"sessions_created":            gorm.Expr("sessions_created + excluded.sessions_created"),
+			"creative_seconds":            gorm.Expr("creative_seconds + excluded.creative_seconds"),
+			"conversation_turns":          gorm.Expr("conversation_turns + excluded.conversation_turns"),
+			"tool_calls":                  gorm.Expr("tool_calls + excluded.tool_calls"),
 		}),
 	}).Create(&record).Error
 	if err != nil {

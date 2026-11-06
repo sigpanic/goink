@@ -3,7 +3,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { PropsWithChildren } from "react";
 import { adapter, app, config, llm } from "@/lib/wailsjs/go/models";
-import { modelKeys, sessionKeys } from "@/lib/queryKeys";
+import { modelKeys, sessionKeys, settingsKeys } from "@/lib/queryKeys";
 import { useModels } from "@/components/settings/useModels";
 import { useSettings } from "@/components/settings/useSettings";
 import { useSession } from "./useSession";
@@ -128,6 +128,63 @@ function setup(sessionId = "") {
   return { qc, ...hook };
 }
 
+it.each([
+  { sessionId: "", empty: true },
+  { sessionId: "", empty: false },
+  { sessionId: "a", empty: true },
+  { sessionId: "a", empty: false },
+])(
+  "requires an explicit model choice for session=$sessionId, empty=$empty",
+  async ({ sessionId, empty }) => {
+    const saved = empty
+      ? new adapter.ModelSelection({
+          adapter_name: "",
+          provider_name: "",
+          model_id: "",
+          reasoning_effort: "",
+        })
+      : { ...choice(0, "max"), model_id: "removed-model" };
+    if (sessionId) {
+      sessions[sessionId].model_selection = saved;
+    } else {
+      settings.default_model_selection = saved;
+    }
+    const { result, qc } = setup(sessionId);
+    await waitFor(() => {
+      expect(qc.getQueryData(modelKeys.all)).toEqual(models);
+      expect(qc.getQueryData(settingsKeys.all)).toEqual(settings);
+      if (sessionId) {
+        expect(qc.getQueryData(sessionKeys.detail(sessionId))).toEqual(
+          sessions[sessionId],
+        );
+      }
+      expect(qc.isFetching()).toBe(0);
+    });
+    expect(result.current.selectedModel).toBeNull();
+    expect(result.current.modelSelection).toBeNull();
+    expect(useChatStore.getState().selectedModel).toBeNull();
+    expect(useChatStore.getState().reasoningEffort).toBe("");
+    expect(api.SetSelectedModel).not.toHaveBeenCalled();
+
+    act(() => result.current.handleSelectModel(models[2].Key));
+    expect(result.current.modelSelection).toEqual(choice(2, "medium"));
+    await waitFor(() => {
+      expect(api.SetSelectedModel).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          session_id: sessionId,
+          model_selection: choice(2, "medium"),
+        }),
+      );
+      expect(qc.isMutating()).toBe(0);
+    });
+    expect(
+      sessionId
+        ? sessions[sessionId].model_selection
+        : settings.default_model_selection,
+    ).toEqual(choice(2, "medium"));
+  },
+);
+
 it("restores per-session selections by all three identity fields and saves global defaults only outside a session", async () => {
   const { result, rerender, qc } = setup();
   await waitFor(() =>
@@ -217,7 +274,7 @@ it("keeps an immediate request snapshot and serializes rapid saves without mixin
   await waitFor(() => expect(qc.isMutating()).toBe(0));
 });
 
-it("retains a failed selection with an error and refreshes model capabilities without silently saving a fallback", async () => {
+it("retains a failed selection, refreshes capabilities, and clears the selection when its model disappears", async () => {
   api.SetSelectedModel.mockRejectedValueOnce(new Error("disk full"));
   const { result, qc } = setup("a");
   await waitFor(() =>
@@ -249,8 +306,9 @@ it("retains a failed selection with an error and refreshes model capabilities wi
   await act(async () => {
     await qc.invalidateQueries({ queryKey: modelKeys.all });
   });
-  await waitFor(() =>
-    expect(result.current.modelSelection?.model_id).toBe("replacement"),
-  );
+  await waitFor(() => expect(result.current.selectedModel).toBeNull());
+  expect(result.current.modelSelection).toBeNull();
+  expect(useChatStore.getState().selectedModel).toBeNull();
+  expect(useChatStore.getState().reasoningEffort).toBe("");
   expect(api.SetSelectedModel).toHaveBeenCalledTimes(1);
 });

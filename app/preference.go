@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/storage"
 )
@@ -73,6 +74,9 @@ func (a *App) CreatePreference(novelID int64, input CreatePreferenceInput) (*pre
 	}
 	if err := a.preference.DB.WithContext(a.ctx).Create(&item).Error; err != nil {
 		return nil, fmt.Errorf("create preference: %w", err)
+	}
+	if a.activity != nil {
+		a.activity.AddActivity(a.ctx, activity.ActivityDelta{PreferencesCreated: 1})
 	}
 	return &item, nil
 }

@@ -7,6 +7,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/setting"
 )
 
@@ -50,6 +51,7 @@ func (t *UpsertSettingTool) Execute(ctx context.Context, args any, tc ToolContex
 	}
 	var failed *failure
 	var ids []int64
+	var created int64
 
 	err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		for i, item := range a.Settings {
@@ -59,6 +61,9 @@ func (t *UpsertSettingTool) Execute(ctx context.Context, args any, tc ToolContex
 				return err
 			}
 			ids = append(ids, id)
+			if item.SettingID == nil {
+				created++
+			}
 		}
 		return nil
 	})
@@ -75,6 +80,8 @@ func (t *UpsertSettingTool) Execute(ctx context.Context, args any, tc ToolContex
 			Data:    map[string]any{"failed_index": failed.index, "failed_category": failed.category},
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{SettingsCreated: created})
 
 	return &ToolResult{
 		Success: true,

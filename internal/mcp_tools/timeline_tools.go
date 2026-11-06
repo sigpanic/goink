@@ -9,6 +9,7 @@ import (
 
 	"gorm.io/gorm"
 
+	"github.com/sigpanic/goink/internal/activity"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/timeline"
@@ -207,6 +208,8 @@ func (t *CreateTimelineEntryTool) Execute(ctx context.Context, args any, tc Tool
 			Error:   fmt.Sprintf("创建时间线条目 [%s] 失败: %s", failedName, failedErr),
 		}, nil
 	}
+
+	activity.NewStore(tc.DB, tc.LoggerOrDefault()).AddActivity(ctx, activity.ActivityDelta{TimelineEntriesCreated: int64(len(ids))})
 
 	return &ToolResult{
 		Success: true,

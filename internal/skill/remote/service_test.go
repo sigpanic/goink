@@ -305,7 +305,7 @@ func TestInstallRemoteSkill_ChangedTargetRequiresNewConfirmation(t *testing.T) {
 
 	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "user", 0, "old local content")
 	require.Error(t, err)
-	assert.Equal(t, apperr.CodeConflict, apperr.CodeFromError(err))
+	assert.Equal(t, CodeInstallConflict, apperr.CodeFromError(err))
 	current, readErr := os.ReadFile(dst)
 	require.NoError(t, readErr)
 	assert.Equal(t, "newer local content", string(current))
@@ -332,7 +332,7 @@ func TestInstallRemoteSkill_NewTargetAppearedAfterProbe(t *testing.T) {
 
 	err := svc.InstallRemoteSkill(context.Background(), "my-skill", "novel", 42, "")
 	require.Error(t, err)
-	assert.Equal(t, apperr.CodeConflict, apperr.CodeFromError(err))
+	assert.Equal(t, CodeInstallConflict, apperr.CodeFromError(err))
 	current, readErr := os.ReadFile(dst)
 	require.NoError(t, readErr)
 	assert.Equal(t, "new local content", string(current))
@@ -426,6 +426,7 @@ func TestInstallRemoteSkill_ReloadFailureStillSucceeds(t *testing.T) {
 func TestDefaultDirResolver_InvalidTarget(t *testing.T) {
 	_, err := defaultDirResolver("bogus", 0)
 	require.Error(t, err)
+	assert.Equal(t, CodeInvalidTarget, apperr.CodeFromError(err))
 	assert.Contains(t, err.Error(), "invalid target")
 }
 
@@ -433,5 +434,14 @@ func TestDefaultDirResolver_InvalidTarget(t *testing.T) {
 func TestDefaultDirResolver_NovelZeroID(t *testing.T) {
 	_, err := defaultDirResolver("novel", 0)
 	require.Error(t, err)
+	assert.Equal(t, CodeNovelRequired, apperr.CodeFromError(err))
 	assert.Contains(t, err.Error(), "non-zero novelID")
+}
+
+func TestInstallRemoteSkillInvalidNameCode(t *testing.T) {
+	svc, fetcher, _, _ := newTestService(t, nil, nil)
+	err := svc.InstallRemoteSkill(context.Background(), "../outside", "user", 0, "")
+	require.Error(t, err)
+	assert.Equal(t, CodeInvalidName, apperr.CodeFromError(err))
+	assert.Empty(t, fetcher.calls)
 }

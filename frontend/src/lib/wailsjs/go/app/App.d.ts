@@ -15,12 +15,12 @@ import {timeline} from '../models';
 import {llm} from '../models';
 import {adapter} from '../models';
 import {pattern} from '../models';
+import {apperr} from '../models';
 import {storage} from '../models';
 import {attachment} from '../models';
 import {git} from '../models';
 import {mcpserver} from '../models';
 import {mcpclient} from '../models';
-import {apperr} from '../models';
 import {session} from '../models';
 import {config} from '../models';
 import {volume} from '../models';
@@ -121,6 +121,8 @@ export function ExtractPattern(arg1:pattern.ExtractPatternInput):Promise<pattern
 export function ExtractStyle(arg1:app.ExtractStyleInput):Promise<style.ExtractResult>;
 
 export function FrontendReady():Promise<app.StartupState>;
+
+export function GetAnnualReport(arg1:number):Promise<apperr.Result_github_com_sigpanic_goink_internal_report_AnnualReport_>;
 
 export function GetAppConfig():Promise<Record<string, any>>;
 
@@ -224,6 +226,8 @@ export function ListSlashCommands(arg1:app.ListSlashCommandsInput):Promise<Array
 
 export function ListStyleSamples(arg1:app.ListStyleSamplesInput):Promise<storage.PageResult_github_com_sigpanic_goink_internal_style_Sample_>;
 
+export function MarkAnnualReportPrompted(arg1:number):Promise<void>;
+
 export function PickAndImportNovel():Promise<imp.ImportResult>;
 
 export function PlaceChapter(arg1:chapter.PlaceInput):Promise<chapter.Chapter>;
@@ -241,6 +245,8 @@ export function RetryStartup():Promise<void>;
 export function RevokeMCPServerCredential():Promise<void>;
 
 export function RotateMCPServerCredential():Promise<mcpserver.LocalView>;
+
+export function SaveAnnualReportImage(arg1:app.SaveAnnualReportImageInput):Promise<apperr.Result_bool_>;
 
 export function SaveAvatar(arg1:Array<number>):Promise<void>;
 

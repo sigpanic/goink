@@ -1,3 +1,28 @@
+import type { TFunction } from "i18next";
+
+const ERROR_CODE_I18N: Record<string, string> = {
+  "report.invalid_year": "annualReport.invalidYear",
+  "report.invalid_image": "annualReport.invalidImage",
+  "attachment.file_too_large": "chat.imageFileTooLarge",
+  "attachment.too_many_pixels": "chat.imageTooManyPixels",
+  "attachment.invalid_image": "chat.invalidImageData",
+  "attachment.invalid_novel_id": "chat.imageNovelRequired",
+  "skill.invalid_target": "skill.marketplace.invalidTarget",
+  "skill.novel_required": "skill.marketplace.novelRequired",
+  "skill.invalid_name": "skill.marketplace.invalidName",
+  "skill.invalid_path": "skill.marketplace.invalidPath",
+  "skill.expected_content_required": "skill.marketplace.confirmationRequired",
+  "skill.install_conflict": "skill.marketplace.targetChanged",
+};
+
+export function errorCodeMessage(
+  code: string,
+  t: TFunction,
+): string | undefined {
+  const key = ERROR_CODE_I18N[code];
+  return key ? t(key) : undefined;
+}
+
 /**
  * 把任意 unknown 错误转为可读字符串。
  *

@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { toastError } from "@/utils/toast";
-import { toErrorMessage } from "@/utils/error";
+import { errorCodeMessage, toErrorMessage } from "@/utils/error";
+import { AppErr } from "@/utils/wailsResult";
 import i18n from "@/i18n";
 
 // queryKey 前缀 → i18n key 映射表。
@@ -51,6 +52,7 @@ const QUERY_ERROR_I18N: Record<string, string> = {
   // settings 复用 chat.settingsLoadFailed（GetSettings 共享缓存，文案通用）
   "writing-activity": "profile.activityLoadFailed",
   "writing-stats": "profile.statsLoadFailed",
+  "annual-report": "annualReport.loadFailed",
   // 5.8 commit 1：LLM 配置 query（GetLLMConfig）
   "llm-config": "settings.llmConfigLoadFailed",
   "mcp-server": "settings.mcpServer.loadFailed",
@@ -88,7 +90,11 @@ export function installQueryErrorToast(queryClient: QueryClient): () => void {
       ? i18n.t(i18nKey)
       : `${prefix} load failed`;
 
-    toastError(`${label}: ${toErrorMessage(error)}`);
+    const detail =
+      error instanceof AppErr
+        ? (errorCodeMessage(error.errCode, i18n.t) ?? toErrorMessage(error))
+        : toErrorMessage(error);
+    toastError(`${label}: ${detail}`);
     console.error(`[query error] ${prefix}:`, error);
   });
 }

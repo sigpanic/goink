@@ -1,0 +1,355 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--foreground) 28%, transparent);
+  backdrop-filter: blur(5px);
+  animation: veil-in 220ms ease-out both;
+}
+
+.dialog {
+  --prompt-ink: var(--tag-teal-foreground);
+  --prompt-gold: var(--tag-amber-foreground);
+  --prompt-paper: color-mix(in srgb, var(--tag-amber) 16%, var(--card));
+  --prompt-serif: "Songti SC", "Noto Serif CJK SC", "SimSun", Georgia, serif;
+  position: fixed;
+  inset: 50% auto auto 50%;
+  z-index: 50;
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100dvh - 40px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--prompt-gold) 22%, var(--border));
+  border-radius: 18px;
+  outline: none;
+  color: var(--foreground);
+  background: var(--prompt-paper);
+  box-shadow: 0 24px 90px color-mix(in srgb, var(--foreground) 20%, transparent);
+  animation: invitation-in 300ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.dialog button {
+  cursor: pointer;
+}
+
+.dialog button:focus-visible {
+  outline: 2px solid var(--prompt-ink);
+  outline-offset: 4px;
+}
+
+.close {
+  position: absolute;
+  inset: 16px 16px auto auto;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--prompt-paper) 76%, transparent);
+  transition:
+    background 160ms,
+    color 160ms;
+}
+
+.close:hover {
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.art {
+  position: relative;
+  height: 230px;
+  overflow: hidden;
+  border-bottom: 1px solid
+    color-mix(in srgb, var(--prompt-gold) 15%, var(--border));
+  background:
+    radial-gradient(
+      ellipse at 25% 65%,
+      color-mix(in srgb, var(--tag-teal) 80%, transparent),
+      transparent 65%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent 0 27px,
+      color-mix(in srgb, var(--prompt-gold) 6%, transparent) 27px 28px
+    );
+}
+
+.imprint {
+  position: absolute;
+  inset: 23px 64px auto 30px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--prompt-ink);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+}
+
+.imprint > span:first-child {
+  font:
+    italic 18px Georgia,
+    serif;
+  letter-spacing: -0.04em;
+}
+
+.imprint > i {
+  width: 28px;
+  height: 1px;
+  background: color-mix(in srgb, var(--prompt-ink) 35%, transparent);
+}
+
+.orbit {
+  position: absolute;
+  top: 65px;
+  left: 31px;
+  width: 245px;
+  height: 145px;
+  transform: rotate(-24deg);
+  border: 1px solid color-mix(in srgb, var(--prompt-gold) 26%, transparent);
+  border-radius: 50%;
+}
+
+.sparkle {
+  position: absolute;
+  top: 73px;
+  left: 241px;
+  color: var(--prompt-gold);
+}
+
+.book {
+  position: absolute;
+  top: 65px;
+  left: 88px;
+  width: 107px;
+  height: 140px;
+  transform: rotate(-12deg);
+  border: 1px solid color-mix(in srgb, var(--prompt-gold) 35%, var(--border));
+  border-radius: 3px 8px 8px 3px;
+  background: repeating-linear-gradient(
+    0deg,
+    var(--prompt-paper) 0 2px,
+    var(--border) 2px 3px
+  );
+  box-shadow: 8px 12px 22px
+    color-mix(in srgb, var(--prompt-ink) 17%, transparent);
+}
+
+.cover {
+  position: absolute;
+  inset: -4px 4px 3px -4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 11px;
+  padding-left: 6px;
+  border-radius: 3px 7px 7px 3px;
+  color: var(--card);
+  background: var(--prompt-ink);
+  box-shadow: inset 6px 0 color-mix(in srgb, var(--foreground) 16%, transparent);
+}
+
+.cover::before {
+  position: absolute;
+  inset: 9px 9px 9px 14px;
+  border: 1px solid color-mix(in srgb, var(--card) 28%, transparent);
+  content: "";
+}
+
+.book-year {
+  font:
+    italic 21px Georgia,
+    serif;
+  letter-spacing: 0.04em;
+}
+
+.book-label {
+  max-width: 74px;
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  text-align: center;
+}
+
+.ribbon {
+  position: absolute;
+  top: -1px;
+  right: 17px;
+  width: 10px;
+  height: 26px;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
+  background: var(--tag-amber);
+}
+
+.year {
+  position: absolute;
+  top: 71px;
+  right: 31px;
+  font:
+    italic 100px/1 Georgia,
+    serif;
+  letter-spacing: -0.08em;
+  color: color-mix(in srgb, var(--prompt-ink) 30%, transparent);
+}
+
+.caption {
+  position: absolute;
+  right: 31px;
+  bottom: 35px;
+  max-width: 230px;
+  color: var(--prompt-ink);
+  font: 11px/1.7 var(--prompt-serif);
+  letter-spacing: 0.08em;
+  text-align: right;
+}
+
+.content {
+  padding: 29px 36px 32px;
+}
+
+.kicker {
+  margin-bottom: 12px;
+  color: var(--prompt-gold);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+
+.title {
+  max-width: 420px;
+  font: 500 25px/1.6 var(--prompt-serif);
+  text-wrap: balance;
+}
+
+.description {
+  margin-top: 12px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  line-height: 1.9;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  margin-top: 26px;
+}
+
+.confirm {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  min-height: 42px;
+  padding: 0 21px;
+  border: 1px solid var(--prompt-ink);
+  border-radius: 7px;
+  color: var(--card);
+  background: var(--prompt-ink);
+  font-size: 12px;
+  transition: opacity 160ms;
+}
+
+.confirm:hover {
+  opacity: 0.86;
+}
+
+.later {
+  padding: 8px 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+.later:hover {
+  color: var(--foreground);
+}
+
+@keyframes veil-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes invitation-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 10px)) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1);
+  }
+}
+
+@media (max-width: 460px) {
+  .art {
+    height: 205px;
+  }
+  .book {
+    left: 47px;
+    top: 66px;
+    width: 88px;
+    height: 116px;
+  }
+  .cover {
+    gap: 6px;
+  }
+  .cover > svg {
+    width: 24px;
+    height: 24px;
+  }
+  .book-year {
+    font-size: 17px;
+  }
+  .ribbon {
+    right: 12px;
+    width: 8px;
+    height: 18px;
+  }
+  .orbit {
+    left: 10px;
+    top: 72px;
+    width: 170px;
+    height: 108px;
+  }
+  .sparkle {
+    left: 170px;
+    top: 67px;
+    width: 16px;
+  }
+  .year {
+    top: 91px;
+    right: 24px;
+    font-size: 62px;
+  }
+  .caption {
+    right: 24px;
+    bottom: 17px;
+    max-width: 160px;
+    font-size: 10px;
+  }
+  .content {
+    padding: 24px;
+  }
+  .title {
+    font-size: 22px;
+  }
+  .actions {
+    gap: 18px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overlay,
+  .dialog {
+    animation: none;
+  }
+  .dialog button {
+    transition: none;
+  }
+}
