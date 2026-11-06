@@ -133,3 +133,38 @@ func TestGetAnnualReportAdaptsErrors(t *testing.T) {
 	require.Zero(t, result.Data)
 	require.Contains(t, result.ErrMsg, "daily writing")
 }
+
+func TestAnnualReportPromptPersistsWithoutChangingOtherSettings(t *testing.T) {
+	a := setupTestApp(t)
+	require.NoError(t, a.SaveUserName("创作者"))
+	before := a.settingsSnapshot()
+	require.Zero(t, before.AnnualReportPromptYear)
+	year := time.Now().Year()
+	require.NoError(t, a.MarkAnnualReportPrompted(year))
+	require.NoError(t, a.MarkAnnualReportPrompted(2026))
+	require.NoError(t, a.SetLastSession("after-report-prompt"))
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	require.Equal(t, year, persisted.AnnualReportPromptYear)
+	require.Equal(t, "创作者", persisted.UserName)
+	require.Equal(t, "after-report-prompt", persisted.LastSessionID)
+	require.Equal(t, before.TrackingStartDate, persisted.TrackingStartDate)
+	require.Equal(t, *persisted, a.settingsSnapshot())
+}
+
+func TestAnnualReportPromptSaveFailurePreservesSettings(t *testing.T) {
+	a := setupTestApp(t)
+	before := a.settingsSnapshot()
+	for _, year := range []int{-1, 0, 2025, time.Now().Year() + 1} {
+		require.Error(t, a.MarkAnnualReportPrompted(year))
+	}
+	require.Equal(t, before, a.settingsSnapshot())
+	require.NoError(t, a.db.Exec(`CREATE TRIGGER reject_report_prompt
+		BEFORE UPDATE OF annual_report_prompt_year ON app_config
+		BEGIN SELECT RAISE(FAIL, 'prompt save failed'); END`).Error)
+	require.ErrorContains(t, a.MarkAnnualReportPrompted(time.Now().Year()), "prompt save failed")
+	require.Equal(t, before, a.settingsSnapshot())
+	persisted, err := config.LoadSettings(a.db)
+	require.NoError(t, err)
+	require.Equal(t, before, *persisted)
+}

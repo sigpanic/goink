@@ -1942,6 +1942,7 @@ export namespace config {
 	    dismissed_version: string;
 	    // Go type: time
 	    last_update_check_at: any;
+	    annual_report_prompt_year: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new AppSettings(source);
@@ -1959,6 +1960,7 @@ export namespace config {
 	        this.git_email = source["git_email"];
 	        this.dismissed_version = source["dismissed_version"];
 	        this.last_update_check_at = this.convertValues(source["last_update_check_at"], null);
+	        this.annual_report_prompt_year = source["annual_report_prompt_year"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

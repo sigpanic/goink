@@ -14,8 +14,19 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/sigpanic/goink/internal/apperr"
+	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/report"
 )
+
+// MarkAnnualReportPrompted 按报告年份记录已展示的提醒，跨年一月仍属于上一份报告。
+func (a *App) MarkAnnualReportPrompted(year int) error {
+	if year < 2026 || year > time.Now().Year() {
+		return fmt.Errorf("report: prompt year must be between 2026 and the current year")
+	}
+	return a.updateSettings(func(s *config.AppSettings) {
+		s.AnnualReportPromptYear = max(s.AnnualReportPromptYear, year)
+	})
+}
 
 // GetAnnualReport 复用领域报告结构，年份校验及统计编排由报告服务负责。
 func (a *App) GetAnnualReport(year int) *apperr.Result[report.AnnualReport] {

@@ -1649,6 +1649,14 @@
     "noWriting": "No writing"
   },
   "annualReport": {
+    "reminderTitle": "Your {{year}} year in review is ready",
+    "reminderNote": "Revisit your creative journey this year. You can also open the report later from your profile.",
+    "reminderBookLabel": "Creative yearbook",
+    "reminderArtNote": "Days spent writing, stories worth keeping",
+    "reminderKicker": "For the stories you brought to life",
+    "viewNow": "Open my yearbook",
+    "viewLater": "Maybe later",
+    "reminderSaveFailed": "The annual report reminder could not be saved. It may appear again next time you start the app.",
     "entryTitle": "Your year in stories",
     "entryNote": "Revisit the days your stories grew",
     "title": "Year in review",
@@ -1656,7 +1664,7 @@
     "saveFailed": "The image could not be saved. Please try again.",
     "invalidYear": "The report year is invalid. Select a valid year no later than the current year.",
     "invalidImage": "The share image is invalid. Generate the poster again.",
-    "back": "Back to profile",
+    "back": "Back",
     "refresh": "Refresh report",
     "author": "Writer",
     "yearLabel": "View year",

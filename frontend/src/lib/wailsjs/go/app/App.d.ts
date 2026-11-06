@@ -226,6 +226,8 @@ export function ListSlashCommands(arg1:app.ListSlashCommandsInput):Promise<Array
 
 export function ListStyleSamples(arg1:app.ListStyleSamplesInput):Promise<storage.PageResult_github_com_sigpanic_goink_internal_style_Sample_>;
 
+export function MarkAnnualReportPrompted(arg1:number):Promise<void>;
+
 export function PickAndImportNovel():Promise<imp.ImportResult>;
 
 export function PlaceChapter(arg1:chapter.PlaceInput):Promise<chapter.Chapter>;

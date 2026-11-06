@@ -30,6 +30,8 @@ import GitHubLink from "@/components/shell/GitHubLink";
 import SettingsDialog from "@/components/settings/SettingsDialog";
 import HelpDialog from "@/components/help/HelpDialog";
 import ProfileView from "@/components/profile/ProfileView";
+import AnnualReportOverlays from "@/components/annual-report/AnnualReportOverlays";
+import { useAnnualReportEntry } from "@/components/annual-report/useAnnualReportEntry";
 import GitCommitView from "@/components/git/GitCommitView";
 import ExtractWorkspaceView from "@/components/extract/ExtractWorkspaceView";
 import UpdateDialog from "@/components/update/UpdateDialog";
@@ -132,7 +134,7 @@ export default function WorkspaceView({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [showSettings, setShowSettings] = useState(false);
-  const [showHelp, setShowHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(!!initialShowHelp);
   const [activeSkillName, setActiveSkillName] = useState<string | null>(null);
   // 3.8 后续：tabTarget/activeContent/isDirty → useEditorStore；
   // selectedGitFile → useGitStore。写方调 getState().setXxx，读方组件自己订阅。
@@ -158,6 +160,9 @@ export default function WorkspaceView({
 
   // ── 更新检查（定时调度与状态封装在 useUpdateCheck）────────────────────────────
   const { updateResult, showUpdate, setShowUpdate } = useUpdateCheck();
+  const annualReport = useAnnualReportEntry(
+    showHelp || showSettings || showUpdate,
+  );
 
   // ── 书籍管理弹窗（state 见 useNovelStore，3.2 外置）──────────────────────────────
 
@@ -389,7 +394,10 @@ export default function WorkspaceView({
           >
             <GitHubLink />
             <button
-              onClick={() => setActivePanel("profile")}
+              onClick={() => {
+                setSidebarClosed(true);
+                setActivePanel("profile");
+              }}
               className={`text-muted-foreground hover:text-foreground transition-colors cursor-pointer w-8 h-8 flex items-center justify-center ml-2 ${activePanel === "profile" ? "text-foreground" : ""}`}
               title={t("workspace.profile")}
             >
@@ -524,7 +532,10 @@ export default function WorkspaceView({
             </ErrorBoundary>
           ) : activePanel === "profile" ? (
             <ErrorBoundary>
-              <ProfileView />
+              <ProfileView
+                reportSeason={annualReport.season}
+                onOpenAnnualReport={annualReport.openReport}
+              />
             </ErrorBoundary>
           ) : null}
 
@@ -570,10 +581,13 @@ export default function WorkspaceView({
         />
 
         <UpdateDialog
-          open={showUpdate}
+          open={
+            showUpdate && !annualReport.reportOpen && !annualReport.promptOpen
+          }
           result={updateResult}
           onClose={() => setShowUpdate(false)}
         />
+        <AnnualReportOverlays entry={annualReport} />
       </div>
     </>
   );
