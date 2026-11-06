@@ -1,4 +1,4 @@
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor } from "@/components/shared/MonacoEditor";
 import { FileCode, FileText } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useThemeStore, type Theme } from "@/stores/useThemeStore";

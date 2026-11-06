@@ -1,5 +1,6 @@
 import { useCallback } from "react";
-import Editor, { type OnMount } from "@monaco-editor/react";
+import type { OnMount } from "@monaco-editor/react";
+import Editor from "@/components/shared/MonacoEditor";
 import { useEditorTabsStore } from "./useEditorTabsStore";
 
 interface Props {

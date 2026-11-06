@@ -36,6 +36,18 @@
     "failed": "失败",
     "listSeparator": "、"
   },
+  "editor": {
+    "loading": "正在加载编辑器...",
+    "loadFailed": "编辑器加载失败",
+    "loadTimeout": "编辑器未能在 15 秒内完成加载。",
+    "recoveryHint": "下方内容为只读，可选中复制。请重试加载编辑器；若仍失败，请先复制未保存的内容，再重启应用。",
+    "copyError": "复制错误详情",
+    "copied": "已复制",
+    "copyFailed": "复制失败，请手动选中并复制错误详情。",
+    "readOnlyContent": "只读内容",
+    "originalContent": "原始内容（只读）",
+    "modifiedContent": "修改后内容（只读）"
+  },
   "time": {
     "justNow": "刚刚",
     "minutesAgo": "{{count}} 分钟前",

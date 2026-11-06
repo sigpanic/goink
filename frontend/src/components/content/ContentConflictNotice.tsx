@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
-import { DiffEditor } from "@monaco-editor/react";
+import { DiffEditor } from "@/components/shared/MonacoEditor";
 import { Loader2, X } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { useThemeStore } from "@/stores/useThemeStore";
