@@ -15,7 +15,10 @@ const ERROR_CODE_I18N: Record<string, string> = {
   "skill.install_conflict": "skill.marketplace.targetChanged",
 };
 
-export function errorCodeMessage(code: string, t: TFunction): string | undefined {
+export function errorCodeMessage(
+  code: string,
+  t: TFunction,
+): string | undefined {
   const key = ERROR_CODE_I18N[code];
   return key ? t(key) : undefined;
 }

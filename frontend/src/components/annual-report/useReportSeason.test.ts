@@ -10,13 +10,11 @@ import {
 vi.mock("@/lib/wailsjs/runtime/runtime", () => ({ Environment: vi.fn() }));
 
 beforeEach(() => {
-  vi.mocked(Environment)
-    .mockReset()
-    .mockResolvedValue({
-      buildType: "production",
-      platform: "linux",
-      arch: "amd64",
-    });
+  vi.mocked(Environment).mockReset().mockResolvedValue({
+    buildType: "production",
+    platform: "linux",
+    arch: "amd64",
+  });
 });
 
 afterEach(() => {
