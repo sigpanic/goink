@@ -12,19 +12,19 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
 type Fixture struct {
-	Tag            string            `json:"tag"`
-	Commit         string            `json:"commit"`
-	Origin         string            `json:"origin"`
-	Archive        string            `json:"archive"`
-	SHA256         string            `json:"sha256"`
-	WritingAdded   int               `json:"writing_added"`
-	WritingDeleted int               `json:"writing_deleted"`
-	LegacyChapters bool              `json:"legacy_chapters"`
-	GitHeads       map[string]string `json:"git_heads"`
+	Tag         string            `json:"tag"`
+	Commit      string            `json:"commit"`
+	Origin      string            `json:"origin"`
+	Archive     string            `json:"archive"`
+	SHA256      string            `json:"sha256"`
+	CaseIDs     []string          `json:"case_ids"`
+	InputSHA256 string            `json:"input_sha256"`
+	GitHeads    map[string]string `json:"git_heads"`
 }
 
 type Manifest struct {
@@ -42,7 +42,7 @@ func Load(dir string) (*Manifest, error) {
 	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, err
 	}
-	if m.Format != 1 || m.Generator != 1 || len(m.Fixtures) == 0 {
+	if m.Format != 1 || m.Generator != 2 || len(m.Fixtures) == 0 {
 		return nil, fmt.Errorf("unsupported or empty historical manifest")
 	}
 	seen := map[string]bool{}
@@ -50,15 +50,30 @@ func Load(dir string) (*Manifest, error) {
 		if seen[f.Archive] || filepath.Base(f.Archive) != f.Archive || !strings.HasSuffix(f.Archive, ".zip") ||
 			!SupportedTag(f.Tag) ||
 			(f.Origin != "fresh" && f.Origin != "from-v1.0.0") ||
-			!regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(f.Commit) ||
-			f.WritingAdded < 0 || f.WritingDeleted < 0 {
+			!regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(f.Commit) {
 			return nil, fmt.Errorf("invalid fixture metadata: %s", f.Archive)
 		}
 		seen[f.Archive] = true
-		for _, novel := range []string{"1", "2"} {
+		if err := ValidateSeed(f); err != nil {
+			return nil, err
+		}
+		input, err := BuildSeed(f.CaseIDs)
+		if err != nil {
+			return nil, err
+		}
+		novelCount := 0
+		for _, row := range input.Rows {
+			if row.Table != "novels" {
+				continue
+			}
+			novelCount++
+			novel := strconv.FormatFloat(row.Values["id"].(float64), 'f', 0, 64)
 			if !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(f.GitHeads[novel]) {
 				return nil, fmt.Errorf("missing historical Git head: %s/%s", f.Archive, novel)
 			}
+		}
+		if len(f.GitHeads) == 0 || len(f.GitHeads) != novelCount {
+			return nil, fmt.Errorf("missing historical Git heads: %s", f.Archive)
 		}
 		hash, err := Hash(filepath.Join(dir, f.Archive))
 		if err != nil {
