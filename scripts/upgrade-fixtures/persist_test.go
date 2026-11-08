@@ -161,7 +161,7 @@ func fixtureOutput(t *testing.T) (string, string, string, manifest, fixture) {
 	if err := os.WriteFile(filepath.Join(source, "novel-agent.db"), []byte("synthetic data"), 0644); err != nil {
 		t.Fatal(err)
 	}
-	m := manifest{Format: 1, Generator: 1}
+	m := manifest{Format: 1, Generator: 2}
 	data, err := json.Marshal(m)
 	if err != nil {
 		t.Fatal(err)
@@ -174,6 +174,14 @@ func fixtureOutput(t *testing.T) (string, string, string, manifest, fixture) {
 		Tag: "v1.0.0", Origin: "fresh", Archive: "v1.0.0-fresh.zip",
 		Commit:   strings.Repeat("a", 40),
 		GitHeads: map[string]string{"1": strings.Repeat("b", 40), "2": strings.Repeat("c", 40)},
+	}
+	sample.CaseIDs, err = fixturedata.SeedIDs(sample.Tag, sample.Origin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sample.InputSHA256, err = fixturedata.SeedHash(sample.CaseIDs)
+	if err != nil {
+		t.Fatal(err)
 	}
 	return dir, source, path, m, sample
 }
