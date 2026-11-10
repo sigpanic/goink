@@ -1,13 +1,14 @@
 package web_test
 
 import (
+	"context"
 	"fmt"
 	"github.com/sigpanic/goink/internal/web"
 	"testing"
 )
 
 func TestFetch(t *testing.T) {
-	result, err := web.Fetch("https://api-docs.deepseek.com/")
+	result, err := web.Fetch(context.Background(), "https://api-docs.deepseek.com/")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@ package web
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net/http"
@@ -132,7 +133,7 @@ func TestRealWorldSites(t *testing.T) {
 
 // fetchRaw 发送 GET 请求并返回原始 response（不做内容提取），用于测试分析。
 func fetchRaw(rawURL string) (*http.Response, error) {
-	u, err := parseAndValidate(rawURL)
+	u, err := parseAndValidate(context.Background(), rawURL)
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +145,7 @@ func fetchRaw(rawURL string) (*http.Response, error) {
 			if len(via) >= 5 {
 				return fmt.Errorf("重定向次数过多")
 			}
-			if err := validateHost(req.URL.Host); err != nil {
+			if err := validateHost(req.Context(), req.URL.Host); err != nil {
 				return fmt.Errorf("重定向目标不安全: %w", err)
 			}
 			return nil
