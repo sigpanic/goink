@@ -15,11 +15,13 @@ type SearchResult struct {
 }
 
 type SearchItem struct {
-	Title     string `json:"title"`
-	URL       string `json:"url"`
-	Summary   string `json:"summary"`
-	Date      string `json:"date,omitempty"`
-	Truncated bool   `json:"truncated"`
+	Title       string   `json:"title"`
+	URL         string   `json:"url"`
+	Summary     string   `json:"summary"`
+	Date        string   `json:"date,omitempty"`
+	Truncated   bool     `json:"truncated"`
+	Authority   *int     `json:"authority,omitempty"`
+	RerankScore *float64 `json:"rerank_score,omitempty"`
 }
 
 // FetchResult 是网页抓取结果。

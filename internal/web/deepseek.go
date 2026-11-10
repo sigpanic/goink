@@ -75,6 +75,9 @@ func (c *DeepSeekClient) Search(ctx context.Context, query string) (*SearchResul
 		if strings.TrimSpace(item.Summary) == "" {
 			item.Summary = item.Snippet
 		}
+		if item.Authority != nil && *item.Authority == -1 {
+			item.Authority = nil
+		}
 		result.Results = append(result.Results, item.SearchItem)
 	}
 	truncateSearchSummaries(result.Results)

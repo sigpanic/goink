@@ -35,9 +35,10 @@ func TestWebSearchToolUsesInjectedSearcher(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	reg := testMCPRegistry(t, &WebSearchTool{})
+	authority, score := 3, 2.4
 	for _, items := range [][]web.SearchItem{
 		{},
-		{{Title: "来源", URL: "https://example.com", Summary: "摘要", Date: "2026-11-01T00:00:00Z", Truncated: true}},
+		{{Title: "来源", URL: "https://example.com", Summary: "摘要", Date: "2026-11-01T00:00:00Z", Truncated: true, Authority: &authority, RerankScore: &score}},
 	} {
 		calls := 0
 		result := reg.Execute(ctx, "web_search", []byte(`{"query":"如何查询资料"}`), ToolContext{
@@ -53,6 +54,12 @@ func TestWebSearchToolUsesInjectedSearcher(t *testing.T) {
 		require.Equal(t, "如何查询资料", result.Data["query"])
 		require.Equal(t, items, result.Data["results"])
 		require.NotContains(t, result.Data, "summary")
+		if len(items) != 0 {
+			encoded, err := json.Marshal(result.Data)
+			require.NoError(t, err)
+			require.Contains(t, string(encoded), `"authority":3`)
+			require.Contains(t, string(encoded), `"rerank_score":2.4`)
+		}
 	}
 }
 

@@ -42,7 +42,7 @@ func TestDeepSeekSearch(t *testing.T) {
 			t.Fatalf("unexpected search payload: %#v", payload)
 		}
 		data, _ := json.Marshal(map[string]any{"results": []map[string]any{
-			{"title": "来源一", "url": "https://example.com/one", "summary": summary, "snippet": "短预览", "date": "2026-11-01T00:00:00Z", "authority": 3, "unknown": true},
+			{"title": "来源一", "url": "https://example.com/one", "summary": summary, "snippet": "短预览", "date": "2026-11-01T00:00:00Z", "authority": 3, "rerank_score": 2.4, "unknown": true},
 			{"title": "来源二", "url": "https://example.com/two", "summary": "  ", "snippet": "回退摘要", "date": nil},
 		}})
 		return webJSONResponse(http.StatusOK, string(data)), nil
@@ -57,11 +57,49 @@ func TestDeepSeekSearch(t *testing.T) {
 	if result.Results[0].Summary != summary || result.Results[0].Date != "2026-11-01T00:00:00Z" || result.Results[1].Summary != "回退摘要" || result.Results[1].Date != "" {
 		t.Fatalf("search fields were not preserved: %+v", result)
 	}
+	first := result.Results[0]
+	if first.Authority == nil || *first.Authority != 3 || first.RerankScore == nil || *first.RerankScore != 2.4 {
+		t.Fatalf("search scores were not preserved: %+v", first)
+	}
 	encoded, _ := json.Marshal(result)
-	for _, field := range []string{`"snippet"`, `"authority"`, `"unknown"`, `"content"`} {
+	for _, field := range []string{`"snippet"`, `"unknown"`, `"content"`} {
 		if strings.Contains(string(encoded), field) {
 			t.Fatalf("result leaked unused field %s", field)
 		}
+	}
+}
+
+func TestDeepSeekSearchOptionalScores(t *testing.T) {
+	for _, tc := range []struct {
+		name, fields string
+		zeroScores   bool
+	}{
+		{"zero scores", `,"authority":0,"rerank_score":0`, true},
+		{"unknown authority", `,"authority":-1`, false},
+		{"missing scores", "", false},
+		{"null scores", `,"authority":null,"rerank_score":null`, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := NewDeepSeekClient("test-key", &http.Client{Transport: webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				return webJSONResponse(http.StatusOK, `{"results":[{"title":"来源","url":"https://example.com","summary":"摘要"`+tc.fields+`}]}`), nil
+			})})
+			result, err := client.Search(context.Background(), "查询")
+			if err != nil {
+				t.Fatal(err)
+			}
+			item := result.Results[0]
+			encoded, err := json.Marshal(item)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tc.zeroScores {
+				if item.Authority == nil || *item.Authority != 0 || item.RerankScore == nil || *item.RerankScore != 0 || !strings.Contains(string(encoded), `"authority":0`) || !strings.Contains(string(encoded), `"rerank_score":0`) {
+					t.Fatalf("zero scores were treated as missing: %s", encoded)
+				}
+			} else if item.Authority != nil || item.RerankScore != nil || strings.Contains(string(encoded), `"authority"`) || strings.Contains(string(encoded), `"rerank_score"`) {
+				t.Fatalf("unknown scores should be omitted: %s", encoded)
+			}
+		})
 	}
 }
 
