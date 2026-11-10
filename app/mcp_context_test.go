@@ -3,20 +3,77 @@ package app
 import (
 	"context"
 	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/sigpanic/goink/internal/git"
+	"github.com/sigpanic/goink/internal/llm"
+	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/mcpclient"
 	"github.com/sigpanic/goink/internal/mcpclient/clientcfg"
 	"github.com/sigpanic/goink/internal/mcpserver"
 	"github.com/sigpanic/goink/internal/search"
+	"github.com/sigpanic/goink/internal/web"
 	"github.com/stretchr/testify/require"
 )
 
 type mcpContextKey string
+
+type mcpWebTransport func(*http.Request) (*http.Response, error)
+
+func (f mcpWebTransport) RoundTrip(req *http.Request) (*http.Response, error) { return f(req) }
+
+func TestMCPWebToolsLoadCurrentConfiguration(t *testing.T) {
+	a := &App{}
+	_, tc := a.mcpToolContext(context.Background())
+	require.Nil(t, tc.WebSearch)
+	require.Nil(t, tc.RemoteFetch)
+	client, err := llm.NewClient(&llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{}}, slog.New(slog.NewTextHandler(io.Discard, nil)))
+	require.NoError(t, err)
+	a.llmClient = client
+	previous := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	for _, key := range []string{"first-key", "updated-key"} {
+		require.NoError(t, client.Reload(&llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{
+			adapter.ProtocolOpenAIChat: {Providers: []adapter.Provider{{Name: "DeepSeek", APIKey: key}}},
+		}}))
+		request, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, tc := a.mcpToolContext(request)
+		require.IsType(t, &web.DeepSeekClient{}, tc.WebSearch)
+		require.Same(t, tc.WebSearch, tc.RemoteFetch)
+		calls := 0
+		http.DefaultTransport = mcpWebTransport(func(req *http.Request) (*http.Response, error) {
+			calls++
+			require.Equal(t, "api.deepseek.com", req.URL.Host)
+			require.Equal(t, "Bearer "+key, req.Header.Get("Authorization"))
+			deadline, ok := req.Context().Deadline()
+			require.True(t, ok)
+			wantDeadline, _ := request.Deadline()
+			require.Equal(t, wantDeadline, deadline)
+			body := `{"results":[]}`
+			if req.URL.Path == "/v1/tools/fetch" {
+				body = `{"title":"来源","content":"正文"}`
+			} else {
+				require.Equal(t, "/v1/tools/search", req.URL.Path)
+			}
+			return &http.Response{StatusCode: http.StatusOK, Header: make(http.Header), Body: io.NopCloser(strings.NewReader(body))}, nil
+		})
+		_, err = tc.WebSearch.Search(ctx, "查询")
+		require.NoError(t, err)
+		_, err = tc.RemoteFetch.Fetch(ctx, "https://example.com/article")
+		require.NoError(t, err)
+		require.Equal(t, 2, calls)
+		cancel()
+	}
+	require.NoError(t, client.Reload(&llm.UserLLMConfig{Version: llm.ConfigVersion, Adapters: map[adapter.Protocol]llm.AdapterConfig{}}))
+	_, tc = a.mcpToolContext(context.Background())
+	require.Nil(t, tc.WebSearch)
+	require.Nil(t, tc.RemoteFetch)
+}
 
 func TestMCPToolContextPreservesRequestLifetimeAndLoadsDependencies(t *testing.T) {
 	a := setupTestApp(t)
@@ -39,8 +96,8 @@ func TestMCPToolContextPreservesRequestLifetimeAndLoadsDependencies(t *testing.T
 	ctx, tc = a.mcpToolContext(context.WithValue(request, key, "request"))
 	require.Equal(t, "request", ctx.Value(key))
 	require.Same(t, svc, tc.SearchService)
-	_, err := tc.WebSearch(ctx, "查询")
-	require.ErrorContains(t, err, "API key 未配置")
+	require.Nil(t, tc.WebSearch)
+	require.Nil(t, tc.RemoteFetch)
 	cancel()
 	require.ErrorIs(t, ctx.Err(), context.Canceled)
 	select {
