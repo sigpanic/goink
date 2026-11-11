@@ -17,10 +17,16 @@ PR 标题用英文，描述用中文；commit message 保持英文不动。来�
 - `git status`：有未提交改动就先停下，让用户决定是否先处理，不要自行 stash / commit
 - `gh pr list --base <base> --head <head> --state open`：已存在打开的 PR 就报告并停止，不要重复创建
 
-## 2. 同步远端（需授权）
+## 2. 同步远端（命令交给用户执行）
 
-- 先说明再执行 `git fetch origin`，避免用过期 ref 作为对比基线
-- `git log --oneline HEAD..origin/<base>` 非空说明 head 分支落后，需要 `git merge origin/<base>`（冲突交给用户确认后再解决）
+- 用只读方式确认基线：`git ls-remote origin refs/heads/<base> refs/heads/<head>`，必要时再说明后执行 `git fetch origin`
+- `git log --oneline HEAD..origin/<base>` 非空说明 head 落后 base。此时**不要自行执行 `git merge`**，把具体命令交给用户自行执行：
+
+  ```
+  cd <当前工作区根目录> && git fetch origin && git merge origin/<base>
+  ```
+
+- 把落后情况（领先/落后提交数、是否会因三点 diff 出现无关删除行）在**会话中**告知用户，等待用户确认已合并完成后再继续
 - 禁止 `git rebase`、禁止 force push
 
 ## 3. 读取全部领先提交
@@ -44,19 +50,24 @@ PR 标题用英文，描述用中文；commit message 保持英文不动。来�
 - （按模块或主题归类，每条结论必须能追溯到某个 commit body 或 diff）
 
 ## 验证
-- （实际跑过的 build / test / lint / 手工验证；没跑就如实写「未运行」，不要编造）
+- （项目层面真实的验证结论，例如「新增的 mock 测试覆盖了 X」「CI 已通过」；没有任何可写的事实时整节省略，不要编造）
 
 ## 备注
-- （已知限制、风险、有意保留的取舍、后续计划；没有可省略）
+- （合并后仍然存在的限制、风险、有意保留的取舍、后续计划；没有可省略）
 
 Refs #NN
 ```
 
 写作要求：
 
+- PR 正文是**面向公众的项目文档**，只客观描述这个 PR 改了什么、为什么改，不写会话过程、工作汇报或与用户沟通的记录
 - 把多个提交归纳成主题，不要逐条复述 commit 列表；但设计取舍、限制、风险要取自 commit body
-- 区分「修复 base 分支上已存在的问题」与「head 分支开发过程中的内部迭代」，后者通常不该作为 PR 亮点
+- 区分「修复 base 分支上已存在的问题」与「head 分支开发过程中的内部迭代」，后者通常不该作为 PR 亮点；已被本 PR 后续提交修好的中间态也不要写进正文
 - 只写 commit body 与 diff 能支撑的事实，不臆造动机或验证结果
+- 严禁出现的表述（这些问题只在会话里告诉用户，绝不写进 PR）：
+  - 起草过程与工具状态：「本次起草阶段未重新运行 build/test/lint」「起草时已指出」「已在实际起草时说明」
+  - 分支同步状况：「head 落后 base N 个提交」「合并前需先同步 master」「三点 diff 会出现无关删除行」
+  - 对用户的工作交代：「建议先…」「需要你确认…」「后续待办」等面向个人的措辞
 
 ## 5. 等用户 review
 
@@ -81,7 +92,8 @@ Refs #NN
 
 ## 禁止事项
 
-- 不 squash、不 rebase、不 force push，不删除分支
+- 不 squash、不 rebase、不 force push，不删除分支；不自行执行 `git merge origin/<base>`，同步命令交给用户
+- 不把会话过程、起草状态、分支同步情况或对用户的工作交代写进 PR 标题与正文
 - 不擅自 `gh pr merge`；用户要求合并时按 `.trae/rules/worktree协作流程.md` 用 `gh pr merge <head> --merge`，并在合并前再次确认
 - 不擅自发布 PR 评论、review 或修改 PR 内容
 - 为写 PR 描述不修改任何代码
