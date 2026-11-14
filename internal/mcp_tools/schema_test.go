@@ -7,8 +7,21 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/sigpanic/goink/internal/mcp_tools"
 )
+
+func TestEditSchemaRequiresNewContentString(t *testing.T) {
+	var schema struct {
+		Required   []string                  `json:"required"`
+		Properties map[string]map[string]any `json:"properties"`
+	}
+	require.NoError(t, json.Unmarshal((&mcp_tools.EditTool{}).JSONSchema(), &schema))
+	require.Contains(t, schema.Required, "new_content")
+	require.Equal(t, "string", schema.Properties["new_content"]["type"])
+	require.NotContains(t, schema.Properties["new_content"], "minLength")
+}
 
 // ── 单元测试：SchemaOf 内联切片元素 ──────────────────────────
 

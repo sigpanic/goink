@@ -26,15 +26,15 @@ import (
 
 // EditArgs 是 edit 工具的参数。
 type EditArgs struct {
-	Path       string `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；卷纲：volumes/id_{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
-	ChangeType string `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
-	SearchText string `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
-	NewContent string `json:"new_content" jsonschema:"description=新内容。full_replace 时为完整全文（必填，传空会报错；若要清空整个文件请改用 line_range_replace(1, total_lines, \"\")，total_lines 从 read 返回获取）；search_replace 时为替换后的文本（传空则删除匹配到的文本）；line_range_replace 时为替换该行范围的新内容（传空则删除该范围行）" validate:"omitempty"`
-	ReplaceAll bool   `json:"replace_all" jsonschema:"description=是否替换所有匹配项。默认 false（仅替换第一个匹配）" validate:"omitempty"`
-	StartLine  int    `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
-	EndLine    int    `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
-	Reason     string `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
-	Title      string `json:"title" jsonschema:"description=章节标题。new.md 新建时可选；对已有章节/大纲传入时覆盖原标题（chapters/ 与 outlines/ 路径均生效）" validate:"omitempty"`
+	Path       string  `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；卷纲：volumes/id_{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
+	ChangeType string  `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
+	SearchText string  `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
+	NewContent *string `json:"new_content" jsonschema:"required,description=必填的新内容，不可省略或传 null。full_replace 时为完整全文（空字符串表示清空全文）；search_replace 时为替换后的文本（空字符串表示删除匹配文本）；line_range_replace 时为替换该行范围的新内容（空字符串表示删除该范围行）" validate:"required"`
+	ReplaceAll bool    `json:"replace_all" jsonschema:"description=是否替换所有匹配项。默认 false（仅替换第一个匹配）" validate:"omitempty"`
+	StartLine  int     `json:"start_line" jsonschema:"description=起始行号 1-based 含此行（line_range_replace 时必填），必须 <= end_line" validate:"omitempty,min=1"`
+	EndLine    int     `json:"end_line" jsonschema:"description=结束行号 1-based 含此行（line_range_replace 时必填）" validate:"omitempty,min=1"`
+	Reason     string  `json:"reason" jsonschema:"required,description=必填。本次修改的原因/意图，供作者审批参考" validate:"required"`
+	Title      string  `json:"title" jsonschema:"description=章节标题。new.md 新建时可选；对已有章节/大纲传入时覆盖原标题（chapters/ 与 outlines/ 路径均生效）" validate:"omitempty"`
 }
 
 // EditTool 编辑文件（章节或故事状态），支持全文替换、查找替换、行范围替换。
@@ -248,7 +248,7 @@ func (t *EditTool) editPlainFile(ctx context.Context, a *EditArgs, tc ToolContex
 		"approved":    true,
 	}
 	if a.ChangeType == "line_range_replace" {
-		afterEnd := a.StartLine + strings.Count(a.NewContent, "\n")
+		afterEnd := a.StartLine + strings.Count(*a.NewContent, "\n")
 		data["before"] = linePreview(current, a.StartLine, a.EndLine)
 		data["after"] = linePreview(proposed, a.StartLine, afterEnd)
 	}
@@ -330,7 +330,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	if err != nil {
 		return &ToolResult{Success: false, Error: fmt.Sprintf("编辑操作失败: %s", err.Error())}, nil
 	}
-	if proposed == current {
+	if !ref.IsNew && proposed == current {
 		// 内容未变：title 有变化时仍执行标题更新，否则直接跳过
 		if !ref.IsNew && a.Title != "" && ch.Title != a.Title {
 			if err := chStore.UpdateTitle(ctx, nil, tc.NovelID, ch.ID, a.Title); err != nil {
@@ -458,7 +458,7 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 		})
 	}
 	if a.ChangeType == "line_range_replace" {
-		afterEnd := a.StartLine + strings.Count(a.NewContent, "\n")
+		afterEnd := a.StartLine + strings.Count(*a.NewContent, "\n")
 		data["before"] = linePreview(current, a.StartLine, a.EndLine)
 		data["after"] = linePreview(proposed, a.StartLine, afterEnd)
 	}
@@ -505,16 +505,13 @@ func linePreview(content string, start, end int) string {
 func applyChange(a *EditArgs, current string) (string, error) {
 	switch a.ChangeType {
 	case "full_replace":
-		if a.NewContent == "" {
-			return "", fmt.Errorf("full_replace 模式需要提供 new_content；若要清空整个文件请用 line_range_replace(1, 总行数, \"\")")
-		}
-		return a.NewContent, nil
+		return *a.NewContent, nil
 
 	case "search_replace":
 		if a.SearchText == "" {
 			return "", fmt.Errorf("search_replace 模式需要提供 search_text")
 		}
-		result, found, hint := searchReplace(current, a.SearchText, a.NewContent, a.ReplaceAll)
+		result, found, hint := searchReplace(current, a.SearchText, *a.NewContent, a.ReplaceAll)
 		if !found {
 			if hint != "" {
 				return "", fmt.Errorf("%s", hint)
@@ -530,7 +527,7 @@ func applyChange(a *EditArgs, current string) (string, error) {
 		if a.StartLine > a.EndLine {
 			return "", fmt.Errorf("start_line 不能大于 end_line")
 		}
-		return lineRangeReplace(current, a.StartLine, a.EndLine, a.NewContent)
+		return lineRangeReplace(current, a.StartLine, a.EndLine, *a.NewContent)
 
 	default:
 		return "", fmt.Errorf("未知的 change_type: %s", a.ChangeType)
@@ -800,8 +797,7 @@ const editDescription = `编辑小说文件（章节正文、大纲、卷纲、�
 - full_replace：new_content
 - search_replace：search_text + new_content
 - line_range_replace：start_line + end_line + new_content
-所有模式都必填：path、change_type、reason
-（new_content 传空的具体行为见 new_content 参数说明）
+所有模式都必填：path、change_type、reason、new_content
 
 模式选择策略：
 - search_replace 连续两次因"未找到匹配"失败，直接换 line_range_replace，不要在同一种模式上反复重试

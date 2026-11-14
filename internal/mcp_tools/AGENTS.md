@@ -20,6 +20,7 @@
 
 - 参数不合法、资源不存在、状态冲突等预期业务分支：返回 `&ToolResult{Success: false, Error: "..."}, nil`，错误消息使用中文。消息只说明已知的业务结论；不要附带驱动或网络的原始错误。
 - 数据库、磁盘、网络等意外依赖异常：返回包装后的 error，例如 `fmt.Errorf("context: %w", err)`，交给 `Registry.Execute` 兜底。若已发生部分操作，包装错误时必须先说明已确认状态，例如 `fmt.Errorf("正文已回退，标题未更新: %w", err)`。
+- 业务与系统的判定标准：原样重试同一个请求会成功属于 system；必须换输入、换来源或改配置才可能成功属于 business。依据是 `ErrKind` 只驱动中断策略，system 连续失败会中断对话，因此只有重试可能恢复或自身依赖/代码故障才归 system。
 - `Registry.Execute` 会把所有返回给 LLM 的错误文本压成单行并限制为最多 300 字符；业务/参数 `ToolResult.Error` 只保留其原文摘要，system error 还会保留完整日志并以 `ErrKindSystem` 返回“状态 + 原因”。工具不要自行截断或手工构造 system `ToolResult`。
 - 不要在工具中 `recover()`；只有需要把 `gorm.ErrRecordNotFound` 转成业务错误时才在工具内处理。
 

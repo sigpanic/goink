@@ -199,7 +199,8 @@ func TestReadCatalogRejectsInvalidPathsAndEdit(t *testing.T) {
 		})
 	}
 	for _, path := range []string{"mcp/index.md", "mcp/schemas/get_volumes.json"} {
-		raw, err := json.Marshal(EditArgs{Path: path, ChangeType: "full_replace", NewContent: "修改", Reason: "测试"})
+		content := "修改"
+		raw, err := json.Marshal(EditArgs{Path: path, ChangeType: "full_replace", NewContent: &content, Reason: "测试"})
 		require.NoError(t, err)
 		result := r.Execute(context.Background(), "edit", raw, ToolContext{}, agentcfg.Allowlist(agentcfg.MainAgent))
 		require.False(t, result.Success)

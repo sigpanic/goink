@@ -1,22 +1,37 @@
 .fetch-card {
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  width: 100%;
+  max-width: min(100%, 42rem);
+  min-width: 0;
+  margin: 0.25rem 0;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--tool-green-border);
+  border-radius: var(--radius-lg);
+  background: var(--card);
+  color: var(--card-foreground);
   font-size: 0.75rem;
-  max-width: 85%;
-  border-left: 3px solid oklch(0.5 0.15 155);
-  background: oklch(0.97 0.02 155);
-  opacity: 0.85;
+  box-shadow: 0 2px 6px color-mix(in oklab, var(--foreground) 4%, transparent);
 }
 
 .fetch-card-row {
   display: flex;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0.35rem 0.5rem 0.35rem 0.6rem;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in oklab, var(--tool-green) 55%, var(--card));
 }
 
 .fetch-card-icon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: var(--radius-sm);
+  background: color-mix(in oklab, var(--tool-green-border) 10%, transparent);
   flex-shrink: 0;
-  color: oklch(0.5 0.15 155);
+  color: var(--tool-green-border);
 }
 
 .fetch-card-label {
@@ -25,16 +40,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: oklch(0.5 0 0);
-  line-height: 1.35;
+  color: var(--foreground);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .fetch-card-badge {
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
-  gap: 0.2rem;
-  padding: 0.1rem 0.4rem;
+  gap: 0.25rem;
+  padding: 0.18rem 0.45rem;
   border-radius: 999px;
   font-size: 0.65rem;
   font-weight: 500;
@@ -42,29 +59,48 @@
 
 .fetch-card-badge-done {
   color: var(--tool-green-border);
-  background: var(--tool-green);
+  background: color-mix(in oklab, var(--tool-green-border) 10%, transparent);
+}
+
+.fetch-card-badge-mode {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}
+
+.fetch-card-truncated {
+  display: inline-flex;
+  margin-top: 0.55rem;
+  padding: 0.12rem 0.4rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.65rem;
+  color: var(--tool-amber-border);
+  background: color-mix(in oklab, var(--tool-amber-border) 10%, transparent);
 }
 
 /* ── meta (title + url) ── */
 .fetch-card-meta {
-  padding: 0.2rem 0.6rem 0.35rem;
+  padding: 0.85rem;
 }
 
 .fetch-card-title-line {
   display: flex;
   align-items: flex-start;
-  gap: 0.35rem;
+  gap: 0.6rem;
 }
 
 .fetch-card-title {
   flex: 1;
   min-width: 0;
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: oklch(0.3 0 0);
+  font-size: 0.85rem;
+  font-weight: 550;
+  line-height: 1.5;
+  color: var(--foreground);
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow-wrap: anywhere;
 }
 
 .fetch-card-ext-btn {
@@ -72,12 +108,12 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 1.4rem;
-  height: 1.4rem;
-  border: none;
+  width: 1.65rem;
+  height: 1.65rem;
+  border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: oklch(0.45 0 0);
+  color: var(--muted-foreground);
   cursor: pointer;
   transition:
     background 0.15s ease,
@@ -85,50 +121,68 @@
 }
 
 .fetch-card-ext-btn:hover {
-  background: oklch(0.94 0.02 240);
-  color: oklch(0.55 0.15 240);
+  background: var(--muted);
+  color: var(--foreground);
 }
 
 .fetch-card-url {
   display: block;
-  font-size: 0.62rem;
-  color: oklch(0.45 0 0);
+  font-size: 0.68rem;
+  color: var(--muted-foreground);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-top: 0.15rem;
+  margin-top: 0.3rem;
 }
 
 /* ── content ── */
 .fetch-card-content {
-  border-top: 1px solid oklch(0.85 0.01 0);
+  border-top: 1px solid var(--border);
 }
 
 .fetch-card-content-toggle {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 0.4rem;
   width: 100%;
-  padding: 0.35rem 0.6rem;
+  padding: 0.65rem 0.85rem;
   border: none;
-  background: none;
+  background: color-mix(in oklab, var(--muted) 25%, var(--card));
   cursor: pointer;
-  font-size: 0.7rem;
+  font-size: 0.75rem;
   font-weight: 500;
-  color: oklch(0.4 0 0);
+  color: var(--muted-foreground);
   transition: color 0.15s ease;
 }
 
 .fetch-card-content-toggle:hover {
-  color: oklch(0.55 0.15 240);
+  color: var(--foreground);
+  background: var(--muted);
+}
+
+.fetch-card-ext-btn:focus-visible,
+.fetch-card-content-toggle:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -3px;
+  border-radius: var(--radius-sm);
 }
 
 .fetch-card-content-body {
-  padding: 0.2rem 0.6rem 0.5rem;
+  padding: 0.85rem;
   max-height: 20rem;
   overflow-y: auto;
+  overflow-wrap: anywhere;
 }
 
 .fetch-card-content-body .prose {
-  font-size: 0.72rem;
+  font-size: 0.78rem;
+  line-height: 1.75;
+}
+
+.fetch-card-content-body .prose > :first-child {
+  margin-top: 0;
+}
+
+.fetch-card-content-body .prose > :last-child {
+  margin-bottom: 0;
 }

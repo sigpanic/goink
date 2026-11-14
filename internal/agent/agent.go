@@ -26,6 +26,7 @@ import (
 	"github.com/sigpanic/goink/internal/session"
 	"github.com/sigpanic/goink/internal/skill"
 	"github.com/sigpanic/goink/internal/storage"
+	"github.com/sigpanic/goink/internal/web"
 )
 
 // Agent 是对话编排核心，持有运行所需的所有基础设施。
@@ -349,6 +350,7 @@ func (a *Agent) run(
 						Metadata: display.Metadata, Timestamp: time.Now(),
 					})
 
+					webSearch, remoteFetch := a.buildWebTools()
 					tc := mcp_tools.ToolContext{
 						DB:       a.db,
 						NovelID:  opts.NovelID,
@@ -370,7 +372,8 @@ func (a *Agent) run(
 						},
 						SkillStore:    a.skillStore,
 						SearchService: a.searchService.Load(),
-						WebSearch:     a.buildWebSearch(),
+						WebSearch:     webSearch,
+						RemoteFetch:   remoteFetch,
 						Logger:        a.logger,
 					}
 					result := a.registry.Execute(ctx, name, rawArgs, tc, opts.AllowedTools)
@@ -746,17 +749,18 @@ func displayPhase(phase string) mcp_tools.DisplayPhase {
 	return mcp_tools.PhaseCompleted
 }
 
-// buildWebSearch 构建 WebSearch 闭包，从当前 providers 中读取 DeepSeek 配置。
-func (a *Agent) buildWebSearch() func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
+// buildWebTools 从当前 providers 中读取 DeepSeek 配置，注入搜索和远程抓取能力。
+func (a *Agent) buildWebTools() (web.Searcher, web.Fetcher) {
+	if a.llm == nil {
+		return nil, nil
+	}
 	providers := a.llm.Providers()
 	ds, ok := providers[adapter.ProtocolOpenAIChat]["DeepSeek"]
-	if !ok || ds.APIKey == "" {
-		return nil
+	if !ok || strings.TrimSpace(ds.APIKey) == "" {
+		return nil, nil
 	}
-	apiKey := ds.APIKey
-	return func(ctx context.Context, query string) (*llm.WebSearchResult, error) {
-		return llm.SearchWeb(ctx, apiKey, "", query)
-	}
+	client := web.NewDeepSeekClient(ds.APIKey, nil)
+	return client, client
 }
 
 // extraJSON 将 map 序列化为 JSON 字符串存入 ExtraMetadata。
