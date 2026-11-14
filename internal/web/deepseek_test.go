@@ -178,13 +178,17 @@ func TestDeepSeekInputValidation(t *testing.T) {
 		return webJSONResponse(http.StatusOK, `{"results":[]}`), nil
 	})})
 	for _, query := range []string{"", " \t\n", strings.Repeat("中", 129)} {
-		if _, err := client.Search(context.Background(), query); err == nil {
-			t.Errorf("expected invalid query: %q", query)
+		_, err := client.Search(context.Background(), query)
+		var businessErr *BusinessError
+		if !errors.As(err, &businessErr) || businessErr.Source != SourceDeepSeek || businessErr.HTTPCode != 0 || businessErr.APICode != "" {
+			t.Errorf("invalid query should be a DeepSeek business error: query=%q err=%v", query, err)
 		}
 	}
 	for _, rawURL := range []string{"", "file:///etc/passwd", "https:///article", "https://user:pass@example.com/", "https://example.com/" + strings.Repeat("a", 8192)} {
-		if _, err := client.Fetch(context.Background(), rawURL); err == nil {
-			t.Errorf("expected invalid URL: %q", rawURL)
+		_, err := client.Fetch(context.Background(), rawURL)
+		var businessErr *BusinessError
+		if !errors.As(err, &businessErr) || businessErr.Source != SourceDeepSeek || businessErr.HTTPCode != 0 || businessErr.APICode != "" {
+			t.Errorf("invalid URL should be a DeepSeek business error: url=%q err=%v", rawURL, err)
 		}
 	}
 	if calls != 0 {
@@ -198,7 +202,9 @@ func TestDeepSeekInputValidation(t *testing.T) {
 		func() error { _, err := client.Search(context.Background(), "有效问题"); return err },
 		func() error { _, err := client.Fetch(context.Background(), "https://example.com/article"); return err },
 	} {
-		if err := call(); err == nil || !strings.Contains(err.Error(), "未配置") {
+		err := call()
+		var businessErr *BusinessError
+		if !errors.As(err, &businessErr) || businessErr.Source != SourceDeepSeek || !strings.Contains(businessErr.Message, "未配置") {
 			t.Errorf("expected missing-key error, got %v", err)
 		}
 	}
@@ -237,14 +243,29 @@ func TestDeepSeekFetch(t *testing.T) {
 	}
 }
 
-func TestDeepSeekAPIErrorsDoNotRetry(t *testing.T) {
-	for _, status := range []int{401, 402, 403, 404, 408, 429, 500, 504} {
-		t.Run(http.StatusText(status), func(t *testing.T) {
+func TestDeepSeekHTTPFailuresDoNotRetry(t *testing.T) {
+	for _, tc := range []struct {
+		status  int
+		message string
+	}{
+		{400, "DeepSeek 服务拒绝当前请求，请调整参数"},
+		{401, "DeepSeek API Key 无效，请检查配置"},
+		{402, "DeepSeek 余额不足，请充值后重试"},
+		{403, "DeepSeek 服务的安全策略拒绝了当前请求"},
+		{404, "DeepSeek 服务未获取到可用内容，请更换来源"},
+		{413, "请求内容超过 DeepSeek 服务的大小限制"},
+		{422, "DeepSeek 服务拒绝当前请求（HTTP 422），请调整参数、来源或配置"},
+		{408, ""},
+		{429, ""},
+		{500, ""},
+		{504, ""},
+	} {
+		t.Run(http.StatusText(tc.status), func(t *testing.T) {
 			for _, fetch := range []bool{false, true} {
 				calls := 0
 				client := NewDeepSeekClient("test-key", &http.Client{Transport: webRoundTripFunc(func(*http.Request) (*http.Response, error) {
 					calls++
-					return webJSONResponse(status, `{"error":{"message":"已知错误原因","code":"api_error","param":null}}`), nil
+					return webJSONResponse(tc.status, `{"error":{"message":"raw dependency error","code":"api_error","param":null}}`), nil
 				})})
 				var err error
 				if fetch {
@@ -252,9 +273,19 @@ func TestDeepSeekAPIErrorsDoNotRetry(t *testing.T) {
 				} else {
 					_, err = client.Search(context.Background(), "查询")
 				}
-				var apiErr *APIError
-				if !errors.As(err, &apiErr) || apiErr.StatusCode != status || apiErr.Code != "api_error" || apiErr.Message != "已知错误原因" || calls != 1 {
-					t.Fatalf("error mapping or retry mismatch: calls=%d err=%v", calls, err)
+				if err == nil || calls != 1 {
+					t.Fatalf("HTTP failure or retry mismatch: calls=%d err=%v", calls, err)
+				}
+				var businessErr *BusinessError
+				if tc.message != "" {
+					if !errors.As(err, &businessErr) || businessErr.HTTPCode != tc.status || businessErr.APICode != "api_error" || businessErr.Source != SourceDeepSeek || businessErr.Message != tc.message {
+						t.Fatalf("business error metadata or message mismatch: err=%+v", err)
+					}
+					if strings.Contains(err.Error(), "raw dependency error") {
+						t.Fatal("business error exposed the raw remote message")
+					}
+				} else if errors.As(err, &businessErr) || !strings.Contains(err.Error(), strconv.Itoa(tc.status)) || !strings.Contains(err.Error(), "api_error") || !strings.Contains(err.Error(), "raw dependency error") {
+					t.Fatalf("system error lost its status, API code or reason: %v", err)
 				}
 			}
 		})
@@ -282,18 +313,31 @@ func TestDeepSeekInvalidResponses(t *testing.T) {
 			} else {
 				_, err = client.Search(context.Background(), "查询")
 			}
-			if err == nil {
-				t.Fatal("invalid response was accepted as complete success")
+			var businessErr *BusinessError
+			if err == nil || errors.As(err, &businessErr) {
+				t.Fatalf("invalid response must remain a system error: %v", err)
+			}
+			if tc.name == "invalid JSON" {
+				var syntaxErr *json.SyntaxError
+				if !errors.As(err, &syntaxErr) {
+					t.Fatalf("JSON parsing error lost its cause: %v", err)
+				}
 			}
 		})
 	}
-	client := NewDeepSeekClient("test-key", &http.Client{Transport: webRoundTripFunc(func(*http.Request) (*http.Response, error) {
-		return webJSONResponse(http.StatusBadGateway, "<html>Bad gateway</html>"), nil
-	})})
-	_, err := client.Search(context.Background(), "查询")
-	var apiErr *APIError
-	if !errors.As(err, &apiErr) || apiErr.Message != "Bad Gateway" {
-		t.Fatalf("non-JSON errors lost HTTP status: %v", err)
+	for _, status := range []int{401, 422, 502} {
+		client := NewDeepSeekClient("test-key", &http.Client{Transport: webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+			return webJSONResponse(status, "<html>raw error page</html>"), nil
+		})})
+		_, err := client.Search(context.Background(), "查询")
+		var businessErr *BusinessError
+		if status == 502 {
+			if err == nil || errors.As(err, &businessErr) || !strings.Contains(err.Error(), "502") || !strings.Contains(err.Error(), "Bad Gateway") {
+				t.Fatalf("non-JSON system error lost HTTP status: %v", err)
+			}
+		} else if !errors.As(err, &businessErr) || businessErr.HTTPCode != status || businessErr.Source != SourceDeepSeek || businessErr.APICode != "" || !strings.Contains(businessErr.Message, "DeepSeek") || strings.Contains(businessErr.Message, "raw error page") {
+			t.Fatalf("non-JSON business rejection lost its safe message or metadata: %v", err)
+		}
 	}
 }
 

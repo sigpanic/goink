@@ -37,21 +37,10 @@ func NewDeepSeekClient(apiKey string, httpClient *http.Client) *DeepSeekClient {
 	return &DeepSeekClient{apiKey: strings.TrimSpace(apiKey), http: httpClient}
 }
 
-// APIError 保留远程接口的 HTTP 状态和错误原因，供调用方区分余额、鉴权与限流问题。
-type APIError struct {
-	StatusCode int
-	Code       string
-	Message    string
-}
-
-func (e *APIError) Error() string {
-	return fmt.Sprintf("DeepSeek API HTTP %d: %s", e.StatusCode, e.Message)
-}
-
 func (c *DeepSeekClient) Search(ctx context.Context, query string) (*SearchResult, error) {
 	query = strings.TrimSpace(query)
 	if n := utf8.RuneCountInString(query); n < 1 || n > 128 {
-		return nil, fmt.Errorf("搜索内容必须为 1～128 个字符，且不能全为空白")
+		return nil, &BusinessError{Source: SourceDeepSeek, Message: "搜索内容必须为 1～128 个字符，且不能全为空白"}
 	}
 	request := struct {
 		Query       string `json:"query"`
@@ -120,9 +109,9 @@ func truncateSearchSummaries(items []SearchItem) {
 
 func (c *DeepSeekClient) Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
 	if utf8.RuneCountInString(rawURL) > 8192 {
-		return nil, fmt.Errorf("网页 URL 不能超过 8192 个字符")
+		return nil, &BusinessError{Source: SourceDeepSeek, Message: "网页 URL 不能超过 8192 个字符"}
 	}
-	if _, err := parseFetchURL(rawURL); err != nil {
+	if _, err := parseFetchURL(rawURL, SourceDeepSeek); err != nil {
 		return nil, err
 	}
 	request := struct {
@@ -151,7 +140,7 @@ func (c *DeepSeekClient) do(ctx context.Context, path string, payload, result an
 		return err
 	}
 	if c.apiKey == "" {
-		return fmt.Errorf("DeepSeek API key 未配置")
+		return &BusinessError{Source: SourceDeepSeek, Message: "DeepSeek API key 未配置"}
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -189,10 +178,37 @@ func (c *DeepSeekClient) do(ctx context.Context, path string, payload, result an
 		if response.Error.Message == "" {
 			response.Error.Message = http.StatusText(resp.StatusCode)
 		}
-		return &APIError{StatusCode: resp.StatusCode, Code: response.Error.Code, Message: response.Error.Message}
+		if isBusinessStatus(resp.StatusCode) {
+			return &BusinessError{
+				HTTPCode: resp.StatusCode,
+				APICode:  response.Error.Code,
+				Message:  deepSeekBusinessMessage(resp.StatusCode),
+				Source:   SourceDeepSeek,
+			}
+		}
+		return fmt.Errorf("DeepSeek API HTTP %d (code=%q): %s", resp.StatusCode, response.Error.Code, response.Error.Message)
 	}
 	if err := json.Unmarshal(data, result); err != nil {
 		return fmt.Errorf("解析 DeepSeek 响应: %w", err)
 	}
 	return ctx.Err()
+}
+
+func deepSeekBusinessMessage(status int) string {
+	switch status {
+	case http.StatusBadRequest:
+		return "DeepSeek 服务拒绝当前请求，请调整参数"
+	case http.StatusUnauthorized:
+		return "DeepSeek API Key 无效，请检查配置"
+	case http.StatusPaymentRequired:
+		return "DeepSeek 余额不足，请充值后重试"
+	case http.StatusForbidden:
+		return "DeepSeek 服务的安全策略拒绝了当前请求"
+	case http.StatusNotFound:
+		return "DeepSeek 服务未获取到可用内容，请更换来源"
+	case http.StatusRequestEntityTooLarge:
+		return "请求内容超过 DeepSeek 服务的大小限制"
+	default:
+		return fmt.Sprintf("DeepSeek 服务拒绝当前请求（HTTP %d），请调整参数、来源或配置", status)
+	}
 }

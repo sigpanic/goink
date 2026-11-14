@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/chapter"
@@ -12,26 +11,9 @@ import (
 )
 
 func webToolFailure(operation string, err error) (*ToolResult, error) {
-	var apiErr *web.APIError
-	if errors.As(err, &apiErr) {
-		var message string
-		switch apiErr.StatusCode {
-		case http.StatusBadRequest:
-			message = "远程服务拒绝当前请求，请调整参数"
-		case http.StatusUnauthorized:
-			message = "DeepSeek API Key 无效，请检查配置"
-		case http.StatusPaymentRequired:
-			message = "DeepSeek 余额不足，请充值后重试"
-		case http.StatusForbidden:
-			message = "远程服务的安全策略拒绝了当前请求"
-		case http.StatusNotFound:
-			message = "远程服务未获取到可用内容，请更换来源"
-		case http.StatusRequestEntityTooLarge:
-			message = "请求内容超过远程服务的大小限制"
-		}
-		if message != "" {
-			return &ToolResult{Error: operation + "失败：" + message}, nil
-		}
+	var businessErr *web.BusinessError
+	if errors.As(err, &businessErr) {
+		return &ToolResult{Error: operation + "失败：" + businessErr.Message}, nil
 	}
 	return nil, fmt.Errorf("%s失败: %w", operation, err)
 }

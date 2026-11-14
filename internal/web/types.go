@@ -1,6 +1,32 @@
 package web
 
-import "context"
+import (
+	"context"
+	"net/http"
+)
+
+type SourceType string
+
+const (
+	SourceDeepSeek SourceType = "deepseek"
+	SourceLocal    SourceType = "local"
+)
+
+// BusinessError 表示已确认的业务失败；Message 是来源实现生成的可直接展示的中文结论。
+// HTTPCode 和 APICode 在没有对应响应时为零值；底层依赖异常使用普通 error 保留错误链。
+type BusinessError struct {
+	HTTPCode int
+	APICode  string
+	Message  string
+	Source   SourceType
+}
+
+func (e *BusinessError) Error() string { return e.Message }
+
+// isBusinessStatus 将确定性 HTTP 拒绝与超时、限流和服务异常区分。
+func isBusinessStatus(status int) bool {
+	return status >= 400 && status < 500 && status != http.StatusRequestTimeout && status != http.StatusTooManyRequests
+}
 
 type FetchMode string
 

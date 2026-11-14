@@ -4,8 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
+	"net/url"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -185,13 +188,17 @@ func TestWebToolsMissingConfiguration(t *testing.T) {
 func TestWebToolsDistinguishRemoteRejectionsFromFailures(t *testing.T) {
 	reg := testMCPRegistry(t, &WebSearchTool{})
 	reg.Register(&WebFetchTool{})
-	for _, status := range []int{400, 401, 402, 403, 404, 413, 429, 500} {
-		dependencyError := &web.APIError{StatusCode: status, Message: "raw dependency error"}
+	for _, status := range []int{400, 401, 402, 403, 404, 413, 422, 408, 429, 500} {
+		client := web.NewDeepSeekClient("test-key", &http.Client{Transport: webToolTransport(func(*http.Request) (*http.Response, error) {
+			return &http.Response{
+				StatusCode: status,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(`{"error":{"code":"api_error","message":"raw dependency error"}}`)),
+			}, nil
+		})})
 		tc := ToolContext{
-			WebSearch: webSearchFunc(func(context.Context, string) (*web.SearchResult, error) { return nil, dependencyError }),
-			RemoteFetch: webFetchFunc(func(context.Context, string) (*web.FetchResult, error) {
-				return nil, dependencyError
-			}),
+			WebSearch:   client,
+			RemoteFetch: client,
 		}
 		for _, test := range []struct{ name, args string }{
 			{"web_search", `{"query":"查询"}`},
@@ -199,13 +206,97 @@ func TestWebToolsDistinguishRemoteRejectionsFromFailures(t *testing.T) {
 		} {
 			result := reg.Execute(context.Background(), test.name, []byte(test.args), tc, nil)
 			require.False(t, result.Success)
-			if status == 429 || status == 500 {
+			if status == 408 || status == 429 || status == 500 {
 				require.Equal(t, ErrKindSystem, result.ErrKind)
 				require.Contains(t, result.Error, "raw dependency error")
+				require.Contains(t, result.Error, "api_error")
 			} else {
 				require.Equal(t, ErrKindBusiness, result.ErrKind)
 				require.NotContains(t, result.Error, "raw dependency error")
+				require.NotContains(t, result.Error, "api_error")
+				require.Contains(t, result.Error, "DeepSeek")
+				if status == 401 {
+					require.Contains(t, result.Error, "API Key 无效")
+				}
+				if status == 422 {
+					require.Contains(t, result.Error, "HTTP 422")
+					require.Contains(t, result.Error, "拒绝当前请求")
+				}
 			}
 		}
 	}
+}
+
+func TestWebFetchLocalHTTPFailures(t *testing.T) {
+	previous := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	reg := testMCPRegistry(t, &WebFetchTool{})
+	for _, status := range []int{401, 402, 404, 422, 408, 429, 503} {
+		t.Run(strconv.Itoa(status), func(t *testing.T) {
+			http.DefaultTransport = webToolTransport(func(*http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: status, Header: make(http.Header), Body: io.NopCloser(strings.NewReader("raw site error"))}, nil
+			})
+			result := reg.Execute(context.Background(), "web_fetch", []byte(`{"url":"https://203.0.113.1/article"}`), ToolContext{}, nil)
+			require.False(t, result.Success)
+			require.Contains(t, result.Error, "目标站点")
+			require.Contains(t, result.Error, strconv.Itoa(status))
+			require.NotContains(t, result.Error, "DeepSeek")
+			require.NotContains(t, result.Error, "raw site error")
+			if status == 408 || status == 429 || status == 503 {
+				require.Equal(t, ErrKindSystem, result.ErrKind)
+			} else {
+				require.Equal(t, ErrKindBusiness, result.ErrKind)
+			}
+			if status == 401 {
+				require.Contains(t, result.Error, "身份认证")
+			}
+		})
+	}
+}
+
+func TestWebToolFailurePreservesWrappedErrors(t *testing.T) {
+	reg := testMCPRegistry(t, &WebSearchTool{})
+	businessErr := &web.BusinessError{Source: "future", HTTPCode: 401, APICode: "source_code", Message: "来源要求身份认证"}
+	wrapped := fmt.Errorf("请求失败: %w", &url.Error{
+		Op: "Get", URL: "https://example.com/private",
+		Err: fmt.Errorf("校验目标失败: %w", businessErr),
+	})
+	result := reg.Execute(context.Background(), "web_search", []byte(`{"query":"查询"}`), ToolContext{
+		WebSearch: webSearchFunc(func(context.Context, string) (*web.SearchResult, error) { return nil, wrapped }),
+	}, nil)
+	require.Equal(t, ErrKindBusiness, result.ErrKind)
+	require.Equal(t, "搜索失败：来源要求身份认证", result.Error)
+
+	cause := errors.New("dependency unavailable")
+	wrapped = fmt.Errorf("读取响应失败: %w", cause)
+	toolResult, err := webToolFailure("搜索", wrapped)
+	require.Nil(t, toolResult)
+	require.ErrorIs(t, err, cause)
+	require.Contains(t, err.Error(), "搜索失败")
+	result = reg.Execute(context.Background(), "web_search", []byte(`{"query":"查询"}`), ToolContext{
+		WebSearch: webSearchFunc(func(context.Context, string) (*web.SearchResult, error) { return nil, wrapped }),
+	}, nil)
+	require.Equal(t, ErrKindSystem, result.ErrKind)
+	require.Contains(t, result.Error, "搜索失败")
+	require.Contains(t, result.Error, "读取响应失败")
+	require.Contains(t, result.Error, "dependency unavailable")
+}
+
+func TestWebFetchRedirectBusinessFailure(t *testing.T) {
+	previous := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	calls := 0
+	http.DefaultTransport = webToolTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{
+			StatusCode: http.StatusFound,
+			Header:     http.Header{"Location": {"https://127.0.0.1/private"}},
+			Body:       io.NopCloser(strings.NewReader("")),
+		}, nil
+	})
+	reg := testMCPRegistry(t, &WebFetchTool{})
+	result := reg.Execute(context.Background(), "web_fetch", []byte(`{"url":"https://203.0.113.1/article"}`), ToolContext{}, nil)
+	require.Equal(t, 1, calls)
+	require.Equal(t, ErrKindBusiness, result.ErrKind)
+	require.Equal(t, "抓取失败：禁止访问内网地址: 127.0.0.1", result.Error)
 }

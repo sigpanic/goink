@@ -63,10 +63,10 @@ func Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
 		Jar:     cookieJar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
-				return fmt.Errorf("重定向次数过多")
+				return &BusinessError{Source: SourceLocal, Message: "重定向次数过多"}
 			}
 			if err := validateHost(req.Context(), req.URL.Host); err != nil {
-				return fmt.Errorf("重定向目标不安全: %w", err)
+				return fmt.Errorf("校验重定向目标失败: %w", err)
 			}
 			return nil
 		},
@@ -94,11 +94,18 @@ func Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		if isBusinessStatus(resp.StatusCode) {
+			message := fmt.Sprintf("目标站点拒绝当前请求（HTTP %d），请更换来源", resp.StatusCode)
+			if resp.StatusCode == http.StatusUnauthorized {
+				message = "目标站点要求身份认证（HTTP 401），请更换来源"
+			}
+			return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: message}
+		}
+		return nil, fmt.Errorf("目标站点返回 HTTP %d", resp.StatusCode)
 	}
 
 	if isAntiCrawlHeaders(resp) {
-		return nil, fmt.Errorf("检测到反爬/CDN 防护响应头，无法抓取")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "检测到反爬/CDN 防护响应头，无法抓取"}
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, fetchMaxBytes+1))
@@ -106,7 +113,7 @@ func Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 	if len(body) > fetchMaxBytes {
-		return nil, fmt.Errorf("网页过大，超过 %d MB", fetchMaxBytes>>20)
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: fmt.Sprintf("网页过大，超过 %d MB", fetchMaxBytes>>20)}
 	}
 
 	// 先用 readability 提取正文区域
@@ -153,13 +160,13 @@ func Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
 	text = strings.TrimSpace(dataImageRegex.ReplaceAllString(text, ""))
 	textLen := len([]rune(text))
 	if textLen == 0 {
-		return nil, fmt.Errorf("网页未返回有效正文")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页未返回有效正文"}
 	}
 	if isEncodingGarbled(text) {
-		return nil, fmt.Errorf("网页编码异常，无法解析")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页编码异常，无法解析"}
 	}
 	if isAntiCrawl(title, textLen, len(body)) {
-		return nil, fmt.Errorf("网页可能为反爬验证页面，无法抓取有效内容")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页可能为反爬验证页面，无法抓取有效内容"}
 	}
 	text, truncated := truncateFetchText(text)
 	if err := ctx.Err(); err != nil {
@@ -315,25 +322,25 @@ func isAntiCrawlHeaders(resp *http.Response) bool {
 	return false
 }
 
-func parseFetchURL(rawURL string) (*url.URL, error) {
+func parseFetchURL(rawURL string, source SourceType) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("URL 格式无效: %w", err)
+		return nil, &BusinessError{Source: source, Message: "URL 格式无效"}
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("仅支持 http/https")
+		return nil, &BusinessError{Source: source, Message: "仅支持 http/https"}
 	}
 	if u.Hostname() == "" {
-		return nil, fmt.Errorf("URL 缺少主机名")
+		return nil, &BusinessError{Source: source, Message: "URL 缺少主机名"}
 	}
 	if u.User != nil {
-		return nil, fmt.Errorf("URL 不允许包含用户信息")
+		return nil, &BusinessError{Source: source, Message: "URL 不允许包含用户信息"}
 	}
 	return u, nil
 }
 
 func parseAndValidate(ctx context.Context, rawURL string) (*url.URL, error) {
-	u, err := parseFetchURL(rawURL)
+	u, err := parseFetchURL(rawURL, SourceLocal)
 	if err != nil {
 		return nil, err
 	}
@@ -357,7 +364,7 @@ func validateHost(ctx context.Context, host string) error {
 		"100.100.100.200":          true,
 	}
 	if blocked[host] {
-		return fmt.Errorf("禁止访问该地址")
+		return &BusinessError{Source: SourceLocal, Message: "禁止访问该地址"}
 	}
 
 	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
@@ -370,7 +377,7 @@ func validateHost(ctx context.Context, host string) error {
 
 	for _, ip := range ips {
 		if isPrivate(ip.IP) {
-			return fmt.Errorf("禁止访问内网地址: %s", ip.IP)
+			return &BusinessError{Source: SourceLocal, Message: fmt.Sprintf("禁止访问内网地址: %s", ip.IP)}
 		}
 	}
 

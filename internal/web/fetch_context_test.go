@@ -3,7 +3,10 @@ package web
 import (
 	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -55,8 +58,116 @@ func TestLocalFetchEmptyBody(t *testing.T) {
 	setLocalFetchTransport(t, webRoundTripFunc(func(*http.Request) (*http.Response, error) {
 		return webJSONResponse(http.StatusOK, "<html><head><title>空页面</title></head><body></body></html>"), nil
 	}))
-	if result, err := Fetch(context.Background(), "https://203.0.113.1/article"); err == nil || result != nil {
-		t.Fatalf("empty body was accepted: result=%+v err=%v", result, err)
+	result, err := Fetch(context.Background(), "https://203.0.113.1/article")
+	var businessErr *BusinessError
+	if result != nil || !errors.As(err, &businessErr) || businessErr.Source != SourceLocal || businessErr.HTTPCode != http.StatusOK || businessErr.Message != "网页未返回有效正文" {
+		t.Fatalf("empty body should be a local business failure: result=%+v err=%v", result, err)
+	}
+}
+
+func TestLocalFetchUnavailableContent(t *testing.T) {
+	for _, tc := range []struct {
+		name, body, message string
+		header              http.Header
+	}{
+		{"anti-crawl header", "", "反爬/CDN", http.Header{"Cf-Mitigated": {"challenge"}}},
+		{"oversized body", strings.Repeat("a", fetchMaxBytes+1), "网页过大", nil},
+		{"garbled body", "<html><body><p>" + strings.Repeat("文�", 100) + "</p></body></html>", "网页编码异常", nil},
+		{"verification page", "<html><head><title>Just a moment</title></head><body><p>Please verify your browser.</p></body></html>", "反爬验证页面", nil},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			setLocalFetchTransport(t, webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				resp := webJSONResponse(http.StatusOK, tc.body)
+				if tc.header != nil {
+					resp.Header = tc.header
+				}
+				return resp, nil
+			}))
+			result, err := Fetch(context.Background(), "https://203.0.113.1/article")
+			var businessErr *BusinessError
+			if result != nil || !errors.As(err, &businessErr) || businessErr.Source != SourceLocal || businessErr.HTTPCode != http.StatusOK || businessErr.APICode != "" || !strings.Contains(businessErr.Message, tc.message) {
+				t.Fatalf("unavailable content lost its local business conclusion: result=%+v err=%v", result, err)
+			}
+		})
+	}
+}
+
+func TestLocalFetchInvalidTargets(t *testing.T) {
+	for _, rawURL := range []string{"https://example.com/%zz", "file:///etc/passwd", "https:///article", "https://user:pass@example.com/", "https://169.254.169.254/", "https://127.0.0.1/"} {
+		result, err := Fetch(context.Background(), rawURL)
+		var businessErr *BusinessError
+		if result != nil || !errors.As(err, &businessErr) || businessErr.Source != SourceLocal || businessErr.HTTPCode != 0 || businessErr.APICode != "" {
+			t.Fatalf("invalid target should be a local business failure: url=%q result=%+v err=%v", rawURL, result, err)
+		}
+	}
+}
+
+func TestLocalFetchRedirectErrorsKeepTheirChain(t *testing.T) {
+	for _, tc := range []struct {
+		name, target, message string
+		calls                 int
+	}{
+		{"private target", "https://127.0.0.1/private", "禁止访问内网地址", 1},
+		{"redirect limit", "https://203.0.113.1/loop", "重定向次数过多", 5},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			setLocalFetchTransport(t, webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				resp := webJSONResponse(http.StatusFound, "")
+				resp.Header.Set("Location", tc.target)
+				return resp, nil
+			}))
+			result, err := Fetch(context.Background(), "https://203.0.113.1/article")
+			var businessErr *BusinessError
+			var urlErr *url.Error
+			if result != nil || calls != tc.calls || !errors.As(err, &businessErr) || !errors.As(err, &urlErr) || businessErr.Source != SourceLocal || !strings.Contains(businessErr.Message, tc.message) || !strings.Contains(err.Error(), "请求失败") {
+				t.Fatalf("redirect lost its error chain or business kind: calls=%d result=%+v err=%v", calls, result, err)
+			}
+			if tc.name == "private target" && !strings.Contains(err.Error(), "校验重定向目标失败") {
+				t.Fatalf("redirect validation context was lost: %v", err)
+			}
+		})
+	}
+}
+
+func TestLocalFetchRedirectDNSFailure(t *testing.T) {
+	previous := net.DefaultResolver
+	t.Cleanup(func() { net.DefaultResolver = previous })
+	net.DefaultResolver = &net.Resolver{
+		PreferGo: true,
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			return nil, errors.New("resolver unavailable")
+		},
+	}
+	setLocalFetchTransport(t, webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+		resp := webJSONResponse(http.StatusFound, "")
+		resp.Header.Set("Location", "https://redirect.example.invalid/article")
+		return resp, nil
+	}))
+	result, err := Fetch(context.Background(), "https://203.0.113.1/article")
+	var businessErr *BusinessError
+	var dnsErr *net.DNSError
+	if result != nil || errors.As(err, &businessErr) || !errors.As(err, &dnsErr) || !strings.Contains(err.Error(), "校验重定向目标失败") || !strings.Contains(err.Error(), "resolver unavailable") {
+		t.Fatalf("redirect DNS failure lost its system error chain: result=%+v err=%v", result, err)
+	}
+}
+
+func TestLocalFetchDependencyErrors(t *testing.T) {
+	for _, readBody := range []bool{false, true} {
+		setLocalFetchTransport(t, webRoundTripFunc(func(*http.Request) (*http.Response, error) {
+			if !readBody {
+				return nil, io.ErrUnexpectedEOF
+			}
+			resp := webJSONResponse(http.StatusOK, "")
+			resp.Body = io.NopCloser(brokenWebBody{})
+			return resp, nil
+		}))
+		result, err := Fetch(context.Background(), "https://203.0.113.1/article")
+		var businessErr *BusinessError
+		if result != nil || errors.As(err, &businessErr) || !errors.Is(err, io.ErrUnexpectedEOF) {
+			t.Fatalf("dependency failure lost its cause or system kind: readBody=%v result=%+v err=%v", readBody, result, err)
+		}
 	}
 }
 
