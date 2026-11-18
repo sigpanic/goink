@@ -14,6 +14,7 @@ import { useChatHistory } from "./useChatHistory";
 import { useSlashCommands } from "./useSlashCommands";
 import type { AgentEvent, Turn, SendResult } from "./types";
 import { AgentEventType, emptySegment, filterSegmentsBySeq } from "./types";
+import finalizeTurn from "./finalizeTurn";
 import ChatComposer from "./ChatComposer";
 import ChatHeader from "./ChatHeader";
 import DeleteSessionDialog from "./DeleteSessionDialog";
@@ -263,12 +264,12 @@ export default function ChatPanel({
         setTurns((prev) =>
           prev.map((turn) => {
             if (turn.turnId !== data.turn_id) return turn;
-            return {
+            return finalizeTurn({
               ...turn,
               status,
               errorMessage: data.reason,
               retrying: null,
-            };
+            });
           }),
         );
       },
@@ -1139,13 +1140,13 @@ export default function ChatPanel({
               t.status === "error" ||
               t.status === "system_interrupted"
             )
-              return t;
-            return {
+              return finalizeTurn(t);
+            return finalizeTurn({
               ...t,
               status: "error" as const,
               errorMessage: reason,
               retrying: null,
-            };
+            });
           }),
         );
         return { success: false, messageSaved, sessionId: requestSessionId };
@@ -1168,7 +1169,7 @@ export default function ChatPanel({
         setTurns((prev) =>
           prev.map((t) =>
             t.id === turnId
-              ? {
+              ? finalizeTurn({
                   ...t,
                   status:
                     t.status === "streaming" ? ("done" as const) : t.status,
@@ -1177,7 +1178,7 @@ export default function ChatPanel({
                   segments: t.segments.map((seg) =>
                     seg.type === "text" ? { ...seg, isStreaming: false } : seg,
                   ),
-                }
+                })
               : t,
           ),
         );

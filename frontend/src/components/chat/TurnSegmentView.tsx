@@ -1,5 +1,6 @@
 import type { ComponentProps } from "react";
-import type { TurnSegment } from "./types";
+import { useTranslation } from "react-i18next";
+import type { Turn, TurnSegment } from "./types";
 import MessageBubble from "./MessageBubble";
 import ThinkingBlock from "./ThinkingBlock";
 import ToolCallCard from "./ToolCallCard";
@@ -14,6 +15,7 @@ interface Props extends Pick<
 > {
   segment: TurnSegment;
   isTurnStreaming: boolean;
+  turnStatus: Turn["status"];
   hideContent?: boolean;
   onApprove: (toolId: string, feedback: string) => Promise<void>;
   onReject: (toolId: string, feedback: string) => Promise<void>;
@@ -22,12 +24,24 @@ interface Props extends Pick<
 export default function TurnSegmentView({
   segment: seg,
   isTurnStreaming,
+  turnStatus,
   hideContent = false,
   copyable,
   sentAt,
   onApprove,
   onReject,
 }: Props) {
+  const { t } = useTranslation();
+  // 未走完的 segment 在 turn 结束时统一显示中性状态，文案区分具体结局
+  const incompleteLabel =
+    turnStatus === "user_stopped"
+      ? t("chat.cancelled")
+      : turnStatus === "system_interrupted"
+        ? t("chat.interrupted")
+        : turnStatus === "error"
+          ? t("chat.unfinished")
+          : t("chat.finished");
+
   if (seg.type === "subagent" && seg.agentType) {
     return (
       <SubagentCard
@@ -36,6 +50,7 @@ export default function TurnSegmentView({
         status={seg.status || "done"}
         retrying={seg.retrying}
         errorMessage={seg.errorMessage}
+        incompleteLabel={incompleteLabel}
       />
     );
   }
@@ -69,6 +84,7 @@ export default function TurnSegmentView({
         approvalType={seg.approvalType}
         approvalPayload={seg.approvalPayload}
         result={seg.result}
+        incompleteLabel={incompleteLabel}
         onApprove={
           seg.toolStatus === "awaiting_approval"
             ? (feedback: string) => onApprove(seg.toolId, feedback)

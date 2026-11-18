@@ -415,6 +415,163 @@ it.each(["error", "system_interrupted"])(
   },
 );
 
+it.each([
+  ["error", "chat.unfinished"],
+  ["system_interrupted", "chat.interrupted"],
+])(
+  "marks an in-flight tool as %s when the turn ends",
+  async (eventType, label) => {
+    const request = await startChat();
+    await act(async () =>
+      emit("agent:1", {
+        turn_id: 1,
+        seq: 1,
+        type: AgentEventType.ToolCall,
+        tool_name: "edit",
+        tool_id: "tool-1",
+        phase: "selected",
+        display_text: "正在编辑文件内容",
+        activity_kind: "write",
+        timestamp: "",
+      }),
+    );
+    expect(screen.getByText("正在编辑文件内容")).toBeInTheDocument();
+
+    await act(async () =>
+      emit("chat:turn_outcome", {
+        turn_id: 1,
+        event_type: eventType,
+        reason: "具体结局原因",
+      }),
+    );
+    expect(screen.queryByText("正在编辑文件内容")).not.toBeInTheDocument();
+    expect(screen.getByText("编辑文件内容")).toBeInTheDocument();
+    expect(screen.getByText(label)).toBeInTheDocument();
+    await act(async () => request.reject("具体结局原因"));
+  },
+);
+
+it("marks an in-flight tool as cancelled when the user stops", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      seq: 1,
+      type: AgentEventType.ToolCall,
+      tool_name: "edit",
+      tool_id: "tool-1",
+      phase: "selected",
+      display_text: "正在编辑文件内容",
+      activity_kind: "write",
+      timestamp: "",
+    }),
+  );
+
+  await act(async () => {
+    emit("chat:turn_outcome", {
+      turn_id: 1,
+      event_type: "user_stopped",
+      reason: "",
+    });
+    request.reject("");
+  });
+  expect(screen.queryByText("正在编辑文件内容")).not.toBeInTheDocument();
+  expect(screen.getByText("编辑文件内容")).toBeInTheDocument();
+  expect(screen.getByText("chat.cancelled")).toBeInTheDocument();
+});
+
+it("keeps an already failed tool unchanged when the turn ends", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      seq: 1,
+      type: AgentEventType.ToolCall,
+      tool_name: "web_search",
+      tool_id: "tool-1",
+      phase: "selected",
+      display_text: "正在搜索",
+      activity_kind: "browse",
+      timestamp: "",
+    }),
+  );
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      seq: 2,
+      type: AgentEventType.ToolCall,
+      tool_name: "web_search",
+      tool_id: "tool-1",
+      phase: "failed",
+      display_text: "搜索",
+      error: "network",
+      timestamp: "",
+    }),
+  );
+  expect(screen.getByText("chat.failed")).toBeInTheDocument();
+
+  await act(async () => {
+    emit("chat:turn_outcome", {
+      turn_id: 1,
+      event_type: "user_stopped",
+      reason: "",
+    });
+    request.reject("");
+  });
+  expect(screen.getByText("chat.failed")).toBeInTheDocument();
+  expect(screen.queryByText("chat.cancelled")).not.toBeInTheDocument();
+});
+
+it("marks an in-flight subagent as cancelled when the turn ends", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      seq: 1,
+      type: AgentEventType.ToolCall,
+      tool_name: "run_subagent",
+      tool_id: "sub-1",
+      phase: "executing",
+      metadata: { agent_type: "memory" },
+      timestamp: "",
+    }),
+  );
+  expect(screen.getByText("chat.executing")).toBeInTheDocument();
+
+  await act(async () => {
+    emit("chat:turn_outcome", {
+      turn_id: 1,
+      event_type: "user_stopped",
+      reason: "",
+    });
+    request.reject("");
+  });
+  expect(screen.queryByText("chat.executing")).not.toBeInTheDocument();
+  expect(screen.getByText("chat.cancelled")).toBeInTheDocument();
+});
+
+it("finalizes leftover tools as finished when the turn completes normally", async () => {
+  const request = await startChat();
+  await act(async () =>
+    emit("agent:1", {
+      turn_id: 1,
+      seq: 1,
+      type: AgentEventType.ToolCall,
+      tool_name: "edit",
+      tool_id: "tool-1",
+      phase: "selected",
+      display_text: "正在编辑文件内容",
+      activity_kind: "write",
+      timestamp: "",
+    }),
+  );
+
+  await act(async () => request.resolve());
+  expect(screen.queryByText("正在编辑文件内容")).not.toBeInTheDocument();
+  expect(screen.getByText("编辑文件内容")).toBeInTheDocument();
+  expect(screen.getByText("chat.finished")).toBeInTheDocument();
+});
+
 it("shows a plain call failure and accepts a later authoritative outcome", async () => {
   const request = await startChat();
   await act(async () => request.reject(new Error("连接失败")));

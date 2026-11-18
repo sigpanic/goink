@@ -81,3 +81,8 @@
 [data-theme="dark"] .compression-label {
   color: oklch(0.7 0.1 88);
 }
+
+.compression-label-incomplete,
+[data-theme="dark"] .compression-label-incomplete {
+  color: var(--muted-foreground);
+}
