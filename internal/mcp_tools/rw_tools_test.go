@@ -217,13 +217,13 @@ func TestEditNewChannel_CreatesRecordAndFile(t *testing.T) {
 	}
 }
 
-// 不带卷的 new.md：小说有卷时默认分进最后一卷（贴卷尾）。
-func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
+// 不带卷的 new.md：追加到全书末尾，即最后一章所在卷的卷尾。
+func TestEditNewChannel_DefaultFollowsLastChapterVolume(t *testing.T) {
 	db, tc, ctx := setupRWEnv(t)
 	v1 := seedVolume(t, db, 1, "第一卷", 1)
 	v2 := seedVolume(t, db, 1, "第二卷", 2)
 	seedChapter(t, db, 1, &v1, 1, 1) // 第一卷 1 章
-	seedChapter(t, db, 1, &v2, 2, 2) // 第二卷 2 章（最后一卷）
+	seedChapter(t, db, 1, &v2, 2, 2) // 第二卷 2 章（末章所在卷）
 
 	res := execEdit(t, ctx, tc, editArgs("chapters/new.md", "full_replace", "新章内容。"))
 	if !res.Success {
@@ -231,7 +231,10 @@ func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
 	}
 	newID := res.Data["chapter_id"].(int64)
 	if got := res.Data["volume_id"].(int64); got != v2 {
-		t.Errorf("volume_id = %v, want last volume %d", got, v2)
+		t.Errorf("volume_id = %v, want 末章所在卷 %d", got, v2)
+	}
+	if got := res.Data["reading_number"].(int); got != 3 {
+		t.Errorf("reading_number = %v, want 3", got)
 	}
 
 	ch := fetchChapter(t, db, newID)
@@ -240,6 +243,35 @@ func TestEditNewChannel_DefaultLastVolume(t *testing.T) {
 	}
 	if ch.SortOrder != 3 { // 贴最后一卷尾：max(1,2)+1
 		t.Errorf("sort_order = %d, want 3", ch.SortOrder)
+	}
+}
+
+// 回归：末章在未分卷时，不带卷的新章也必须落在未分卷组末尾，
+// 不能按“最后一卷”插到第一卷而把已有章节的阅读号整体后移。
+func TestEditNewChannel_DefaultFollowsUnassignedLastChapter(t *testing.T) {
+	db, tc, ctx := setupRWEnv(t)
+	v1 := seedVolume(t, db, 1, "第一卷", 1)
+	seedChapter(t, db, 1, &v1, 1, 1)
+	seedChapter(t, db, 1, nil, 2, 1) // 末章在未分卷
+
+	res := execEdit(t, ctx, tc, editArgs("chapters/new.md", "full_replace", "新章内容。"))
+	if !res.Success {
+		t.Fatalf("expected success, got: %s", res.Error)
+	}
+	newID := res.Data["chapter_id"].(int64)
+	if got := res.Data["volume_id"]; got != nil {
+		t.Errorf("volume_id = %v, want nil", got)
+	}
+	if got := res.Data["reading_number"].(int); got != 3 {
+		t.Errorf("reading_number = %v, want 3", got)
+	}
+
+	ch := fetchChapter(t, db, newID)
+	if ch.VolumeID != nil {
+		t.Errorf("volume_id = %v, want nil", ch.VolumeID)
+	}
+	if ch.SortOrder != 2 {
+		t.Errorf("sort_order = %d, want 2", ch.SortOrder)
 	}
 }
 
