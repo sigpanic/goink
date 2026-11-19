@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Loader2, CheckCircle2, XCircle, CircleSlash, ChevronDown } from "lucide-react";
+import {
+  Loader2,
+  CheckCircle2,
+  XCircle,
+  CircleSlash,
+  ChevronDown,
+} from "lucide-react";
 import type { TurnSegment } from "./types";
 import ThinkingBlock from "./ThinkingBlock";
 import MessageBubble from "./MessageBubble";

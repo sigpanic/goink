@@ -17,17 +17,13 @@ import { memo, useState, useRef, useCallback } from "react";
 import AutoGrowTextarea from "@/components/ui/AutoGrowTextarea";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
+import type { ToolStatus } from "./types";
 import "./ToolCallCard.css";
 
 interface Props {
   toolName: string;
   displayText: string;
-  status:
-    | "executing"
-    | "awaiting_approval"
-    | "completed"
-    | "failed"
-    | "incomplete";
+  status: ToolStatus;
   activityKind?: string;
   error?: string;
   compact?: boolean;
