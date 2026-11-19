@@ -761,6 +761,61 @@
         "1": "682eda5d3e1ce3d4c38a935a48aa57a66c93f481",
         "2": "b6735a722f6763780656491b3ff50894e01bc27b"
       }
+    },
+    {
+      "tag": "v1.8.1",
+      "commit": "9463ab964501003c4abb316813ecf3adaf67e84a",
+      "origin": "fresh",
+      "archive": "v1.8.1-fresh.zip",
+      "sha256": "d4c53995d32c817f720d3569580706a54f1b450d74ec8dbda7388024ddb6f7a6",
+      "case_ids": [
+        "novels",
+        "characters",
+        "preferences",
+        "messages",
+        "locations",
+        "styles",
+        "setting-items",
+        "chapters-id",
+        "references-id",
+        "volumes",
+        "writing-daily",
+        "groups",
+        "activity",
+        "settings-native",
+        "sessions-native",
+        "llm-v2"
+      ],
+      "input_sha256": "4f369ca341151b44750f97f6d3cbb1c5d3aabb4fd80781f712da81116aa0e5db",
+      "git_heads": {
+        "1": "2e3c4fe35d9b8c750213908279fb4e4c5b205b28",
+        "2": "db2afc7c279edac9e91e366d2ab28ad70477f08b"
+      }
+    },
+    {
+      "tag": "v1.8.1",
+      "commit": "9463ab964501003c4abb316813ecf3adaf67e84a",
+      "origin": "from-v1.0.0",
+      "archive": "v1.8.1-from-v1.0.0.zip",
+      "sha256": "74538a988355ddedf530e6fdaf63fff77b867b25e0c77116f440fdf4186ab458",
+      "case_ids": [
+        "novels",
+        "chapters-numbered",
+        "characters",
+        "references-v100",
+        "preferences",
+        "settings-legacy",
+        "sessions-legacy",
+        "messages",
+        "writing-v100",
+        "llm-v1",
+        "locations"
+      ],
+      "input_sha256": "7e3031a6b07e0a7a837b4dc6efa7bf84b524c737802f63224ca209df53ebffdb",
+      "git_heads": {
+        "1": "e9280d1751daa6abb217b6773eee4313d90cb0ef",
+        "2": "0857c0e53820c3f574545a1031e0c71779777856"
+      }
     }
   ]
 }

@@ -31,7 +31,7 @@ func TestSeedDeltasAndOrigins(t *testing.T) {
 	if slices.Contains(old, "volumes") || !slices.Contains(current, "volumes") || slices.Contains(current, "settings-legacy") {
 		t.Fatal("version deltas did not replace old layouts and add new scenarios")
 	}
-	if _, err := SeedIDs("v1.8.1", "fresh"); err == nil {
+	if _, err := SeedIDs("v1.9.1", "fresh"); err == nil {
 		t.Fatal("missing release delta must fail")
 	}
 }
