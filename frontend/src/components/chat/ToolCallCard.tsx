@@ -23,11 +23,7 @@ interface Props {
   toolName: string;
   displayText: string;
   status:
-    | "executing"
-    | "awaiting_approval"
-    | "completed"
-    | "failed"
-    | "incomplete";
+    "executing" | "awaiting_approval" | "completed" | "failed" | "incomplete";
   activityKind?: string;
   error?: string;
   compact?: boolean;

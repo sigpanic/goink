@@ -57,11 +57,7 @@ export interface TurnSegment {
   toolName: string;
   toolId: string;
   toolStatus:
-    | "executing"
-    | "awaiting_approval"
-    | "completed"
-    | "failed"
-    | "incomplete";
+    "executing" | "awaiting_approval" | "completed" | "failed" | "incomplete";
   displayText: string;
   activityKind: string;
   error: string;
