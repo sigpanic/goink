@@ -3,6 +3,7 @@ package web
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"fmt"
 	"io"
 	"math/rand/v2"
@@ -21,7 +22,7 @@ import (
 
 const (
 	fetchTimeout   = 30 * time.Second
-	fetchMaxChars  = 15000
+	fetchMaxChars  = 10000
 	fetchMaxBytes  = 10 << 20 // 10 MB
 	fetchDelayMin  = 500 * time.Millisecond
 	fetchDelayMax  = 1500 * time.Millisecond
@@ -39,37 +40,39 @@ var cookieJar, _ = cookiejar.New(nil)
 // base64 标准字符集 A-Za-z0-9+/= 不含 ')'，[^)]* 不会跨图片误匹配。
 var dataImageRegex = regexp.MustCompile(`!\[[^\]]*\]\(data:image/[^)]*\)`)
 
-// FetchResult 是网页抓取结果。
-type FetchResult struct {
-	URL   string `json:"url"`
-	Title string `json:"title"`
-	Text  string `json:"text"`
-}
-
 // Fetch 抓取指定 URL 的网页内容，清洗后返回 markdown。
-func Fetch(rawURL string) (*FetchResult, error) {
-	u, err := parseAndValidate(rawURL)
+func Fetch(ctx context.Context, rawURL string) (*FetchResult, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	u, err := parseAndValidate(ctx, rawURL)
 	if err != nil {
 		return nil, err
 	}
 
-	time.Sleep(fetchDelayMin + rand.N(fetchDelayMax-fetchDelayMin))
+	timer := time.NewTimer(fetchDelayMin + rand.N(fetchDelayMax-fetchDelayMin))
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-timer.C:
+	}
 
 	client := &http.Client{
 		Timeout: fetchTimeout,
 		Jar:     cookieJar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 5 {
-				return fmt.Errorf("重定向次数过多")
+				return &BusinessError{Source: SourceLocal, Message: "重定向次数过多"}
 			}
-			if err := validateHost(req.URL.Host); err != nil {
-				return fmt.Errorf("重定向目标不安全: %w", err)
+			if err := validateHost(req.Context(), req.URL.Host); err != nil {
+				return fmt.Errorf("校验重定向目标失败: %w", err)
 			}
 			return nil
 		},
 	}
 
-	req, err := http.NewRequest("GET", u.String(), nil)
+	req, err := http.NewRequestWithContext(ctx, "GET", u.String(), nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建请求失败: %w", err)
 	}
@@ -91,11 +94,18 @@ func Fetch(rawURL string) (*FetchResult, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+		if isBusinessStatus(resp.StatusCode) {
+			message := fmt.Sprintf("目标站点拒绝当前请求（HTTP %d），请更换来源", resp.StatusCode)
+			if resp.StatusCode == http.StatusUnauthorized {
+				message = "目标站点要求身份认证（HTTP 401），请更换来源"
+			}
+			return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: message}
+		}
+		return nil, fmt.Errorf("目标站点返回 HTTP %d", resp.StatusCode)
 	}
 
 	if isAntiCrawlHeaders(resp) {
-		return nil, fmt.Errorf("检测到反爬/CDN 防护响应头，无法抓取")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "检测到反爬/CDN 防护响应头，无法抓取"}
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, fetchMaxBytes+1))
@@ -103,7 +113,7 @@ func Fetch(rawURL string) (*FetchResult, error) {
 		return nil, fmt.Errorf("读取响应失败: %w", err)
 	}
 	if len(body) > fetchMaxBytes {
-		return nil, fmt.Errorf("网页过大，超过 %d MB", fetchMaxBytes>>20)
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: fmt.Sprintf("网页过大，超过 %d MB", fetchMaxBytes>>20)}
 	}
 
 	// 先用 readability 提取正文区域
@@ -147,24 +157,37 @@ func Fetch(rawURL string) (*FetchResult, error) {
 
 	text = strings.TrimSpace(text)
 	// 移除 base64 内联图片（data: URL），避免 base64 数据污染 LLM 上下文
-	text = dataImageRegex.ReplaceAllString(text, "")
+	text = strings.TrimSpace(dataImageRegex.ReplaceAllString(text, ""))
 	textLen := len([]rune(text))
+	if textLen == 0 {
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页未返回有效正文"}
+	}
 	if isEncodingGarbled(text) {
-		return nil, fmt.Errorf("网页编码异常，无法解析")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页编码异常，无法解析"}
 	}
 	if isAntiCrawl(title, textLen, len(body)) {
-		return nil, fmt.Errorf("网页可能为反爬验证页面，无法抓取有效内容")
+		return nil, &BusinessError{Source: SourceLocal, HTTPCode: resp.StatusCode, Message: "网页可能为反爬验证页面，无法抓取有效内容"}
 	}
-	if textLen > fetchMaxChars {
-		runes := []rune(text)
-		text = string(runes[:fetchMaxChars]) + "\n\n...[内容已截断]"
+	text, truncated := truncateFetchText(text)
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 
 	return &FetchResult{
-		URL:   rawURL,
-		Title: title,
-		Text:  text,
+		URL:       rawURL,
+		Title:     title,
+		Text:      text,
+		Mode:      LocalFetch,
+		Truncated: truncated,
 	}, nil
+}
+
+func truncateFetchText(text string) (string, bool) {
+	runes := []rune(text)
+	if len(runes) <= fetchMaxChars {
+		return text, false
+	}
+	return string(runes[:fetchMaxChars]) + "\n\n...[内容已截断]", true
 }
 
 // isEncodingGarbled 检测编码错误或加密导致的乱码。
@@ -299,27 +322,35 @@ func isAntiCrawlHeaders(resp *http.Response) bool {
 	return false
 }
 
-func parseAndValidate(rawURL string) (*url.URL, error) {
+func parseFetchURL(rawURL string, source SourceType) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
-		return nil, fmt.Errorf("URL 格式无效: %w", err)
+		return nil, &BusinessError{Source: source, Message: "URL 格式无效"}
 	}
 	if u.Scheme != "http" && u.Scheme != "https" {
-		return nil, fmt.Errorf("仅支持 http/https")
+		return nil, &BusinessError{Source: source, Message: "仅支持 http/https"}
 	}
-	if u.Host == "" {
-		return nil, fmt.Errorf("URL 缺少主机名")
+	if u.Hostname() == "" {
+		return nil, &BusinessError{Source: source, Message: "URL 缺少主机名"}
 	}
 	if u.User != nil {
-		return nil, fmt.Errorf("URL 不允许包含用户信息")
+		return nil, &BusinessError{Source: source, Message: "URL 不允许包含用户信息"}
 	}
-	if err := validateHost(u.Host); err != nil {
+	return u, nil
+}
+
+func parseAndValidate(ctx context.Context, rawURL string) (*url.URL, error) {
+	u, err := parseFetchURL(rawURL, SourceLocal)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateHost(ctx, u.Host); err != nil {
 		return nil, err
 	}
 	return u, nil
 }
 
-func validateHost(host string) error {
+func validateHost(ctx context.Context, host string) error {
 	// 去掉端口
 	if h, _, err := net.SplitHostPort(host); err == nil {
 		host = h
@@ -333,10 +364,10 @@ func validateHost(host string) error {
 		"100.100.100.200":          true,
 	}
 	if blocked[host] {
-		return fmt.Errorf("禁止访问该地址")
+		return &BusinessError{Source: SourceLocal, Message: "禁止访问该地址"}
 	}
 
-	ips, err := net.LookupIP(host)
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
 	if err != nil {
 		return fmt.Errorf("DNS 解析失败: %w", err)
 	}
@@ -345,8 +376,8 @@ func validateHost(host string) error {
 	}
 
 	for _, ip := range ips {
-		if isPrivate(ip) {
-			return fmt.Errorf("禁止访问内网地址: %s", ip)
+		if isPrivate(ip.IP) {
+			return &BusinessError{Source: SourceLocal, Message: fmt.Sprintf("禁止访问内网地址: %s", ip.IP)}
 		}
 	}
 

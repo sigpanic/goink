@@ -30,6 +30,7 @@ import (
 	"github.com/sigpanic/goink/internal/llm/adapter"
 	"github.com/sigpanic/goink/internal/migrate"
 	"github.com/sigpanic/goink/internal/migrate/upgrade/fixture"
+	"github.com/sigpanic/goink/internal/migrate/upgrade/fixture/seeddata"
 	"github.com/sigpanic/goink/internal/novel"
 	"github.com/sigpanic/goink/internal/storage"
 	"github.com/sigpanic/goink/internal/writing"
@@ -71,12 +72,20 @@ func TestUpgradeWorker(t *testing.T) {
 	}
 	ctx := context.Background()
 	novels := novel.NewStore(db, log)
+	var novelCount int64
+	if err := db.Table("novels").Count(&novelCount).Error; err != nil {
+		t.Fatal(err)
+	}
 	listed, err := novels.List(ctx, novel.ListNovelsOptions{})
-	if err != nil || listed.Total != 2 {
+	if err != nil || listed.Total != novelCount {
 		t.Fatalf("current novel Store: result=%v error=%v", listed, err)
 	}
+	var chapterCount int64
+	if err := db.Table("chapters").Where("novel_id = ?", 1).Count(&chapterCount).Error; err != nil {
+		t.Fatal(err)
+	}
 	chapters, err := chapter.NewStore(db, log).ListAllByNovel(ctx, nil, 1)
-	if err != nil || len(chapters) != 2 || chapters[0].ID != 11 || chapters[1].ID != 12 {
+	if err != nil || int64(len(chapters)) != chapterCount {
 		t.Fatalf("current chapter Store: chapters=%v error=%v", chapters, err)
 	}
 	if err := novels.DB.WithContext(ctx).Create(&novel.Novel{ID: 1001, Title: "升级后新建小说"}).Error; err != nil {
@@ -361,52 +370,49 @@ func requireGit(t *testing.T) string {
 
 func assertContract(t *testing.T, dir string, sample fixture.Fixture, gitBin string, contents ...map[string]string) {
 	t.Helper()
-	assertLLMConfig(t, dir)
+	if err := fixture.ValidateSeed(sample); err != nil {
+		t.Fatal(err)
+	}
+	cases, err := fixture.ResolveCases(sample.CaseIDs)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := os.ReadFile(filepath.Join(dir, ".goink", "llm_config.enc"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain, err := config.Decrypt(ciphertext)
+	if err != nil {
+		t.Fatal(err)
+	}
 	withDB(t, filepath.Join(dir, "novel-agent.db"), func(db *sql.DB) {
-		for name, count := range map[string]int{"novels": 2, "chapters": 3, "time_entries": 2, "story_arcs": 1, "arc_nodes": 1, "reader_perspectives": 2, "characters": 2, "character_relations": 2, "preference_items": 2, "sessions": 1, "messages": 3} {
-			assertCount(t, db, name+" row count", "SELECT COUNT(*) FROM "+quote(name), count)
+		result := &seeddata.UpgradeResult{DB: db, DataDir: dir, LLMConfig: plain, CheckedTables: map[string]bool{}}
+		if len(contents) != 0 {
+			result.FileOverrides = contents[0]
 		}
-		assertCount(t, db, "novels preserved", `SELECT COUNT(*) FROM novels WHERE genre='玄幻' AND description='保留中文与 UTF-8' AND ((id=1 AND title='升级样本1') OR (id=2 AND title='升级样本2'))`, 2)
-		assertCount(t, db, "chapter order and IDs", `SELECT COUNT(*) FROM chapters WHERE summary='章节摘要' AND word_count=8 AND ((id=11 AND novel_id=1 AND sort_order=1) OR (id=12 AND novel_id=1 AND sort_order=2) OR (id=21 AND novel_id=2 AND sort_order=1))`, 3)
-		assertCount(t, db, "timeline stable IDs", `SELECT COUNT(*) FROM time_entries WHERE target_reading_number=999 AND ((id=1 AND source_chapter_id=11 AND resolved_chapter_id=12) OR (id=2 AND source_chapter_id=21 AND resolved_chapter_id IS NULL))`, 2)
-		assertCount(t, db, "arc future reading position", `SELECT COUNT(*) FROM arc_nodes WHERE id=1 AND target_reading_number=999 AND actual_chapter_id=12`, 1)
-		assertCount(t, db, "reader references and orphan", `SELECT COUNT(*) FROM reader_perspectives WHERE (id=1 AND planted_chapter_id=11 AND revealed_chapter_id IS NULL) OR (id=2 AND planted_chapter_id IS NULL AND revealed_chapter_id=21)`, 2)
-		assertCount(t, db, "append-only relationship history", `SELECT COUNT(*) FROM character_relations WHERE source_character_id=31 AND target_character_id=32 AND relation_describe='关系历史' AND ((id=1 AND is_current=1 AND chapter_id=12) OR (id=2 AND is_current=0 AND chapter_id IS NULL))`, 2)
-		assertCount(t, db, "global and novel preferences", `SELECT COUNT(*) FROM preference_items WHERE content='使用短句' AND ((id=1 AND is_global=1 AND novel_id=0) OR (id=2 AND is_global=0 AND novel_id=1))`, 2)
-		assertCount(t, db, "settings", `SELECT COUNT(*) FROM app_config WHERE id=1 AND last_novel_id=2 AND approval_mode='manual' AND COALESCE(default_adapter_name,'')='' AND COALESCE(default_provider_name,'')='' AND COALESCE(default_model_id,'')='' AND COALESCE(default_reasoning_effort,'')=''`, 1)
-		assertCount(t, db, "session", `SELECT COUNT(*) FROM sessions WHERE session_id='upgrade-session' AND title='历史对话' AND active_version=2 AND adapter_name='' AND provider_name='' AND model_id='' AND reasoning_effort=''`, 1)
-		assertCount(t, db, "append-only audit messages", `SELECT COUNT(*) FROM messages WHERE session_id='upgrade-session' AND role='user' AND ((id=1 AND content='消息1' AND version=2 AND to_api=1 AND to_frontend=0) OR (id=2 AND content='消息2' AND version=1 AND to_api=0 AND to_frontend=1) OR (id=3 AND content='消息3' AND version=2 AND to_api=0 AND to_frontend=0))`, 3)
-		assertCount(t, db, "daily writing counts", `SELECT COUNT(*) FROM writing_log WHERE date='2026-01-01' AND novel_id=1 AND word_delta=50 AND words_added=? AND words_deleted=?`, 1, sample.WritingAdded, sample.WritingDeleted)
-		assertCount(t, db, "daily writing row count", `SELECT COUNT(*) FROM writing_log`, 1)
+		for _, c := range cases {
+			if err := c.AssertAfter(result); err != nil {
+				t.Fatalf("seed case %s: %v", c.ID, err)
+			}
+		}
+		for _, name := range tableNames(t, db, false) {
+			if !result.CheckedTables[name] {
+				assertCount(t, db, "unseeded "+name, "SELECT COUNT(*) FROM "+quote(name), 0)
+			}
+		}
 		assertCount(t, db, "unfinished migration states", `SELECT COUNT(*) FROM migrate_state WHERE status <> 'done'`, 0)
 		var states int
-		if err := db.QueryRow(`SELECT COUNT(*) FROM migrate_state`).Scan(&states); err != nil || states == 0 {
+		if err := db.QueryRow("SELECT COUNT(*) FROM migrate_state").Scan(&states); err != nil || states == 0 {
 			t.Fatalf("missing completed progress: states=%d error=%v", states, err)
 		}
 		var integrity string
-		if err := db.QueryRow(`PRAGMA integrity_check`).Scan(&integrity); err != nil || integrity != "ok" {
+		if err := db.QueryRow("PRAGMA integrity_check").Scan(&integrity); err != nil || integrity != "ok" {
 			t.Fatalf("database integrity: %s %v", integrity, err)
 		}
 	})
-	for _, c := range []struct{ id, novel int }{{11, 1}, {12, 1}, {21, 2}} {
-		for _, kind := range []string{"chapters", "outlines"} {
-			path := filepath.Join(dir, "novels", fmt.Sprint(c.novel), kind, fmt.Sprintf("id_%d.md", c.id))
-			data, err := os.ReadFile(path)
-			want := fmt.Sprintf("%s：小说%d，章节%d\n", kind, c.novel, c.id)
-			if len(contents) > 0 {
-				key := fmt.Sprintf("novels/%d/%s/id_%d.md", c.novel, kind, c.id)
-				if override, exists := contents[0][key]; exists {
-					want = override
-				}
-			}
-			if err != nil || string(data) != want {
-				t.Fatalf("file content %s: got %q error=%v", path, data, err)
-			}
-		}
-	}
-	for _, id := range []string{"1", "2"} {
+	for id, head := range sample.GitHeads {
 		repo := filepath.Join(dir, "novels", id)
-		gitOutput(t, gitBin, repo, "merge-base", "--is-ancestor", sample.GitHeads[id], "HEAD")
+		gitOutput(t, gitBin, repo, "merge-base", "--is-ancestor", head, "HEAD")
 		gitOutput(t, gitBin, repo, "fsck", "--no-reflogs")
 		if out := gitOutput(t, gitBin, repo, "status", "--porcelain"); out != "" {
 			t.Fatalf("dirty upgraded repository %s: %s", id, out)
@@ -464,7 +470,7 @@ func assertBackups(t *testing.T, dir string, sample fixture.Fixture, original ma
 		if files := fileHashes(t, filepath.Join(backup, "novels")); !reflect.DeepEqual(originalFiles, files) {
 			t.Fatalf("backup %s changed original novel file contents", entry.Name())
 		}
-		for _, id := range []string{"1", "2"} {
+		for id := range sample.GitHeads {
 			if head := gitOutput(t, gitBin, filepath.Join(backup, "novels", id), "rev-parse", "HEAD"); head != sample.GitHeads[id] {
 				t.Fatal("backup does not preserve original Git head")
 			}
@@ -712,8 +718,14 @@ func gitOutput(t *testing.T, bin, dir string, args ...string) string {
 func gitHeads(t *testing.T, dir, gitBin string) map[string]string {
 	t.Helper()
 	heads := map[string]string{}
-	for _, id := range []string{"1", "2"} {
-		heads[id] = gitOutput(t, gitBin, filepath.Join(dir, "novels", id), "rev-parse", "HEAD")
+	entries, err := os.ReadDir(filepath.Join(dir, "novels"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			heads[entry.Name()] = gitOutput(t, gitBin, filepath.Join(dir, "novels", entry.Name()), "rev-parse", "HEAD")
+		}
 	}
 	return heads
 }

@@ -56,7 +56,7 @@ func run(selected string, check bool, target string, rebuild bool) error {
 		return fmt.Errorf("run from the worktree root")
 	}
 	path := filepath.Join(root, fixtureDir, "manifest.json")
-	m := manifest{Format: 1, Generator: 1}
+	m := manifest{Format: 1, Generator: 2}
 	if data, err := os.ReadFile(path); err == nil {
 		if err := json.Unmarshal(data, &m); err != nil {
 			return err
@@ -64,7 +64,7 @@ func run(selected string, check bool, target string, rebuild bool) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	if m.Format != 1 || m.Generator != 1 {
+	if m.Format != 1 || (m.Generator != 1 && m.Generator != 2) {
 		return fmt.Errorf("unsupported fixture format/generator")
 	}
 	all, err := releaseTags(root, target)
@@ -74,6 +74,7 @@ func run(selected string, check bool, target string, rebuild bool) error {
 	if check {
 		return checkManifest(root, m, all)
 	}
+	m.Generator = 2
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("generate historical fixtures on Linux; consumption is cross-platform")
 	}
@@ -125,6 +126,11 @@ func run(selected string, check bool, target string, rebuild bool) error {
 					if existing.Commit != commit || hash != existing.SHA256 {
 						return fmt.Errorf("frozen fixture %s changed; refusing to overwrite", name)
 					}
+					if !rebuild {
+						if err := fixturedata.ValidateSeed(existing); err != nil {
+							return err
+						}
+					}
 					frozen = true
 				}
 			}
@@ -154,6 +160,9 @@ func run(selected string, check bool, target string, rebuild bool) error {
 				return err
 			}
 			f.Tag, f.Commit, f.Origin, f.Archive = tag, commit, origin, name+".zip"
+			if err := fixturedata.ValidateSeed(f); err != nil {
+				return err
+			}
 			// Persist each completed sample, so an interrupted generation can be
 			// reviewed and resumed without overwriting already frozen archives.
 			if err := saveFixture(filepath.Join(home, "Goink"), path, &m, f, rebuild); err != nil {
@@ -225,6 +234,9 @@ func checkManifest(root string, m manifest, tags []string) error {
 }
 
 func buildRunner(root, work, tag string) (string, error) {
+	if _, err := fixturedata.SeedIDs(tag, "fresh"); err != nil {
+		return "", err
+	}
 	dir := filepath.Join(work, "source-"+tag)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
@@ -266,8 +278,16 @@ func buildRunner(root, work, tag string) (string, error) {
 	if err := os.WriteFile(filepath.Join(dir, "upgrade_fixture_main.go"), source, 0644); err != nil {
 		return "", err
 	}
+	dataTypes, err := os.ReadFile(filepath.Join(root, "internal/migrate/upgrade/fixture/seeddata/data.go"))
+	if err != nil {
+		return "", err
+	}
+	dataTypes = bytes.Replace(dataTypes, []byte("package seeddata"), []byte("package main"), 1)
+	if err := os.WriteFile(filepath.Join(dir, "upgrade_fixture_seed_data.go"), dataTypes, 0644); err != nil {
+		return "", err
+	}
 	runner := filepath.Join(work, "runner-"+tag)
-	build := exec.Command("go", "build", "-o", runner, "upgrade_fixture_main.go")
+	build := exec.Command("go", "build", "-o", runner, "upgrade_fixture_main.go", "upgrade_fixture_seed_data.go")
 	build.Dir, build.Stdout, build.Stderr = dir, os.Stdout, os.Stderr
 	if err := build.Run(); err != nil {
 		return "", fmt.Errorf("build historical runner %s: %w", tag, err)
@@ -316,6 +336,46 @@ func extractSource(reader io.Reader, dir string) error {
 
 func invoke(root, runner, home, mode string) error {
 	if err := os.MkdirAll(home, 0755); err != nil {
+		return err
+	}
+	tag := strings.TrimPrefix(filepath.Base(runner), "runner-")
+	metaPath := filepath.Join(home, "metadata.json")
+	var meta fixture
+	if mode == "seed" {
+		ids, err := fixturedata.SeedIDs(tag, "fresh")
+		if err != nil {
+			return err
+		}
+		input, err := fixturedata.BuildSeed(ids)
+		if err != nil {
+			return err
+		}
+		encoded, err := json.Marshal(input)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(home, "seed.json"), encoded, 0644); err != nil {
+			return err
+		}
+		meta.CaseIDs = ids
+		meta.InputSHA256, err = fixturedata.SeedHash(ids)
+		if err != nil {
+			return err
+		}
+	} else {
+		encoded, err := os.ReadFile(metaPath)
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(encoded, &meta); err != nil {
+			return err
+		}
+	}
+	encoded, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(metaPath, encoded, 0644); err != nil {
 		return err
 	}
 	gitBin, err := exec.LookPath("git")

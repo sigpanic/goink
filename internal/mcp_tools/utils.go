@@ -2,11 +2,21 @@ package mcp_tools
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/chapter"
+	"github.com/sigpanic/goink/internal/web"
 )
+
+func webToolFailure(operation string, err error) (*ToolResult, error) {
+	var businessErr *web.BusinessError
+	if errors.As(err, &businessErr) {
+		return &ToolResult{Error: operation + "失败：" + businessErr.Message}, nil
+	}
+	return nil, fmt.Errorf("%s失败: %w", operation, err)
+}
 
 // ensureChapterIDsInNovel 批量校验章节存在且属于当前小说。
 // 仅用于工具写入具体章节引用；未来计划的 reading number 不适用。

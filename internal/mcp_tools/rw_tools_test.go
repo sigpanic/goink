@@ -18,6 +18,7 @@ import (
 	"gorm.io/gorm"
 
 	"github.com/sigpanic/goink/internal/activity"
+	"github.com/sigpanic/goink/internal/approval"
 	"github.com/sigpanic/goink/internal/chapter"
 	"github.com/sigpanic/goink/internal/config"
 	"github.com/sigpanic/goink/internal/git"
@@ -178,6 +179,150 @@ func editArgsTitle(path, changeType, content, title string) map[string]any {
 	args := editArgs(path, changeType, content)
 	args["title"] = title
 	return args
+}
+
+type rwApproverFunc func(context.Context, string, any) (approval.Approval, error)
+
+func (f rwApproverFunc) RequestApproval(ctx context.Context, toolID string, payload any) (approval.Approval, error) {
+	return f(ctx, toolID, payload)
+}
+
+func TestEditRequiresNewContent(t *testing.T) {
+	for _, mode := range []string{"full_replace", "search_replace", "line_range_replace"} {
+		for _, input := range []string{"missing", "null"} {
+			t.Run(mode+"/"+input, func(t *testing.T) {
+				db, tc, ctx := setupRWEnv(t)
+				id := seedChapter(t, db, 1, nil, 1, 1)
+				path := git.ChapterPath(id)
+				original := "第一行\n第二行"
+				require.NoError(t, git.WriteFile(1, path, original))
+				tc.Approver = rwApproverFunc(func(context.Context, string, any) (approval.Approval, error) {
+					t.Fatal("invalid arguments must not request approval")
+					return approval.Approval{}, nil
+				})
+				args := editArgs(path, mode, "")
+				args["search_text"] = original
+				args["start_line"], args["end_line"] = 1, 2
+				if input == "missing" {
+					delete(args, "new_content")
+				} else {
+					args["new_content"] = nil
+				}
+
+				res := execEdit(t, ctx, tc, args)
+				require.False(t, res.Success)
+				require.Equal(t, mcp_tools.ErrKindArgs, res.ErrKind)
+				require.Contains(t, res.Error, "NewContent")
+				require.Equal(t, original, mustReadFile(t, novelFile(t, 1, path)))
+				require.EqualValues(t, 1, chapterCount(t, db, 1))
+			})
+		}
+	}
+}
+
+func TestEditEmptyContentApproval(t *testing.T) {
+	for _, pathKind := range []string{"plain", "chapter"} {
+		for _, mode := range []string{"full_replace", "search_replace", "line_range_replace"} {
+			for _, approved := range []bool{false, true} {
+				t.Run(fmt.Sprintf("%s/%s/approved=%t", pathKind, mode, approved), func(t *testing.T) {
+					db, tc, ctx := setupRWEnv(t)
+					path := "goink.md"
+					var id int64
+					if pathKind == "chapter" {
+						id = seedChapter(t, db, 1, nil, 1, 1)
+						path = git.ChapterPath(id)
+						require.NoError(t, db.Model(&chapter.Chapter{}).Where("id = ?", id).Update("word_count", 6).Error)
+					}
+					original := "第一行\n第二行"
+					require.NoError(t, git.WriteFile(1, path, original))
+					approvalCalls := 0
+					tc.Approver = rwApproverFunc(func(_ context.Context, _ string, payload any) (approval.Approval, error) {
+						approvalCalls++
+						p := payload.(map[string]any)
+						require.Equal(t, path, p["path"])
+						require.Equal(t, original, p["original"])
+						require.Equal(t, "", p["modified"])
+						return approval.Approval{Approved: approved}, nil
+					})
+					args := editArgs(path, mode, "")
+					args["search_text"] = original
+					args["start_line"], args["end_line"] = 1, 2
+
+					res := execEdit(t, ctx, tc, args)
+					require.Equal(t, approved, res.Success, res.Error)
+					require.Equal(t, 1, approvalCalls)
+					expected := original
+					if approved {
+						expected = ""
+					}
+					require.Equal(t, expected, mustReadFile(t, novelFile(t, 1, path)))
+					if pathKind == "chapter" {
+						require.EqualValues(t, 1, chapterCount(t, db, 1))
+						expectedWords := 6
+						if approved {
+							expectedWords = 0
+						}
+						require.Equal(t, expectedWords, fetchChapter(t, db, id).WordCount)
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestNewChapterEmptyContent(t *testing.T) {
+	for _, prefix := range []string{"chapters", "outlines"} {
+		for _, approved := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/approved=%t", prefix, approved), func(t *testing.T) {
+				db, tc, ctx := setupRWEnv(t)
+				vol := seedVolume(t, db, 1, "第一卷", 1)
+				path := fmt.Sprintf("%s/%d/new.md", prefix, vol)
+				approvalCalls := 0
+				tc.Approver = rwApproverFunc(func(_ context.Context, _ string, payload any) (approval.Approval, error) {
+					approvalCalls++
+					p := payload.(map[string]any)
+					require.Equal(t, path, p["path"])
+					require.Equal(t, "", p["original"])
+					require.Equal(t, "", p["modified"])
+					require.Equal(t, "空章节", p["title"])
+					return approval.Approval{Approved: approved}, nil
+				})
+
+				res := execEdit(t, ctx, tc, editArgsTitle(path, "full_replace", "", "空章节"))
+				require.Equal(t, approved, res.Success, res.Error)
+				require.Equal(t, 1, approvalCalls)
+				if !approved {
+					require.Zero(t, chapterCount(t, db, 1))
+					_, err := os.Stat(novelFile(t, 1, prefix))
+					require.True(t, os.IsNotExist(err), "rejected creation must not write files: %v", err)
+					return
+				}
+
+				require.EqualValues(t, 1, chapterCount(t, db, 1))
+				id := res.Data["chapter_id"].(int64)
+				require.Positive(t, id)
+				require.Equal(t, vol, res.Data["volume_id"])
+				physical := git.ChapterPath(id)
+				if prefix == "outlines" {
+					physical = git.OutlinePath(id)
+				}
+				require.Equal(t, physical, res.Data["path"])
+				require.Equal(t, "", mustReadFile(t, novelFile(t, 1, physical)))
+				ch := fetchChapter(t, db, id)
+				require.Equal(t, "空章节", ch.Title)
+				require.Equal(t, &vol, ch.VolumeID)
+				require.Equal(t, 1, ch.SortOrder)
+				require.Zero(t, ch.WordCount)
+
+				res = execEdit(t, ctx, tc, editArgsTitle(physical, "full_replace", "", "新标题"))
+				require.True(t, res.Success, res.Error)
+				require.Equal(t, "新标题", fetchChapter(t, db, id).Title)
+				require.Equal(t, 1, approvalCalls)
+				require.EqualValues(t, 1, chapterCount(t, db, 1))
+				require.Equal(t, "", mustReadFile(t, novelFile(t, 1, physical)))
+			})
+		}
+	}
 }
 
 // ── 新建通道（chapters/{vid}/new.md）──────────────────────

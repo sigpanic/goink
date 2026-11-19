@@ -12,9 +12,9 @@ import (
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 
-	"github.com/sigpanic/goink/internal/llm"
 	"github.com/sigpanic/goink/internal/preference"
 	"github.com/sigpanic/goink/internal/setting"
+	"github.com/sigpanic/goink/internal/web"
 )
 
 func testMCPRegistry(t *testing.T, tool Tool) *Registry {
@@ -35,10 +35,10 @@ func testMCPDB(t *testing.T) *gorm.DB {
 
 func TestWebSearchRequestFailureIsSystemError(t *testing.T) {
 	reg := testMCPRegistry(t, &WebSearchTool{})
-	result := reg.Execute(context.Background(), "web_search", []byte(`{"prompt":"查询天气"}`), ToolContext{
-		WebSearch: func(context.Context, string) (*llm.WebSearchResult, error) {
+	result := reg.Execute(context.Background(), "web_search", []byte(`{"query":"查询天气"}`), ToolContext{
+		WebSearch: webSearchFunc(func(context.Context, string) (*web.SearchResult, error) {
 			return nil, errors.New("request timed out")
-		},
+		}),
 	}, nil)
 
 	if result.Success {
