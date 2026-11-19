@@ -503,3 +503,99 @@ func TestListByNovel_Pagination(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultVolumeID(t *testing.T) {
+	ctx := context.Background()
+
+	seedVolume := func(t *testing.T, db *gorm.DB, name string, sort int) *int64 {
+		t.Helper()
+		v := volume.Volume{NovelID: 1, Name: name, SortOrder: sort}
+		if err := db.Create(&v).Error; err != nil {
+			t.Fatalf("seed volume: %v", err)
+		}
+		return &v.ID
+	}
+	seedChapter := func(t *testing.T, db *gorm.DB, volumeID *int64, sort int) {
+		t.Helper()
+		if err := db.Create(&Chapter{NovelID: 1, VolumeID: volumeID, SortOrder: sort}).Error; err != nil {
+			t.Fatalf("seed chapter: %v", err)
+		}
+	}
+
+	t.Run("跟随阅读顺序最后一章所在卷", func(t *testing.T) {
+		db := openChDB(t)
+		s := NewStore(db, testChLogger())
+		v1 := seedVolume(t, db, "第一卷", 1)
+		v2 := seedVolume(t, db, "第二卷", 2)
+		seedChapter(t, db, v1, 1)
+		seedChapter(t, db, v2, 1)
+
+		got, err := s.DefaultVolumeID(ctx, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil || *got != *v2 {
+			t.Errorf("volume_id = %v, want 第二卷 %d", got, *v2)
+		}
+	})
+
+	t.Run("末章未分卷时返回 nil", func(t *testing.T) {
+		db := openChDB(t)
+		s := NewStore(db, testChLogger())
+		v1 := seedVolume(t, db, "第一卷", 1)
+		seedChapter(t, db, v1, 1)
+		seedChapter(t, db, nil, 1)
+
+		got, err := s.DefaultVolumeID(ctx, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Errorf("volume_id = %v, want nil", *got)
+		}
+	})
+
+	t.Run("末卷为空时仍跟随最后一章", func(t *testing.T) {
+		db := openChDB(t)
+		s := NewStore(db, testChLogger())
+		v1 := seedVolume(t, db, "第一卷", 1)
+		seedVolume(t, db, "第二卷", 2) // 空卷
+		seedChapter(t, db, v1, 1)
+
+		got, err := s.DefaultVolumeID(ctx, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil || *got != *v1 {
+			t.Errorf("volume_id = %v, want 第一卷 %d", got, *v1)
+		}
+	})
+
+	t.Run("无章节时回退卷序最后一卷", func(t *testing.T) {
+		db := openChDB(t)
+		s := NewStore(db, testChLogger())
+		seedVolume(t, db, "第一卷", 1)
+		v2 := seedVolume(t, db, "第二卷", 2)
+
+		got, err := s.DefaultVolumeID(ctx, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got == nil || *got != *v2 {
+			t.Errorf("volume_id = %v, want 第二卷 %d", got, *v2)
+		}
+	})
+
+	t.Run("无章节也无卷时返回 nil", func(t *testing.T) {
+		db := openChDB(t)
+		s := NewStore(db, testChLogger())
+
+		got, err := s.DefaultVolumeID(ctx, nil, 1)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != nil {
+			t.Errorf("volume_id = %v, want nil", *got)
+		}
+	})
+}

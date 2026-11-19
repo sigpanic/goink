@@ -26,7 +26,7 @@ import (
 
 // EditArgs 是 edit 工具的参数。
 type EditArgs struct {
-	Path       string  `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时默认分进最后一卷，整本书未建卷则创建未分卷章节）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；卷纲：volumes/id_{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
+	Path       string  `json:"path" jsonschema:"required,description=要编辑的文件路径。章节正文：chapters/id_{章节id}.md（主格式）或 chapters/{卷id}/id_{章节id}.md（等价容错写法）；章节大纲：outlines/id_{章节id}.md 或 outlines/{卷id}/id_{章节id}.md；新建章节：chapters/{卷id}/new.md 或 chapters/new.md（不带卷时追加到全书末尾）；新建大纲：outlines/{卷id}/new.md 或 outlines/new.md（规则同章节，只能 full_replace）；卷纲：volumes/id_{卷id}.md；故事状态 goink.md；小说级技能 skills/<name>.md；用户级技能 ~/.goink/skills/<name>.md" validate:"required"`
 	ChangeType string  `json:"change_type" jsonschema:"required,enum=full_replace,enum=search_replace,enum=line_range_replace,description=编辑方式。full_replace：全文替换；search_replace：查找并替换指定文本；line_range_replace：替换指定行范围" validate:"required,oneof=full_replace search_replace line_range_replace"`
 	SearchText string  `json:"search_text" jsonschema:"description=要查找的原文片段（search_replace 时必填）。请从文件中精确复制" validate:"omitempty"`
 	NewContent *string `json:"new_content" jsonschema:"required,description=必填的新内容，不可省略或传 null。full_replace 时为完整全文（空字符串表示清空全文）；search_replace 时为替换后的文本（空字符串表示删除匹配文本）；line_range_replace 时为替换该行范围的新内容（空字符串表示删除该范围行）" validate:"required"`
@@ -363,15 +363,13 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 	// 新建在外层事务中取得 id 并写入首个文件；文件失败时回滚记录与排序调整。
 	// 已有章节的标题更新仍延后到正文落盘之后，见下。
 	if ref.IsNew {
-		// 未指定卷：默认最后一卷；整本书无卷则创建未分卷章节。
+		// 未指定卷：追加到全书末尾，即最后一章所在的卷；无章节时回退到卷序最后一卷。
 		if volumeID == nil {
-			last, err := volume.NewStore(tc.DB, tc.LoggerOrDefault()).LastByNovel(ctx, nil, tc.NovelID)
+			resolved, err := chStore.DefaultVolumeID(ctx, nil, tc.NovelID)
 			if err != nil {
-				return nil, fmt.Errorf("resolve last volume: %w", err)
+				return nil, fmt.Errorf("resolve default volume: %w", err)
 			}
-			if last != nil {
-				volumeID = &last.ID
-			}
+			volumeID = resolved
 		}
 		var created *chapter.Chapter
 		if err := tc.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
@@ -437,6 +435,11 @@ func (t *EditTool) editChapterLike(ctx context.Context, a *EditArgs, tc ToolCont
 			data["volume_id"] = *ch.VolumeID
 		} else {
 			data["volume_id"] = nil
+		}
+		if number, err := chStore.GetReadingNumberByID(ctx, nil, tc.NovelID, ch.ID); err != nil {
+			tc.LoggerOrDefault().Warn("计算实时章节号失败", "chapter_id", ch.ID, "err", err)
+		} else {
+			data["reading_number"] = number
 		}
 	}
 

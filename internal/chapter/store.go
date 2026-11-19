@@ -122,6 +122,31 @@ func (s *Store) CountByNovel(ctx context.Context, tx *gorm.DB, novelID int64) (i
 	return int(count), nil
 }
 
+// DefaultVolumeID 返回“不带卷新建章节”时的默认归属卷：取阅读顺序最后一章
+// 所在的卷（该章未分卷时为 nil）；全书没有章节时回退到卷序最后一卷；
+// 既无章节也无卷时返回 nil。调用方随后把新章节追加到该分组末尾。
+func (s *Store) DefaultVolumeID(ctx context.Context, tx *gorm.DB, novelID int64) (*int64, error) {
+	var last Chapter
+	if err := s.orderedByNovel(ctx, tx, novelID).
+		Order(chapterOrderDesc).
+		Limit(1).
+		Find(&last).Error; err != nil {
+		return nil, fmt.Errorf("chapter store: default volume: %w", err)
+	}
+	if last.ID != 0 {
+		return last.VolumeID, nil
+	}
+
+	vol, err := volume.NewStore(s.DB, s.logger).LastByNovel(ctx, tx, novelID)
+	if err != nil {
+		return nil, fmt.Errorf("chapter store: default volume: %w", err)
+	}
+	if vol == nil {
+		return nil, nil
+	}
+	return &vol.ID, nil
+}
+
 // MissingIDsByNovel 返回不存在或不属于指定小说的章节 ID。
 // 返回值按输入中的首次出现顺序排列，重复 ID 只返回一次。
 func (s *Store) MissingIDsByNovel(ctx context.Context, tx *gorm.DB, novelID int64, ids []int64) ([]int64, error) {

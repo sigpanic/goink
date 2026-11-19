@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import "./CompressionBlock.css";
 
 interface Props {
-  phase: "compressing" | "done";
+  phase: "compressing" | "done" | "incomplete";
 }
 
 export default function CompressionBlock({ phase }: Props) {
@@ -29,6 +29,20 @@ export default function CompressionBlock({ phase }: Props) {
           <span className="compression-shimmer">
             {t("chat.compressingContext", { seconds: elapsed })}
           </span>
+        </div>
+      </div>
+    );
+  }
+
+  if (phase === "incomplete") {
+    return (
+      <div className="compression-block">
+        <div className="compression-done">
+          <span className="compression-line" />
+          <span className="compression-label compression-label-incomplete">
+            {t("chat.compressionInterrupted")}
+          </span>
+          <span className="compression-line" />
         </div>
       </div>
     );
