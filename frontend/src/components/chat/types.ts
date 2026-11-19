@@ -56,7 +56,12 @@ export interface TurnSegment {
   // tool
   toolName: string;
   toolId: string;
-  toolStatus: "executing" | "awaiting_approval" | "completed" | "failed";
+  toolStatus:
+    | "executing"
+    | "awaiting_approval"
+    | "completed"
+    | "failed"
+    | "incomplete";
   displayText: string;
   activityKind: string;
   error: string;
@@ -64,13 +69,13 @@ export interface TurnSegment {
   approvalType?: string;
   approvalPayload?: Record<string, unknown>;
   // subagent
-  status?: "streaming" | "done" | "failed";
+  status?: "streaming" | "done" | "failed" | "incomplete";
   agentType?: "memory" | "review";
   taskId?: string;
   segments?: TurnSegment[];
   finalText?: string;
   // compression
-  compressionPhase?: "compressing" | "done";
+  compressionPhase?: "compressing" | "done" | "incomplete";
   // web_search / web_fetch 的富文本结果
   result?: Record<string, unknown>;
   // P2: 创建该 segment 时的事件 seq（实时流式用，>= 1）

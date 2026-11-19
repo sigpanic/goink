@@ -24,6 +24,11 @@
   border-left: 3px solid var(--tool-red-border);
   background: var(--tool-red);
 }
+.tool-card.incomplete {
+  border-left: 3px solid var(--border);
+  background: color-mix(in oklab, var(--muted) 45%, transparent);
+  opacity: 0.85;
+}
 
 .tool-card.compact {
   font-size: 0.72rem;
@@ -58,6 +63,9 @@
 .tool-card.failed .tool-icon {
   color: var(--tool-red-border);
 }
+.tool-card.incomplete .tool-icon {
+  color: var(--muted-foreground);
+}
 
 /* ── Label ── */
 .tool-label {
@@ -70,6 +78,9 @@
   line-height: 1.35;
 }
 .tool-card.completed .tool-label {
+  color: var(--muted-foreground);
+}
+.tool-card.incomplete .tool-label {
   color: var(--muted-foreground);
 }
 
@@ -99,6 +110,10 @@
 .tool-badge-failed {
   color: var(--tool-red-border);
   background: color-mix(in oklab, var(--tool-red-border) 8%, transparent);
+}
+.tool-badge-incomplete {
+  color: var(--muted-foreground);
+  background: color-mix(in oklab, var(--muted-foreground) 12%, transparent);
 }
 
 /* ── Error line ── */

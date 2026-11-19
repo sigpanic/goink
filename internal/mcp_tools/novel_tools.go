@@ -23,7 +23,7 @@ type GetChapterListTool struct{}
 
 func (t *GetChapterListTool) Name() string { return "get_chapter_list" }
 func (t *GetChapterListTool) Description() string {
-	return "获取小说的章节目录，支持分页。按阅读顺序降序排列（最新的在前），按卷分组展示每章的稳定 ID、实时阅读序号、标题和字数。"
+	return "获取小说的章节目录，支持分页。按阅读顺序降序排列（最新的在前），按卷分组展示每章的稳定 ID、实时阅读序号、标题和字数。排序规则：各卷按卷序排在前面，未分卷章节统一排在所有卷之后（因此未分卷分组显示在列表最上方）。"
 }
 func (t *GetChapterListTool) Category() ToolCategory { return CategoryNovelManagement }
 

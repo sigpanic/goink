@@ -2,6 +2,7 @@ import {
   Loader2,
   CheckCircle2,
   XCircle,
+  CircleSlash,
   Eye,
   Plus,
   Pencil,
@@ -21,10 +22,17 @@ import "./ToolCallCard.css";
 interface Props {
   toolName: string;
   displayText: string;
-  status: "executing" | "awaiting_approval" | "completed" | "failed";
+  status:
+    | "executing"
+    | "awaiting_approval"
+    | "completed"
+    | "failed"
+    | "incomplete";
   activityKind?: string;
   error?: string;
   compact?: boolean;
+  // turn 已结束但工具未走完时的中性文案（已取消 / 已中断 / 未完成）
+  incompleteLabel?: string;
   // approval
   approvalType?: string;
   approvalPayload?: Record<string, unknown>;
@@ -335,6 +343,7 @@ export default memo(function ToolCallCard({
   activityKind,
   error,
   compact,
+  incompleteLabel,
   approvalType,
   approvalPayload,
   onApprove,
@@ -374,6 +383,9 @@ export default memo(function ToolCallCard({
   const isExecuting = status === "executing";
   const isCompleted = status === "completed";
   const isFailed = status === "failed";
+  const isIncomplete = status === "incomplete";
+  // selected 阶段生成的文案带“正在”前缀，中断后去掉以免出现“正在编辑… / 已取消”的矛盾
+  const label = isIncomplete ? displayText.replace(/^正在/, "") : displayText;
 
   // delete_record 完成态：渲染"已删除 xxx"具体内容（result.deleted 由后端 metadata 透传）
   const deletedEntity =
@@ -383,7 +395,7 @@ export default memo(function ToolCallCard({
 
   return (
     <div
-      className={`tool-card ${isExecuting ? "executing" : isCompleted ? "completed" : "failed"} ${compact ? "compact" : ""}`}
+      className={`tool-card ${isExecuting ? "executing" : isCompleted ? "completed" : isFailed ? "failed" : isIncomplete ? "incomplete" : "failed"} ${compact ? "compact" : ""}`}
     >
       <div className={`tool-row ${compact ? "compact" : ""}`}>
         <span className="tool-icon">
@@ -391,6 +403,8 @@ export default memo(function ToolCallCard({
             <Loader2 className="animate-spin" size={compact ? 12 : 14} />
           ) : isFailed ? (
             <XCircle size={compact ? 12 : 14} />
+          ) : isIncomplete ? (
+            <CircleSlash size={compact ? 12 : 14} />
           ) : (
             (() => {
               const I = activityIcon(activityKind);
@@ -399,16 +413,18 @@ export default memo(function ToolCallCard({
           )}
         </span>
 
-        <span className="tool-label">{displayText}</span>
+        <span className="tool-label">{label}</span>
 
         <span
-          className={`tool-badge ${isCompleted ? "tool-badge-done" : isFailed ? "tool-badge-failed" : ""}`}
+          className={`tool-badge ${isCompleted ? "tool-badge-done" : isFailed ? "tool-badge-failed" : isIncomplete ? "tool-badge-incomplete" : ""}`}
         >
           {isExecuting
             ? activityBadge(activityKind, t)
             : isCompleted
               ? t("chat.done")
-              : t("chat.failed")}
+              : isIncomplete
+                ? (incompleteLabel ?? t("chat.finished"))
+                : t("chat.failed")}
         </span>
       </div>
 

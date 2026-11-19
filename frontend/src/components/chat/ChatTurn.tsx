@@ -81,6 +81,7 @@ export default function ChatTurn({
               key={segment.id}
               segment={segment}
               isTurnStreaming={turn.status === "streaming"}
+              turnStatus={turn.status}
               hideContent={canCollapse && index === finalIndex}
               copyable={hasFinalReply && !canCollapse && index === finalIndex}
               sentAt={index === finalIndex ? turn.assistantSentAt : undefined}

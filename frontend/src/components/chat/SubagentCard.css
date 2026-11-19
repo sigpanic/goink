@@ -88,3 +88,8 @@
   color: var(--tool-red-border);
   background: var(--tool-red);
 }
+
+.subagent-badge-incomplete {
+  color: var(--muted-foreground);
+  background: var(--muted);
+}

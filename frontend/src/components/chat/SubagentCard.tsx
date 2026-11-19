@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, memo } from "react";
 import { useTranslation } from "react-i18next";
 import type { TFunction } from "i18next";
-import { Loader2, CheckCircle2, XCircle, ChevronDown } from "lucide-react";
+import { Loader2, CheckCircle2, XCircle, CircleSlash, ChevronDown } from "lucide-react";
 import type { TurnSegment } from "./types";
 import ThinkingBlock from "./ThinkingBlock";
 import MessageBubble from "./MessageBubble";
@@ -12,7 +12,9 @@ import "./SubagentCard.css";
 interface Props {
   agentType: "memory" | "review";
   segments: TurnSegment[];
-  status: "streaming" | "done" | "failed";
+  status: "streaming" | "done" | "failed" | "incomplete";
+  // turn 已结束但子 agent 未走完时的中性文案（已取消 / 已中断 / 未完成）
+  incompleteLabel?: string;
   // P1: 子 agent 重试状态（由 EventRetrying 携带 sub_task_id 时设置）
   retrying?: {
     attempt: number;
@@ -38,6 +40,7 @@ export default memo(function SubagentCard({
   status,
   retrying,
   errorMessage,
+  incompleteLabel,
 }: Props) {
   const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(status !== "streaming");
@@ -46,6 +49,7 @@ export default memo(function SubagentCard({
   const isStreaming = status === "streaming";
   const isDone = status === "done";
   const isFailed = status === "failed";
+  const isIncomplete = status === "incomplete";
 
   const accentCls =
     agentType === "review" ? "subagent-review" : "subagent-memory";
@@ -107,6 +111,10 @@ export default memo(function SubagentCard({
           ) : isDone ? (
             <span className="subagent-badge subagent-badge-done">
               <CheckCircle2 size={10} /> {t("chat.done")}
+            </span>
+          ) : isIncomplete ? (
+            <span className="subagent-badge subagent-badge-incomplete">
+              <CircleSlash size={10} /> {incompleteLabel ?? t("chat.finished")}
             </span>
           ) : isFailed ? (
             <span className="subagent-badge subagent-badge-failed">
@@ -182,6 +190,7 @@ export default memo(function SubagentCard({
                       activityKind={seg.activityKind}
                       error={seg.error}
                       result={seg.result}
+                      incompleteLabel={incompleteLabel}
                       compact
                     />
                   );
