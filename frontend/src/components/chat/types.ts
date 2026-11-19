@@ -44,6 +44,10 @@ export interface AgentEvent {
   timestamp: string;
 }
 
+// ToolStatus 是工具调用的生命周期状态，供 turn segment 与工具卡片共用。
+export type ToolStatus =
+  "executing" | "awaiting_approval" | "completed" | "failed" | "incomplete";
+
 // TurnSegment 是 turn 内的一个片段：文本块、工具调用、子 Agent 或压缩标记
 export interface TurnSegment {
   id: string;
@@ -56,8 +60,7 @@ export interface TurnSegment {
   // tool
   toolName: string;
   toolId: string;
-  toolStatus:
-    "executing" | "awaiting_approval" | "completed" | "failed" | "incomplete";
+  toolStatus: ToolStatus;
   displayText: string;
   activityKind: string;
   error: string;
