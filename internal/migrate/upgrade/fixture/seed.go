@@ -35,6 +35,7 @@ var SeedDeltas = []SeedDelta{
 	{Tag: "v1.7.0"},
 	{Tag: "v1.8.0", Remove: []string{"settings-legacy-relay", "sessions-legacy", "llm-v1"}, Add: []string{"settings-native", "sessions-native", "llm-v2"}},
 	{Tag: "v1.8.1"},
+	{Tag: "v1.9.0"},
 }
 
 func ApplyDelta(ids []string, delta SeedDelta) ([]string, error) {
