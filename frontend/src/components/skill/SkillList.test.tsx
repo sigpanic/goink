@@ -65,6 +65,25 @@ vi.mock("./SkillCopyDialog", () => ({
   ),
 }));
 
+vi.mock("./SkillCreateDialog", () => ({
+  default: ({
+    onCreated,
+    onClose,
+  }: {
+    onCreated: (name: string, target: "novel" | "user") => void;
+    onClose: () => void;
+  }) => (
+    <button
+      onClick={() => {
+        onCreated("created", "user");
+        onClose();
+      }}
+    >
+      create skill
+    </button>
+  ),
+}));
+
 // 5.4 commit 1: skills 数据走 useSkills query（不再走 useApp.ListSkills）。
 // mockUseSkills 用 vi.hoisted 提升，让 vi.mock 工厂能引用（vi.mock 自身被提升到文件顶部）。
 // 5.4 commit 2: DeleteSkill 走 useDeleteSkill mutation（不再走 useApp）。
@@ -117,11 +136,19 @@ describe("SkillList", () => {
     fireEvent.click(screen.getByRole("button", { name: "copy skill" }));
     expect(defaultProps.onNewSkill).toHaveBeenCalledWith(
       "copied",
+      "novel",
       "source content",
     );
     expect(
       screen.queryByRole("button", { name: "copy skill" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("opens the create dialog and forwards the chosen level", () => {
+    render(<SkillList {...defaultProps} />);
+    fireEvent.click(screen.getByTitle("skill.newSkill"));
+    fireEvent.click(screen.getByRole("button", { name: "create skill" }));
+    expect(defaultProps.onNewSkill).toHaveBeenCalledWith("created", "user");
   });
 
   it("shows loadFailed when isError", async () => {

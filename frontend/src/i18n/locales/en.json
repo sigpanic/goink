@@ -1128,6 +1128,16 @@
   "skill": {
     "skills": "Skills",
     "newSkill": "New Skill",
+    "createTitle": "New Skill",
+    "createDesc": "The skill opens in the editor after creation so you can keep editing.",
+    "scopeLabel": "Level",
+    "scopeNovel": "Current novel",
+    "scopeNovelHint": "Only available in the current novel",
+    "scopeUser": "User",
+    "scopeUserHint": "Available in all novels",
+    "invalidName": "Name cannot contain / \\ : * ? \" < > | or end with .md",
+    "nameExistsAtScope": "A skill with this name already exists at this level",
+    "create": "Create",
     "copy": {
       "title": "Copy from Another Novel",
       "description": "Open selected novel-level skills in the new skill editor. Saving creates independent copies in this novel. The content may contain settings specific to the source novel; edit as needed.",

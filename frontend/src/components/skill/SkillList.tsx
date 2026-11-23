@@ -11,6 +11,7 @@ import { useEditorTabsStore } from "@/components/content/useEditorTabsStore";
 import SkillContributeDialog from "./SkillContributeDialog";
 import SkillMarketplace from "./SkillMarketplace";
 import SkillCopyDialog from "./SkillCopyDialog";
+import SkillCreateDialog, { type SkillTarget } from "./SkillCreateDialog";
 import { useSkills } from "./useSkills";
 import { useDeleteSkill } from "./useDeleteSkill";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
@@ -20,7 +21,11 @@ interface Props {
   activeSkillName: string | null;
   onSelectSkill: (path: string, title: string, readOnly: boolean) => void;
   onEditSkill: (path: string, title: string, readOnly: boolean) => void;
-  onNewSkill: (name: string, initialContent?: string) => void;
+  onNewSkill: (
+    name: string,
+    target: SkillTarget,
+    initialContent?: string,
+  ) => void;
 }
 
 function skillPath(name: string, source: string): string {
@@ -51,8 +56,7 @@ export default function SkillList({
   // 5.4 commit 2: DeleteSkill 走 mutation（onSuccess invalidate list，不再手动 invalidate）。
   const deleteMutation = useDeleteSkill(novelId);
   const [search, setSearch] = useState("");
-  const [creating, setCreating] = useState(false);
-  const [newName, setNewName] = useState("");
+  const [createOpen, setCreateOpen] = useState(false);
   const [showContribute, setShowContribute] = useState(false);
   const [marketplaceOpen, setMarketplaceOpen] = useState(false);
   const [copyOpen, setCopyOpen] = useState(false);
@@ -164,7 +168,7 @@ export default function SkillList({
             <Heart className="w-3.5 h-3.5" />
           </button>
           <button
-            onClick={() => setCreating(true)}
+            onClick={() => setCreateOpen(true)}
             className="p-0.5 rounded hover:bg-muted/60 text-muted-foreground hover:text-foreground transition-colors"
             title={t("skill.newSkill")}
           >
@@ -172,47 +176,6 @@ export default function SkillList({
           </button>
         </div>
       </div>
-      {creating && (
-        <div className="px-2 py-1.5 border-b flex gap-1">
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && newName.trim()) {
-                onNewSkill(newName.trim());
-                setCreating(false);
-                setNewName("");
-              }
-              if (e.key === "Escape") {
-                setCreating(false);
-                setNewName("");
-              }
-            }}
-            onBlur={() => {
-              if (!newName.trim()) {
-                setCreating(false);
-              }
-            }}
-            placeholder={t("skill.namePlaceholder")}
-            autoFocus
-            className="flex-1 px-2 py-0.5 text-xs bg-background border rounded outline-none focus:ring-1 focus:ring-ring"
-          />
-          <button
-            onClick={() => {
-              if (newName.trim()) {
-                onNewSkill(newName.trim());
-                setCreating(false);
-                setNewName("");
-              }
-            }}
-            disabled={!newName.trim()}
-            className="px-2 py-0.5 text-xs text-action-save hover:text-action-save/80 disabled:opacity-50"
-          >
-            {t("skill.confirm")}
-          </button>
-        </div>
-      )}
       <div className="px-2 py-1.5">
         <div className="relative">
           <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
@@ -282,8 +245,21 @@ export default function SkillList({
           key={novelId}
           novelId={novelId}
           currentSkills={skills}
-          onNewSkill={onNewSkill}
+          onNewSkill={(name, initialContent) =>
+            onNewSkill(name, "novel", initialContent)
+          }
           onClose={() => setCopyOpen(false)}
+        />
+      )}
+      {createOpen && (
+        <SkillCreateDialog
+          novelId={novelId}
+          skills={skills}
+          onClose={() => setCreateOpen(false)}
+          onCreated={(name, target) => {
+            setCreateOpen(false);
+            onNewSkill(name, target);
+          }}
         />
       )}
       <SkillMarketplace

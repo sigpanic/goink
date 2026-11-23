@@ -1103,6 +1103,16 @@
   "skill": {
     "skills": "技能",
     "newSkill": "新建技能",
+    "createTitle": "新建技能",
+    "createDesc": "创建后将在编辑器中打开，可继续修改。",
+    "scopeLabel": "层级",
+    "scopeNovel": "当前小说",
+    "scopeNovelHint": "仅在当前小说中可用",
+    "scopeUser": "用户级",
+    "scopeUserHint": "所有小说均可使用",
+    "invalidName": "技能名称不能包含 / \\ : * ? \" < > |，且不能以 .md 结尾",
+    "nameExistsAtScope": "该层级已存在同名技能",
+    "create": "创建",
     "copy": {
       "title": "从其他小说复制",
       "description": "将选中的小说级技能带入新建编辑器，保存后成为当前小说的独立副本。正文可能包含源小说的专有设定，请按需修改。",

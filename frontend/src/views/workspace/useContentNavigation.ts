@@ -58,15 +58,18 @@ export function useContentNavigation({
     contentRef.current?.openFile(path, title, readOnly, "edit");
   }
 
-  function handleNewSkill(name: string, initialContent?: string) {
-    setActiveSkillName(`${t("workspace.skillLabel")}${name}`);
-    contentRef.current?.openFile(
-      `skills/${name}.md`,
-      `${t("workspace.skillLabel")}${name}`,
-      false,
-      "edit",
-      initialContent,
-    );
+  function handleNewSkill(
+    name: string,
+    target: "novel" | "user" = "novel",
+    initialContent?: string,
+  ) {
+    const path =
+      target === "user" ? `~/.goink/skills/${name}.md` : `skills/${name}.md`;
+    const title = `${t("workspace.skillLabel")}${name}`;
+    setActiveSkillName(title);
+    // 新建技能文件已落盘，直接看预览；复制技能带草稿内容，需要进入编辑。
+    const viewMode = initialContent === undefined ? "preview" : "edit";
+    contentRef.current?.openFile(path, title, false, viewMode, initialContent);
   }
 
   function handleSearchNavigateChapter(

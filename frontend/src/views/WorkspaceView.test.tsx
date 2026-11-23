@@ -720,7 +720,7 @@ describe("WorkspaceView search navigation", () => {
       "skills/draft.md",
       "workspace.skillLabeldraft",
       false,
-      "edit",
+      "preview",
       undefined,
     );
     expect(screen.getByTestId("side-panel")).toHaveAttribute(
