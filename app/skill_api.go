@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/sigpanic/goink/internal/activity"
@@ -41,13 +40,10 @@ func (a *App) DeleteSkill(input DeleteSkillInput) error {
 	if a.skill == nil {
 		return fmt.Errorf("skill store 未初始化")
 	}
-	if input.Name == "" {
-		return fmt.Errorf("技能名称不能为空")
+	if err := skill.ValidateName(input.Name); err != nil {
+		return fmt.Errorf("技能名称非法: %w", err)
 	}
-	name := strings.TrimSuffix(filepath.Base(input.Name), ".md")
-	if name == "" || name != input.Name {
-		return fmt.Errorf("技能名称非法")
-	}
+	name := input.Name
 
 	source := input.Source
 	if source != "novel" && source != "user" {
