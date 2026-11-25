@@ -6,6 +6,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { AppErr } from "@/utils/wailsResult";
 import SkillEditForm from "./SkillEditForm";
 
 const original =
@@ -95,5 +96,82 @@ describe("SkillEditForm", () => {
     expect(
       screen.getByPlaceholderText("skill.contentPlaceholder"),
     ).toBeEnabled();
+  });
+
+  it("shows the current level and moves to the other level", async () => {
+    const onMove = vi.fn().mockResolvedValue(undefined);
+    const view = render(
+      <SkillEditForm
+        content={original}
+        isDirty={false}
+        source="novel"
+        onDraftChange={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+        onMove={onMove}
+      />,
+    );
+
+    expect(screen.getByText("skill.scopeNovel")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "skill.moveToUser" }));
+    await waitFor(() => expect(onMove).toHaveBeenCalledWith("user"));
+
+    view.rerender(
+      <SkillEditForm
+        content={original}
+        isDirty={false}
+        source="user"
+        onDraftChange={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+        onMove={onMove}
+      />,
+    );
+    expect(screen.getByText("skill.scopeUser")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "skill.moveToNovel" }));
+    await waitFor(() => expect(onMove).toHaveBeenLastCalledWith("novel"));
+  });
+
+  it("requires saving before moving a dirty skill", () => {
+    const onMove = vi.fn();
+    render(
+      <SkillEditForm
+        content={original}
+        isDirty
+        source="novel"
+        onDraftChange={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+        onMove={onMove}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "skill.moveToUser" }));
+
+    expect(screen.getByText("skill.moveSaveFirst")).toBeInTheDocument();
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it("maps move business errors to messages", async () => {
+    const onMove = vi
+      .fn()
+      .mockRejectedValue(new AppErr("skill.exists", "目标层已存在"));
+    render(
+      <SkillEditForm
+        content={original}
+        isDirty={false}
+        source="novel"
+        onDraftChange={vi.fn()}
+        onSave={vi.fn()}
+        onCancel={vi.fn()}
+        onMove={onMove}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "skill.moveToUser" }));
+
+    expect(
+      await screen.findByText("skill.nameExistsAtScope"),
+    ).toBeInTheDocument();
   });
 });

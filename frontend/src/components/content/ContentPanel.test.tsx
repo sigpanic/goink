@@ -99,7 +99,7 @@ vi.mock("./SkillPreview", () => ({
 }));
 
 vi.mock("@/components/skill/SkillEditForm", () => ({
-  default: ({ content, onSave, onDraftChange, onCancel }: any) => (
+  default: ({ content, onSave, onDraftChange, onCancel, onMove }: any) => (
     <div data-testid="skill-edit-form">
       {content}
       <button onClick={() => onDraftChange(`${content}\n本地补充`)}>
@@ -114,6 +114,12 @@ vi.mock("@/components/skill/SkillEditForm", () => ({
         save normalized skill
       </button>
       <button onClick={onCancel}>cancel skill</button>
+      <button onClick={() => void onMove?.("user").catch(() => undefined)}>
+        move skill
+      </button>
+      <button onClick={() => void onMove?.("novel").catch(() => undefined)}>
+        move skill to novel
+      </button>
     </div>
   ),
 }));
@@ -197,6 +203,14 @@ vi.mock("./useSaveContent", () => ({
   useSaveContent: () => ({ mutateAsync: mockSaveContent }),
 }));
 
+// 技能换层 mutation mock（ContentPanel 负责落盘后同步 tab 路径）。
+const { mockMoveSkill } = vi.hoisted(() => ({
+  mockMoveSkill: vi.fn(),
+}));
+vi.mock("@/components/skill/useMoveSkill", () => ({
+  useMoveSkill: () => ({ mutateAsync: mockMoveSkill }),
+}));
+
 // 3.8: ContentPanel 从 useNovelStore 订阅 activeNovelId（替代 prop）。mock 提供固定值 1。
 vi.mock("@/components/novel/useNovelStore", () => ({
   useNovelStore: (selector: any) => selector({ activeNovelId: 1 }),
@@ -211,6 +225,7 @@ describe("ContentPanel", () => {
     // 5.2 commit 1: GetContent 走 useFileContent.fetchContent（query 缓存通道）
     mockFetchContent.mockResolvedValue("file content");
     mockSaveContent.mockResolvedValue(undefined);
+    mockMoveSkill.mockResolvedValue({ name: "test", source: "user" });
     mockGetChapters.mockResolvedValue([]);
     mockGetVolumes.mockResolvedValue([]);
     mockGetContent.mockResolvedValue("file content");
@@ -280,6 +295,229 @@ describe("ContentPanel", () => {
       content: "skill content",
       viewMode: "edit",
     });
+  });
+
+  it("moves a skill tab to the user-level path after MoveSkill succeeds", async () => {
+    mockTabsState = [
+      {
+        id: "f1",
+        type: "file",
+        path: "skills/test.md",
+        title: "技能: test",
+        content: "skill content",
+        contentBase: "skill content",
+        viewMode: "edit",
+      },
+    ];
+    mockActiveTabIdState = "f1";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "f1" } },
+    });
+    mockUpdateTab.mockImplementation(
+      (id: string, patch: Partial<EditorTab>) => {
+        useEditorTabsStore.getState().updateTab(1, id, patch);
+        mockTabsState = mockTabsState.map((tab) =>
+          tab.id === id ? { ...tab, ...patch } : tab,
+        );
+      },
+    );
+
+    render(<ContentPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("move skill"));
+    });
+
+    await vi.waitFor(() =>
+      expect(mockMoveSkill).toHaveBeenCalledWith({
+        novel_id: 1,
+        name: "test",
+        from: "novel",
+        to: "user",
+      }),
+    );
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      path: "~/.goink/skills/test.md",
+      readOnly: false,
+    });
+  });
+
+  it("closes a clean tab at the target path after MoveSkill succeeds", async () => {
+    mockTabsState = [
+      {
+        id: "f1",
+        type: "file",
+        path: "skills/test.md",
+        title: "技能: test",
+        content: "skill content",
+        contentBase: "skill content",
+        viewMode: "edit",
+      },
+      {
+        id: "f2",
+        type: "file",
+        path: "~/.goink/skills/test.md",
+        title: "技能: test",
+        viewMode: "preview",
+      },
+    ];
+    mockActiveTabIdState = "f1";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "f1" } },
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: Partial<EditorTab>) =>
+      useEditorTabsStore.getState().updateTab(1, id, patch),
+    );
+
+    render(<ContentPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("move skill"));
+    });
+
+    await vi.waitFor(() =>
+      expect(mockMoveSkill).toHaveBeenCalledWith({
+        novel_id: 1,
+        name: "test",
+        from: "novel",
+        to: "user",
+      }),
+    );
+    const tabs = useEditorTabsStore.getState().byNovel["1"].tabs;
+    expect(tabs).toHaveLength(1);
+    expect(tabs[0]).toMatchObject({
+      id: "f1",
+      path: "~/.goink/skills/test.md",
+    });
+  });
+
+  it("blocks moving when the target path has an unsaved tab", async () => {
+    mockTabsState = [
+      {
+        id: "f1",
+        type: "file",
+        path: "skills/test.md",
+        title: "技能: test",
+        content: "skill content",
+        contentBase: "skill content",
+        viewMode: "edit",
+      },
+      {
+        id: "f2",
+        type: "file",
+        path: "~/.goink/skills/test.md",
+        title: "技能: test",
+        content: "draft content",
+        isDirty: true,
+        viewMode: "edit",
+      },
+    ];
+    mockActiveTabIdState = "f1";
+    useEditorTabsStore.setState({
+      byNovel: { "1": { tabs: mockTabsState, activeTabId: "f1" } },
+    });
+
+    render(<ContentPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("move skill"));
+    });
+
+    expect(mockMoveSkill).not.toHaveBeenCalled();
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs).toHaveLength(2);
+  });
+
+  it("closes old user-level tabs in other novels after moving to novel level", async () => {
+    mockTabsState = [
+      {
+        id: "f1",
+        type: "file",
+        path: "~/.goink/skills/test.md",
+        title: "技能: test",
+        content: "skill content",
+        contentBase: "skill content",
+        viewMode: "edit",
+      },
+    ];
+    mockActiveTabIdState = "f1";
+    useEditorTabsStore.setState({
+      byNovel: {
+        "1": { tabs: mockTabsState, activeTabId: "f1" },
+        "2": {
+          tabs: [
+            {
+              id: "f2",
+              type: "file",
+              path: "~/.goink/skills/test.md",
+              title: "技能: test",
+              content: "skill content",
+              viewMode: "preview",
+            },
+          ],
+          activeTabId: "f2",
+        },
+      },
+    });
+    mockUpdateTab.mockImplementation((id: string, patch: Partial<EditorTab>) =>
+      useEditorTabsStore.getState().updateTab(1, id, patch),
+    );
+
+    render(<ContentPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("move skill to novel"));
+    });
+
+    await vi.waitFor(() =>
+      expect(mockMoveSkill).toHaveBeenCalledWith({
+        novel_id: 1,
+        name: "test",
+        from: "user",
+        to: "novel",
+      }),
+    );
+    expect(useEditorTabsStore.getState().byNovel["2"].tabs).toHaveLength(0);
+    expect(useEditorTabsStore.getState().byNovel["1"].tabs[0]).toMatchObject({
+      path: "skills/test.md",
+    });
+  });
+
+  it("blocks moving when another novel has unsaved changes to the skill", async () => {
+    mockTabsState = [
+      {
+        id: "f1",
+        type: "file",
+        path: "~/.goink/skills/test.md",
+        title: "技能: test",
+        content: "skill content",
+        contentBase: "skill content",
+        viewMode: "edit",
+      },
+    ];
+    mockActiveTabIdState = "f1";
+    useEditorTabsStore.setState({
+      byNovel: {
+        "1": { tabs: mockTabsState, activeTabId: "f1" },
+        "2": {
+          tabs: [
+            {
+              id: "f2",
+              type: "file",
+              path: "~/.goink/skills/test.md",
+              title: "技能: test",
+              content: "draft content",
+              isDirty: true,
+              viewMode: "edit",
+            },
+          ],
+          activeTabId: "f2",
+        },
+      },
+    });
+
+    render(<ContentPanel />);
+    await act(async () => {
+      fireEvent.click(screen.getByText("move skill to novel"));
+    });
+
+    expect(mockMoveSkill).not.toHaveBeenCalled();
+    expect(useEditorTabsStore.getState().byNovel["2"].tabs).toHaveLength(1);
   });
 
   it("切走页面期间 AI 修改技能时保留未保存表单稿件", async () => {

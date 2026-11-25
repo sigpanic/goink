@@ -34,6 +34,7 @@ import { getEditorSaveQueue, isContentConflict } from "./editorSaveQueue";
 import ContentConflictNotice from "./ContentConflictNotice";
 import { useEditorFileSync } from "./useEditorFileSync";
 import SkillEditForm from "@/components/skill/SkillEditForm";
+import { useMoveSkillTab } from "./useMoveSkillTab";
 import Markdown from "@/components/Markdown";
 import {
   isContentPath,
@@ -90,6 +91,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
     const { fetchContent } = useFileContent();
     const saveContentMutation = useSaveContent();
     const mutateSaveContent = saveContentMutation.mutateAsync;
+    const moveSkillTab = useMoveSkillTab(novelId);
     const editorSaveQueue = getEditorSaveQueue(qc);
     const {
       tabs,
@@ -402,6 +404,16 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
           throw saveError ?? new Error(t("common.saveFailed"));
       },
       [mutateSaveContent, updateTab, t, novelId, editorSaveQueue],
+    );
+
+    // 技能换层：落盘与 tab 同步都封装在 useMoveSkillTab；
+    // 这里只把当前激活 tab 传给动作，tab 在点击时才确定。
+    const handleMoveSkill = useCallback(
+      (to: "novel" | "user") =>
+        activeTab && activeTab.type === "file"
+          ? moveSkillTab({ tabId: activeTab.id, path: activeTab.path }, to)
+          : Promise.resolve(),
+      [activeTab, moveSkillTab],
     );
 
     const handleCloseTab = useCallback(
@@ -1130,6 +1142,7 @@ const ContentPanel = forwardRef<ContentPanelHandle>(
               onSave={(newContent) =>
                 doSave(activeTab.id, activeTab.path, newContent)
               }
+              onMove={handleMoveSkill}
               onCancel={() => {
                 const current = useEditorTabsStore
                   .getState()

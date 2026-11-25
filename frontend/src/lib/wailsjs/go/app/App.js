@@ -398,6 +398,10 @@ export function MarkAnnualReportPrompted(arg1) {
   return window['go']['app']['App']['MarkAnnualReportPrompted'](arg1);
 }
 
+export function MoveSkill(arg1) {
+  return window['go']['app']['App']['MoveSkill'](arg1);
+}
+
 export function PickAndImportNovel() {
   return window['go']['app']['App']['PickAndImportNovel']();
 }
