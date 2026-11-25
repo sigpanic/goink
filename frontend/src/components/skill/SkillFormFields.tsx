@@ -82,13 +82,14 @@ export default function SkillFormFields({
           }))}
           onChange={(value) => onChange({ mode: value })}
         />
-        {draft.mode === "always" && (source === "user" || source === "novel") && (
-          <p className="mt-1.5 text-xs text-muted-foreground">
-            {source === "user"
-              ? t("skill.alwaysScopeUser")
-              : t("skill.alwaysScopeNovel")}
-          </p>
-        )}
+        {draft.mode === "always" &&
+          (source === "user" || source === "novel") && (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              {source === "user"
+                ? t("skill.alwaysScopeUser")
+                : t("skill.alwaysScopeNovel")}
+            </p>
+          )}
       </div>
 
       <div className="flex gap-4">

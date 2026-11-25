@@ -24,9 +24,7 @@ interface Props {
 }
 
 function pathForTarget(target: SkillTarget, name: string): string {
-  return target === "user"
-    ? `~/.goink/skills/${name}.md`
-    : `skills/${name}.md`;
+  return target === "user" ? `~/.goink/skills/${name}.md` : `skills/${name}.md`;
 }
 
 // SkillCreateDialog 是独立的新建表单：名称只输入一次，层级在提交前选择。
